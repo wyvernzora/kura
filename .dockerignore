@@ -1,0 +1,15 @@
+.git
+.gitignore
+.dockerignore
+README.md
+AGENTS.md
+bin
+dist
+build
+coverage.out
+*.coverprofile
+.env
+.env.*
+.DS_Store
+.idea
+.vscode
