@@ -21,7 +21,7 @@ Hello, World!
 
 ## Requirements
 
-- Go 1.24.5 or newer.
+- Go 1.26.2 or newer.
 - Docker, if building or running the container image.
 
 ## Run Locally
