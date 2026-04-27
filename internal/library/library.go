@@ -9,6 +9,7 @@ import (
 	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/library/reconcile"
 	"github.com/wyvernzora/kura/internal/library/scan"
+	"github.com/wyvernzora/kura/internal/library/workflows"
 	"github.com/wyvernzora/kura/internal/progress"
 )
 
@@ -29,14 +30,29 @@ type MediaInfo = media.MediaInfo
 type Series = models.Series
 type Season = models.Season
 type Episode = models.Episode
+type Staged = models.Staged
+type StagedEpisode = models.StagedEpisode
 type Trash = models.Trash
 type TrashedEpisode = models.TrashedEpisode
 type MediaFile = models.MediaFile
 type CompanionFile = models.CompanionFile
 type DuplicateEpisodeNumberError = models.DuplicateEpisodeNumberError
 
+type AddEpisodeOptions = workflows.AddEpisodeOptions
+type EpisodeAlreadyExistsError = workflows.EpisodeAlreadyExistsError
+
 type DiscoveredEpisode = scan.DiscoveredEpisode
 type ImportSkip = scan.ImportSkip
+
+type MediaInspector = workflows.MediaInspector
+type MediaInspectorFunc = workflows.MediaInspectorFunc
+type ProviderSeriesResolver = workflows.ProviderSeriesResolver
+type SeriesSyncOptions = workflows.SeriesSyncOptions
+type SeriesSyncResult = workflows.SeriesSyncResult
+type SeriesSyncEntry = workflows.SeriesSyncEntry
+type StageEpisodeFileOptions = workflows.StageEpisodeFileOptions
+type StageEpisodeFileResult = workflows.StageEpisodeFileResult
+type StagedEpisodeAlreadyExistsError = workflows.StagedEpisodeAlreadyExistsError
 
 type ResolveSeriesOptions = match.ResolveSeriesOptions
 type SeriesSelectionRequiredError = match.SeriesSelectionRequiredError
@@ -50,6 +66,7 @@ type ProgressReporter = progress.Reporter
 
 const (
 	SeriesSchemaVersion = models.SeriesSchemaVersion
+	StagedSchemaVersion = models.StagedSchemaVersion
 	TrashSchemaVersion  = models.TrashSchemaVersion
 
 	MediaSourceUnknown = media.MediaSourceUnknown
@@ -104,6 +121,10 @@ func SeriesPath(seriesDir string) string {
 	return models.SeriesPath(seriesDir)
 }
 
+func StagedPath(seriesDir string) string {
+	return models.StagedPath(seriesDir)
+}
+
 func WithProgress(ctx context.Context, reporter ProgressReporter) context.Context {
 	return progress.With(ctx, reporter)
 }
@@ -113,10 +134,12 @@ type Library interface {
 	NewSeries(dirname string) (*Series, error)
 	LoadSeries(dirname string) (*Series, error)
 	SaveSeries(series Series) error
+	LoadStaged(dirname string) (*Staged, error)
+	SaveStaged(staged Staged) error
 	LoadTrash(dirname string) (*Trash, error)
 	SaveTrash(trash Trash) error
 	SyncSeries(ctx context.Context, root LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error)
-	ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts ImportEpisodeFileOptions) (Series, error)
+	StageEpisodeFile(ctx context.Context, root LibraryRoot, dirname string, opts StageEpisodeFileOptions) (StageEpisodeFileResult, error)
 	PlanReconcile(ctx context.Context, root LibraryRoot, dirname string) (ReconcilePlan, error)
 	ApplyReconcile(ctx context.Context, plan ReconcilePlan) error
 }
@@ -144,12 +167,32 @@ func (l library) SaveSeries(series Series) error {
 	return l.store.Save(series)
 }
 
+func (l library) LoadStaged(dirname string) (*Staged, error) {
+	return l.store.LoadStaged(dirname)
+}
+
+func (l library) SaveStaged(staged Staged) error {
+	return l.store.SaveStaged(staged)
+}
+
 func (l library) LoadTrash(dirname string) (*Trash, error) {
 	return l.store.LoadTrash(dirname)
 }
 
 func (l library) SaveTrash(trash Trash) error {
 	return l.store.SaveTrash(trash)
+}
+
+func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series, error) {
+	return workflows.AddEpisode(seriesDir, series, opts)
+}
+
+func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
+	return workflows.SyncSeries(ctx, l.store, root, dirname, opts)
+}
+
+func (l library) StageEpisodeFile(ctx context.Context, root LibraryRoot, dirname string, opts StageEpisodeFileOptions) (StageEpisodeFileResult, error) {
+	return workflows.StageEpisodeFile(ctx, l.store, root, dirname, opts)
 }
 
 func (l library) PlanReconcile(ctx context.Context, root LibraryRoot, dirname string) (ReconcilePlan, error) {

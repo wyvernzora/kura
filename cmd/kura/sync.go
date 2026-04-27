@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 
 	"github.com/wyvernzora/kura/internal/library"
@@ -97,56 +96,6 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 	return nil
 }
 
-type seriesReconcileCmd struct {
-	DryRun bool   `name:"dry-run" help:"Print planned changes without renaming files or writing metadata."`
-	JSON   bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
-	Yes    bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
-	Series string `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
-}
-
-func (cmd *seriesReconcileCmd) Run(rt runContext) error {
-	lib := library.New()
-	root, err := library.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
-	if err != nil {
-		return err
-	}
-	seriesDir, dirErr := resolveSeriesSelector(root, cmd.Series)
-	plan, err := lib.PlanReconcile(rt.Context, root, cmd.Series)
-	if err != nil {
-		if dirErr == nil {
-			warnDuplicateSeries(rt, seriesDir.Path(), err)
-		}
-		return err
-	}
-	plan.DryRun = cmd.DryRun
-
-	if cmd.JSON {
-		encoder := json.NewEncoder(rt.Stdout)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(plan); err != nil {
-			return err
-		}
-	} else if err := terminalui.WriteReconcilePlan(rt.Stdout, plan); err != nil {
-		return err
-	}
-	if cmd.DryRun || !plan.HasChanges() {
-		return nil
-	}
-	if !cmd.Yes {
-		confirmed, err := terminalui.Confirm(rt.Stdin, rt.Stderr, "Apply these changes? [y/N] ")
-		if err != nil {
-			return err
-		}
-		if !confirmed {
-			return nil
-		}
-	}
-	return lib.ApplyReconcile(
-		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
-		plan,
-	)
-}
-
 func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series, bool, error) {
 	metadataSource, err := buildMetadataSource(rt, cmd.Provider, cmd.TVDBBaseURL)
 	if err != nil {
@@ -193,27 +142,8 @@ func (cmd *seriesSyncCmd) providerSeriesResolver(rt runContext) library.Provider
 	}
 }
 
-func providerRefForSource(series library.Series, source string) (metadata.RemoteSeriesRef, error) {
-	for _, raw := range series.ProviderRefs {
-		ref, err := metadata.ParseRemoteSeriesRef(raw)
-		if err != nil {
-			return metadata.RemoteSeriesRef{}, err
-		}
-		if ref.Source() == source {
-			return ref, nil
-		}
-	}
-	return metadata.RemoteSeriesRef{}, fmt.Errorf("series has no %s provider ref", source)
-}
-
 func isInteractiveRun(rt runContext) bool {
 	stdin, stdinOK := rt.Stdin.(*os.File)
 	stdout, stdoutOK := rt.Stdout.(*os.File)
 	return stdinOK && stdoutOK && terminalui.IsTerminal(stdin) && terminalui.IsTerminal(stdout)
-}
-
-func resolveSeriesSelector(root library.LibraryRoot, series string) (library.SeriesDir, error) {
-	// TODO: Replace direct child directory lookup with library-wide series selector
-	// resolution once Kura has an index of local series metadata.
-	return root.SeriesDir(series)
 }

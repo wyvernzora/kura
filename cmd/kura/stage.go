@@ -7,29 +7,25 @@ import (
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/library"
-	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/terminalui"
 )
 
-type episodeCmd struct {
-	Import episodeImportCmd `cmd:"" help:"Import an existing episode file into .kura/series.json."`
-}
-
-type episodeImportCmd struct {
+type stageCmd struct {
 	Season      int      `help:"Season number."`
-	Special     bool     `help:"Import as a special."`
+	Special     bool     `help:"Stage as a special."`
 	Number      int      `help:"Episode number." required:""`
 	Provider    string   `help:"Metadata provider to validate against." enum:"tvdb" default:"tvdb"`
 	TVDBBaseURL string   `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
 	Source      string   `help:"Media source. Defaults to filename source or unknown."`
-	Companions  []string `name:"companion" help:"Companion file path relative to KURA_LIBRARY_ROOT."`
-	DryRun      bool     `name:"dry-run" help:"Print the updated series document without writing it."`
-	Replace     bool     `name:"replace" help:"Replace an existing episode record, moving the old record to trash."`
-	Path        string   `arg:"" help:"Media file path relative to KURA_LIBRARY_ROOT."`
+	Companions  []string `name:"companion" help:"Absolute companion file path."`
+	DryRun      bool     `name:"dry-run" help:"Print the updated staged document without writing it."`
+	Replace     bool     `name:"replace" help:"Stage over an active episode or replace an existing staged entry for the same season and episode."`
+	Series      string   `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
+	Path        string   `arg:"" help:"Absolute media file path to stage."`
 }
 
-func (cmd *episodeImportCmd) Run(rt runContext) error {
+func (cmd *stageCmd) Run(rt runContext) error {
 	if cmd.Special && cmd.Season != 0 {
 		return errors.New("--season and --special are mutually exclusive")
 	}
@@ -58,10 +54,11 @@ func (cmd *episodeImportCmd) Run(rt runContext) error {
 	if strings.TrimSpace(cmd.Source) != "" {
 		source = library.ParseMediaSource(cmd.Source)
 	}
-	updated, err := library.New().ImportEpisodeFile(
+	result, err := library.New().StageEpisodeFile(
 		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
 		root,
-		library.ImportEpisodeFileOptions{
+		cmd.Series,
+		library.StageEpisodeFileOptions{
 			Season:           season,
 			Episode:          episode,
 			Source:           source,
@@ -79,7 +76,10 @@ func (cmd *episodeImportCmd) Run(rt runContext) error {
 
 	encoder := json.NewEncoder(rt.Stdout)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(updated)
+	if cmd.DryRun {
+		return encoder.Encode(result.UpdatedStaged)
+	}
+	return encoder.Encode(result)
 }
 
 func episodeProviderSeriesResolver(rt runContext, provider string, tvdbBaseURL string) library.ProviderSeriesResolver {
@@ -94,13 +94,4 @@ func episodeProviderSeriesResolver(rt runContext, provider string, tvdbBaseURL s
 		}
 		return metadataSource.GetSeries(ctx, ref.ID())
 	}
-}
-
-func mediaInspector(rt runContext) mediainfo.Inspector {
-	inspector := mediainfo.New()
-	command := strings.TrimSpace(rt.Getenv("KURA_MEDIAINFO_COMMAND"))
-	if command != "" {
-		inspector.Command = command
-	}
-	return inspector
 }

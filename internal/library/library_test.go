@@ -380,12 +380,11 @@ func TestSyncSeriesRejectsDuplicateParsedEpisodes(t *testing.T) {
 	}
 }
 
-func TestImportEpisodeFileFindsSeriesAndRecordsCompanion(t *testing.T) {
+func TestStageEpisodeFileRecordsAbsolutePathsInStaged(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Bookworm")
-	seasonDir := filepath.Join(seriesDir, "Season 1")
-	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll season: %v", err)
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
 	}
 	series, err := testSeries(seriesDir)
 	if err != nil {
@@ -394,8 +393,11 @@ func TestImportEpisodeFileFindsSeriesAndRecordsCompanion(t *testing.T) {
 	if err := New().SaveSeries(*series); err != nil {
 		t.Fatalf("SaveSeries: %v", err)
 	}
-	writeFile(t, filepath.Join(seasonDir, "episode.mkv"), "episode")
-	writeFile(t, filepath.Join(seasonDir, "episode.en.ass"), "subtitle")
+	stageDir := t.TempDir()
+	mediaPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip).mkv")
+	companionPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip).en.ass")
+	writeFile(t, mediaPath, "episode")
+	writeFile(t, companionPath, "subtitle")
 
 	root, err := ParseLibraryRoot(rootPath)
 	if err != nil {
@@ -404,24 +406,186 @@ func TestImportEpisodeFileFindsSeriesAndRecordsCompanion(t *testing.T) {
 	season, _ := RegularSeason(1)
 	episode, _ := NewEpisodeNumber(1)
 	providerSeries := testProviderSeries()
-	updated, err := New().ImportEpisodeFile(context.Background(), root, ImportEpisodeFileOptions{
+	result, err := New().StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
-		Companions:     []string{"Bookworm/Season 1/episode.en.ass"},
-		MediaPath:      "Bookworm/Season 1/episode.mkv",
+		Companions:     []string{companionPath},
+		MediaPath:      mediaPath,
 		Inspector:      fakeInspector,
 		ProviderSeries: &providerSeries,
 		Apply:          true,
 	})
 	if err != nil {
-		t.Fatalf("ImportEpisodeFile: %v", err)
+		t.Fatalf("StageEpisodeFile: %v", err)
 	}
-	got := updated.Seasons["1"].Episodes["1"]
-	if got.Media.Path != "Season 1/episode.mkv" {
-		t.Fatalf("Media.Path = %q", got.Media.Path)
+	if result.Entry.Media.Path != mediaPath {
+		t.Fatalf("Media.Path = %q, want %q", result.Entry.Media.Path, mediaPath)
 	}
-	if len(got.Companions) != 1 || got.Companions[0].Path != "Season 1/episode.en.ass" {
-		t.Fatalf("Companions = %#v", got.Companions)
+	staged, err := New().LoadStaged(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadStaged: %v", err)
+	}
+	if len(staged.Entries) != 1 {
+		t.Fatalf("len(Staged.Entries) = %d, want 1", len(staged.Entries))
+	}
+	if staged.Entries[0].Media.Path != mediaPath {
+		t.Fatalf("Staged media path = %q, want %q", staged.Entries[0].Media.Path, mediaPath)
+	}
+	if len(staged.Entries[0].Companions) != 1 || staged.Entries[0].Companions[0].Path != companionPath {
+		t.Fatalf("Staged companions = %#v", staged.Entries[0].Companions)
+	}
+}
+
+func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
+	}
+	series, err := testSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("testSeries: %v", err)
+	}
+	if err := New().SaveSeries(*series); err != nil {
+		t.Fatalf("SaveSeries: %v", err)
+	}
+	stageDir := t.TempDir()
+	firstPath := filepath.Join(stageDir, "first.mkv")
+	secondPath := filepath.Join(stageDir, "second.mkv")
+	writeFile(t, firstPath, "first")
+	writeFile(t, secondPath, "second")
+
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	season, _ := RegularSeason(1)
+	episode, _ := NewEpisodeNumber(1)
+	providerSeries := testProviderSeries()
+	lib := New()
+	if _, err := lib.StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
+		Season:         season,
+		Episode:        episode,
+		MediaPath:      firstPath,
+		Inspector:      fakeInspector,
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+	}); err != nil {
+		t.Fatalf("StageEpisodeFile first: %v", err)
+	}
+	if _, err := lib.StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
+		Season:         season,
+		Episode:        episode,
+		MediaPath:      secondPath,
+		Inspector:      fakeInspector,
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+	}); err == nil {
+		t.Fatal("StageEpisodeFile second returned nil error, want staged episode exists error")
+	}
+	result, err := lib.StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
+		Season:         season,
+		Episode:        episode,
+		MediaPath:      secondPath,
+		Inspector:      fakeInspector,
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+		Replace:        true,
+	})
+	if err != nil {
+		t.Fatalf("StageEpisodeFile replace: %v", err)
+	}
+	if !result.Replaced {
+		t.Fatal("Replaced = false, want true")
+	}
+	staged, err := lib.LoadStaged(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadStaged: %v", err)
+	}
+	if len(staged.Entries) != 1 || staged.Entries[0].Media.Path != secondPath {
+		t.Fatalf("Staged entries = %#v, want single replacement", staged.Entries)
+	}
+}
+
+func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
+		t.Fatalf("MkdirAll .kura: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "active.mkv"), "active")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/active.mkv",
+							"source": "webrip",
+							"size": 6,
+							"mtime": "2026-04-20T03:00:00Z"
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`)
+	stageDir := t.TempDir()
+	mediaPath := filepath.Join(stageDir, "replacement.mkv")
+	writeFile(t, mediaPath, "replacement")
+
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	season, _ := RegularSeason(1)
+	episode, _ := NewEpisodeNumber(1)
+	providerSeries := testProviderSeries()
+	lib := New()
+	if _, err := lib.StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
+		Season:         season,
+		Episode:        episode,
+		MediaPath:      mediaPath,
+		Inspector:      fakeInspector,
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+	}); err == nil {
+		t.Fatal("StageEpisodeFile returned nil error, want active episode exists error")
+	}
+	result, err := lib.StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
+		Season:         season,
+		Episode:        episode,
+		MediaPath:      mediaPath,
+		Inspector:      fakeInspector,
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+		Replace:        true,
+	})
+	if err != nil {
+		t.Fatalf("StageEpisodeFile replace: %v", err)
+	}
+	if !result.Replaced {
+		t.Fatal("Replaced = false, want true")
+	}
+	staged, err := lib.LoadStaged(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadStaged: %v", err)
+	}
+	if len(staged.Entries) != 1 || staged.Entries[0].Media.Path != mediaPath {
+		t.Fatalf("Staged entries = %#v, want staged replacement", staged.Entries)
 	}
 }
 

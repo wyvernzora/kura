@@ -277,16 +277,15 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	}
 }
 
-func TestEpisodeImportCommandPrintsUpdatedSeriesJSON(t *testing.T) {
+func TestStageCommandWritesStagedJSON(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
 	root := t.TempDir()
 	mediainfoCommand := newFakeMediaInfoCommand(t, root)
 	seriesDir := filepath.Join(root, "Bookworm")
-	seasonDir := filepath.Join(seriesDir, "Season 1")
-	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll season: %v", err)
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
 	}
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
@@ -296,33 +295,45 @@ func TestEpisodeImportCommandPrintsUpdatedSeriesJSON(t *testing.T) {
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm"
 	}`)
-	writeFile(t, filepath.Join(seasonDir, "episode.mkv"), "episode")
-	writeFile(t, filepath.Join(seasonDir, "episode.en.ass"), "subtitle")
+	stageDir := t.TempDir()
+	mediaPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip).mkv")
+	companionPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip).en.ass")
+	writeFile(t, mediaPath, "episode")
+	writeFile(t, companionPath, "subtitle")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"episode",
-		"import",
+		"stage",
 		"--season", "1",
 		"--number", "1",
 		"--tvdb-base-url", server.URL,
-		"--companion", "Bookworm/Season 1/episode.en.ass",
-		"--dry-run",
-		"Bookworm/Season 1/episode.mkv",
+		"--companion", companionPath,
+		"Bookworm",
+		mediaPath,
 	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
 	}
-	var series map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &series); err != nil {
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
-	season := findJSONNumberedObject(t, series["seasons"], 1)
-	episode := findJSONNumberedObject(t, season["episodes"], 1)
-	media := episode["media"].(map[string]any)
-	if got := media["path"]; got != "Season 1/episode.mkv" {
-		t.Fatalf("media.path = %v, want Season 1/episode.mkv", got)
+	if got := result["series"]; got != "Bookworm" {
+		t.Fatalf("series = %v, want Bookworm", got)
+	}
+	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "staged.json"))
+	if err != nil {
+		t.Fatalf("ReadFile staged.json: %v", err)
+	}
+	var staged map[string]any
+	if err := json.Unmarshal(data, &staged); err != nil {
+		t.Fatalf("unmarshal staged: %v", err)
+	}
+	entry := staged["entries"].([]any)[0].(map[string]any)
+	media := entry["media"].(map[string]any)
+	if got := media["path"]; got != mediaPath {
+		t.Fatalf("media.path = %v, want %s", got, mediaPath)
 	}
 }
 
@@ -476,26 +487,6 @@ func writeJSON(t *testing.T, w http.ResponseWriter, value any) {
 	if err := json.NewEncoder(w).Encode(value); err != nil {
 		t.Fatalf("encode json: %v", err)
 	}
-}
-
-func findJSONNumberedObject(t *testing.T, value any, number int) map[string]any {
-	t.Helper()
-
-	items, ok := value.([]any)
-	if !ok {
-		t.Fatalf("value = %T, want array", value)
-	}
-	for _, item := range items {
-		object, ok := item.(map[string]any)
-		if !ok {
-			t.Fatalf("item = %T, want object", item)
-		}
-		if got := object["number"]; got == float64(number) {
-			return object
-		}
-	}
-	t.Fatalf("number %d not found in %#v", number, value)
-	return nil
 }
 
 func newFakeMediaInfoCommand(t *testing.T, dir string) string {

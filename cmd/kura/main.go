@@ -12,9 +12,8 @@ import (
 type cli struct {
 	Sync      seriesSyncCmd      `cmd:"" help:"Scan a series and sync it into Kura metadata."`
 	Reconcile seriesReconcileCmd `cmd:"" help:"Rename tracked files to match Kura metadata."`
+	Stage     stageCmd           `cmd:"" help:"Stage an external episode file for a series."`
 	Meta      metaCmd            `cmd:"" help:"Metadata provider commands."`
-	Library   libraryCmd         `cmd:"" hidden:"" help:"Library metadata commands."`
-	Episode   episodeCmd         `cmd:"" hidden:"" help:"Episode metadata commands."`
 }
 
 type runContext struct {

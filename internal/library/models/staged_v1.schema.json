@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "staged_v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stagedEpisode"
+      }
+    }
+  },
+  "$defs": {
+    "stagedEpisode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "season",
+        "number",
+        "media",
+        "companions"
+      ],
+      "properties": {
+        "season": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "media": {
+          "$ref": "#/$defs/mediaFile"
+        },
+        "companions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/companionFile"
+          }
+        }
+      }
+    },
+    "mediaFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "source",
+        "size",
+        "mtime"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mtime": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sampleHash": {
+          "type": "string"
+        },
+        "mediainfo": {
+          "$ref": "#/$defs/mediaInfo"
+        }
+      }
+    },
+    "companionFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "size",
+        "mtime"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "role": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mtime": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "mediaInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "videoCodec": {
+          "type": "string"
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "audioCodec": {
+          "type": "string"
+        },
+        "hasSubtitles": {
+          "type": "boolean"
+        }
+      }
+    },
+    "absolutePath": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
