@@ -95,7 +95,7 @@ func TestSeriesSyncCommandWritesSummaryAndMetadata(t *testing.T) {
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv"), "episode")
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -125,7 +125,7 @@ func TestSeriesSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv")
+	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
 	writeFile(t, episodePath, "episode")
 	info, err := os.Stat(episodePath)
 	if err != nil {
@@ -145,7 +145,7 @@ func TestSeriesSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 					{
 						"number": 1,
 						"media": {
-							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
 							"source": "webrip",
 							"size": %d,
 							"mtime": %q,
@@ -240,7 +240,7 @@ func TestSeriesReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll season: %v", err)
 	}
-	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv"), "episode")
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
@@ -256,7 +256,7 @@ func TestSeriesReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 					{
 						"number": 1,
 						"media": {
-							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
 							"source": "webrip",
 							"size": 7,
 							"mtime": "2026-04-20T03:00:00Z",

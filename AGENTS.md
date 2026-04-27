@@ -22,7 +22,7 @@ These notes capture project intent and working conventions for future agent thre
 - Regular seasons live under `Season <N>/`.
 - Season 0 specials should be treated as root-level series files in the target layout, while legacy `Season 0/` folders may exist and must be tolerated during bootstrap.
 - BD/DVD extras use `Season <N>/Extra/` with no required internal structure.
-- Preferred target episode naming convention: `<title> - S02E03 (WebRip HEVC 1920x1080).mkv`.
+- Preferred target episode naming convention: `<title> - S02E03 (WebRip 1080p).mkv`.
 - Filesystem title selection uses ordered `KURA_PREFERRED_LANGUAGES`; empty or unset means
   provider canonical title, and missing translations always fall back to canonical.
 

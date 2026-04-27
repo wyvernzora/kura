@@ -233,7 +233,6 @@ func reconciledMediaFilename(title layout.FilesystemTitle, seasonNumber int, epi
 		Source: mediafacts.ParseMediaSource(media.Source),
 	}
 	if media.MediaInfo != nil {
-		facts.VideoCodec = mediafacts.ParseCodec(media.MediaInfo.VideoCodec)
 		if resolution, err := mediafacts.ParseResolution(media.MediaInfo.Resolution); err == nil {
 			facts.Resolution = resolution
 		}

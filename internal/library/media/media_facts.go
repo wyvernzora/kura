@@ -148,6 +148,26 @@ func (r Resolution) String() string {
 	return fmt.Sprintf("%dx%d", r.width, r.height)
 }
 
+func (r Resolution) Display() string {
+	if !r.Known() {
+		return ""
+	}
+	switch r.String() {
+	case "3840x2160", "4096x2160":
+		return "4K"
+	case "2560x1440":
+		return "1440p"
+	case "1920x1080":
+		return "1080p"
+	case "1280x720":
+		return "720p"
+	case "640x480", "720x480", "854x480":
+		return "480p"
+	default:
+		return r.String()
+	}
+}
+
 // MediaInfo stores parsed facts for one media file.
 type MediaInfo struct {
 	VideoCodec   string `json:"videoCodec,omitempty"`

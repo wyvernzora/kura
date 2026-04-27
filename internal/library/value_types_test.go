@@ -103,6 +103,25 @@ func TestResolution(t *testing.T) {
 	if resolution.String() != "1920x1080" {
 		t.Fatalf("String = %q, want 1920x1080", resolution.String())
 	}
+	if resolution.Display() != "1080p" {
+		t.Fatalf("Display = %q, want 1080p", resolution.Display())
+	}
+	displayCases := map[string]string{
+		"3840x2160": "4K",
+		"2560x1440": "1440p",
+		"1280x720":  "720p",
+		"854x480":   "480p",
+		"1920x800":  "1920x800",
+	}
+	for input, want := range displayCases {
+		resolution, err := ParseResolution(input)
+		if err != nil {
+			t.Fatalf("ParseResolution(%q): %v", input, err)
+		}
+		if got := resolution.Display(); got != want {
+			t.Fatalf("Display(%q) = %q, want %q", input, got, want)
+		}
+	}
 	if _, err := ParseResolution("1080p"); err == nil {
 		t.Fatal("ParseResolution returned nil error, want malformed value rejection")
 	}
@@ -118,10 +137,9 @@ func TestBuildMediaFilename(t *testing.T) {
 	resolution, _ := ParseResolution("1920x1080")
 	filename := BuildMediaFilename(title, NewEpisodeRef(season, episode), MediaFilenameFacts{
 		Source:     ParseMediaSource("webrip"),
-		VideoCodec: ParseCodec("HEVC"),
 		Resolution: resolution,
 	}, ".mkv")
-	if filename.String() != "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv" {
+	if filename.String() != "Bookworm - S01E01 (WebRip 1080p).mkv" {
 		t.Fatalf("filename = %q", filename.String())
 	}
 }

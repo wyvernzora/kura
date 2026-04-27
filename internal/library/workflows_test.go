@@ -120,8 +120,8 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv"), "episode 1")
-	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).en.ass"), "subtitle")
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode 1")
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).en.ass"), "subtitle")
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E02.mkv"), "episode 2")
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - bonus.mkv"), "bonus")
 
@@ -157,7 +157,7 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 		t.Fatalf("FilesystemTitle = %q, want Bookworm", loaded.FilesystemTitle)
 	}
 	episode := loaded.Seasons["1"].Episodes["1"]
-	if episode.Media.Path != "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv" {
+	if episode.Media.Path != "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv" {
 		t.Fatalf("Media.Path = %q", episode.Media.Path)
 	}
 	if len(episode.Companions) != 1 {
@@ -175,7 +175,7 @@ func TestSyncSeriesKeepsUnchangedTrackedEpisodeWithoutInspector(t *testing.T) {
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll season: %v", err)
 	}
-	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv")
+	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
 	writeFile(t, episodePath, "episode")
 	info, err := os.Stat(episodePath)
 	if err != nil {
@@ -195,7 +195,7 @@ func TestSyncSeriesKeepsUnchangedTrackedEpisodeWithoutInspector(t *testing.T) {
 					{
 						"number": 1,
 						"media": {
-							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
 							"source": "webrip",
 							"size": %d,
 							"mtime": %q,
@@ -234,7 +234,7 @@ func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll season: %v", err)
 	}
-	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv")
+	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
 	writeFile(t, episodePath, "episode")
 	info, err := os.Stat(episodePath)
 	if err != nil {
@@ -254,7 +254,7 @@ func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
 					{
 						"number": 1,
 						"media": {
-							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
 							"source": "webrip",
 							"size": %d,
 							"mtime": %q,
@@ -418,9 +418,9 @@ func TestPlanAndApplyReconcileRenamesTrackedFilesThenRoot(t *testing.T) {
 		t.Fatalf("old series dir stat err = %v, want not exists", err)
 	}
 	for _, path := range []string{
-		filepath.Join(targetSeriesDir, "Season 1", "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv"),
-		filepath.Join(targetSeriesDir, "Season 1", "Bookworm - S01E01 (WebRip HEVC 1920x1080).en.ass"),
-		filepath.Join(targetSeriesDir, "Bookworm - S00E01 (BDRip AVC 1280x720).mp4"),
+		filepath.Join(targetSeriesDir, "Season 1", "Bookworm - S01E01 (WebRip 1080p).mkv"),
+		filepath.Join(targetSeriesDir, "Season 1", "Bookworm - S01E01 (WebRip 1080p).en.ass"),
+		filepath.Join(targetSeriesDir, "Bookworm - S00E01 (BDRip 720p).mp4"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("Stat %s: %v", path, err)
@@ -483,7 +483,7 @@ func TestApplyReconcileSkipsUnchangedPlan(t *testing.T) {
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll season: %v", err)
 	}
-	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv"), "episode")
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
@@ -499,7 +499,7 @@ func TestApplyReconcileSkipsUnchangedPlan(t *testing.T) {
 					{
 						"number": 1,
 						"media": {
-							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
 							"source": "webrip",
 							"size": 7,
 							"mtime": "2026-04-20T03:00:00Z",
