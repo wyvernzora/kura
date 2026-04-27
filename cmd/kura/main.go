@@ -10,10 +10,11 @@ import (
 )
 
 type cli struct {
-	Meta    metaCmd    `cmd:"" help:"Metadata provider commands."`
-	Library libraryCmd `cmd:"" help:"Library metadata commands."`
-	Series  seriesCmd  `cmd:"" help:"Series metadata commands."`
-	Episode episodeCmd `cmd:"" help:"Episode metadata commands."`
+	Sync      seriesSyncCmd      `cmd:"" help:"Scan a series and sync it into Kura metadata."`
+	Reconcile seriesReconcileCmd `cmd:"" help:"Rename tracked files to match Kura metadata."`
+	Meta      metaCmd            `cmd:"" help:"Metadata provider commands."`
+	Library   libraryCmd         `cmd:"" hidden:"" help:"Library metadata commands."`
+	Episode   episodeCmd         `cmd:"" hidden:"" help:"Episode metadata commands."`
 }
 
 type runContext struct {

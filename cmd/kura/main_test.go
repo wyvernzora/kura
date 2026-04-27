@@ -42,7 +42,7 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 	}
 }
 
-func TestSeriesSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
+func TestSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -55,7 +55,6 @@ func TestSeriesSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"series",
 		"sync",
 		"--yes",
 		"--tvdb-base-url", server.URL,
@@ -84,7 +83,7 @@ func TestSeriesSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
 	}
 }
 
-func TestSeriesSyncCommandWritesSummaryAndMetadata(t *testing.T) {
+func TestSyncCommandWritesSummaryAndMetadata(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -100,7 +99,6 @@ func TestSeriesSyncCommandWritesSummaryAndMetadata(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"series",
 		"sync",
 		"--yes",
 		"--tvdb-base-url", server.URL,
@@ -118,7 +116,7 @@ func TestSeriesSyncCommandWritesSummaryAndMetadata(t *testing.T) {
 	}
 }
 
-func TestSeriesSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
+func TestSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -161,7 +159,6 @@ func TestSeriesSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err = run([]string{
-		"series",
 		"sync",
 		"Bookworm",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
@@ -173,7 +170,7 @@ func TestSeriesSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	}
 }
 
-func TestSeriesReconcileCommandPrintsDryRunJSON(t *testing.T) {
+func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Long Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -211,7 +208,6 @@ func TestSeriesReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"series",
 		"reconcile",
 		"--dry-run",
 		"--json",
@@ -232,7 +228,7 @@ func TestSeriesReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	}
 }
 
-func TestSeriesReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
+func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -270,7 +266,6 @@ func TestSeriesReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"series",
 		"reconcile",
 		"Bookworm",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))

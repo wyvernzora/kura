@@ -12,11 +12,6 @@ import (
 	"github.com/wyvernzora/kura/internal/terminalui"
 )
 
-type seriesCmd struct {
-	Sync      seriesSyncCmd      `cmd:"" help:"Scan a series directory and sync it into Kura metadata."`
-	Reconcile seriesReconcileCmd `cmd:"" help:"Rename tracked files and the series directory to match Kura metadata."`
-}
-
 type seriesSyncCmd struct {
 	Provider    string `help:"Metadata provider to use when searching." enum:"tvdb" default:"tvdb"`
 	ProviderRef string `name:"provider-ref" help:"Provider series reference, such as tvdb:370070. Bypasses search."`
@@ -25,7 +20,7 @@ type seriesSyncCmd struct {
 	JSON        bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Yes         bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
 	Replace     bool   `name:"replace" help:"Replace existing episode records, moving old records to trash."`
-	Dirname     string `arg:"" help:"Series directory name below KURA_LIBRARY_ROOT."`
+	Series      string `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
 }
 
 func (cmd *seriesSyncCmd) Run(rt runContext) error {
@@ -34,7 +29,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 	if err != nil {
 		return err
 	}
-	seriesDir, err := root.SeriesDir(cmd.Dirname)
+	seriesDir, err := resolveSeriesSelector(root, cmd.Series)
 	if err != nil {
 		return err
 	}
@@ -53,7 +48,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 	result, err := lib.SyncSeries(
 		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
 		root,
-		cmd.Dirname,
+		cmd.Series,
 		library.SeriesSyncOptions{
 			ProviderSeries:   providerSeries,
 			ProviderResolver: cmd.providerSeriesResolver(rt),
@@ -103,10 +98,10 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 }
 
 type seriesReconcileCmd struct {
-	DryRun  bool   `name:"dry-run" help:"Print planned changes without renaming files or writing metadata."`
-	JSON    bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
-	Yes     bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
-	Dirname string `arg:"" help:"Series directory name below KURA_LIBRARY_ROOT."`
+	DryRun bool   `name:"dry-run" help:"Print planned changes without renaming files or writing metadata."`
+	JSON   bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
+	Yes    bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
+	Series string `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
 }
 
 func (cmd *seriesReconcileCmd) Run(rt runContext) error {
@@ -115,8 +110,8 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 	if err != nil {
 		return err
 	}
-	seriesDir, dirErr := root.SeriesDir(cmd.Dirname)
-	plan, err := lib.PlanReconcile(rt.Context, root, cmd.Dirname)
+	seriesDir, dirErr := resolveSeriesSelector(root, cmd.Series)
+	plan, err := lib.PlanReconcile(rt.Context, root, cmd.Series)
 	if err != nil {
 		if dirErr == nil {
 			warnDuplicateSeries(rt, seriesDir.Path(), err)
@@ -157,7 +152,7 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 	if err != nil {
 		return metadata.Series{}, false, err
 	}
-	resolved, selected, err := library.ResolveProviderSeries(rt.Context, metadataSource, cmd.Dirname, library.ResolveSeriesOptions{
+	resolved, selected, err := library.ResolveProviderSeries(rt.Context, metadataSource, cmd.Series, library.ResolveSeriesOptions{
 		ProviderRef: cmd.ProviderRef,
 		SearchLimit: 5,
 	})
@@ -168,7 +163,7 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 		}
 		stdin := rt.Stdin.(*os.File)
 		stdout := rt.Stdout.(*os.File)
-		match, ok, selectErr := terminalui.SelectSeriesCandidate(stdin, stdout, rt.Stderr, cmd.Dirname, selectionRequired.Candidates)
+		match, ok, selectErr := terminalui.SelectSeriesCandidate(stdin, stdout, rt.Stderr, cmd.Series, selectionRequired.Candidates)
 		if selectErr != nil {
 			return metadata.Series{}, false, selectErr
 		}
@@ -215,4 +210,10 @@ func isInteractiveRun(rt runContext) bool {
 	stdin, stdinOK := rt.Stdin.(*os.File)
 	stdout, stdoutOK := rt.Stdout.(*os.File)
 	return stdinOK && stdoutOK && terminalui.IsTerminal(stdin) && terminalui.IsTerminal(stdout)
+}
+
+func resolveSeriesSelector(root library.LibraryRoot, series string) (library.SeriesDir, error) {
+	// TODO: Replace direct child directory lookup with library-wide series selector
+	// resolution once Kura has an index of local series metadata.
+	return root.SeriesDir(series)
 }
