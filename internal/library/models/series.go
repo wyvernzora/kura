@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
+	media "github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/library/layout"
-	"github.com/wyvernzora/kura/internal/library/media"
 )
 
 const (

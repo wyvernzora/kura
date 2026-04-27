@@ -1,16 +1,14 @@
-package layout
+package domain
 
 import (
 	"fmt"
-
-	"github.com/wyvernzora/kura/internal/library/media"
 )
 
 type MediaFilename string
 
 type MediaFilenameFacts struct {
-	Source     media.MediaSource
-	Resolution media.Resolution
+	Source     MediaSource
+	Resolution Resolution
 }
 
 func BuildMediaFilename(title FilesystemTitle, episode EpisodeRef, facts MediaFilenameFacts, extension string) MediaFilename {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/library/layout"
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
@@ -29,7 +29,7 @@ func ResolveProviderSeries(ctx context.Context, metadataSource metadata.Source, 
 		return series, true, err
 	}
 
-	query := layout.CleanFilesystemTitle(dirname).String()
+	query := domain.CleanFilesystemTitle(dirname).String()
 	results, err := metadataSource.Search(ctx, query, metadata.SearchOptions{
 		Limit: opts.SearchLimit,
 		Type:  metadata.MediaTypeSeries,
@@ -49,7 +49,7 @@ func ResolveProviderSeries(ctx context.Context, metadataSource metadata.Source, 
 }
 
 func GetProviderSeriesByRef(ctx context.Context, metadataSource metadata.Source, remoteRef string) (metadata.Series, error) {
-	ref, err := metadata.ParseRemoteSeriesRef(remoteRef)
+	ref, err := domain.ParseRemoteSeriesRef(remoteRef)
 	if err != nil {
 		return metadata.Series{}, err
 	}
@@ -91,13 +91,13 @@ func ExactSearchMatch(dirname string, results []metadata.SearchResult) (metadata
 }
 
 func ExactTitleMatch(query string, title string) bool {
-	return layout.CleanFilesystemTitle(query).String() == layout.CleanFilesystemTitle(title).String()
+	return domain.CleanFilesystemTitle(query).String() == domain.CleanFilesystemTitle(title).String()
 }
 
 func TitleContainsQuery(query string, title string) bool {
-	cleanQuery := layout.CleanFilesystemTitle(query).String()
+	cleanQuery := domain.CleanFilesystemTitle(query).String()
 	if cleanQuery == "" {
 		return false
 	}
-	return strings.Contains(layout.CleanFilesystemTitle(title).String(), cleanQuery)
+	return strings.Contains(domain.CleanFilesystemTitle(title).String(), cleanQuery)
 }

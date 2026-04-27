@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/wyvernzora/kura/internal/config"
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -95,7 +96,7 @@ func mediaInspector(rt runContext) mediainfo.Inspector {
 }
 
 func parseRemoteSeriesRef(seriesRef string) (string, string, error) {
-	ref, err := metadata.ParseRemoteSeriesRef(seriesRef)
+	ref, err := domain.ParseRemoteSeriesRef(seriesRef)
 	if err != nil {
 		return "", "", err
 	}
@@ -105,15 +106,15 @@ func parseRemoteSeriesRef(seriesRef string) (string, string, error) {
 	return ref.Source(), ref.ID(), nil
 }
 
-func providerRefForSource(series library.Series, source string) (metadata.RemoteSeriesRef, error) {
+func providerRefForSource(series library.Series, source string) (domain.RemoteSeriesRef, error) {
 	for _, raw := range series.ProviderRefs {
-		ref, err := metadata.ParseRemoteSeriesRef(raw)
+		ref, err := domain.ParseRemoteSeriesRef(raw)
 		if err != nil {
-			return metadata.RemoteSeriesRef{}, err
+			return domain.RemoteSeriesRef{}, err
 		}
 		if ref.Source() == source {
 			return ref, nil
 		}
 	}
-	return metadata.RemoteSeriesRef{}, fmt.Errorf("series has no %s provider ref", source)
+	return domain.RemoteSeriesRef{}, fmt.Errorf("series has no %s provider ref", source)
 }

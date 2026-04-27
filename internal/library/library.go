@@ -3,9 +3,9 @@ package library
 import (
 	"context"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/library/layout"
 	"github.com/wyvernzora/kura/internal/library/match"
-	"github.com/wyvernzora/kura/internal/library/media"
 	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/library/reconcile"
 	"github.com/wyvernzora/kura/internal/library/scan"
@@ -15,17 +15,17 @@ import (
 
 type LibraryRoot = layout.LibraryRoot
 type SeriesDir = layout.SeriesDir
-type FilesystemTitle = layout.FilesystemTitle
-type SeasonNumber = layout.SeasonNumber
-type EpisodeNumber = layout.EpisodeNumber
-type EpisodeRef = layout.EpisodeRef
-type MediaFilename = layout.MediaFilename
-type MediaFilenameFacts = layout.MediaFilenameFacts
+type FilesystemTitle = domain.FilesystemTitle
+type SeasonNumber = domain.SeasonNumber
+type EpisodeNumber = domain.EpisodeNumber
+type EpisodeRef = domain.EpisodeRef
+type MediaFilename = domain.MediaFilename
+type MediaFilenameFacts = domain.MediaFilenameFacts
 
-type MediaSource = media.MediaSource
-type Codec = media.Codec
-type Resolution = media.Resolution
-type MediaInfo = media.MediaInfo
+type MediaSource = domain.MediaSource
+type Codec = domain.Codec
+type Resolution = domain.Resolution
+type MediaInfo = domain.MediaInfo
 
 type Series = models.Series
 type Season = models.Season
@@ -69,14 +69,14 @@ const (
 	StagedSchemaVersion = models.StagedSchemaVersion
 	TrashSchemaVersion  = models.TrashSchemaVersion
 
-	MediaSourceUnknown = media.MediaSourceUnknown
-	MediaSourceTVRip   = media.MediaSourceTVRip
-	MediaSourceWebRip  = media.MediaSourceWebRip
-	MediaSourceWebDL   = media.MediaSourceWebDL
-	MediaSourceBDRip   = media.MediaSourceBDRip
-	MediaSourceBluRay  = media.MediaSourceBluRay
-	MediaSourceHDTV    = media.MediaSourceHDTV
-	MediaSourceDVDRip  = media.MediaSourceDVDRip
+	MediaSourceUnknown = domain.MediaSourceUnknown
+	MediaSourceTVRip   = domain.MediaSourceTVRip
+	MediaSourceWebRip  = domain.MediaSourceWebRip
+	MediaSourceWebDL   = domain.MediaSourceWebDL
+	MediaSourceBDRip   = domain.MediaSourceBDRip
+	MediaSourceBluRay  = domain.MediaSourceBluRay
+	MediaSourceHDTV    = domain.MediaSourceHDTV
+	MediaSourceDVDRip  = domain.MediaSourceDVDRip
 
 	ProgressStart   = progress.StartStatus
 	ProgressUpdate  = progress.UpdateStatus
@@ -87,21 +87,21 @@ const (
 var (
 	ParseLibraryRoot     = layout.ParseLibraryRoot
 	ParseSeriesDir       = layout.ParseSeriesDir
-	ParseFilesystemTitle = layout.ParseFilesystemTitle
-	CleanFilesystemTitle = layout.CleanFilesystemTitle
-	NewSeasonNumber      = layout.NewSeasonNumber
-	ParseSeasonNumber    = layout.ParseSeasonNumber
-	RegularSeason        = layout.RegularSeason
-	SpecialsSeason       = layout.SpecialsSeason
-	NewEpisodeNumber     = layout.NewEpisodeNumber
-	ParseEpisodeNumber   = layout.ParseEpisodeNumber
-	NewEpisodeRef        = layout.NewEpisodeRef
-	BuildMediaFilename   = layout.BuildMediaFilename
+	ParseFilesystemTitle = domain.ParseFilesystemTitle
+	CleanFilesystemTitle = domain.CleanFilesystemTitle
+	NewSeasonNumber      = domain.NewSeasonNumber
+	ParseSeasonNumber    = domain.ParseSeasonNumber
+	RegularSeason        = domain.RegularSeason
+	SpecialsSeason       = domain.SpecialsSeason
+	NewEpisodeNumber     = domain.NewEpisodeNumber
+	ParseEpisodeNumber   = domain.ParseEpisodeNumber
+	NewEpisodeRef        = domain.NewEpisodeRef
+	BuildMediaFilename   = domain.BuildMediaFilename
 
-	ParseMediaSource = media.ParseMediaSource
-	ParseCodec       = media.ParseCodec
-	NewResolution    = media.NewResolution
-	ParseResolution  = media.ParseResolution
+	ParseMediaSource = domain.ParseMediaSource
+	ParseCodec       = domain.ParseCodec
+	NewResolution    = domain.NewResolution
+	ParseResolution  = domain.ParseResolution
 
 	DiscoverSeriesEpisodes   = scan.DiscoverSeriesEpisodes
 	ParseSeasonDir           = scan.ParseSeasonDir

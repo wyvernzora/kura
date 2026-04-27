@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
@@ -202,7 +203,7 @@ func newSeriesFromProvider(store models.Store, seriesDir string, providerSeries 
 	if len(series.ProviderRefs) == 0 {
 		series.ProviderRefs = []string{providerSeries.ProviderRef}
 	}
-	ref, err := metadata.ParseRemoteSeriesRef(providerSeries.ProviderRef)
+	ref, err := domain.ParseRemoteSeriesRef(providerSeries.ProviderRef)
 	if err != nil {
 		return nil, err
 	}

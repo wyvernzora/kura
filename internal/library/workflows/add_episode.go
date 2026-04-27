@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	media "github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/library/layout"
-	"github.com/wyvernzora/kura/internal/library/media"
 	"github.com/wyvernzora/kura/internal/library/models"
 )
 
@@ -89,7 +89,7 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 	}
 	episodeKey := strconv.Itoa(opts.Episode)
 	episode, exists := season.Episodes[episodeKey]
-	samePath := exists && layout.CleanFilesystemTitle(episode.Media.Path).EqualName(relPath)
+	samePath := exists && media.CleanFilesystemTitle(episode.Media.Path).EqualName(relPath)
 	if exists && !opts.Replace && !(opts.Refresh && samePath) {
 		return Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
 	}

@@ -3,8 +3,8 @@ package workflows
 import (
 	"context"
 
+	media "github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/library/layout"
-	"github.com/wyvernzora/kura/internal/library/media"
 	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/library/scan"
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -12,8 +12,8 @@ import (
 
 type LibraryRoot = layout.LibraryRoot
 type SeriesDir = layout.SeriesDir
-type SeasonNumber = layout.SeasonNumber
-type EpisodeNumber = layout.EpisodeNumber
+type SeasonNumber = media.SeasonNumber
+type EpisodeNumber = media.EpisodeNumber
 type MediaSource = media.MediaSource
 type MediaInfo = media.MediaInfo
 
@@ -43,7 +43,7 @@ func (f MediaInspectorFunc) Inspect(ctx context.Context, path string) (MediaInfo
 type ProviderSeriesResolver func(context.Context, Series) (metadata.Series, error)
 
 var (
-	CleanFilesystemTitle    = layout.CleanFilesystemTitle
+	CleanFilesystemTitle    = media.CleanFilesystemTitle
 	ParseMediaSource        = media.ParseMediaSource
 	DiscoverSeriesEpisodes  = scan.DiscoverSeriesEpisodes
 	InferSourceFromFilename = scan.InferSourceFromFilename

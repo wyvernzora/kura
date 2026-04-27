@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	mediafacts "github.com/wyvernzora/kura/internal/library/media"
+	mediafacts "github.com/wyvernzora/kura/internal/domain"
 )
 
 const (
