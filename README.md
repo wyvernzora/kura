@@ -57,7 +57,7 @@ Useful environment:
 - `KURA_LIBRARY_ROOT`: root directory containing series directories.
 - `KURA_MEDIAINFO_COMMAND`: path to the `mediainfo` executable, when it is not
   on `PATH`.
-- `KURA_TVDB_API_KEY`: API key for TVDB metadata lookups.
+- `KURA_TVDB_KEY`: API key for TVDB metadata lookups.
 - `KURA_PREFERRED_LANGUAGES`: comma-separated preferred metadata languages.
 
 ## Build
