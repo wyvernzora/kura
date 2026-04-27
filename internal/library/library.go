@@ -6,8 +6,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain"
 	layout "github.com/wyvernzora/kura/internal/fsroot"
 	scan "github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/library/reconcile"
-	"github.com/wyvernzora/kura/internal/library/workflows"
+	"github.com/wyvernzora/kura/internal/ops"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/resolve"
 	"github.com/wyvernzora/kura/internal/store"
@@ -38,27 +37,27 @@ type MediaFile = store.MediaFile
 type CompanionFile = store.CompanionFile
 type DuplicateEpisodeNumberError = store.DuplicateEpisodeNumberError
 
-type AddEpisodeOptions = workflows.AddEpisodeOptions
-type EpisodeAlreadyExistsError = workflows.EpisodeAlreadyExistsError
+type AddEpisodeOptions = ops.AddEpisodeOptions
+type EpisodeAlreadyExistsError = ops.EpisodeAlreadyExistsError
 
 type DiscoveredEpisode = scan.DiscoveredEpisode
 type ImportSkip = scan.ImportSkip
 
-type MediaInspector = workflows.MediaInspector
-type MediaInspectorFunc = workflows.MediaInspectorFunc
-type ProviderSeriesResolver = workflows.ProviderSeriesResolver
-type SeriesSyncOptions = workflows.SeriesSyncOptions
-type SeriesSyncResult = workflows.SeriesSyncResult
-type SeriesSyncEntry = workflows.SeriesSyncEntry
-type StageEpisodeFileOptions = workflows.StageEpisodeFileOptions
-type StageEpisodeFileResult = workflows.StageEpisodeFileResult
-type StagedEpisodeAlreadyExistsError = workflows.StagedEpisodeAlreadyExistsError
+type MediaInspector = ops.MediaInspector
+type MediaInspectorFunc = ops.MediaInspectorFunc
+type ProviderSeriesResolver = ops.ProviderSeriesResolver
+type SeriesSyncOptions = ops.SeriesSyncOptions
+type SeriesSyncResult = ops.SeriesSyncResult
+type SeriesSyncEntry = ops.SeriesSyncEntry
+type StageEpisodeFileOptions = ops.StageEpisodeFileOptions
+type StageEpisodeFileResult = ops.StageEpisodeFileResult
+type StagedEpisodeAlreadyExistsError = ops.StagedEpisodeAlreadyExistsError
 
 type ResolveSeriesOptions = resolve.ResolveSeriesOptions
 type SeriesSelectionRequiredError = resolve.SeriesSelectionRequiredError
 
-type ReconcilePlan = reconcile.Plan
-type ReconcileMove = reconcile.Move
+type ReconcilePlan = ops.Plan
+type ReconcileMove = ops.Move
 
 type ProgressStatus = progress.Status
 type ProgressEvent = progress.Event
@@ -184,21 +183,21 @@ func (l library) SaveTrash(trash Trash) error {
 }
 
 func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series, error) {
-	return workflows.AddEpisode(seriesDir, series, opts)
+	return ops.AddEpisode(seriesDir, series, opts)
 }
 
 func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
-	return workflows.SyncSeries(ctx, l.store, root, dirname, opts)
+	return ops.SyncSeries(ctx, l.store, root, dirname, opts)
 }
 
 func (l library) StageEpisodeFile(ctx context.Context, root LibraryRoot, dirname string, opts StageEpisodeFileOptions) (StageEpisodeFileResult, error) {
-	return workflows.StageEpisodeFile(ctx, l.store, root, dirname, opts)
+	return ops.StageEpisodeFile(ctx, l.store, root, dirname, opts)
 }
 
 func (l library) PlanReconcile(ctx context.Context, root LibraryRoot, dirname string) (ReconcilePlan, error) {
-	return reconcile.PlanSeries(ctx, root, dirname, l.store)
+	return ops.PlanSeries(ctx, root, dirname, l.store)
 }
 
 func (l library) ApplyReconcile(ctx context.Context, plan ReconcilePlan) error {
-	return reconcile.ApplyPlan(ctx, plan, l.store)
+	return ops.ApplyPlan(ctx, plan, l.store)
 }
