@@ -149,6 +149,7 @@ func stagedEpisode(season int, number int, mediaPath string, source string, comp
 		Season: season,
 		Number: number,
 		Episode: Episode{
+			Number: number,
 			Media: MediaFile{
 				Path:      mediaPath,
 				Source:    ParseMediaSource(source).String(),

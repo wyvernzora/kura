@@ -102,6 +102,7 @@ func trashEntriesFromV1(trash []trashV1) []TrashedEpisode {
 			Season: trashed.Season,
 			Number: trashed.Number,
 			Episode: Episode{
+				Number:     trashed.Number,
 				Media:      mediaFileFromV1(trashed.Media),
 				Companions: companionsFromV1(trashed.Companions),
 			},

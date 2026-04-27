@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	mediafacts "github.com/wyvernzora/kura/internal/domain"
@@ -215,52 +214,43 @@ func setSeriesEpisode(series *store.Series, seasonNumber int, episodeNumber int,
 	if episodeNumber < 1 {
 		return fmt.Errorf("library: invalid episode %d", episodeNumber)
 	}
-	episodeKey := strconv.Itoa(episodeNumber)
 	if seasonNumber == 0 {
 		season := store.Season{}
 		if series.Specials != nil {
 			season = *series.Specials
 		}
-		if season.Episodes == nil {
-			season.Episodes = map[string]store.Episode{}
-		}
-		season.Episodes[episodeKey] = episode
-		series.Specials = &season
+		season.Number = 0
+		episode.Number = episodeNumber
+		season.UpsertEpisode(episode)
+		series.UpsertSeason(season)
 		return nil
 	}
-	if series.Seasons == nil {
-		series.Seasons = map[string]store.Season{}
+	season := store.Season{Number: seasonNumber}
+	if existingSeason, ok := series.Season(seasonNumber); ok {
+		season = *existingSeason
 	}
-	seasonKey := strconv.Itoa(seasonNumber)
-	season := series.Seasons[seasonKey]
-	if season.Episodes == nil {
-		season.Episodes = map[string]store.Episode{}
-	}
-	season.Episodes[episodeKey] = episode
-	series.Seasons[seasonKey] = season
+	episode.Number = episodeNumber
+	season.UpsertEpisode(episode)
+	series.UpsertSeason(season)
 	return nil
 }
 
 func reconcileEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, series *store.Series, trash *store.Trash) ([]Move, error) {
 	var moves []Move
-	regularKeys := make([]int, 0, len(series.Seasons))
-	for key := range series.Seasons {
-		seasonNumber, err := strconv.Atoi(key)
-		if err != nil || seasonNumber < 1 {
+	regularSeasons := append([]store.Season(nil), series.Seasons...)
+	sort.Slice(regularSeasons, func(i, j int) bool {
+		return regularSeasons[i].Number < regularSeasons[j].Number
+	})
+	for _, season := range regularSeasons {
+		if season.Number < 1 {
 			continue
 		}
-		regularKeys = append(regularKeys, seasonNumber)
-	}
-	sort.Ints(regularKeys)
-	for _, seasonNumber := range regularKeys {
-		key := strconv.Itoa(seasonNumber)
-		season := series.Seasons[key]
-		seasonMoves, err := reconcileSeasonEpisodes(seriesDir, title, seasonNumber, &season)
+		seasonMoves, err := reconcileSeasonEpisodes(seriesDir, title, season.Number, &season)
 		if err != nil {
 			return nil, err
 		}
 		moves = append(moves, seasonMoves...)
-		series.Seasons[key] = season
+		series.UpsertSeason(season)
 	}
 	if series.Specials != nil {
 		seasonMoves, err := reconcileSeasonEpisodes(seriesDir, title, 0, series.Specials)
@@ -279,24 +269,20 @@ func reconcileEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTi
 
 func reconcileSeasonEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, seasonNumber int, season *store.Season) ([]Move, error) {
 	var moves []Move
-	episodeNumbers := make([]int, 0, len(season.Episodes))
-	for key := range season.Episodes {
-		episodeNumber, err := strconv.Atoi(key)
-		if err != nil || episodeNumber < 1 {
+	episodes := append([]store.Episode(nil), season.Episodes...)
+	sort.Slice(episodes, func(i, j int) bool {
+		return episodes[i].Number < episodes[j].Number
+	})
+	for _, episode := range episodes {
+		if episode.Number < 1 {
 			continue
 		}
-		episodeNumbers = append(episodeNumbers, episodeNumber)
-	}
-	sort.Ints(episodeNumbers)
-	for _, episodeNumber := range episodeNumbers {
-		key := strconv.Itoa(episodeNumber)
-		episode := season.Episodes[key]
-		episodeMoves, err := reconcileEpisode(seriesDir, title, seasonNumber, episodeNumber, &episode)
+		episodeMoves, err := reconcileEpisode(seriesDir, title, seasonNumber, episode.Number, &episode)
 		if err != nil {
 			return nil, err
 		}
 		moves = append(moves, episodeMoves...)
-		season.Episodes[key] = episode
+		season.UpsertEpisode(episode)
 	}
 	return moves, nil
 }

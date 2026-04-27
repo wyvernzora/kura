@@ -283,16 +283,7 @@ func episodeKey(seasonNumber int, episodeNumber int) string {
 }
 
 func unchangedTrackedEpisode(seriesDir SeriesDir, series Series, discovered DiscoveredEpisode) (Episode, bool, error) {
-	season := Season{}
-	if discovered.Season == 0 {
-		if series.Specials == nil {
-			return Episode{}, false, nil
-		}
-		season = *series.Specials
-	} else {
-		season = series.Seasons[strconv.Itoa(discovered.Season)]
-	}
-	episode, ok := season.Episodes[strconv.Itoa(discovered.Number)]
+	episode, ok := series.LookupEpisode(discovered.Season, discovered.Number)
 	if !ok || !CleanFilesystemTitle(episode.Media.Path).EqualName(discovered.Path) {
 		return Episode{}, false, nil
 	}

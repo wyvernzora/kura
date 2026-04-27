@@ -41,6 +41,7 @@ func TrashPath(seriesDir string) string {
 }
 
 func NewTrashedEpisode(season int, number int, episode Episode) TrashedEpisode {
+	episode.Number = number
 	return TrashedEpisode{
 		ID:      ulid.Make().String(),
 		Season:  season,

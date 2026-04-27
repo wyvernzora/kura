@@ -4,7 +4,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
+	"sort"
 
 	media "github.com/wyvernzora/kura/internal/domain"
 	layout "github.com/wyvernzora/kura/internal/fsroot"
@@ -20,16 +20,16 @@ const (
 // titles and air dates, belongs in provider read views and is intentionally not
 // persisted here.
 type Series struct {
-	SchemaVersion     int               `json:"schemaVersion"`
-	ID                string            `json:"id"`
-	ProviderRefs      []string          `json:"providerRefs"`
-	PreferredProvider string            `json:"preferredProvider"`
-	PreferredTitle    string            `json:"preferredTitle"`
-	CanonicalTitle    string            `json:"canonicalTitle"`
-	LastScanned       string            `json:"lastScanned,omitempty"`
-	Notes             string            `json:"notes,omitempty"`
-	Seasons           map[string]Season `json:"seasons,omitempty"`
-	Specials          *Season           `json:"specials,omitempty"`
+	SchemaVersion     int      `json:"schemaVersion"`
+	ID                string   `json:"id"`
+	ProviderRefs      []string `json:"providerRefs"`
+	PreferredProvider string   `json:"preferredProvider"`
+	PreferredTitle    string   `json:"preferredTitle"`
+	CanonicalTitle    string   `json:"canonicalTitle"`
+	LastScanned       string   `json:"lastScanned,omitempty"`
+	Notes             string   `json:"notes,omitempty"`
+	Seasons           []Season `json:"seasons,omitempty"`
+	Specials          *Season  `json:"specials,omitempty"`
 
 	dirname string
 }
@@ -40,12 +40,14 @@ func (s Series) MarshalJSON() ([]byte, error) {
 
 // Season stores local state for one regular season or the specials collection.
 type Season struct {
-	Notes    string             `json:"notes,omitempty"`
-	Episodes map[string]Episode `json:"episodes,omitempty"`
+	Number   int       `json:"number"`
+	Notes    string    `json:"notes,omitempty"`
+	Episodes []Episode `json:"episodes,omitempty"`
 }
 
 // Episode stores local state for one episode.
 type Episode struct {
+	Number     int             `json:"number"`
 	Media      MediaFile       `json:"media"`
 	Companions []CompanionFile `json:"companions"`
 }
@@ -95,12 +97,11 @@ func (s Series) Validate() error {
 	if err := validateSeriesV1Schema(seriesToV1(s)); err != nil {
 		return err
 	}
-	for seasonKey, season := range s.Seasons {
-		seasonNumber, err := strconv.Atoi(seasonKey)
-		if err != nil || seasonNumber < 1 {
-			return fmt.Errorf("library: invalid season key %q", seasonKey)
+	for _, season := range s.Seasons {
+		if season.Number < 1 {
+			return fmt.Errorf("library: invalid season number %d", season.Number)
 		}
-		if err := validateSeasonPaths(seasonNumber, season); err != nil {
+		if err := validateSeasonPaths(season.Number, season); err != nil {
 			return err
 		}
 	}
@@ -112,34 +113,83 @@ func (s Series) Validate() error {
 	return nil
 }
 
-func (s Series) LookupEpisode(seasonNumber int, episodeNumber int) (Episode, bool) {
-	if seasonNumber == 0 {
-		if s.Specials == nil || s.Specials.Episodes == nil {
-			return Episode{}, false
+func (s Series) Season(number int) (*Season, bool) {
+	if number == 0 {
+		if s.Specials == nil {
+			return nil, false
 		}
-		episode, ok := s.Specials.Episodes[strconv.Itoa(episodeNumber)]
-		return episode, ok && episode.Media.Path != ""
+		return s.Specials, true
 	}
-	season, ok := s.Seasons[strconv.Itoa(seasonNumber)]
-	if !ok || season.Episodes == nil {
+	for i := range s.Seasons {
+		if s.Seasons[i].Number == number {
+			return &s.Seasons[i], true
+		}
+	}
+	return nil, false
+}
+
+func (s Series) LookupEpisode(seasonNumber int, episodeNumber int) (Episode, bool) {
+	season, ok := s.Season(seasonNumber)
+	if !ok {
 		return Episode{}, false
 	}
-	episode, ok := season.Episodes[strconv.Itoa(episodeNumber)]
-	return episode, ok && episode.Media.Path != ""
+	episode, ok := season.Episode(episodeNumber)
+	if !ok || episode.Media.Path == "" {
+		return Episode{}, false
+	}
+	return *episode, true
+}
+
+func (s *Series) UpsertSeason(season Season) {
+	if season.Number == 0 {
+		s.Specials = &season
+		return
+	}
+	for i := range s.Seasons {
+		if s.Seasons[i].Number == season.Number {
+			s.Seasons[i] = season
+			return
+		}
+	}
+	s.Seasons = append(s.Seasons, season)
+	sort.Slice(s.Seasons, func(i, j int) bool {
+		return s.Seasons[i].Number < s.Seasons[j].Number
+	})
+}
+
+func (s Season) Episode(number int) (*Episode, bool) {
+	for i := range s.Episodes {
+		if s.Episodes[i].Number == number {
+			return &s.Episodes[i], true
+		}
+	}
+	return nil, false
+}
+
+func (s *Season) UpsertEpisode(episode Episode) {
+	for i := range s.Episodes {
+		if s.Episodes[i].Number == episode.Number {
+			s.Episodes[i] = episode
+			return
+		}
+	}
+	s.Episodes = append(s.Episodes, episode)
+	sort.Slice(s.Episodes, func(i, j int) bool {
+		return s.Episodes[i].Number < s.Episodes[j].Number
+	})
 }
 
 func validateSeasonPaths(seasonNumber int, season Season) error {
-	for episodeKey, episode := range season.Episodes {
-		episodeNumber, err := strconv.Atoi(episodeKey)
-		if err != nil || episodeNumber < 1 {
-			return fmt.Errorf("library: invalid episode key %q in season %d", episodeKey, seasonNumber)
+	for _, episode := range season.Episodes {
+		if episode.Number < 1 {
+			return fmt.Errorf("library: invalid episode number %d in season %d", episode.Number, seasonNumber)
 		}
 		if _, err := layout.CleanSeriesRelPath(episode.Media.Path); err != nil {
-			return fmt.Errorf("library: invalid media path for S%02dE%02d: %w", seasonNumber, episodeNumber, err)
+			return fmt.Errorf("library: invalid media path for S%02dE%02d: %w", seasonNumber, episode.Number, err)
 		}
 		for _, companion := range episode.Companions {
 			if _, err := layout.CleanSeriesRelPath(companion.Path); err != nil {
-				return fmt.Errorf("library: invalid companion path for S%02dE%02d: %w", seasonNumber, episodeNumber, err)
+				return fmt.Errorf("library: invalid companion path for S%02dE%02d: %w", seasonNumber, episode.Number, err)
 			}
 		}
 	}

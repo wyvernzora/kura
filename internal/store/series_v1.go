@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -169,38 +168,30 @@ func validateUniqueEpisodeNumbersForSeason(season seasonV1) error {
 	return nil
 }
 
-func seasonsToV1(seasons map[string]Season) []seasonV1 {
+func seasonsToV1(seasons []Season) []seasonV1 {
 	if len(seasons) == 0 {
 		return nil
 	}
-	keys := make([]int, 0, len(seasons))
-	for key, season := range seasons {
-		seasonNumber, err := strconv.Atoi(key)
-		if err != nil {
+	out := make([]seasonV1, 0, len(seasons))
+	for _, season := range seasons {
+		if season.Number < 1 {
 			continue
 		}
-		if seasonNumber < 1 {
-			continue
-		}
-		_ = season
-		keys = append(keys, seasonNumber)
+		out = append(out, seasonToV1(season.Number, season))
 	}
-	sort.Ints(keys)
-	out := make([]seasonV1, 0, len(keys))
-	for _, seasonNumber := range keys {
-		out = append(out, seasonToV1(seasonNumber, seasons[strconv.Itoa(seasonNumber)]))
-	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
 	return out
 }
 
-func seasonsFromV1(seasons []seasonV1) map[string]Season {
+func seasonsFromV1(seasons []seasonV1) []Season {
 	if len(seasons) == 0 {
 		return nil
 	}
-	out := make(map[string]Season, len(seasons))
+	out := make([]Season, 0, len(seasons))
 	for _, season := range seasons {
-		out[strconv.Itoa(season.Number)] = seasonFromV1(season)
+		out = append(out, seasonFromV1(season))
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
 	return out
 }
 
@@ -230,48 +221,44 @@ func seasonFromV1Ptr(season *seasonV1) *Season {
 
 func seasonFromV1(season seasonV1) Season {
 	return Season{
+		Number:   season.Number,
 		Notes:    season.Notes,
 		Episodes: episodesFromV1(season.Episodes),
 	}
 }
 
-func episodesToV1(episodes map[string]Episode) []episodeV1 {
+func episodesToV1(episodes []Episode) []episodeV1 {
 	if len(episodes) == 0 {
 		return nil
 	}
-	keys := make([]int, 0, len(episodes))
-	for key := range episodes {
-		episodeNumber, err := strconv.Atoi(key)
-		if err != nil || episodeNumber < 1 {
+	out := make([]episodeV1, 0, len(episodes))
+	for _, episode := range episodes {
+		if episode.Number < 1 {
 			continue
 		}
-		keys = append(keys, episodeNumber)
-	}
-	sort.Ints(keys)
-	out := make([]episodeV1, 0, len(keys))
-	for _, episodeNumber := range keys {
-		episode := episodes[strconv.Itoa(episodeNumber)]
 		out = append(out, episodeV1{
-			Number:     episodeNumber,
+			Number:     episode.Number,
 			Media:      mediaFileToV1(episode.Media),
 			Companions: companionsToV1(episode.Companions),
 		})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
 	return out
 }
 
-func episodesFromV1(episodes []episodeV1) map[string]Episode {
+func episodesFromV1(episodes []episodeV1) []Episode {
 	if len(episodes) == 0 {
 		return nil
 	}
-	out := make(map[string]Episode, len(episodes))
+	out := make([]Episode, 0, len(episodes))
 	for _, episode := range episodes {
-		key := strconv.Itoa(episode.Number)
-		out[key] = Episode{
+		out = append(out, Episode{
+			Number:     episode.Number,
 			Media:      mediaFileFromV1(episode.Media),
 			Companions: companionsFromV1(episode.Companions),
-		}
+		})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Number < out[j].Number })
 	return out
 }
 

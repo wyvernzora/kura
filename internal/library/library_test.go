@@ -55,7 +55,7 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
-	episode := loaded.Seasons["1"].Episodes["1"]
+	episode := testEpisode(t, loaded, 1, 1)
 	if episode.Media.Path != "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv" {
 		t.Fatalf("Media.Path = %q", episode.Media.Path)
 	}
@@ -269,7 +269,7 @@ func TestSyncSeriesRefreshesChangedCompanionWithoutReplace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat companion: %v", err)
 	}
-	got := loaded.Seasons["1"].Episodes["1"].Companions[0]
+	got := testEpisode(t, loaded, 1, 1).Companions[0]
 	if got.Size != companionInfo.Size() || got.MTime != companionInfo.ModTime().UTC().Format(time.RFC3339) {
 		t.Fatalf("Companion facts = %#v, want refreshed from filesystem", got)
 	}
@@ -699,10 +699,10 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
-	if got := loaded.Seasons["1"].Episodes["1"].Media.Path; got != "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv" {
+	if got := testEpisode(t, loaded, 1, 1).Media.Path; got != "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv" {
 		t.Fatalf("Media.Path = %q, want reconciled path", got)
 	}
-	if got := loaded.Seasons["1"].Episodes["1"].Companions[0].Path; got != "Season 1/Bookworm - S01E01 (WebRip 1080p).en.ass" {
+	if got := testEpisode(t, loaded, 1, 1).Companions[0].Path; got != "Season 1/Bookworm - S01E01 (WebRip 1080p).en.ass" {
 		t.Fatalf("Companion.Path = %q, want reconciled path", got)
 	}
 }
@@ -1214,4 +1214,13 @@ func writeSeriesJSON(t *testing.T, seriesDir string, content string) {
 	if err := os.WriteFile(SeriesPath(seriesDir), []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile series.json: %v", err)
 	}
+}
+
+func testEpisode(t *testing.T, series *Series, seasonNumber int, episodeNumber int) Episode {
+	t.Helper()
+	episode, ok := series.LookupEpisode(seasonNumber, episodeNumber)
+	if !ok {
+		t.Fatalf("LookupEpisode(%d, %d) = false", seasonNumber, episodeNumber)
+	}
+	return episode
 }

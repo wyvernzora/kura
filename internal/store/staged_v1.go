@@ -99,6 +99,7 @@ func stagedEntriesFromV1(entries []stagedV1) []StagedEpisode {
 			Season: staged.Season,
 			Number: staged.Number,
 			Episode: Episode{
+				Number:     staged.Number,
 				Media:      mediaFileFromV1(staged.Media),
 				Companions: companionsFromV1(staged.Companions),
 			},

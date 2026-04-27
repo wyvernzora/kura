@@ -126,7 +126,7 @@ func TestAddEpisodeRecordsRelativeFileFacts(t *testing.T) {
 		t.Fatalf("AddEpisode: %v", err)
 	}
 
-	media := updated.Seasons["1"].Episodes["1"].Media
+	media := testEpisode(t, &updated, 1, 1).Media
 	if media.Path != "Season 1/episode.mkv" {
 		t.Fatalf("Media.Path = %q, want Season 1/episode.mkv", media.Path)
 	}
@@ -140,7 +140,7 @@ func TestAddEpisodeRecordsRelativeFileFacts(t *testing.T) {
 		t.Fatal("Media.MTime is empty")
 	}
 
-	data, err := json.Marshal(updated.Seasons["1"].Episodes["1"])
+	data, err := json.Marshal(testEpisode(t, &updated, 1, 1))
 	if err != nil {
 		t.Fatalf("Marshal episode: %v", err)
 	}
@@ -186,11 +186,16 @@ func TestAddEpisodeRecordsSpecialsSeparately(t *testing.T) {
 	if updated.Specials == nil {
 		t.Fatal("Specials = nil, want season")
 	}
-	if got := updated.Specials.Episodes["1"].Media.Path; got != "special.mkv" {
+	if got := testEpisode(t, &updated, 0, 1).Media.Path; got != "special.mkv" {
 		t.Fatalf("special media path = %q, want special.mkv", got)
 	}
-	if _, ok := updated.Seasons["0"]; ok {
-		t.Fatal("Seasons[0] exists, want specials separate")
+	if _, ok := updated.Season(0); !ok {
+		t.Fatal("Specials missing")
+	}
+	for _, season := range updated.Seasons {
+		if season.Number == 0 {
+			t.Fatal("Seasons[0] exists, want specials separate")
+		}
 	}
 }
 
@@ -265,7 +270,7 @@ func TestAddEpisodeReplacesMediaForSameEpisodeWithTrash(t *testing.T) {
 		t.Fatalf("AddEpisode second: %v", err)
 	}
 
-	media := updated.Seasons["1"].Episodes["1"].Media
+	media := testEpisode(t, &updated, 1, 1).Media
 	if media.Path != "Season 1/episode-720p.mkv" {
 		t.Fatalf("media path = %q, want replacement path", media.Path)
 	}

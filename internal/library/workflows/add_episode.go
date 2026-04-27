@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	media "github.com/wyvernzora/kura/internal/domain"
@@ -61,20 +60,17 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 		return Series{}, fmt.Errorf("library: episode path %q is a directory", relPath)
 	}
 
-	if series.Seasons == nil {
-		series.Seasons = map[string]Season{}
-	}
 	season := Season{}
 	if opts.Season == 0 {
 		if series.Specials != nil {
 			season = *series.Specials
 		}
 	} else {
-		season = series.Seasons[strconv.Itoa(opts.Season)]
+		if existingSeason, ok := series.Season(opts.Season); ok {
+			season = *existingSeason
+		}
 	}
-	if season.Episodes == nil {
-		season.Episodes = map[string]Episode{}
-	}
+	season.Number = opts.Season
 	companions, err := companionFiles(seriesPath.Path(), opts.Companions)
 	if err != nil {
 		return Series{}, err
@@ -87,8 +83,11 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 		MTime:     info.ModTime().UTC().Format(time.RFC3339),
 		MediaInfo: opts.MediaInfo,
 	}
-	episodeKey := strconv.Itoa(opts.Episode)
-	episode, exists := season.Episodes[episodeKey]
+	episodePtr, exists := season.Episode(opts.Episode)
+	episode := Episode{}
+	if exists {
+		episode = *episodePtr
+	}
 	samePath := exists && media.CleanFilesystemTitle(episode.Media.Path).EqualName(relPath)
 	if exists && !opts.Replace && !(opts.Refresh && samePath) {
 		return Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
@@ -112,12 +111,9 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 	if len(companions) > 0 || episode.Companions == nil || opts.Refresh {
 		episode.Companions = companions
 	}
-	season.Episodes[episodeKey] = episode
-	if opts.Season == 0 {
-		series.Specials = &season
-	} else {
-		series.Seasons[strconv.Itoa(opts.Season)] = season
-	}
+	episode.Number = opts.Episode
+	season.UpsertEpisode(episode)
+	series.UpsertSeason(season)
 
 	if err := series.Validate(); err != nil {
 		return Series{}, err
