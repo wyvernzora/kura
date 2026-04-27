@@ -2,7 +2,6 @@ package library
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -85,8 +84,8 @@ func TestResolveProviderSeriesDoesNotSubstringMatchMultipleResults(t *testing.T)
 	}
 
 	_, _, err := ResolveProviderSeries(context.Background(), metadataSource, "Bookworm", ResolveSeriesOptions{})
-	var selectionRequired SeriesSelectionRequiredError
-	if !errorAs(err, &selectionRequired) {
+	selectionRequired, ok := errors.AsType[SeriesSelectionRequiredError](err)
+	if !ok {
 		t.Fatalf("error = %v, want SeriesSelectionRequiredError", err)
 	}
 	if len(selectionRequired.Candidates) != 2 {
@@ -105,8 +104,8 @@ func TestResolveProviderSeriesReturnsCandidatesWhenSelectionRequired(t *testing.
 	}
 
 	_, _, err := ResolveProviderSeries(context.Background(), metadataSource, "No Match", ResolveSeriesOptions{})
-	var selectionRequired SeriesSelectionRequiredError
-	if !errorAs(err, &selectionRequired) {
+	selectionRequired, ok := errors.AsType[SeriesSelectionRequiredError](err)
+	if !ok {
 		t.Fatalf("error = %v, want SeriesSelectionRequiredError", err)
 	}
 	if len(selectionRequired.Candidates) != 1 {
@@ -456,17 +455,4 @@ func writeSeriesJSON(t *testing.T, seriesDir string, content string) {
 	if err := os.WriteFile(SeriesPath(seriesDir), []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile series.json: %v", err)
 	}
-}
-
-func errorAs[T error](err error, target *T) bool {
-	return errors.As(err, target)
-}
-
-func requireJSON(t *testing.T, data []byte) map[string]any {
-	t.Helper()
-	var value map[string]any
-	if err := json.Unmarshal(data, &value); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	return value
 }

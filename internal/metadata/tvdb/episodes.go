@@ -45,7 +45,7 @@ func (c *client) seriesEpisodes(ctx context.Context, id string) ([]episodeRecord
 	// from causing an unbounded loop while remaining far above realistic series
 	// page counts.
 	const maxEpisodePages = 100
-	for page := 0; page < maxEpisodePages; page++ {
+	for page := range maxEpisodePages {
 		values := url.Values{}
 		values.Set("page", strconv.Itoa(page))
 

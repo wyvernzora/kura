@@ -317,13 +317,11 @@ func TestTokenLoginIsSingleflight(t *testing.T) {
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 8)
-	for i := 0; i < 8; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 8 {
+		wg.Go(func() {
 			_, err := p.Search(context.Background(), "honzuki", metadata.SearchOptions{})
 			errs <- err
-		}()
+		})
 	}
 	wg.Wait()
 	close(errs)

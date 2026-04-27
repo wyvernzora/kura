@@ -342,7 +342,7 @@ func findSeriesDir(root LibraryRoot, mediaPath string) (SeriesDir, error) {
 	for {
 		if _, err := os.Stat(SeriesPath(dir)); err == nil {
 			return ParseSeriesDir(dir)
-		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			return SeriesDir{}, err
 		}
 		if dir == root.Path() {

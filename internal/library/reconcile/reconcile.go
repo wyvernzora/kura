@@ -262,7 +262,7 @@ func reconcileRootMove(root layout.LibraryRoot, seriesDir layout.SeriesDir, titl
 	targetSeriesDir := filepath.Join(root.Path(), title.String())
 	if _, err := os.Stat(targetSeriesDir); err == nil {
 		return nil, "", fmt.Errorf("target series directory %q already exists", targetSeriesDir)
-	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, "", err
 	}
 	return &Move{From: currentName, To: title.String()}, targetSeriesDir, nil
@@ -379,8 +379,8 @@ func safeMoveDir(from string, to string) error {
 }
 
 func isCrossDeviceMove(err error) bool {
-	var linkErr *os.LinkError
-	if !errors.As(err, &linkErr) {
+	linkErr, ok := errors.AsType[*os.LinkError](err)
+	if !ok {
 		return false
 	}
 	return errors.Is(linkErr.Err, syscall.EXDEV)

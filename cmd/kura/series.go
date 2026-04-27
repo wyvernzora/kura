@@ -155,8 +155,8 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 		SearchLimit: 5,
 	})
 	if err != nil {
-		var selectionRequired library.SeriesSelectionRequiredError
-		if !errors.As(err, &selectionRequired) || !isInteractiveRun(rt) {
+		selectionRequired, ok := errors.AsType[library.SeriesSelectionRequiredError](err)
+		if !ok || !isInteractiveRun(rt) {
 			return metadata.Series{}, false, err
 		}
 		stdin := rt.Stdin.(*os.File)

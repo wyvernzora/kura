@@ -143,8 +143,8 @@ func (t *searchTranslations) UnmarshalJSON(data []byte) error {
 
 func trimObjectID(id string) string {
 	id = strings.TrimSpace(id)
-	if strings.HasPrefix(id, "series-") {
-		return strings.TrimPrefix(id, "series-")
+	if after, ok := strings.CutPrefix(id, "series-"); ok {
+		return after
 	}
 	return id
 }

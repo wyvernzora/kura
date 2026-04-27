@@ -63,8 +63,7 @@ func loadSeries(rt runContext, lib library.Library, seriesDir string) (*library.
 }
 
 func warnDuplicateSeries(rt runContext, seriesDir string, err error) {
-	var duplicate library.DuplicateEpisodeNumberError
-	if errors.As(err, &duplicate) {
+	if _, ok := errors.AsType[library.DuplicateEpisodeNumberError](err); ok {
 		fmt.Fprintf(rt.Stderr, "warning: %s contains duplicate episode entries; manually edit series.json before continuing\n", library.SeriesPath(seriesDir))
 	}
 }
