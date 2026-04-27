@@ -264,6 +264,114 @@ func TestSyncSeriesKeepsUnchangedTrackedEpisodeWithoutInspector(t *testing.T) {
 	}
 }
 
+func TestSyncSeriesRefreshesChangedCompanionWithoutReplace(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
+		t.Fatalf("MkdirAll .kura: %v", err)
+	}
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
+	companionPath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).en.ass")
+	writeFile(t, episodePath, "episode")
+	writeFile(t, companionPath, "updated subtitle")
+	episodeInfo, err := os.Stat(episodePath)
+	if err != nil {
+		t.Fatalf("Stat episode: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
+							"source": "webrip",
+							"size": %d,
+							"mtime": %q,
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": [
+							{"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).en.ass", "size": 1, "mtime": "2026-04-20T03:00:00Z"}
+						]
+					}
+				]
+			}
+		]
+	}`, episodeInfo.Size(), episodeInfo.ModTime().UTC().Format(time.RFC3339)))
+
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	providerSeries := testProviderSeries()
+	result, err := New().SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
+		ProviderSeries: &providerSeries,
+		Inspector:      fakeInspector,
+		Apply:          true,
+	})
+	if err != nil {
+		t.Fatalf("SyncSeries: %v", err)
+	}
+	if len(result.Synced) != 1 || result.Synced[0].Status != "updated" {
+		t.Fatalf("Synced = %#v, want updated entry", result.Synced)
+	}
+	loaded, err := New().LoadSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadSeries: %v", err)
+	}
+	companionInfo, err := os.Stat(companionPath)
+	if err != nil {
+		t.Fatalf("Stat companion: %v", err)
+	}
+	got := loaded.Seasons["1"].Episodes["1"].Companions[0]
+	if got.Size != companionInfo.Size() || got.MTime != companionInfo.ModTime().UTC().Format(time.RFC3339) {
+		t.Fatalf("Companion facts = %#v, want refreshed from filesystem", got)
+	}
+}
+
+func TestSyncSeriesDryRunDoesNotApplyWhenApplyIsAlsoTrue(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01.mkv"), "episode")
+
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	providerSeries := testProviderSeries()
+	result, err := New().SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
+		ProviderSeries: &providerSeries,
+		Inspector:      fakeInspector,
+		Apply:          true,
+		DryRun:         true,
+	})
+	if err != nil {
+		t.Fatalf("SyncSeries: %v", err)
+	}
+	if !result.HasChanges() {
+		t.Fatal("HasChanges = false, want true")
+	}
+	if _, err := os.Stat(SeriesPath(seriesDir)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat series.json = %v, want not exist", err)
+	}
+}
+
 func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Bookworm")

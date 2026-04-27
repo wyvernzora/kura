@@ -119,7 +119,9 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 		if err := validateProviderEpisode(providerSeries, episode.Season, episode.Number); err != nil {
 			return SeriesSyncResult{}, err
 		}
-		replacing := episodeExists(updated, episode.Season, episode.Number)
+		trackedEpisode, tracked := updated.LookupEpisode(episode.Season, episode.Number)
+		refreshing := tracked && CleanFilesystemTitle(trackedEpisode.Media.Path).EqualName(episode.Path)
+		replacing := tracked && !refreshing
 		if replacing && !opts.Replace {
 			return SeriesSyncResult{}, EpisodeAlreadyExistsError{Season: episode.Season, Episode: episode.Number}
 		}
@@ -139,7 +141,8 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 			Source:     episode.Source,
 			Companions: episode.Companions,
 			MediaInfo:  &mediaInfo,
-			Replace:    opts.Replace,
+			Replace:    opts.Replace && replacing,
+			Refresh:    refreshing,
 			Trash:      &updatedTrash,
 		})
 		if err != nil {
@@ -150,6 +153,8 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 		status := "new"
 		if replacing {
 			status = "replaced"
+		} else if refreshing {
+			status = "updated"
 		}
 		synced = append(synced, SeriesSyncEntry{
 			Status:     status,
@@ -173,7 +178,7 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 		UpdatedSeries: updated,
 		UpdatedTrash:  updatedTrash,
 	}
-	if opts.Apply && result.HasChanges() {
+	if opts.Apply && !opts.DryRun && result.HasChanges() {
 		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", SeriesPath(seriesDir.Path())), 0)
 		if err := store.Save(updated); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing series metadata", 0, 0)
@@ -304,7 +309,37 @@ func unchangedTrackedEpisode(seriesDir SeriesDir, series Series, discovered Disc
 	if episode.Media.MTime != info.ModTime().UTC().Format(time.RFC3339) {
 		return Episode{}, false, nil
 	}
+	if !companionsUnchanged(seriesDir, episode.Companions, discovered.Companions) {
+		return Episode{}, false, nil
+	}
 	return episode, true, nil
+}
+
+func companionsUnchanged(seriesDir SeriesDir, tracked []CompanionFile, discovered []string) bool {
+	if len(tracked) != len(discovered) {
+		return false
+	}
+	trackedByPath := make(map[string]CompanionFile, len(tracked))
+	for _, companion := range tracked {
+		trackedByPath[companion.Path] = companion
+	}
+	for _, path := range discovered {
+		companion, ok := trackedByPath[path]
+		if !ok {
+			return false
+		}
+		info, err := os.Stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(path)))
+		if err != nil || info.IsDir() {
+			return false
+		}
+		if companion.Size != info.Size() {
+			return false
+		}
+		if companion.MTime != info.ModTime().UTC().Format(time.RFC3339) {
+			return false
+		}
+	}
+	return true
 }
 
 func existingSyncEntry(discovered DiscoveredEpisode, episode Episode) SeriesSyncEntry {

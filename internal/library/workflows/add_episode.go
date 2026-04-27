@@ -21,6 +21,7 @@ type AddEpisodeOptions struct {
 	Companions []string
 	MediaInfo  *MediaInfo
 	Replace    bool
+	Refresh    bool
 	Trash      *Trash
 }
 
@@ -88,20 +89,27 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 	}
 	episodeKey := strconv.Itoa(opts.Episode)
 	episode, exists := season.Episodes[episodeKey]
-	if exists && !opts.Replace {
+	samePath := exists && layout.CleanFilesystemTitle(episode.Media.Path).EqualName(relPath)
+	if exists && !opts.Replace && !(opts.Refresh && samePath) {
 		return Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
 	}
 	var replaced *Episode
 	if exists {
-		if opts.Trash == nil {
-			return Series{}, fmt.Errorf("library: trash document is required to replace S%02dE%02d", opts.Season, opts.Episode)
+		if opts.Replace {
+			if opts.Trash == nil {
+				return Series{}, fmt.Errorf("library: trash document is required to replace S%02dE%02d", opts.Season, opts.Episode)
+			}
+			existing := episode
+			replaced = &existing
+			episode = Episode{}
+		} else if opts.Refresh {
+			episode = Episode{}
+		} else {
+			return Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
 		}
-		existing := episode
-		replaced = &existing
-		episode = Episode{}
 	}
 	episode.Media = mediaFile
-	if len(companions) > 0 || episode.Companions == nil {
+	if len(companions) > 0 || episode.Companions == nil || opts.Refresh {
 		episode.Companions = companions
 	}
 	season.Episodes[episodeKey] = episode
