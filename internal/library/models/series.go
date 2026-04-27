@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	media "github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/library/layout"
+	layout "github.com/wyvernzora/kura/internal/fsroot"
 )
 
 const (

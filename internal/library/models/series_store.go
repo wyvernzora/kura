@@ -2,13 +2,12 @@ package models
 
 import (
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/library/layout"
+	layout "github.com/wyvernzora/kura/internal/fsroot"
 )
 
 type Store struct{}
@@ -93,7 +92,7 @@ func (Store) Save(series Series) error {
 	if err := os.Rename(tmpName, path); err != nil {
 		return err
 	}
-	return syncDir(metaDir)
+	return layout.SyncDir(metaDir)
 }
 
 func cleanDirname(dirname string) (string, error) {
@@ -102,16 +101,4 @@ func cleanDirname(dirname string) (string, error) {
 		return "", errors.New("library: dirname is required")
 	}
 	return filepath.Clean(dirname), nil
-}
-
-func syncDir(path string) error {
-	dir, err := os.Open(path)
-	if err != nil {
-		if errors.Is(err, fs.ErrPermission) {
-			return nil
-		}
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
 }

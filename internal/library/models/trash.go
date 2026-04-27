@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/library/layout"
+	layout "github.com/wyvernzora/kura/internal/fsroot"
 )
 
 const (

@@ -1,16 +1,10 @@
-package scan
+package fsroot
 
 import (
 	"os"
 	"path/filepath"
-	"regexp"
-	"slices"
 	"sort"
-	"strconv"
 	"strings"
-
-	media "github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/library/layout"
 )
 
 type DiscoveredEpisode struct {
@@ -35,7 +29,7 @@ const (
 	SkipCodeIgnoredDirectory         = "ignored_directory"
 )
 
-func DiscoverSeriesEpisodes(seriesDir layout.SeriesDir) ([]DiscoveredEpisode, []ImportSkip, error) {
+func DiscoverSeriesEpisodes(seriesDir SeriesDir) ([]DiscoveredEpisode, []ImportSkip, error) {
 	entries, err := os.ReadDir(seriesDir.Path())
 	if err != nil {
 		return nil, nil, err
@@ -45,7 +39,7 @@ func DiscoverSeriesEpisodes(seriesDir layout.SeriesDir) ([]DiscoveredEpisode, []
 	var skipped []ImportSkip
 	for _, entry := range entries {
 		name := entry.Name()
-		if name == layout.KuraDir {
+		if name == KuraDir {
 			continue
 		}
 		fullPath := filepath.Join(seriesDir.Path(), name)
@@ -85,7 +79,7 @@ func DiscoverSeriesEpisodes(seriesDir layout.SeriesDir) ([]DiscoveredEpisode, []
 	return episodes, skipped, nil
 }
 
-func discoverSeasonEpisodes(seriesDir layout.SeriesDir, seasonDir string, season int) ([]DiscoveredEpisode, []ImportSkip, error) {
+func discoverSeasonEpisodes(seriesDir SeriesDir, seasonDir string, season int) ([]DiscoveredEpisode, []ImportSkip, error) {
 	entries, err := os.ReadDir(seasonDir)
 	if err != nil {
 		return nil, nil, err
@@ -159,53 +153,6 @@ func matchingCompanions(seriesDir string, dir string, videoName string, entries 
 	}
 	sort.Strings(companions)
 	return companions
-}
-
-var (
-	seasonDirPattern  = regexp.MustCompile(`(?i)^Season[[:space:]]+([0-9]+)$`)
-	mediaFactsPattern = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)
-)
-
-func ParseSeasonDir(name string) (int, bool) {
-	matches := seasonDirPattern.FindStringSubmatch(name)
-	if len(matches) != 2 {
-		return 0, false
-	}
-	season, err := strconv.Atoi(matches[1])
-	if err != nil || season < 0 {
-		return 0, false
-	}
-	return season, true
-}
-
-func InferSourceFromFilename(path string) media.MediaSource {
-	name := filepath.ToSlash(path)
-	matches := mediaFactsPattern.FindStringSubmatch(name)
-	if len(matches) != 2 {
-		return media.MediaSourceUnknown
-	}
-	fields := strings.Fields(matches[1])
-	if len(fields) == 0 {
-		return media.MediaSourceUnknown
-	}
-	return media.ParseMediaSource(fields[0])
-}
-
-func RecognizedVideoFile(path string) bool {
-	extension := strings.ToLower(filepath.Ext(path))
-	return slices.Contains([]string{
-		".mkv",
-		".mp4",
-		".m4v",
-		".avi",
-		".mov",
-		".webm",
-		".ts",
-		".m2ts",
-		".wmv",
-		".ogm",
-		".ogv",
-	}, extension)
 }
 
 func sortDiscoveredEpisodes(episodes []DiscoveredEpisode) {

@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wyvernzora/kura/internal/library/layout"
+	layout "github.com/wyvernzora/kura/internal/fsroot"
 )
 
 func (Store) NewStaged(dirname string) (*Staged, error) {
@@ -82,5 +82,5 @@ func (Store) SaveStaged(staged Staged) error {
 	if err := os.Rename(tmpName, path); err != nil {
 		return err
 	}
-	return syncDir(metaDir)
+	return layout.SyncDir(metaDir)
 }

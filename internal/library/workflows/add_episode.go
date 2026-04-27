@@ -8,7 +8,7 @@ import (
 	"time"
 
 	media "github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/library/layout"
+	layout "github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/library/models"
 )
 

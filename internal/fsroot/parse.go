@@ -1,12 +1,14 @@
-package scan
+package fsroot
 
 import (
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/nssteinbrenner/anitogo"
+	"github.com/wyvernzora/kura/internal/domain"
 )
 
 type ParsedEpisodeRef struct {
@@ -24,7 +26,51 @@ var filenameParsingStrategies = []FilenameParsingStrategy{
 var (
 	seasonEpisodePattern = regexp.MustCompile(`(?i)\bS([0-9]{1,2})E([0-9]{1,3})\b`)
 	episodeMarkerPattern = regexp.MustCompile(`(?i)(?:^|[^[:alnum:]])E([0-9]{1,3})(?:[^[:alnum:]]|$)`)
+	seasonDirPattern     = regexp.MustCompile(`(?i)^Season[[:space:]]+([0-9]+)$`)
+	mediaFactsPattern    = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)
 )
+
+func ParseSeasonDir(name string) (int, bool) {
+	matches := seasonDirPattern.FindStringSubmatch(name)
+	if len(matches) != 2 {
+		return 0, false
+	}
+	season, err := strconv.Atoi(matches[1])
+	if err != nil || season < 0 {
+		return 0, false
+	}
+	return season, true
+}
+
+func RecognizedVideoFile(path string) bool {
+	extension := strings.ToLower(filepath.Ext(path))
+	return slices.Contains([]string{
+		".mkv",
+		".mp4",
+		".m4v",
+		".avi",
+		".mov",
+		".webm",
+		".ts",
+		".m2ts",
+		".wmv",
+		".ogm",
+		".ogv",
+	}, extension)
+}
+
+func InferSourceFromFilename(path string) domain.MediaSource {
+	name := filepath.ToSlash(path)
+	matches := mediaFactsPattern.FindStringSubmatch(name)
+	if len(matches) != 2 {
+		return domain.MediaSourceUnknown
+	}
+	fields := strings.Fields(matches[1])
+	if len(fields) == 0 {
+		return domain.MediaSourceUnknown
+	}
+	return domain.ParseMediaSource(fields[0])
+}
 
 func InferEpisodeFromFilename(name string) (int, int, bool) {
 	for _, strategy := range filenameParsingStrategies {

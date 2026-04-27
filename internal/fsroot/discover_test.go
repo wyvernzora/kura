@@ -1,11 +1,9 @@
-package scan
+package fsroot
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/wyvernzora/kura/internal/library/layout"
 )
 
 func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
@@ -17,7 +15,7 @@ func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}
@@ -45,7 +43,7 @@ func TestDiscoverSeasonEpisodesRejectsFallbackSeasonMismatch(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[Conclave-Mendoi]_Mobile_Suit_Gundam_00_S2_-_01v2_[1280x720_H.264_AAC][4863FBE8].mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}
@@ -69,7 +67,7 @@ func TestDiscoverSeriesRootRejectsImplicitFallbackSeason(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seriesDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}
@@ -96,7 +94,7 @@ func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 		t.Fatalf("MkdirAll Extra: %v", err)
 	}
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}

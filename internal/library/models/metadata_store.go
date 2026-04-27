@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/wyvernzora/kura/internal/fsroot"
 )
 
 func removeMetadataFile(path string) error {
@@ -13,5 +15,5 @@ func removeMetadataFile(path string) error {
 		}
 		return err
 	}
-	return syncDir(filepath.Dir(path))
+	return fsroot.SyncDir(filepath.Dir(path))
 }

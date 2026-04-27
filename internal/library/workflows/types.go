@@ -4,9 +4,9 @@ import (
 	"context"
 
 	media "github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/library/layout"
+	layout "github.com/wyvernzora/kura/internal/fsroot"
+	scan "github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/library/models"
-	"github.com/wyvernzora/kura/internal/library/scan"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
