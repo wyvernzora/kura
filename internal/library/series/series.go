@@ -3,12 +3,15 @@ package series
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/library/layout"
 	"github.com/wyvernzora/kura/internal/library/media"
 )
@@ -33,6 +36,7 @@ type Series struct {
 	Notes             string            `json:"notes,omitempty"`
 	Seasons           map[string]Season `json:"seasons,omitempty"`
 	Specials          *Season           `json:"specials,omitempty"`
+	Trash             []TrashedEpisode  `json:"trash,omitempty"`
 
 	dirname string
 }
@@ -60,6 +64,16 @@ func (e Episode) MarshalJSON() ([]byte, error) {
 		out.Companions = []CompanionFile{}
 	}
 	return json.Marshal(out)
+}
+
+// TrashedEpisode stores a replaced local episode until reconciliation moves it
+// out of the active series layout.
+type TrashedEpisode struct {
+	TrashID string `json:"trashId"`
+	Season  int    `json:"season"`
+	Number  int    `json:"number"`
+
+	Episode
 }
 
 // MediaFile stores facts about one primary media file.
@@ -92,6 +106,16 @@ type AddEpisodeOptions struct {
 	Source     string
 	Companions []string
 	MediaInfo  *MediaInfo
+	Replace    bool
+}
+
+type EpisodeAlreadyExistsError struct {
+	Season  int
+	Episode int
+}
+
+func (err EpisodeAlreadyExistsError) Error() string {
+	return fmt.Sprintf("episode S%02dE%02d already exists; pass --replace to replace it", err.Season, err.Episode)
 }
 
 // SeriesPath returns the metadata path for a series directory.
@@ -155,12 +179,25 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 		MTime:     info.ModTime().UTC().Format(time.RFC3339),
 		MediaInfo: opts.MediaInfo,
 	}
-	episode := season.Episodes[strconv.Itoa(opts.Episode)]
+	episodeKey := strconv.Itoa(opts.Episode)
+	episode, exists := season.Episodes[episodeKey]
+	if exists && !opts.Replace {
+		return Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
+	}
+	if exists {
+		series.Trash = append(series.Trash, TrashedEpisode{
+			TrashID: ulid.Make().String(),
+			Season:  opts.Season,
+			Number:  opts.Episode,
+			Episode: episode,
+		})
+		episode = Episode{}
+	}
 	episode.Media = media
 	if len(companions) > 0 || episode.Companions == nil {
 		episode.Companions = companions
 	}
-	season.Episodes[strconv.Itoa(opts.Episode)] = episode
+	season.Episodes[episodeKey] = episode
 	if opts.Season == 0 {
 		series.Specials = &season
 	} else {
@@ -219,9 +256,43 @@ func (s Series) Validate() error {
 		}
 	}
 	if s.Specials != nil {
-		return validateSeasonPaths(0, *s.Specials)
+		if err := validateSeasonPaths(0, *s.Specials); err != nil {
+			return err
+		}
+	}
+	trashIDs := map[string]struct{}{}
+	for _, trashed := range s.Trash {
+		if strings.TrimSpace(trashed.TrashID) == "" {
+			return errors.New("library: trashId is required")
+		}
+		if _, exists := trashIDs[trashed.TrashID]; exists {
+			return fmt.Errorf("library: duplicate trashId %q", trashed.TrashID)
+		}
+		trashIDs[trashed.TrashID] = struct{}{}
+		if trashed.Season < 0 {
+			return fmt.Errorf("library: invalid trash season %d", trashed.Season)
+		}
+		if trashed.Number < 1 {
+			return fmt.Errorf("library: invalid trash episode %d", trashed.Number)
+		}
+		if _, err := cleanTrashRelPath(trashed.Media.Path); err != nil {
+			return fmt.Errorf("library: invalid trashed media path for %s: %w", trashed.TrashID, err)
+		}
+		for _, companion := range trashed.Companions {
+			if _, err := cleanTrashRelPath(companion.Path); err != nil {
+				return fmt.Errorf("library: invalid trashed companion path for %s: %w", trashed.TrashID, err)
+			}
+		}
 	}
 	return nil
+}
+
+func cleanTrashRelPath(path string) (string, error) {
+	relPath, err := layout.CleanRelPathAllowingKura(path)
+	if err != nil {
+		return "", err
+	}
+	return relPath, nil
 }
 
 func validateSeasonPaths(seasonNumber int, season Season) error {

@@ -29,10 +29,12 @@ type MediaInfo = media.MediaInfo
 type Series = series.Series
 type Season = series.Season
 type Episode = series.Episode
+type TrashedEpisode = series.TrashedEpisode
 type MediaFile = series.MediaFile
 type CompanionFile = series.CompanionFile
 type AddEpisodeOptions = series.AddEpisodeOptions
 type DuplicateEpisodeNumberError = series.DuplicateEpisodeNumberError
+type EpisodeAlreadyExistsError = series.EpisodeAlreadyExistsError
 
 type DiscoveredEpisode = scan.DiscoveredEpisode
 type ImportSkip = scan.ImportSkip

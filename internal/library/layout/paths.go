@@ -11,6 +11,7 @@ import (
 
 const (
 	KuraDir        = ".kura"
+	KuraTrashDir   = "trash"
 	SeriesFileName = "series.json"
 )
 
@@ -136,6 +137,17 @@ func containsPath(root string, path string) bool {
 }
 
 func CleanSeriesRelPath(path string) (string, error) {
+	clean, err := CleanRelPathAllowingKura(path)
+	if err != nil {
+		return "", err
+	}
+	if slices.Contains(strings.Split(clean, "/"), KuraDir) {
+		return "", fmt.Errorf("path %q cannot point inside .kura", path)
+	}
+	return clean, nil
+}
+
+func CleanRelPathAllowingKura(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return "", errors.New("path is required")
@@ -151,9 +163,6 @@ func CleanSeriesRelPath(path string) (string, error) {
 	}
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path %q escapes the series root", path)
-	}
-	if slices.Contains(strings.Split(filepath.ToSlash(clean), "/"), KuraDir) {
-		return "", fmt.Errorf("path %q cannot point inside .kura", path)
 	}
 	return filepath.ToSlash(clean), nil
 }

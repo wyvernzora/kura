@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/wyvernzora/kura/internal/library"
@@ -22,6 +24,7 @@ type seriesSyncCmd struct {
 	DryRun      bool   `name:"dry-run" help:"Print planned changes without writing series metadata."`
 	JSON        bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Yes         bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
+	Replace     bool   `name:"replace" help:"Replace existing episode records, moving old records to trash."`
 	Dirname     string `arg:"" help:"Series directory name below KURA_LIBRARY_ROOT."`
 }
 
@@ -52,9 +55,11 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		root,
 		cmd.Dirname,
 		library.SeriesSyncOptions{
-			ProviderSeries: providerSeries,
-			Inspector:      mediaInspector(rt),
-			DryRun:         cmd.DryRun,
+			ProviderSeries:   providerSeries,
+			ProviderResolver: cmd.providerSeriesResolver(rt),
+			Inspector:        mediaInspector(rt),
+			DryRun:           cmd.DryRun,
+			Replace:          cmd.Replace,
 		},
 	)
 	if err != nil {
@@ -173,6 +178,33 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 		selected = true
 	}
 	return resolved, selected, nil
+}
+
+func (cmd *seriesSyncCmd) providerSeriesResolver(rt runContext) library.ProviderSeriesResolver {
+	return func(ctx context.Context, local library.Series) (metadata.Series, error) {
+		metadataSource, err := buildMetadataSource(rt, cmd.Provider, cmd.TVDBBaseURL)
+		if err != nil {
+			return metadata.Series{}, err
+		}
+		ref, err := providerRefForSource(local, metadataSource.Key())
+		if err != nil {
+			return metadata.Series{}, err
+		}
+		return metadataSource.GetSeries(ctx, ref.ID())
+	}
+}
+
+func providerRefForSource(series library.Series, source string) (metadata.RemoteSeriesRef, error) {
+	for _, raw := range series.ProviderRefs {
+		ref, err := metadata.ParseRemoteSeriesRef(raw)
+		if err != nil {
+			return metadata.RemoteSeriesRef{}, err
+		}
+		if ref.Source() == source {
+			return ref, nil
+		}
+	}
+	return metadata.RemoteSeriesRef{}, fmt.Errorf("series has no %s provider ref", source)
 }
 
 func isInteractiveRun(rt runContext) bool {

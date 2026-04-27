@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/terminalui"
 )
 
@@ -15,13 +17,16 @@ type episodeCmd struct {
 }
 
 type episodeImportCmd struct {
-	Season     int      `help:"Season number."`
-	Special    bool     `help:"Import as a special."`
-	Number     int      `help:"Episode number." required:""`
-	Source     string   `help:"Media source. Defaults to filename source or unknown."`
-	Companions []string `name:"companion" help:"Companion file path relative to KURA_LIBRARY_ROOT."`
-	DryRun     bool     `name:"dry-run" help:"Print the updated series document without writing it."`
-	Path       string   `arg:"" help:"Media file path relative to KURA_LIBRARY_ROOT."`
+	Season      int      `help:"Season number."`
+	Special     bool     `help:"Import as a special."`
+	Number      int      `help:"Episode number." required:""`
+	Provider    string   `help:"Metadata provider to validate against." enum:"tvdb" default:"tvdb"`
+	TVDBBaseURL string   `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
+	Source      string   `help:"Media source. Defaults to filename source or unknown."`
+	Companions  []string `name:"companion" help:"Companion file path relative to KURA_LIBRARY_ROOT."`
+	DryRun      bool     `name:"dry-run" help:"Print the updated series document without writing it."`
+	Replace     bool     `name:"replace" help:"Replace an existing episode record, moving the old record to trash."`
+	Path        string   `arg:"" help:"Media file path relative to KURA_LIBRARY_ROOT."`
 }
 
 func (cmd *episodeImportCmd) Run(rt runContext) error {
@@ -57,13 +62,15 @@ func (cmd *episodeImportCmd) Run(rt runContext) error {
 		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
 		root,
 		library.ImportEpisodeFileOptions{
-			Season:     season,
-			Episode:    episode,
-			Source:     source,
-			Companions: cmd.Companions,
-			MediaPath:  cmd.Path,
-			Inspector:  mediaInspector(rt),
-			Apply:      !cmd.DryRun,
+			Season:           season,
+			Episode:          episode,
+			Source:           source,
+			Companions:       cmd.Companions,
+			MediaPath:        cmd.Path,
+			Inspector:        mediaInspector(rt),
+			ProviderResolver: episodeProviderSeriesResolver(rt, cmd.Provider, cmd.TVDBBaseURL),
+			Apply:            !cmd.DryRun,
+			Replace:          cmd.Replace,
 		},
 	)
 	if err != nil {
@@ -73,6 +80,20 @@ func (cmd *episodeImportCmd) Run(rt runContext) error {
 	encoder := json.NewEncoder(rt.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(updated)
+}
+
+func episodeProviderSeriesResolver(rt runContext, provider string, tvdbBaseURL string) library.ProviderSeriesResolver {
+	return func(ctx context.Context, local library.Series) (metadata.Series, error) {
+		metadataSource, err := buildMetadataSource(rt, provider, tvdbBaseURL)
+		if err != nil {
+			return metadata.Series{}, err
+		}
+		ref, err := providerRefForSource(local, metadataSource.Key())
+		if err != nil {
+			return metadata.Series{}, err
+		}
+		return metadataSource.GetSeries(ctx, ref.ID())
+	}
 }
 
 func mediaInspector(rt runContext) mediainfo.Inspector {

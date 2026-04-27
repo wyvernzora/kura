@@ -54,6 +54,12 @@
     },
     "specials": {
       "$ref": "#/$defs/season"
+    },
+    "trash": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/trash"
+      }
     }
   },
   "$defs": {
@@ -88,6 +94,40 @@
         "companions"
       ],
       "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "media": {
+          "$ref": "#/$defs/mediaFile"
+        },
+        "companions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/companionFile"
+          }
+        }
+      }
+    },
+    "trash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trashId",
+        "season",
+        "number",
+        "media",
+        "companions"
+      ],
+      "properties": {
+        "trashId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "season": {
+          "type": "integer",
+          "minimum": 0
+        },
         "number": {
           "type": "integer",
           "minimum": 1

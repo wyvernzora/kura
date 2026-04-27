@@ -17,6 +17,7 @@ type libraryAddEpisodeCmd struct {
 	Episode int    `help:"Episode number."`
 	File    string `help:"Media file path relative to the series folder."`
 	DryRun  bool   `name:"dry-run" help:"Print the updated series document without writing it."`
+	Replace bool   `name:"replace" help:"Replace an existing episode record, moving the old record to trash."`
 	Path    string `arg:"" help:"Existing series folder path."`
 }
 
@@ -38,6 +39,7 @@ func (cmd *libraryAddEpisodeCmd) Run(rt runContext) error {
 		Season:  cmd.Season,
 		Episode: cmd.Episode,
 		Path:    cmd.File,
+		Replace: cmd.Replace,
 	})
 	if err != nil {
 		return err

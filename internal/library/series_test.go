@@ -194,7 +194,41 @@ func TestAddEpisodeRecordsSpecialsSeparately(t *testing.T) {
 	}
 }
 
-func TestAddEpisodeReplacesMediaForSameEpisode(t *testing.T) {
+func TestAddEpisodeRejectsExistingEpisodeWithoutReplace(t *testing.T) {
+	seriesDir := t.TempDir()
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seasonDir, "episode-1080p.mkv"), []byte("episode 1080p"), 0o644); err != nil {
+		t.Fatalf("WriteFile 1080p: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(seasonDir, "episode-720p.mkv"), []byte("episode 720p"), 0o644); err != nil {
+		t.Fatalf("WriteFile 720p: %v", err)
+	}
+
+	series, err := testSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("NewSeries: %v", err)
+	}
+	updated, err := AddEpisode(seriesDir, *series, AddEpisodeOptions{
+		Season:  1,
+		Episode: 1,
+		Path:    "Season 1/episode-1080p.mkv",
+	})
+	if err != nil {
+		t.Fatalf("AddEpisode first: %v", err)
+	}
+	if _, err := AddEpisode(seriesDir, updated, AddEpisodeOptions{
+		Season:  1,
+		Episode: 1,
+		Path:    "Season 1/episode-720p.mkv",
+	}); err == nil {
+		t.Fatal("AddEpisode second returned nil error, want existing episode error")
+	}
+}
+
+func TestAddEpisodeReplacesMediaForSameEpisodeWithTrash(t *testing.T) {
 	seriesDir := t.TempDir()
 	seasonDir := filepath.Join(seriesDir, "Season 1")
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
@@ -223,6 +257,7 @@ func TestAddEpisodeReplacesMediaForSameEpisode(t *testing.T) {
 		Season:  1,
 		Episode: 1,
 		Path:    "Season 1/episode-720p.mkv",
+		Replace: true,
 	})
 	if err != nil {
 		t.Fatalf("AddEpisode second: %v", err)
@@ -232,9 +267,21 @@ func TestAddEpisodeReplacesMediaForSameEpisode(t *testing.T) {
 	if media.Path != "Season 1/episode-720p.mkv" {
 		t.Fatalf("media path = %q, want replacement path", media.Path)
 	}
+	if len(updated.Trash) != 1 {
+		t.Fatalf("len(Trash) = %d, want 1", len(updated.Trash))
+	}
+	if _, err := ulid.Parse(updated.Trash[0].TrashID); err != nil {
+		t.Fatalf("TrashID = %q, want ULID: %v", updated.Trash[0].TrashID, err)
+	}
+	if updated.Trash[0].Season != 1 || updated.Trash[0].Number != 1 {
+		t.Fatalf("trash episode = S%02dE%02d, want S01E01", updated.Trash[0].Season, updated.Trash[0].Number)
+	}
+	if updated.Trash[0].Media.Path != "Season 1/episode-1080p.mkv" {
+		t.Fatalf("trash media path = %q, want old path", updated.Trash[0].Media.Path)
+	}
 }
 
-func TestAddEpisodeRefreshesExistingMediaPath(t *testing.T) {
+func TestAddEpisodeRejectsRefreshWithoutReplace(t *testing.T) {
 	seriesDir := t.TempDir()
 	seasonDir := filepath.Join(seriesDir, "Season 1")
 	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
@@ -260,18 +307,12 @@ func TestAddEpisodeRefreshesExistingMediaPath(t *testing.T) {
 	if err := os.WriteFile(path, []byte("episode updated"), 0o644); err != nil {
 		t.Fatalf("WriteFile updated: %v", err)
 	}
-	updated, err = AddEpisode(seriesDir, updated, AddEpisodeOptions{
+	if _, err := AddEpisode(seriesDir, updated, AddEpisodeOptions{
 		Season:  1,
 		Episode: 1,
 		Path:    "Season 1/episode.mkv",
-	})
-	if err != nil {
-		t.Fatalf("AddEpisode second: %v", err)
-	}
-
-	media := updated.Seasons["1"].Episodes["1"].Media
-	if media.Size != int64(len("episode updated")) {
-		t.Fatalf("media size = %d, want updated size", media.Size)
+	}); err == nil {
+		t.Fatal("AddEpisode second returned nil error, want existing episode error")
 	}
 }
 

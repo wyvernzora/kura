@@ -123,6 +123,11 @@ func reconcileEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle,
 		}
 		moves = append(moves, seasonMoves...)
 	}
+	trashMoves, err := reconcileTrash(seriesDir, series)
+	if err != nil {
+		return nil, err
+	}
+	moves = append(moves, trashMoves...)
 	return moves, nil
 }
 
@@ -188,6 +193,37 @@ func reconcileEpisode(seriesDir layout.SeriesDir, title layout.FilesystemTitle, 
 		}
 		moves = append(moves, Move{From: companion.Path, To: targetCompanionPath})
 		companion.Path = targetCompanionPath
+	}
+	return moves, nil
+}
+
+func reconcileTrash(seriesDir layout.SeriesDir, series *series.Series) ([]Move, error) {
+	var moves []Move
+	for index := range series.Trash {
+		trashed := &series.Trash[index]
+		if trashed.TrashID == "" {
+			return nil, errors.New("trashed episode has no trashId")
+		}
+		targetMediaPath := filepath.ToSlash(filepath.Join(layout.KuraDir, layout.KuraTrashDir, trashed.TrashID, filepath.Base(trashed.Media.Path)))
+		if targetMediaPath != trashed.Media.Path {
+			if _, err := os.Stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(trashed.Media.Path))); err != nil {
+				return nil, err
+			}
+			moves = append(moves, Move{From: trashed.Media.Path, To: targetMediaPath})
+			trashed.Media.Path = targetMediaPath
+		}
+		for companionIndex := range trashed.Companions {
+			companion := &trashed.Companions[companionIndex]
+			targetCompanionPath := filepath.ToSlash(filepath.Join(layout.KuraDir, layout.KuraTrashDir, trashed.TrashID, filepath.Base(companion.Path)))
+			if targetCompanionPath == companion.Path {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(companion.Path))); err != nil {
+				return nil, err
+			}
+			moves = append(moves, Move{From: companion.Path, To: targetCompanionPath})
+			companion.Path = targetCompanionPath
+		}
 	}
 	return moves, nil
 }

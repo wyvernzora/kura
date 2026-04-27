@@ -283,6 +283,9 @@ func TestSeriesReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 }
 
 func TestEpisodeImportCommandPrintsUpdatedSeriesJSON(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
 	root := t.TempDir()
 	mediainfoCommand := newFakeMediaInfoCommand(t, root)
 	seriesDir := filepath.Join(root, "Bookworm")
@@ -308,6 +311,7 @@ func TestEpisodeImportCommandPrintsUpdatedSeriesJSON(t *testing.T) {
 		"import",
 		"--season", "1",
 		"--number", "1",
+		"--tvdb-base-url", server.URL,
 		"--companion", "Bookworm/Season 1/episode.en.ass",
 		"--dry-run",
 		"Bookworm/Season 1/episode.mkv",

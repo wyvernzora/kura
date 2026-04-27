@@ -24,11 +24,15 @@ func (f MediaInspectorFunc) Inspect(ctx context.Context, path string) (MediaInfo
 	return f(ctx, path)
 }
 
+type ProviderSeriesResolver func(context.Context, Series) (metadata.Series, error)
+
 type SeriesSyncOptions struct {
-	ProviderSeries *metadata.Series
-	Inspector      MediaInspector
-	Apply          bool
-	DryRun         bool
+	ProviderSeries   *metadata.Series
+	ProviderResolver ProviderSeriesResolver
+	Inspector        MediaInspector
+	Apply            bool
+	DryRun           bool
+	Replace          bool
 }
 
 type SeriesSyncResult struct {
@@ -93,8 +97,12 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 	if err != nil {
 		return SeriesSyncResult{}, err
 	}
+	if err := validateUniqueDiscoveredEpisodes(discovered); err != nil {
+		return SeriesSyncResult{}, err
+	}
 
 	updated := *series
+	var providerSeries *metadata.Series
 	synced := make([]SeriesSyncEntry, 0, len(discovered))
 	progress.Start(ctx, "series-sync", fmt.Sprintf("Found %d episode media file(s) for %s", len(discovered), seriesDir.Name()), len(discovered))
 	for index, episode := range discovered {
@@ -107,6 +115,19 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 			progress.Update(ctx, "series-sync", fmt.Sprintf("Keeping existing %d/%d: %s", index+1, len(discovered), episode.Path), index+1, len(discovered))
 			synced = append(synced, existingSyncEntry(episode, existing))
 			continue
+		}
+		if providerSeries == nil {
+			providerSeries, err = providerSeriesForLocal(ctx, updated, opts.ProviderSeries, opts.ProviderResolver)
+			if err != nil {
+				return SeriesSyncResult{}, err
+			}
+		}
+		if err := validateProviderEpisode(providerSeries, episode.Season, episode.Number); err != nil {
+			return SeriesSyncResult{}, err
+		}
+		replacing := episodeExists(updated, episode.Season, episode.Number)
+		if replacing && !opts.Replace {
+			return SeriesSyncResult{}, EpisodeAlreadyExistsError{Season: episode.Season, Episode: episode.Number}
 		}
 		if opts.Inspector == nil {
 			return SeriesSyncResult{}, errors.New("library: media inspector is required")
@@ -124,14 +145,19 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 			Source:     episode.Source,
 			Companions: episode.Companions,
 			MediaInfo:  &mediaInfo,
+			Replace:    opts.Replace,
 		})
 		if err != nil {
 			progress.Failure(ctx, "series-sync", fmt.Sprintf("Failed recording %s", episode.Path), index+1, len(discovered))
 			return SeriesSyncResult{}, err
 		}
 		updated = next
+		status := "new"
+		if replacing {
+			status = "replaced"
+		}
 		synced = append(synced, SeriesSyncEntry{
-			Status:     "new",
+			Status:     status,
 			Season:     episode.Season,
 			Special:    episode.Special,
 			Number:     episode.Number,
@@ -163,13 +189,16 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 }
 
 type ImportEpisodeFileOptions struct {
-	Season     SeasonNumber
-	Episode    EpisodeNumber
-	Source     MediaSource
-	Companions []string
-	MediaPath  string
-	Inspector  MediaInspector
-	Apply      bool
+	Season           SeasonNumber
+	Episode          EpisodeNumber
+	Source           MediaSource
+	Companions       []string
+	MediaPath        string
+	Inspector        MediaInspector
+	ProviderSeries   *metadata.Series
+	ProviderResolver ProviderSeriesResolver
+	Apply            bool
+	Replace          bool
 }
 
 func (l library) ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts ImportEpisodeFileOptions) (Series, error) {
@@ -215,6 +244,16 @@ func (l library) ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts I
 	if err != nil {
 		return Series{}, err
 	}
+	providerSeries, err := providerSeriesForLocal(ctx, *series, opts.ProviderSeries, opts.ProviderResolver)
+	if err != nil {
+		return Series{}, err
+	}
+	if err := validateProviderEpisode(providerSeries, opts.Season.Int(), opts.Episode.Int()); err != nil {
+		return Series{}, err
+	}
+	if episodeExists(*series, opts.Season.Int(), opts.Episode.Int()) && !opts.Replace {
+		return Series{}, EpisodeAlreadyExistsError{Season: opts.Season.Int(), Episode: opts.Episode.Int()}
+	}
 	if opts.Inspector == nil {
 		return Series{}, errors.New("library: media inspector is required")
 	}
@@ -236,6 +275,7 @@ func (l library) ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts I
 		Source:     source.String(),
 		Companions: seriesCompanions,
 		MediaInfo:  &mediaInfo,
+		Replace:    opts.Replace,
 	})
 	if err != nil {
 		progress.Failure(ctx, "episode-import", fmt.Sprintf("Failed recording %s", mediaPath), 1, 1)
@@ -269,6 +309,81 @@ func newSeriesFromProvider(lib Library, seriesDir string, providerSeries metadat
 	series.PreferredTitle = providerSeries.PreferredTitle
 	series.CanonicalTitle = providerSeries.CanonicalTitle
 	return series, nil
+}
+
+func providerSeriesForLocal(ctx context.Context, series Series, explicit *metadata.Series, resolve ProviderSeriesResolver) (*metadata.Series, error) {
+	if explicit != nil {
+		return explicit, nil
+	}
+	if resolve == nil {
+		return nil, nil
+	}
+	providerSeries, err := resolve(ctx, series)
+	if err != nil {
+		return nil, err
+	}
+	return &providerSeries, nil
+}
+
+func validateProviderEpisode(providerSeries *metadata.Series, seasonNumber int, episodeNumber int) error {
+	if providerSeries == nil {
+		return errors.New("library: provider series metadata is required to import episodes")
+	}
+	if providerEpisodeExists(*providerSeries, seasonNumber, episodeNumber) {
+		return nil
+	}
+	return fmt.Errorf("library: provider metadata has no S%02dE%02d", seasonNumber, episodeNumber)
+}
+
+func providerEpisodeExists(series metadata.Series, seasonNumber int, episodeNumber int) bool {
+	if seasonNumber == 0 {
+		for _, episode := range series.Specials {
+			if episode.SeasonNumber == 0 && episode.EpisodeNumber == episodeNumber {
+				return true
+			}
+		}
+		return false
+	}
+	for _, season := range series.Seasons {
+		if season.Number != seasonNumber {
+			continue
+		}
+		for _, episode := range season.Episodes {
+			if episode.EpisodeNumber == episodeNumber {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+func validateUniqueDiscoveredEpisodes(discovered []DiscoveredEpisode) error {
+	seen := map[string]DiscoveredEpisode{}
+	for _, episode := range discovered {
+		key := episodeKey(episode.Season, episode.Number)
+		existing, exists := seen[key]
+		if exists {
+			return fmt.Errorf("series sync: multiple files parsed as S%02dE%02d: %s and %s", episode.Season, episode.Number, existing.Path, episode.Path)
+		}
+		seen[key] = episode
+	}
+	return nil
+}
+
+func episodeExists(series Series, seasonNumber int, episodeNumber int) bool {
+	if seasonNumber == 0 {
+		return series.Specials != nil && series.Specials.Episodes != nil && series.Specials.Episodes[strconv.Itoa(episodeNumber)].Media.Path != ""
+	}
+	season, ok := series.Seasons[strconv.Itoa(seasonNumber)]
+	if !ok || season.Episodes == nil {
+		return false
+	}
+	return season.Episodes[strconv.Itoa(episodeNumber)].Media.Path != ""
+}
+
+func episodeKey(seasonNumber int, episodeNumber int) string {
+	return strconv.Itoa(seasonNumber) + ":" + strconv.Itoa(episodeNumber)
 }
 
 func unchangedTrackedEpisode(seriesDir SeriesDir, series Series, discovered DiscoveredEpisode) (Episode, bool, error) {
