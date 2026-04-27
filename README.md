@@ -26,6 +26,10 @@ directories:
   files into the series, and moves replaced active files into `.kura/trash/`.
 - `kura meta ...` exposes the current metadata helper commands.
 
+Trash metadata is retained as an inventory of replaced files. Reconcile moves
+trashed media under `.kura/trash/<id>/` and keeps the corresponding
+`.kura/trash.json` entries.
+
 The normal local flow is:
 
 ```sh
