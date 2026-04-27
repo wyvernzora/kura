@@ -26,11 +26,14 @@ type Plan struct {
 	FileMoves     []Move        `json:"fileMoves"`
 	SeriesDir     string        `json:"-"`
 	UpdatedSeries models.Series `json:"-"`
+	UpdatedStaged models.Staged `json:"-"`
 	UpdatedTrash  models.Trash  `json:"-"`
+
+	metadataChanged bool
 }
 
 func (p Plan) HasChanges() bool {
-	return len(p.FileMoves) > 0
+	return len(p.FileMoves) > 0 || p.metadataChanged
 }
 
 type Move struct {
@@ -53,26 +56,38 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 	}
 
 	updated := *loaded
+	staged, err := store.LoadStaged(seriesDir.Path())
+	if err != nil {
+		return Plan{}, err
+	}
+	updatedStaged := *staged
 	trash, err := store.LoadTrash(seriesDir.Path())
 	if err != nil {
 		return Plan{}, err
 	}
 	updatedTrash := *trash
+	stagedMoves, stagedChanged, err := applyStagedEpisodes(seriesDir, title, &updated, &updatedStaged, &updatedTrash)
+	if err != nil {
+		return Plan{}, err
+	}
 	fileMoves, err := reconcileEpisodes(seriesDir, title, &updated, &updatedTrash)
 	if err != nil {
 		return Plan{}, err
 	}
+	fileMoves = append(fileMoves, stagedMoves...)
 	if err := validateMoves(seriesDir, fileMoves); err != nil {
 		return Plan{}, err
 	}
 
 	return Plan{
-		Series:        seriesDir.Name(),
-		Target:        title.String(),
-		FileMoves:     fileMoves,
-		SeriesDir:     seriesDir.Path(),
-		UpdatedSeries: updated,
-		UpdatedTrash:  updatedTrash,
+		Series:          seriesDir.Name(),
+		Target:          title.String(),
+		FileMoves:       fileMoves,
+		SeriesDir:       seriesDir.Path(),
+		UpdatedSeries:   updated,
+		UpdatedStaged:   updatedStaged,
+		UpdatedTrash:    updatedTrash,
+		metadataChanged: stagedChanged,
 	}, nil
 }
 
@@ -86,7 +101,10 @@ func ApplyPlan(ctx context.Context, plan Plan, store models.Store) error {
 			continue
 		}
 		progress.Update(ctx, "series-reconcile", fmt.Sprintf("Moving %s", move.From), index+1, len(plan.FileMoves))
-		from := filepath.Join(plan.SeriesDir, filepath.FromSlash(move.From))
+		from := move.From
+		if !filepath.IsAbs(from) {
+			from = filepath.Join(plan.SeriesDir, filepath.FromSlash(move.From))
+		}
 		to := filepath.Join(plan.SeriesDir, filepath.FromSlash(move.To))
 		if err := safeMoveFile(from, to); err != nil {
 			progress.Failure(ctx, "series-reconcile", fmt.Sprintf("Failed moving %s", move.From), index+1, len(plan.FileMoves))
@@ -102,7 +120,126 @@ func ApplyPlan(ctx context.Context, plan Plan, store models.Store) error {
 		progress.Failure(ctx, "series-reconcile", "Failed writing trash metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}
+	if err := store.SaveStaged(plan.UpdatedStaged); err != nil {
+		progress.Failure(ctx, "series-reconcile", "Failed writing staged metadata", len(plan.FileMoves), len(plan.FileMoves))
+		return err
+	}
 	progress.Success(ctx, "series-reconcile", fmt.Sprintf("Reconciled %d file move(s)", len(plan.FileMoves)), len(plan.FileMoves))
+	return nil
+}
+
+func applyStagedEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle, series *models.Series, staged *models.Staged, trash *models.Trash) ([]Move, bool, error) {
+	if staged.IsEmpty() {
+		return nil, false, nil
+	}
+	entries := append([]models.StagedEpisode(nil), staged.Entries...)
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Season != entries[j].Season {
+			return entries[i].Season < entries[j].Season
+		}
+		if entries[i].Number != entries[j].Number {
+			return entries[i].Number < entries[j].Number
+		}
+		return entries[i].Media.Path < entries[j].Media.Path
+	})
+
+	moves := make([]Move, 0, len(entries))
+	for _, stagedEpisode := range entries {
+		if err := validateStagedSource(stagedEpisode); err != nil {
+			return nil, false, err
+		}
+		existing, exists := series.LookupEpisode(stagedEpisode.Season, stagedEpisode.Number)
+		if exists {
+			trash.Entries = append(trash.Entries, models.NewTrashedEpisode(stagedEpisode.Season, stagedEpisode.Number, existing))
+		}
+		episode, episodeMoves, err := activeEpisodeFromStaged(title, stagedEpisode)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := setSeriesEpisode(series, stagedEpisode.Season, stagedEpisode.Number, episode); err != nil {
+			return nil, false, err
+		}
+		moves = append(moves, episodeMoves...)
+	}
+	staged.Entries = nil
+	if err := series.Validate(); err != nil {
+		return nil, false, err
+	}
+	if err := staged.Validate(); err != nil {
+		return nil, false, err
+	}
+	if err := trash.Validate(); err != nil {
+		return nil, false, err
+	}
+	return moves, true, nil
+}
+
+func validateStagedSource(staged models.StagedEpisode) error {
+	if _, err := os.Stat(staged.Media.Path); err != nil {
+		return err
+	}
+	for _, companion := range staged.Companions {
+		if _, err := os.Stat(companion.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func activeEpisodeFromStaged(title layout.FilesystemTitle, staged models.StagedEpisode) (models.Episode, []Move, error) {
+	targetMediaFilename, err := reconciledMediaFilename(title, staged.Season, staged.Number, staged.Media)
+	if err != nil {
+		return models.Episode{}, nil, err
+	}
+	targetMediaPath := filepath.ToSlash(filepath.Join(targetEpisodeDir(staged.Season), targetMediaFilename))
+	episode := staged.Episode
+	episode.Media.Path = targetMediaPath
+	moves := []Move{{From: staged.Media.Path, To: targetMediaPath}}
+
+	oldMediaBase := strings.TrimSuffix(filepath.Base(staged.Media.Path), filepath.Ext(staged.Media.Path))
+	newMediaBase := strings.TrimSuffix(filepath.Base(targetMediaPath), filepath.Ext(targetMediaPath))
+	for index := range episode.Companions {
+		companion := &episode.Companions[index]
+		targetCompanionPath := filepath.ToSlash(filepath.Join(
+			targetEpisodeDir(staged.Season),
+			newMediaBase+companionSuffix(filepath.Base(companion.Path), oldMediaBase),
+		))
+		moves = append(moves, Move{From: companion.Path, To: targetCompanionPath})
+		companion.Path = targetCompanionPath
+	}
+	return episode, moves, nil
+}
+
+func setSeriesEpisode(series *models.Series, seasonNumber int, episodeNumber int, episode models.Episode) error {
+	if seasonNumber < 0 {
+		return fmt.Errorf("library: invalid season %d", seasonNumber)
+	}
+	if episodeNumber < 1 {
+		return fmt.Errorf("library: invalid episode %d", episodeNumber)
+	}
+	episodeKey := strconv.Itoa(episodeNumber)
+	if seasonNumber == 0 {
+		season := models.Season{}
+		if series.Specials != nil {
+			season = *series.Specials
+		}
+		if season.Episodes == nil {
+			season.Episodes = map[string]models.Episode{}
+		}
+		season.Episodes[episodeKey] = episode
+		series.Specials = &season
+		return nil
+	}
+	if series.Seasons == nil {
+		series.Seasons = map[string]models.Season{}
+	}
+	seasonKey := strconv.Itoa(seasonNumber)
+	season := series.Seasons[seasonKey]
+	if season.Episodes == nil {
+		season.Episodes = map[string]models.Episode{}
+	}
+	season.Episodes[episodeKey] = episode
+	series.Seasons[seasonKey] = season
 	return nil
 }
 
@@ -288,6 +425,7 @@ func compoundExtension(filename string) string {
 
 func validateMoves(seriesDir layout.SeriesDir, moves []Move) error {
 	targets := map[string]string{}
+	relativeSources := map[string]struct{}{}
 	for _, move := range moves {
 		if move.From == move.To {
 			continue
@@ -296,9 +434,20 @@ func validateMoves(seriesDir layout.SeriesDir, moves []Move) error {
 			return fmt.Errorf("multiple tracked files target %q", move.To)
 		}
 		targets[move.To] = move.From
+		if !filepath.IsAbs(move.From) {
+			relativeSources[move.From] = struct{}{}
+		}
 	}
 	for target, source := range targets {
-		if _, err := os.Stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(target))); err == nil && target != source {
+		targetAbs := filepath.Join(seriesDir.Path(), filepath.FromSlash(target))
+		sourceAbs := source
+		if !filepath.IsAbs(sourceAbs) {
+			sourceAbs = filepath.Join(seriesDir.Path(), filepath.FromSlash(source))
+		}
+		if _, err := os.Stat(targetAbs); err == nil && targetAbs != sourceAbs {
+			if _, movedAway := relativeSources[target]; movedAway {
+				continue
+			}
 			return fmt.Errorf("target path %q already exists", target)
 		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err

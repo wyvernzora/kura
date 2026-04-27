@@ -49,7 +49,7 @@ func (Store) SaveStaged(staged Staged) error {
 		return errors.New("library: staged is not bound to a directory")
 	}
 	if staged.IsEmpty() {
-		return nil
+		return removeMetadataFile(StagedPath(staged.dirname))
 	}
 	if err := staged.Validate(); err != nil {
 		return err

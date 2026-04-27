@@ -589,6 +589,177 @@ func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
 	}
 }
 
+func TestReconcileAppliesStagedEpisode(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
+	}
+	series, err := testSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("testSeries: %v", err)
+	}
+	lib := New()
+	if err := lib.SaveSeries(*series); err != nil {
+		t.Fatalf("SaveSeries: %v", err)
+	}
+
+	stageDir := t.TempDir()
+	mediaPath := filepath.Join(stageDir, "incoming.mkv")
+	companionPath := filepath.Join(stageDir, "incoming.en.ass")
+	writeFile(t, mediaPath, "episode")
+	writeFile(t, companionPath, "subtitle")
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	season, _ := RegularSeason(1)
+	episode, _ := NewEpisodeNumber(1)
+	providerSeries := testProviderSeries()
+	if _, err := lib.StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
+		Season:         season,
+		Episode:        episode,
+		Source:         MediaSourceWebRip,
+		Companions:     []string{companionPath},
+		MediaPath:      mediaPath,
+		Inspector:      fakeInspector,
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+	}); err != nil {
+		t.Fatalf("StageEpisodeFile: %v", err)
+	}
+
+	plan, err := lib.PlanReconcile(context.Background(), root, "Bookworm")
+	if err != nil {
+		t.Fatalf("PlanReconcile: %v", err)
+	}
+	if len(plan.FileMoves) != 2 {
+		t.Fatalf("len(FileMoves) = %d, want media plus companion", len(plan.FileMoves))
+	}
+	if err := lib.ApplyReconcile(context.Background(), plan); err != nil {
+		t.Fatalf("ApplyReconcile: %v", err)
+	}
+
+	targetMediaPath := filepath.Join(seriesDir, "Season 1", "Bookworm - S01E01 (WebRip 1080p).mkv")
+	targetCompanionPath := filepath.Join(seriesDir, "Season 1", "Bookworm - S01E01 (WebRip 1080p).en.ass")
+	for _, path := range []string{targetMediaPath, targetCompanionPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("Stat %s: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(mediaPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat staged media = %v, want not exist", err)
+	}
+	if _, err := os.Stat(StagedPath(seriesDir)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat staged.json = %v, want not exist", err)
+	}
+	loaded, err := lib.LoadSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadSeries: %v", err)
+	}
+	if got := loaded.Seasons["1"].Episodes["1"].Media.Path; got != "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv" {
+		t.Fatalf("Media.Path = %q, want reconciled path", got)
+	}
+	if got := loaded.Seasons["1"].Episodes["1"].Companions[0].Path; got != "Season 1/Bookworm - S01E01 (WebRip 1080p).en.ass" {
+		t.Fatalf("Companion.Path = %q, want reconciled path", got)
+	}
+}
+
+func TestReconcileAppliesStagedReplacementAfterTrashingActiveEpisode(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
+		t.Fatalf("MkdirAll .kura: %v", err)
+	}
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	activeRelPath := "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv"
+	writeFile(t, filepath.Join(seriesDir, filepath.FromSlash(activeRelPath)), "old episode")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
+							"source": "webrip",
+							"size": 11,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`)
+	stageDir := t.TempDir()
+	mediaPath := filepath.Join(stageDir, "replacement.mkv")
+	writeFile(t, mediaPath, "new episode")
+
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	season, _ := RegularSeason(1)
+	episode, _ := NewEpisodeNumber(1)
+	providerSeries := testProviderSeries()
+	lib := New()
+	if _, err := lib.StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
+		Season:         season,
+		Episode:        episode,
+		Source:         MediaSourceWebRip,
+		MediaPath:      mediaPath,
+		Inspector:      fakeInspector,
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+		Replace:        true,
+	}); err != nil {
+		t.Fatalf("StageEpisodeFile replace: %v", err)
+	}
+	plan, err := lib.PlanReconcile(context.Background(), root, "Bookworm")
+	if err != nil {
+		t.Fatalf("PlanReconcile: %v", err)
+	}
+	if len(plan.FileMoves) != 2 {
+		t.Fatalf("len(FileMoves) = %d, want trash move plus staged media move", len(plan.FileMoves))
+	}
+	if err := lib.ApplyReconcile(context.Background(), plan); err != nil {
+		t.Fatalf("ApplyReconcile: %v", err)
+	}
+
+	trash, err := lib.LoadTrash(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadTrash: %v", err)
+	}
+	if len(trash.Entries) != 1 {
+		t.Fatalf("len(Trash.Entries) = %d, want 1", len(trash.Entries))
+	}
+	if _, err := os.Stat(filepath.Join(seriesDir, ".kura", "trash", trash.Entries[0].ID, "Bookworm - S01E01 (WebRip 1080p).mkv")); err != nil {
+		t.Fatalf("Stat trashed active episode: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(seriesDir, filepath.FromSlash(activeRelPath)))
+	if err != nil {
+		t.Fatalf("ReadFile active replacement: %v", err)
+	}
+	if string(data) != "new episode" {
+		t.Fatalf("active replacement content = %q, want new episode", data)
+	}
+	if _, err := os.Stat(StagedPath(seriesDir)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat staged.json = %v, want not exist", err)
+	}
+}
+
 func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Bookworm")

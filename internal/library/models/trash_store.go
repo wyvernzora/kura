@@ -49,7 +49,7 @@ func (Store) SaveTrash(trash Trash) error {
 		return errors.New("library: trash is not bound to a directory")
 	}
 	if trash.IsEmpty() {
-		return nil
+		return removeMetadataFile(TrashPath(trash.dirname))
 	}
 	if err := trash.Validate(); err != nil {
 		return err
