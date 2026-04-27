@@ -30,6 +30,10 @@ type Plan struct {
 	UpdatedSeries   series.Series `json:"-"`
 }
 
+func (p Plan) HasChanges() bool {
+	return len(p.FileMoves) > 0 || p.RootMove != nil
+}
+
 type Move struct {
 	From string `json:"from"`
 	To   string `json:"to"`
@@ -80,6 +84,9 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 }
 
 func ApplyPlan(ctx context.Context, plan Plan, store series.Store) error {
+	if !plan.HasChanges() {
+		return nil
+	}
 	progress.Start(ctx, "series-reconcile", fmt.Sprintf("Reconciling %s", plan.Series), len(plan.FileMoves))
 	for index, move := range plan.FileMoves {
 		if move.From == move.To {

@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMetaSearchPrintsJSON(t *testing.T) {
@@ -116,6 +118,61 @@ func TestSeriesSyncCommandWritesSummaryAndMetadata(t *testing.T) {
 	}
 }
 
+func TestSeriesSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv")
+	writeFile(t, episodePath, "episode")
+	info, err := os.Stat(episodePath)
+	if err != nil {
+		t.Fatalf("Stat episode: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"source": "webrip",
+							"size": %d,
+							"mtime": %q,
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`, info.Size(), info.ModTime().UTC().Format(time.RFC3339)))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err = run([]string{
+		"series",
+		"sync",
+		"Bookworm",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "Apply this sync?") {
+		t.Fatalf("stderr = %q, want no apply prompt", stderr.String())
+	}
+}
+
 func TestSeriesReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Long Bookworm")
@@ -173,6 +230,57 @@ func TestSeriesReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	}
 	if moves := plan["fileMoves"].([]any); len(moves) != 1 {
 		t.Fatalf("len(fileMoves) = %d, want 1", len(moves))
+	}
+}
+
+func TestSeriesReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv"), "episode")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"filesystemTitle": "Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"source": "webrip",
+							"size": 7,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"series",
+		"reconcile",
+		"Bookworm",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if strings.Contains(stderr.String(), "Apply these changes?") {
+		t.Fatalf("stderr = %q, want no apply prompt", stderr.String())
 	}
 }
 

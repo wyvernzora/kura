@@ -73,7 +73,10 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		return err
 	}
 
-	if !cmd.DryRun && !cmd.Yes {
+	if cmd.DryRun || !result.HasChanges() {
+		return nil
+	}
+	if !cmd.Yes {
 		confirmed, err := terminalui.Confirm(rt.Stdin, rt.Stderr, "Apply this sync? [y/N] ")
 		if err != nil {
 			return err
@@ -82,16 +85,14 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 			return nil
 		}
 	}
-	if !cmd.DryRun {
-		progress := terminalui.NewProgress(rt.Stderr)
-		progress.Start("Writing series metadata: %s", library.SeriesPath(seriesDir.Path()))
-		defer progress.Stop()
-		if err := lib.SaveSeries(result.UpdatedSeries); err != nil {
-			progress.Fail("Failed writing series metadata")
-			return err
-		}
-		progress.Succeed("Synced %d episode media file(s)", len(result.Synced))
+	progress := terminalui.NewProgress(rt.Stderr)
+	progress.Start("Writing series metadata: %s", library.SeriesPath(seriesDir.Path()))
+	defer progress.Stop()
+	if err := lib.SaveSeries(result.UpdatedSeries); err != nil {
+		progress.Fail("Failed writing series metadata")
+		return err
 	}
+	progress.Succeed("Synced %d episode media file(s)", len(result.Synced))
 	return nil
 }
 
@@ -127,7 +128,10 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 	} else if err := terminalui.WriteReconcilePlan(rt.Stdout, plan); err != nil {
 		return err
 	}
-	if !cmd.DryRun && !cmd.Yes {
+	if cmd.DryRun || !plan.HasChanges() {
+		return nil
+	}
+	if !cmd.Yes {
 		confirmed, err := terminalui.Confirm(rt.Stdin, rt.Stderr, "Apply these changes? [y/N] ")
 		if err != nil {
 			return err
@@ -135,9 +139,6 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 		if !confirmed {
 			return nil
 		}
-	}
-	if cmd.DryRun {
-		return nil
 	}
 	return lib.ApplyReconcile(
 		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),

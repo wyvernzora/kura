@@ -35,6 +35,18 @@ type SeriesSyncResult struct {
 	UpdatedSeries Series            `json:"-"`
 }
 
+func (r SeriesSyncResult) HasChanges() bool {
+	if r.Initialized {
+		return true
+	}
+	for _, entry := range r.Synced {
+		if entry.Status != "existing" {
+			return true
+		}
+	}
+	return false
+}
+
 type SeriesSyncEntry struct {
 	Status     string   `json:"status"`
 	Season     int      `json:"season,omitempty"`
@@ -137,7 +149,7 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 		Skipped:       skipped,
 		UpdatedSeries: updated,
 	}
-	if opts.Apply {
+	if opts.Apply && result.HasChanges() {
 		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", SeriesPath(seriesDir.Path())), 0)
 		if err := l.SaveSeries(updated); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing series metadata", 0, 0)

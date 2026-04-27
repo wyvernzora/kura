@@ -219,6 +219,78 @@ func TestSyncSeriesKeepsUnchangedTrackedEpisodeWithoutInspector(t *testing.T) {
 	if len(result.Synced) != 1 || result.Synced[0].Status != "existing" {
 		t.Fatalf("Synced = %#v, want existing entry", result.Synced)
 	}
+	if result.HasChanges() {
+		t.Fatal("HasChanges = true, want false")
+	}
+}
+
+func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
+		t.Fatalf("MkdirAll .kura: %v", err)
+	}
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv")
+	writeFile(t, episodePath, "episode")
+	info, err := os.Stat(episodePath)
+	if err != nil {
+		t.Fatalf("Stat episode: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"source": "webrip",
+							"size": %d,
+							"mtime": %q,
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`, info.Size(), info.ModTime().UTC().Format(time.RFC3339)))
+
+	metadataPath := SeriesPath(seriesDir)
+	originalTime := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	if err := os.Chtimes(metadataPath, originalTime, originalTime); err != nil {
+		t.Fatalf("Chtimes series.json: %v", err)
+	}
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+
+	result, err := New().SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{Apply: true})
+	if err != nil {
+		t.Fatalf("SyncSeries: %v", err)
+	}
+	if result.HasChanges() {
+		t.Fatal("HasChanges = true, want false")
+	}
+	metadataInfo, err := os.Stat(metadataPath)
+	if err != nil {
+		t.Fatalf("Stat series.json: %v", err)
+	}
+	if !metadataInfo.ModTime().Equal(originalTime) {
+		t.Fatalf("series.json mtime = %s, want %s", metadataInfo.ModTime(), originalTime)
+	}
 }
 
 func TestImportEpisodeFileFindsSeriesAndRecordsCompanion(t *testing.T) {
@@ -398,6 +470,73 @@ func TestPlanReconcileTreatsCanonicallyEquivalentRootNameAsUnchanged(t *testing.
 	}
 	if plan.RootMove != nil {
 		t.Fatalf("RootMove = %#v, want nil", plan.RootMove)
+	}
+}
+
+func TestApplyReconcileSkipsUnchangedPlan(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
+		t.Fatalf("MkdirAll .kura: %v", err)
+	}
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv"), "episode")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"filesystemTitle": "Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/Bookworm - S01E01 (WebRip HEVC 1920x1080).mkv",
+							"source": "webrip",
+							"size": 7,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`)
+	metadataPath := SeriesPath(seriesDir)
+	originalTime := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	if err := os.Chtimes(metadataPath, originalTime, originalTime); err != nil {
+		t.Fatalf("Chtimes series.json: %v", err)
+	}
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	lib := New()
+	plan, err := lib.PlanReconcile(context.Background(), root, "Bookworm")
+	if err != nil {
+		t.Fatalf("PlanReconcile: %v", err)
+	}
+	if plan.HasChanges() {
+		t.Fatalf("HasChanges = true, want false: %#v", plan)
+	}
+	if err := lib.ApplyReconcile(context.Background(), plan); err != nil {
+		t.Fatalf("ApplyReconcile: %v", err)
+	}
+	metadataInfo, err := os.Stat(metadataPath)
+	if err != nil {
+		t.Fatalf("Stat series.json: %v", err)
+	}
+	if !metadataInfo.ModTime().Equal(originalTime) {
+		t.Fatalf("series.json mtime = %s, want %s", metadataInfo.ModTime(), originalTime)
 	}
 }
 
