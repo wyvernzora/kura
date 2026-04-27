@@ -36,6 +36,16 @@ go run ./cmd/kura
 go build -o bin/kura ./cmd/kura
 ```
 
+## Development Checks
+
+Run the same core checks used during local development:
+
+```sh
+make check
+```
+
+`make check` runs `gofmt`, `go vet`, `gopls check`, `go test`, and a local binary build. `gopls check` surfaces editor diagnostics such as Go's `modernize` analyzer warnings.
+
 ## Docker
 
 Build the image:
