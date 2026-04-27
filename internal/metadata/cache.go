@@ -1,0 +1,193 @@
+package metadata
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/hashicorp/golang-lru/v2/expirable"
+)
+
+// CacheOptions configures NewCachedSource.
+type CacheOptions struct {
+	// TTL is how long successful metadata responses remain cached. Zero uses
+	// DefaultCacheTTL.
+	TTL time.Duration
+
+	// MaxEntries caps the number of cached metadata responses. Zero uses
+	// DefaultCacheMaxEntries.
+	MaxEntries int
+}
+
+// DefaultCacheTTL is the initial metadata response TTL described by the spec.
+const DefaultCacheTTL = 10 * time.Minute
+
+// DefaultCacheMaxEntries is the default LRU capacity for metadata responses.
+const DefaultCacheMaxEntries = 256
+
+// NewCachedSource wraps a Source with a small in-process TTL cache.
+//
+// Only successful Search and GetSeries responses are cached. Returned values
+// are deep-copied so callers cannot mutate cached entries.
+func NewCachedSource(next Source, opts CacheOptions) (Source, error) {
+	if next == nil {
+		return nil, errors.New("metadata cache: nil source")
+	}
+	if opts.TTL < 0 {
+		return nil, errors.New("metadata cache: negative ttl")
+	}
+	if opts.TTL == 0 {
+		opts.TTL = DefaultCacheTTL
+	}
+	if opts.MaxEntries < 0 {
+		return nil, errors.New("metadata cache: negative max entries")
+	}
+	if opts.MaxEntries == 0 {
+		opts.MaxEntries = DefaultCacheMaxEntries
+	}
+
+	return &cachedSource{
+		next:    next,
+		entries: expirable.NewLRU[string, any](opts.MaxEntries, nil, opts.TTL),
+	}, nil
+}
+
+type cachedSource struct {
+	next    Source
+	entries *expirable.LRU[string, any]
+}
+
+func (p *cachedSource) Key() string {
+	return p.next.Key()
+}
+
+func (p *cachedSource) Search(ctx context.Context, query string, opts SearchOptions) ([]SearchResult, error) {
+	key, err := cacheKey(p.next.Key(), "search", query, opts)
+	if err != nil {
+		return nil, err
+	}
+	if cached, ok := p.get(key); ok {
+		return cloneSearchResults(cached.([]SearchResult)), nil
+	}
+
+	results, err := p.next.Search(ctx, query, opts)
+	if err != nil {
+		return nil, err
+	}
+	// Store and return separate copies so downstream merge code cannot mutate
+	// cache contents by appending to slices or editing maps.
+	p.set(key, cloneSearchResults(results))
+	return cloneSearchResults(results), nil
+}
+
+func (p *cachedSource) GetSeries(ctx context.Context, providerID string) (Series, error) {
+	key, err := cacheKey(p.next.Key(), "series", providerID)
+	if err != nil {
+		return Series{}, err
+	}
+	if cached, ok := p.get(key); ok {
+		return cloneSeries(cached.(Series)), nil
+	}
+
+	series, err := p.next.GetSeries(ctx, providerID)
+	if err != nil {
+		return Series{}, err
+	}
+	// Store and return separate copies so downstream merge code cannot mutate
+	// cache contents by appending to slices or editing maps.
+	p.set(key, cloneSeries(series))
+	return cloneSeries(series), nil
+}
+
+func (p *cachedSource) get(key string) (any, bool) {
+	return p.entries.Get(key)
+}
+
+func (p *cachedSource) set(key string, value any) {
+	p.entries.Add(key, value)
+}
+
+func cacheKey(sourceKey, method string, parts ...any) (string, error) {
+	// JSON gives a stable enough representation for these option structs while
+	// keeping the wrapper independent from source-specific key formats.
+	body, err := json.Marshal(parts)
+	if err != nil {
+		return "", fmt.Errorf("metadata cache: build key: %w", err)
+	}
+	return sourceKey + ":" + method + ":" + string(body), nil
+}
+
+func cloneSearchResults(in []SearchResult) []SearchResult {
+	if in == nil {
+		return nil
+	}
+	out := make([]SearchResult, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].SeriesSummary = cloneSeriesSummary(in[i].SeriesSummary)
+	}
+	return out
+}
+
+func cloneSeries(in Series) Series {
+	out := in
+	out.SeriesSummary = cloneSeriesSummary(in.SeriesSummary)
+	out.Seasons = cloneSeasons(in.Seasons)
+	out.Specials = cloneEpisodeList(in.Specials)
+	return out
+}
+
+func cloneSeriesSummary(in SeriesSummary) SeriesSummary {
+	out := in
+	out.ProviderRefs = cloneStrings(in.ProviderRefs)
+	out.Genres = cloneStrings(in.Genres)
+	return out
+}
+
+func cloneSeasons(in []Season) []Season {
+	if in == nil {
+		return nil
+	}
+	out := make([]Season, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Episodes = cloneEpisodes(in[i].Episodes)
+	}
+	return out
+}
+
+func cloneEpisodes(in []Episode) []Episode {
+	if in == nil {
+		return nil
+	}
+	out := make([]Episode, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].AbsoluteNumber = cloneInt(in[i].AbsoluteNumber)
+	}
+	return out
+}
+
+func cloneEpisodeList(in []Episode) []Episode {
+	if len(in) == 0 {
+		return []Episode{}
+	}
+	return cloneEpisodes(in)
+}
+
+func cloneInt(in *int) *int {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	return &out
+}
+
+func cloneStrings(in []string) []string {
+	if len(in) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), in...)
+}
