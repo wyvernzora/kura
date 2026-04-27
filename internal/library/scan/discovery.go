@@ -32,6 +32,7 @@ const (
 	SkipCodeSpecialNumberNotInferred = "special_number_not_inferred"
 	SkipCodeEpisodeNumberNotInferred = "episode_number_not_inferred"
 	SkipCodeSeasonMismatch           = "season_mismatch"
+	SkipCodeIgnoredDirectory         = "ignored_directory"
 )
 
 func DiscoverSeriesEpisodes(seriesDir layout.SeriesDir) ([]DiscoveredEpisode, []ImportSkip, error) {
@@ -51,6 +52,7 @@ func DiscoverSeriesEpisodes(seriesDir layout.SeriesDir) ([]DiscoveredEpisode, []
 		if entry.IsDir() {
 			season, ok := ParseSeasonDir(name)
 			if !ok {
+				skipped = append(skipped, ImportSkip{Path: filepath.ToSlash(name), Code: SkipCodeIgnoredDirectory, Reason: "directory is not a season directory"})
 				continue
 			}
 			discovered, seasonSkipped, err := discoverSeasonEpisodes(seriesDir, fullPath, season)
@@ -92,6 +94,12 @@ func discoverSeasonEpisodes(seriesDir layout.SeriesDir, seasonDir string, season
 	var skipped []ImportSkip
 	for _, entry := range entries {
 		if entry.IsDir() {
+			fullPath := filepath.Join(seasonDir, entry.Name())
+			relPath, err := filepath.Rel(seriesDir.Path(), fullPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			skipped = append(skipped, ImportSkip{Path: filepath.ToSlash(relPath), Code: SkipCodeIgnoredDirectory, Reason: "season subdirectory is not scanned"})
 			continue
 		}
 		fullPath := filepath.Join(seasonDir, entry.Name())
