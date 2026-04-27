@@ -1,4 +1,4 @@
-package models
+package store
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-//go:embed staged_v1.schema.json
+//go:embed schema/staged_v1.json
 var stagedV1SchemaJSON []byte
 
 type stagedV1 struct {
@@ -145,11 +145,11 @@ func compiledStagedV1Schema() (*jsonschema.Schema, error) {
 			return
 		}
 		compiler := jsonschema.NewCompiler()
-		if err := compiler.AddResource("staged_v1.schema.json", doc); err != nil {
+		if err := compiler.AddResource("staged_v1.json", doc); err != nil {
 			stagedV1SchemaErr = err
 			return
 		}
-		stagedV1Schema, stagedV1SchemaErr = compiler.Compile("staged_v1.schema.json")
+		stagedV1Schema, stagedV1SchemaErr = compiler.Compile("staged_v1.json")
 	})
 	return stagedV1Schema, stagedV1SchemaErr
 }

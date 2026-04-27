@@ -6,8 +6,8 @@ import (
 	media "github.com/wyvernzora/kura/internal/domain"
 	layout "github.com/wyvernzora/kura/internal/fsroot"
 	scan "github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/store"
 )
 
 type LibraryRoot = layout.LibraryRoot
@@ -17,15 +17,15 @@ type EpisodeNumber = media.EpisodeNumber
 type MediaSource = media.MediaSource
 type MediaInfo = media.MediaInfo
 
-type Series = models.Series
-type Season = models.Season
-type Episode = models.Episode
-type Staged = models.Staged
-type StagedEpisode = models.StagedEpisode
-type Trash = models.Trash
-type TrashedEpisode = models.TrashedEpisode
-type MediaFile = models.MediaFile
-type CompanionFile = models.CompanionFile
+type Series = store.Series
+type Season = store.Season
+type Episode = store.Episode
+type Staged = store.Staged
+type StagedEpisode = store.StagedEpisode
+type Trash = store.Trash
+type TrashedEpisode = store.TrashedEpisode
+type MediaFile = store.MediaFile
+type CompanionFile = store.CompanionFile
 
 type DiscoveredEpisode = scan.DiscoveredEpisode
 type ImportSkip = scan.ImportSkip
@@ -51,9 +51,9 @@ var (
 )
 
 func SeriesPath(seriesDir string) string {
-	return models.SeriesPath(seriesDir)
+	return store.SeriesPath(seriesDir)
 }
 
 func StagedPath(seriesDir string) string {
-	return models.StagedPath(seriesDir)
+	return store.StagedPath(seriesDir)
 }

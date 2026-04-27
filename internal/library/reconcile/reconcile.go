@@ -13,19 +13,19 @@ import (
 	mediafacts "github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	layout "github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/store"
 )
 
 type Plan struct {
-	Series        string        `json:"series"`
-	Target        string        `json:"target"`
-	DryRun        bool          `json:"dryRun"`
-	FileMoves     []Move        `json:"fileMoves"`
-	SeriesDir     string        `json:"-"`
-	UpdatedSeries models.Series `json:"-"`
-	UpdatedStaged models.Staged `json:"-"`
-	UpdatedTrash  models.Trash  `json:"-"`
+	Series        string       `json:"series"`
+	Target        string       `json:"target"`
+	DryRun        bool         `json:"dryRun"`
+	FileMoves     []Move       `json:"fileMoves"`
+	SeriesDir     string       `json:"-"`
+	UpdatedSeries store.Series `json:"-"`
+	UpdatedStaged store.Staged `json:"-"`
+	UpdatedTrash  store.Trash  `json:"-"`
 
 	metadataChanged bool
 }
@@ -39,12 +39,12 @@ type Move struct {
 	To   string `json:"to"`
 }
 
-func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, store models.Store) (Plan, error) {
+func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, repo store.Repo) (Plan, error) {
 	seriesDir, err := root.SeriesDir(dirname)
 	if err != nil {
 		return Plan{}, err
 	}
-	loaded, err := store.Load(seriesDir.Path())
+	loaded, err := repo.LoadSeries(seriesDir.Path())
 	if err != nil {
 		return Plan{}, err
 	}
@@ -54,12 +54,12 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 	}
 
 	updated := *loaded
-	staged, err := store.LoadStaged(seriesDir.Path())
+	staged, err := repo.LoadStaged(seriesDir.Path())
 	if err != nil {
 		return Plan{}, err
 	}
 	updatedStaged := *staged
-	trash, err := store.LoadTrash(seriesDir.Path())
+	trash, err := repo.LoadTrash(seriesDir.Path())
 	if err != nil {
 		return Plan{}, err
 	}
@@ -89,7 +89,7 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 	}, nil
 }
 
-func ApplyPlan(ctx context.Context, plan Plan, store models.Store) error {
+func ApplyPlan(ctx context.Context, plan Plan, repo store.Repo) error {
 	if !plan.HasChanges() {
 		return nil
 	}
@@ -109,16 +109,16 @@ func ApplyPlan(ctx context.Context, plan Plan, store models.Store) error {
 			return err
 		}
 	}
-	progress.Update(ctx, "series-reconcile", fmt.Sprintf("Writing series metadata: %s", models.SeriesPath(plan.SeriesDir)), len(plan.FileMoves), len(plan.FileMoves))
-	if err := store.Save(plan.UpdatedSeries); err != nil {
+	progress.Update(ctx, "series-reconcile", fmt.Sprintf("Writing series metadata: %s", store.SeriesPath(plan.SeriesDir)), len(plan.FileMoves), len(plan.FileMoves))
+	if err := repo.SaveSeries(plan.UpdatedSeries); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing series metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}
-	if err := store.SaveTrash(plan.UpdatedTrash); err != nil {
+	if err := repo.SaveTrash(plan.UpdatedTrash); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing trash metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}
-	if err := store.SaveStaged(plan.UpdatedStaged); err != nil {
+	if err := repo.SaveStaged(plan.UpdatedStaged); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing staged metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}
@@ -126,11 +126,11 @@ func ApplyPlan(ctx context.Context, plan Plan, store models.Store) error {
 	return nil
 }
 
-func applyStagedEpisodes(title mediafacts.FilesystemTitle, series *models.Series, staged *models.Staged, trash *models.Trash) ([]Move, bool, error) {
+func applyStagedEpisodes(title mediafacts.FilesystemTitle, series *store.Series, staged *store.Staged, trash *store.Trash) ([]Move, bool, error) {
 	if staged.IsEmpty() {
 		return nil, false, nil
 	}
-	entries := append([]models.StagedEpisode(nil), staged.Entries...)
+	entries := append([]store.StagedEpisode(nil), staged.Entries...)
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].Season != entries[j].Season {
 			return entries[i].Season < entries[j].Season
@@ -148,7 +148,7 @@ func applyStagedEpisodes(title mediafacts.FilesystemTitle, series *models.Series
 		}
 		existing, exists := series.LookupEpisode(stagedEpisode.Season, stagedEpisode.Number)
 		if exists {
-			trash.Entries = append(trash.Entries, models.NewTrashedEpisode(stagedEpisode.Season, stagedEpisode.Number, existing))
+			trash.Entries = append(trash.Entries, store.NewTrashedEpisode(stagedEpisode.Season, stagedEpisode.Number, existing))
 		}
 		episode, episodeMoves, err := activeEpisodeFromStaged(title, stagedEpisode)
 		if err != nil {
@@ -172,7 +172,7 @@ func applyStagedEpisodes(title mediafacts.FilesystemTitle, series *models.Series
 	return moves, true, nil
 }
 
-func validateStagedSource(staged models.StagedEpisode) error {
+func validateStagedSource(staged store.StagedEpisode) error {
 	if _, err := os.Stat(staged.Media.Path); err != nil {
 		return err
 	}
@@ -184,10 +184,10 @@ func validateStagedSource(staged models.StagedEpisode) error {
 	return nil
 }
 
-func activeEpisodeFromStaged(title mediafacts.FilesystemTitle, staged models.StagedEpisode) (models.Episode, []Move, error) {
+func activeEpisodeFromStaged(title mediafacts.FilesystemTitle, staged store.StagedEpisode) (store.Episode, []Move, error) {
 	targetMediaFilename, err := reconciledMediaFilename(title, staged.Season, staged.Number, staged.Media)
 	if err != nil {
-		return models.Episode{}, nil, err
+		return store.Episode{}, nil, err
 	}
 	targetMediaPath := filepath.ToSlash(filepath.Join(targetEpisodeDir(staged.Season), targetMediaFilename))
 	episode := staged.Episode
@@ -208,7 +208,7 @@ func activeEpisodeFromStaged(title mediafacts.FilesystemTitle, staged models.Sta
 	return episode, moves, nil
 }
 
-func setSeriesEpisode(series *models.Series, seasonNumber int, episodeNumber int, episode models.Episode) error {
+func setSeriesEpisode(series *store.Series, seasonNumber int, episodeNumber int, episode store.Episode) error {
 	if seasonNumber < 0 {
 		return fmt.Errorf("library: invalid season %d", seasonNumber)
 	}
@@ -217,31 +217,31 @@ func setSeriesEpisode(series *models.Series, seasonNumber int, episodeNumber int
 	}
 	episodeKey := strconv.Itoa(episodeNumber)
 	if seasonNumber == 0 {
-		season := models.Season{}
+		season := store.Season{}
 		if series.Specials != nil {
 			season = *series.Specials
 		}
 		if season.Episodes == nil {
-			season.Episodes = map[string]models.Episode{}
+			season.Episodes = map[string]store.Episode{}
 		}
 		season.Episodes[episodeKey] = episode
 		series.Specials = &season
 		return nil
 	}
 	if series.Seasons == nil {
-		series.Seasons = map[string]models.Season{}
+		series.Seasons = map[string]store.Season{}
 	}
 	seasonKey := strconv.Itoa(seasonNumber)
 	season := series.Seasons[seasonKey]
 	if season.Episodes == nil {
-		season.Episodes = map[string]models.Episode{}
+		season.Episodes = map[string]store.Episode{}
 	}
 	season.Episodes[episodeKey] = episode
 	series.Seasons[seasonKey] = season
 	return nil
 }
 
-func reconcileEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, series *models.Series, trash *models.Trash) ([]Move, error) {
+func reconcileEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, series *store.Series, trash *store.Trash) ([]Move, error) {
 	var moves []Move
 	regularKeys := make([]int, 0, len(series.Seasons))
 	for key := range series.Seasons {
@@ -277,7 +277,7 @@ func reconcileEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTi
 	return moves, nil
 }
 
-func reconcileSeasonEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, seasonNumber int, season *models.Season) ([]Move, error) {
+func reconcileSeasonEpisodes(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, seasonNumber int, season *store.Season) ([]Move, error) {
 	var moves []Move
 	episodeNumbers := make([]int, 0, len(season.Episodes))
 	for key := range season.Episodes {
@@ -301,7 +301,7 @@ func reconcileSeasonEpisodes(seriesDir layout.SeriesDir, title mediafacts.Filesy
 	return moves, nil
 }
 
-func reconcileEpisode(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, seasonNumber int, episodeNumber int, episode *models.Episode) ([]Move, error) {
+func reconcileEpisode(seriesDir layout.SeriesDir, title mediafacts.FilesystemTitle, seasonNumber int, episodeNumber int, episode *store.Episode) ([]Move, error) {
 	var moves []Move
 	mediaFile := episode.Media
 	if mediaFile.Path == "" {
@@ -343,7 +343,7 @@ func reconcileEpisode(seriesDir layout.SeriesDir, title mediafacts.FilesystemTit
 	return moves, nil
 }
 
-func reconcileTrash(seriesDir layout.SeriesDir, trash *models.Trash) ([]Move, error) {
+func reconcileTrash(seriesDir layout.SeriesDir, trash *store.Trash) ([]Move, error) {
 	var moves []Move
 	for index := range trash.Entries {
 		trashed := &trash.Entries[index]
@@ -381,7 +381,7 @@ func targetEpisodeDir(seasonNumber int) string {
 	return fmt.Sprintf("Season %d", seasonNumber)
 }
 
-func reconciledMediaFilename(title mediafacts.FilesystemTitle, seasonNumber int, episodeNumber int, media models.MediaFile) (string, error) {
+func reconciledMediaFilename(title mediafacts.FilesystemTitle, seasonNumber int, episodeNumber int, media store.MediaFile) (string, error) {
 	season, err := mediafacts.NewSeasonNumber(seasonNumber)
 	if err != nil {
 		return "", err

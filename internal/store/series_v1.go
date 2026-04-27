@@ -1,4 +1,4 @@
-package models
+package store
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-//go:embed series_v1.schema.json
+//go:embed schema/series_v1.json
 var seriesV1SchemaJSON []byte
 
 type schemaHeader struct {
@@ -402,11 +402,11 @@ func compiledSeriesV1Schema() (*jsonschema.Schema, error) {
 			return
 		}
 		compiler := jsonschema.NewCompiler()
-		if err := compiler.AddResource("series_v1.schema.json", doc); err != nil {
+		if err := compiler.AddResource("series_v1.json", doc); err != nil {
 			seriesV1SchemaErr = err
 			return
 		}
-		seriesV1Schema, seriesV1SchemaErr = compiler.Compile("series_v1.schema.json")
+		seriesV1Schema, seriesV1SchemaErr = compiler.Compile("series_v1.json")
 	})
 	return seriesV1Schema, seriesV1SchemaErr
 }

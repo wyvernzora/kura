@@ -1,7 +1,8 @@
-package models
+package store
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,17 +11,17 @@ import (
 	layout "github.com/wyvernzora/kura/internal/fsroot"
 )
 
-type Store struct{}
+type Repo struct{}
 
-func NewStore() Store {
-	return Store{}
+func NewRepo() Repo {
+	return Repo{}
 }
 
 // New creates an unsaved series model bound to dirname.
 //
 // Metadata-derived fields are intentionally left for the caller to populate
 // before Save. Save performs full schema validation.
-func (Store) New(dirname string) (*Series, error) {
+func (Repo) NewSeries(dirname string) (*Series, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -34,7 +35,7 @@ func (Store) New(dirname string) (*Series, error) {
 }
 
 // Load reads and validates <dirname>/.kura/series.json.
-func (Store) Load(dirname string) (*Series, error) {
+func (Repo) LoadSeries(dirname string) (*Series, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func (Store) Load(dirname string) (*Series, error) {
 }
 
 // Save atomically writes series to its bound <dirname>/.kura/series.json path.
-func (Store) Save(series Series) error {
+func (Repo) SaveSeries(series Series) error {
 	if series.dirname == "" {
 		return errors.New("library: series is not bound to a directory")
 	}
@@ -70,15 +71,20 @@ func (Store) Save(series Series) error {
 		return err
 	}
 
-	path := SeriesPath(series.dirname)
-	tmp, err := os.CreateTemp(metaDir, ".series-*.tmp")
+	return atomicWrite(metaDir, SeriesPath(series.dirname), ".series-*.tmp", func(w io.Writer) error {
+		return encodeSeries(w, series)
+	})
+}
+
+func atomicWrite(dir string, finalPath string, tmpPattern string, encode func(io.Writer) error) error {
+	tmp, err := os.CreateTemp(dir, tmpPattern)
 	if err != nil {
 		return err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
 
-	if err := encodeSeries(tmp, series); err != nil {
+	if err := encode(tmp); err != nil {
 		_ = tmp.Close()
 		return err
 	}
@@ -89,10 +95,10 @@ func (Store) Save(series Series) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(tmpName, path); err != nil {
+	if err := os.Rename(tmpName, finalPath); err != nil {
 		return err
 	}
-	return layout.SyncDir(metaDir)
+	return layout.SyncDir(dir)
 }
 
 func cleanDirname(dirname string) (string, error) {

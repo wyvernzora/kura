@@ -1,14 +1,15 @@
-package models
+package store
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 
 	layout "github.com/wyvernzora/kura/internal/fsroot"
 )
 
-func (Store) NewStaged(dirname string) (*Staged, error) {
+func (Repo) NewStaged(dirname string) (*Staged, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -19,7 +20,7 @@ func (Store) NewStaged(dirname string) (*Staged, error) {
 	}, nil
 }
 
-func (store Store) LoadStaged(dirname string) (*Staged, error) {
+func (repo Repo) LoadStaged(dirname string) (*Staged, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -28,7 +29,7 @@ func (store Store) LoadStaged(dirname string) (*Staged, error) {
 	path := StagedPath(dirname)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return store.NewStaged(dirname)
+		return repo.NewStaged(dirname)
 	}
 	if err != nil {
 		return nil, err
@@ -44,7 +45,7 @@ func (store Store) LoadStaged(dirname string) (*Staged, error) {
 	return &staged, nil
 }
 
-func (Store) SaveStaged(staged Staged) error {
+func (Repo) SaveStaged(staged Staged) error {
 	if staged.dirname == "" {
 		return errors.New("library: staged is not bound to a directory")
 	}
@@ -60,27 +61,7 @@ func (Store) SaveStaged(staged Staged) error {
 		return err
 	}
 
-	path := StagedPath(staged.dirname)
-	tmp, err := os.CreateTemp(metaDir, ".staged-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-
-	if err := encodeStaged(tmp, staged); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return err
-	}
-	return layout.SyncDir(metaDir)
+	return atomicWrite(metaDir, StagedPath(staged.dirname), ".staged-*.tmp", func(w io.Writer) error {
+		return encodeStaged(w, staged)
+	})
 }

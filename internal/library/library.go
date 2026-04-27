@@ -7,10 +7,10 @@ import (
 	layout "github.com/wyvernzora/kura/internal/fsroot"
 	scan "github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/library/match"
-	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/library/reconcile"
 	"github.com/wyvernzora/kura/internal/library/workflows"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/store"
 )
 
 type LibraryRoot = layout.LibraryRoot
@@ -27,16 +27,16 @@ type Codec = domain.Codec
 type Resolution = domain.Resolution
 type MediaInfo = domain.MediaInfo
 
-type Series = models.Series
-type Season = models.Season
-type Episode = models.Episode
-type Staged = models.Staged
-type StagedEpisode = models.StagedEpisode
-type Trash = models.Trash
-type TrashedEpisode = models.TrashedEpisode
-type MediaFile = models.MediaFile
-type CompanionFile = models.CompanionFile
-type DuplicateEpisodeNumberError = models.DuplicateEpisodeNumberError
+type Series = store.Series
+type Season = store.Season
+type Episode = store.Episode
+type Staged = store.Staged
+type StagedEpisode = store.StagedEpisode
+type Trash = store.Trash
+type TrashedEpisode = store.TrashedEpisode
+type MediaFile = store.MediaFile
+type CompanionFile = store.CompanionFile
+type DuplicateEpisodeNumberError = store.DuplicateEpisodeNumberError
 
 type AddEpisodeOptions = workflows.AddEpisodeOptions
 type EpisodeAlreadyExistsError = workflows.EpisodeAlreadyExistsError
@@ -65,9 +65,9 @@ type ProgressEvent = progress.Event
 type ProgressReporter = progress.Reporter
 
 const (
-	SeriesSchemaVersion = models.SeriesSchemaVersion
-	StagedSchemaVersion = models.StagedSchemaVersion
-	TrashSchemaVersion  = models.TrashSchemaVersion
+	SeriesSchemaVersion = store.SeriesSchemaVersion
+	StagedSchemaVersion = store.StagedSchemaVersion
+	TrashSchemaVersion  = store.TrashSchemaVersion
 
 	MediaSourceUnknown = domain.MediaSourceUnknown
 	MediaSourceTVRip   = domain.MediaSourceTVRip
@@ -118,11 +118,11 @@ var (
 )
 
 func SeriesPath(seriesDir string) string {
-	return models.SeriesPath(seriesDir)
+	return store.SeriesPath(seriesDir)
 }
 
 func StagedPath(seriesDir string) string {
-	return models.StagedPath(seriesDir)
+	return store.StagedPath(seriesDir)
 }
 
 func WithProgress(ctx context.Context, reporter ProgressReporter) context.Context {
@@ -145,26 +145,26 @@ type Library interface {
 }
 
 type library struct {
-	store models.Store
+	store store.Repo
 }
 
 var _ Library = library{}
 
 // New returns the default filesystem-backed library implementation.
 func New() Library {
-	return library{store: models.NewStore()}
+	return library{store: store.NewRepo()}
 }
 
 func (l library) NewSeries(dirname string) (*Series, error) {
-	return l.store.New(dirname)
+	return l.store.NewSeries(dirname)
 }
 
 func (l library) LoadSeries(dirname string) (*Series, error) {
-	return l.store.Load(dirname)
+	return l.store.LoadSeries(dirname)
 }
 
 func (l library) SaveSeries(series Series) error {
-	return l.store.Save(series)
+	return l.store.SaveSeries(series)
 }
 
 func (l library) LoadStaged(dirname string) (*Staged, error) {

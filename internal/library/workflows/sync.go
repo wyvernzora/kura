@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/store"
 )
 
 type SeriesSyncOptions struct {
@@ -57,7 +57,7 @@ type SeriesSyncEntry struct {
 	Companions []string `json:"companions"`
 }
 
-func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
+func SyncSeries(ctx context.Context, repo store.Repo, root LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
 	seriesDir, err := root.SeriesDir(dirname)
 	if err != nil {
 		return SeriesSyncResult{}, err
@@ -66,7 +66,7 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 	var initialized bool
 	var series *Series
 	if _, err := os.Stat(SeriesPath(seriesDir.Path())); err == nil {
-		series, err = store.Load(seriesDir.Path())
+		series, err = repo.LoadSeries(seriesDir.Path())
 		if err != nil {
 			return SeriesSyncResult{}, err
 		}
@@ -74,7 +74,7 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 		if opts.ProviderSeries == nil {
 			return SeriesSyncResult{}, fmt.Errorf("library: provider series is required to initialize %q", dirname)
 		}
-		series, err = newSeriesFromProvider(store, seriesDir.Path(), *opts.ProviderSeries)
+		series, err = newSeriesFromProvider(repo, seriesDir.Path(), *opts.ProviderSeries)
 		if err != nil {
 			return SeriesSyncResult{}, err
 		}
@@ -92,7 +92,7 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 	}
 
 	updated := *series
-	trash, err := store.LoadTrash(seriesDir.Path())
+	trash, err := repo.LoadTrash(seriesDir.Path())
 	if err != nil {
 		return SeriesSyncResult{}, err
 	}
@@ -181,11 +181,11 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 	}
 	if opts.Apply && !opts.DryRun && result.HasChanges() {
 		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", SeriesPath(seriesDir.Path())), 0)
-		if err := store.Save(updated); err != nil {
+		if err := repo.SaveSeries(updated); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing series metadata", 0, 0)
 			return SeriesSyncResult{}, err
 		}
-		if err := store.SaveTrash(updatedTrash); err != nil {
+		if err := repo.SaveTrash(updatedTrash); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing trash metadata", 0, 0)
 			return SeriesSyncResult{}, err
 		}
@@ -194,8 +194,8 @@ func SyncSeries(ctx context.Context, store models.Store, root LibraryRoot, dirna
 	return result, nil
 }
 
-func newSeriesFromProvider(store models.Store, seriesDir string, providerSeries metadata.Series) (*Series, error) {
-	series, err := store.New(seriesDir)
+func newSeriesFromProvider(repo store.Repo, seriesDir string, providerSeries metadata.Series) (*Series, error) {
+	series, err := repo.NewSeries(seriesDir)
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package models
+package store
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-//go:embed trash_v1.schema.json
+//go:embed schema/trash_v1.json
 var trashV1SchemaJSON []byte
 
 type trashV1 struct {
@@ -148,11 +148,11 @@ func compiledTrashV1Schema() (*jsonschema.Schema, error) {
 			return
 		}
 		compiler := jsonschema.NewCompiler()
-		if err := compiler.AddResource("trash_v1.schema.json", doc); err != nil {
+		if err := compiler.AddResource("trash_v1.json", doc); err != nil {
 			trashV1SchemaErr = err
 			return
 		}
-		trashV1Schema, trashV1SchemaErr = compiler.Compile("trash_v1.schema.json")
+		trashV1Schema, trashV1SchemaErr = compiler.Compile("trash_v1.json")
 	})
 	return trashV1Schema, trashV1SchemaErr
 }

@@ -1,5 +1,5 @@
-// Package models owns Kura's persistent per-series library state.
-package models
+// Package store owns Kura's persistent per-series library state.
+package store
 
 import (
 	"encoding/json"

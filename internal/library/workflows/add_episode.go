@@ -9,7 +9,7 @@ import (
 
 	media "github.com/wyvernzora/kura/internal/domain"
 	layout "github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/library/models"
+	"github.com/wyvernzora/kura/internal/store"
 )
 
 // AddEpisodeOptions describes a media record to add or replace in a series.
@@ -124,7 +124,7 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 	}
 	if replaced != nil {
 		trash := *opts.Trash
-		trash.Entries = append(append([]TrashedEpisode(nil), opts.Trash.Entries...), models.NewTrashedEpisode(opts.Season, opts.Episode, *replaced))
+		trash.Entries = append(append([]TrashedEpisode(nil), opts.Trash.Entries...), store.NewTrashedEpisode(opts.Season, opts.Episode, *replaced))
 		if err := trash.Validate(); err != nil {
 			return Series{}, err
 		}
