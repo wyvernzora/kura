@@ -6,10 +6,10 @@ import (
 	"github.com/wyvernzora/kura/internal/domain"
 	layout "github.com/wyvernzora/kura/internal/fsroot"
 	scan "github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/library/match"
 	"github.com/wyvernzora/kura/internal/library/reconcile"
 	"github.com/wyvernzora/kura/internal/library/workflows"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/resolve"
 	"github.com/wyvernzora/kura/internal/store"
 )
 
@@ -54,8 +54,8 @@ type StageEpisodeFileOptions = workflows.StageEpisodeFileOptions
 type StageEpisodeFileResult = workflows.StageEpisodeFileResult
 type StagedEpisodeAlreadyExistsError = workflows.StagedEpisodeAlreadyExistsError
 
-type ResolveSeriesOptions = match.ResolveSeriesOptions
-type SeriesSelectionRequiredError = match.SeriesSelectionRequiredError
+type ResolveSeriesOptions = resolve.ResolveSeriesOptions
+type SeriesSelectionRequiredError = resolve.SeriesSelectionRequiredError
 
 type ReconcilePlan = reconcile.Plan
 type ReconcileMove = reconcile.Move
@@ -109,12 +109,12 @@ var (
 	InferSourceFromFilename  = scan.InferSourceFromFilename
 	RecognizedVideoFile      = scan.RecognizedVideoFile
 
-	ResolveProviderSeries  = match.ResolveProviderSeries
-	GetProviderSeriesByRef = match.GetProviderSeriesByRef
-	SearchResultMatch      = match.SearchResultMatch
-	ExactSearchMatch       = match.ExactSearchMatch
-	ExactTitleMatch        = match.ExactTitleMatch
-	TitleContainsQuery     = match.TitleContainsQuery
+	ResolveProviderSeries  = resolve.ResolveProviderSeries
+	GetProviderSeriesByRef = resolve.GetProviderSeriesByRef
+	SearchResultMatch      = resolve.SearchResultMatch
+	ExactSearchMatch       = resolve.ExactSearchMatch
+	ExactTitleMatch        = resolve.ExactTitleMatch
+	TitleContainsQuery     = resolve.TitleContainsQuery
 )
 
 func SeriesPath(seriesDir string) string {

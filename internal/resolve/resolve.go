@@ -1,4 +1,4 @@
-package match
+package resolve
 
 import (
 	"context"
