@@ -66,7 +66,7 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 		return Plan{}, err
 	}
 	updatedTrash := *trash
-	stagedMoves, stagedChanged, err := applyStagedEpisodes(seriesDir, title, &updated, &updatedStaged, &updatedTrash)
+	stagedMoves, stagedChanged, err := applyStagedEpisodes(title, &updated, &updatedStaged, &updatedTrash)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -128,7 +128,7 @@ func ApplyPlan(ctx context.Context, plan Plan, store models.Store) error {
 	return nil
 }
 
-func applyStagedEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle, series *models.Series, staged *models.Staged, trash *models.Trash) ([]Move, bool, error) {
+func applyStagedEpisodes(title layout.FilesystemTitle, series *models.Series, staged *models.Staged, trash *models.Trash) ([]Move, bool, error) {
 	if staged.IsEmpty() {
 		return nil, false, nil
 	}
