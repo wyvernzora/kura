@@ -133,7 +133,7 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	result, err := New().SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries:          &providerSeries,
 		PreserveFilesystemTitle: true,
-		Inspector:               fakeInspector{},
+		Inspector:               fakeInspector,
 		Apply:                   true,
 	})
 	if err != nil {
@@ -321,7 +321,7 @@ func TestImportEpisodeFileFindsSeriesAndRecordsCompanion(t *testing.T) {
 		Episode:    episode,
 		Companions: []string{"Bookworm/Season 1/episode.en.ass"},
 		MediaPath:  "Bookworm/Season 1/episode.mkv",
-		Inspector:  fakeInspector{},
+		Inspector:  fakeInspector,
 		Apply:      true,
 	})
 	if err != nil {
@@ -561,14 +561,12 @@ func (p fakeMetadataSource) GetSeries(_ context.Context, providerID string) (met
 	return series, nil
 }
 
-type fakeInspector struct{}
-
-func (fakeInspector) Inspect(context.Context, string) (MediaInfo, error) {
+var fakeInspector = MediaInspectorFunc(func(context.Context, string) (MediaInfo, error) {
 	return MediaInfo{
 		VideoCodec: "HEVC",
 		Resolution: "1920x1080",
 	}, nil
-}
+})
 
 func testProviderSeries() metadata.Series {
 	return metadata.Series{

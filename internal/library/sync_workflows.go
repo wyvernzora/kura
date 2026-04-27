@@ -18,6 +18,12 @@ type MediaInspector interface {
 	Inspect(context.Context, string) (MediaInfo, error)
 }
 
+type MediaInspectorFunc func(context.Context, string) (MediaInfo, error)
+
+func (f MediaInspectorFunc) Inspect(ctx context.Context, path string) (MediaInfo, error) {
+	return f(ctx, path)
+}
+
 type SeriesSyncOptions struct {
 	ProviderSeries          *metadata.Series
 	PreserveFilesystemTitle bool
