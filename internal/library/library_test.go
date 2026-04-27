@@ -164,6 +164,40 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	}
 }
 
+func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Bookworm")
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
+	}
+
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	providerSeries := testProviderSeries()
+	result, err := New().SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
+		ProviderSeries: &providerSeries,
+		Apply:          true,
+	})
+	if err != nil {
+		t.Fatalf("SyncSeries: %v", err)
+	}
+	if !result.Initialized {
+		t.Fatal("Initialized = false, want true")
+	}
+	if len(result.Synced) != 0 || len(result.Skipped) != 0 {
+		t.Fatalf("Synced/Skipped = %#v/%#v, want empty", result.Synced, result.Skipped)
+	}
+	loaded, err := New().LoadSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadSeries: %v", err)
+	}
+	if loaded.PreferredTitle != providerSeries.PreferredTitle {
+		t.Fatalf("PreferredTitle = %q, want %q", loaded.PreferredTitle, providerSeries.PreferredTitle)
+	}
+}
+
 func TestSyncSeriesDoesNotPersistFilesystemTitle(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Short Title")
