@@ -13,6 +13,7 @@ require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/briandowns/spinner v1.23.2
 	github.com/jedib0t/go-pretty/v6 v6.7.10
+	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31
 	golang.org/x/term v0.29.0
@@ -20,6 +21,7 @@ require (
 
 require (
 	github.com/fatih/color v1.7.0 // indirect
+	github.com/google/uuid v1.5.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-isatty v0.0.8 // indirect

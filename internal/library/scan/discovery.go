@@ -154,10 +154,8 @@ func matchingCompanions(seriesDir string, dir string, videoName string, entries 
 }
 
 var (
-	seasonDirPattern     = regexp.MustCompile(`(?i)^Season[[:space:]]+([0-9]+)$`)
-	seasonEpisodePattern = regexp.MustCompile(`(?i)\bS([0-9]{1,2})E([0-9]{1,3})\b`)
-	episodeMarkerPattern = regexp.MustCompile(`(?i)(?:^|[^[:alnum:]])E([0-9]{1,3})(?:[^[:alnum:]]|$)`)
-	mediaFactsPattern    = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)
+	seasonDirPattern  = regexp.MustCompile(`(?i)^Season[[:space:]]+([0-9]+)$`)
+	mediaFactsPattern = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)
 )
 
 func ParseSeasonDir(name string) (int, bool) {
@@ -170,26 +168,6 @@ func ParseSeasonDir(name string) (int, bool) {
 		return 0, false
 	}
 	return season, true
-}
-
-func InferEpisodeFromFilename(name string) (int, int, bool) {
-	base := strings.TrimSuffix(name, filepath.Ext(name))
-	matches := seasonEpisodePattern.FindStringSubmatch(base)
-	if len(matches) == 3 {
-		season, seasonErr := strconv.Atoi(matches[1])
-		episode, episodeErr := strconv.Atoi(matches[2])
-		if seasonErr == nil && episodeErr == nil && episode > 0 {
-			return season, episode, true
-		}
-	}
-	matches = episodeMarkerPattern.FindStringSubmatch(base)
-	if len(matches) == 2 {
-		episode, err := strconv.Atoi(matches[1])
-		if err == nil && episode > 0 {
-			return -1, episode, true
-		}
-	}
-	return 0, 0, false
 }
 
 func InferSourceFromFilename(path string) media.MediaSource {
