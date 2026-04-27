@@ -13,11 +13,29 @@ The intended shape is deliberately lean:
 
 ## Current Status
 
-Kura is at the initial scaffold stage. The current executable prints:
+Kura currently has a small CLI for managing existing Plex-style anime series
+directories:
 
-```text
-Hello, World!
+- `kura sync <dir>` scans a series directory, initializes Kura metadata when
+  needed, records importable episode media, and reports skipped files or
+  ignored directories.
+- `kura stage <dir> [opts] <absolute-path>` admits an explicitly selected
+  external episode file into `.kura/staged.json`. Use `--replace` when the
+  staged file is intended to replace an active or already-staged episode.
+- `kura reconcile <dir>` applies Kura's planned filesystem layout, moves staged
+  files into the series, and moves replaced active files into `.kura/trash/`.
+- `kura meta ...` exposes the current metadata helper commands.
+
+The normal local flow is:
+
+```sh
+kura sync <series-dir>
+kura stage <series-dir> --season 1 --number 3 --replace /media/anime/inbox/example.mkv
+kura reconcile <series-dir>
 ```
+
+`sync` can also bootstrap an empty show directory when metadata resolution
+succeeds or an explicit provider ref is supplied.
 
 ## Requirements
 
@@ -29,6 +47,14 @@ Hello, World!
 ```sh
 go run ./cmd/kura
 ```
+
+Useful environment:
+
+- `KURA_LIBRARY_ROOT`: root directory containing series directories.
+- `KURA_MEDIAINFO_COMMAND`: path to the `mediainfo` executable, when it is not
+  on `PATH`.
+- `KURA_TVDB_API_KEY`: API key for TVDB metadata lookups.
+- `KURA_PREFERRED_LANGUAGES`: comma-separated preferred metadata languages.
 
 ## Build
 
