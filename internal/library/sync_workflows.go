@@ -25,11 +25,10 @@ func (f MediaInspectorFunc) Inspect(ctx context.Context, path string) (MediaInfo
 }
 
 type SeriesSyncOptions struct {
-	ProviderSeries          *metadata.Series
-	PreserveFilesystemTitle bool
-	Inspector               MediaInspector
-	Apply                   bool
-	DryRun                  bool
+	ProviderSeries *metadata.Series
+	Inspector      MediaInspector
+	Apply          bool
+	DryRun         bool
 }
 
 type SeriesSyncResult struct {
@@ -84,9 +83,6 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 		series, err = newSeriesFromProvider(l, seriesDir.Path(), *opts.ProviderSeries)
 		if err != nil {
 			return SeriesSyncResult{}, err
-		}
-		if opts.PreserveFilesystemTitle {
-			series.FilesystemTitle = CleanFilesystemTitle(dirname).String()
 		}
 		initialized = true
 	} else {

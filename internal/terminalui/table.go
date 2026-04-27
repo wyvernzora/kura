@@ -76,9 +76,6 @@ func WriteReconcilePlan(w io.Writer, plan library.ReconcilePlan) error {
 	for _, move := range plan.FileMoves {
 		tw.AppendRow(table.Row{"FILE", move.From, move.To})
 	}
-	if plan.RootMove != nil {
-		tw.AppendRow(table.Row{"ROOT", plan.RootMove.From, plan.RootMove.To})
-	}
 	return writeStyledTable(w, tw, nil)
 }
 

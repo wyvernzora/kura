@@ -27,7 +27,6 @@ type seriesV1 struct {
 	PreferredProvider string     `json:"preferredProvider"`
 	PreferredTitle    string     `json:"preferredTitle"`
 	CanonicalTitle    string     `json:"canonicalTitle"`
-	FilesystemTitle   string     `json:"filesystemTitle,omitempty"`
 	LastScanned       string     `json:"lastScanned,omitempty"`
 	Notes             string     `json:"notes,omitempty"`
 	Seasons           []seasonV1 `json:"seasons,omitempty"`
@@ -125,7 +124,6 @@ func seriesToV1(series Series) seriesV1 {
 		PreferredProvider: series.PreferredProvider,
 		PreferredTitle:    series.PreferredTitle,
 		CanonicalTitle:    series.CanonicalTitle,
-		FilesystemTitle:   series.FilesystemTitle,
 		LastScanned:       series.LastScanned,
 		Notes:             series.Notes,
 		Seasons:           seasonsToV1(series.Seasons),
@@ -141,7 +139,6 @@ func seriesFromV1(disk seriesV1) Series {
 		PreferredProvider: disk.PreferredProvider,
 		PreferredTitle:    disk.PreferredTitle,
 		CanonicalTitle:    disk.CanonicalTitle,
-		FilesystemTitle:   disk.FilesystemTitle,
 		LastScanned:       disk.LastScanned,
 		Notes:             disk.Notes,
 		Seasons:           seasonsFromV1(disk.Seasons),

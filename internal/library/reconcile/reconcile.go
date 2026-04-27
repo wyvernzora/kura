@@ -20,18 +20,16 @@ import (
 )
 
 type Plan struct {
-	Series          string        `json:"series"`
-	Target          string        `json:"target"`
-	DryRun          bool          `json:"dryRun"`
-	FileMoves       []Move        `json:"fileMoves"`
-	RootMove        *Move         `json:"rootMove,omitempty"`
-	SeriesDir       string        `json:"-"`
-	TargetSeriesDir string        `json:"-"`
-	UpdatedSeries   series.Series `json:"-"`
+	Series        string        `json:"series"`
+	Target        string        `json:"target"`
+	DryRun        bool          `json:"dryRun"`
+	FileMoves     []Move        `json:"fileMoves"`
+	SeriesDir     string        `json:"-"`
+	UpdatedSeries series.Series `json:"-"`
 }
 
 func (p Plan) HasChanges() bool {
-	return len(p.FileMoves) > 0 || p.RootMove != nil
+	return len(p.FileMoves) > 0
 }
 
 type Move struct {
@@ -48,13 +46,7 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 	if err != nil {
 		return Plan{}, err
 	}
-	title := layout.CleanFilesystemTitle(loaded.FilesystemTitle)
-	if title.IsZero() {
-		title = layout.CleanFilesystemTitle(loaded.PreferredTitle)
-	}
-	if title.IsZero() {
-		return Plan{}, errors.New("series has no filesystemTitle or preferredTitle")
-	}
+	title := layout.CleanFilesystemTitle(seriesDir.Name())
 	if _, err := layout.ParseFilesystemTitle(title.String()); err != nil {
 		return Plan{}, err
 	}
@@ -64,22 +56,16 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 	if err != nil {
 		return Plan{}, err
 	}
-	rootMove, targetSeriesDir, err := reconcileRootMove(root, seriesDir, title)
-	if err != nil {
-		return Plan{}, err
-	}
 	if err := validateMoves(seriesDir, fileMoves); err != nil {
 		return Plan{}, err
 	}
 
 	return Plan{
-		Series:          seriesDir.Name(),
-		Target:          title.String(),
-		FileMoves:       fileMoves,
-		RootMove:        rootMove,
-		SeriesDir:       seriesDir.Path(),
-		TargetSeriesDir: targetSeriesDir,
-		UpdatedSeries:   updated,
+		Series:        seriesDir.Name(),
+		Target:        title.String(),
+		FileMoves:     fileMoves,
+		SeriesDir:     seriesDir.Path(),
+		UpdatedSeries: updated,
 	}, nil
 }
 
@@ -104,13 +90,6 @@ func ApplyPlan(ctx context.Context, plan Plan, store series.Store) error {
 	if err := store.Save(plan.UpdatedSeries); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing series metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
-	}
-	if plan.RootMove != nil {
-		progress.Update(ctx, "series-reconcile", fmt.Sprintf("Moving series directory: %s", plan.RootMove.From), len(plan.FileMoves), len(plan.FileMoves))
-		if err := safeMoveDir(plan.SeriesDir, plan.TargetSeriesDir); err != nil {
-			progress.Failure(ctx, "series-reconcile", "Failed moving series directory", len(plan.FileMoves), len(plan.FileMoves))
-			return err
-		}
 	}
 	progress.Success(ctx, "series-reconcile", fmt.Sprintf("Reconciled %d file move(s)", len(plan.FileMoves)), len(plan.FileMoves))
 	return nil
@@ -260,20 +239,6 @@ func compoundExtension(filename string) string {
 	return name[index:]
 }
 
-func reconcileRootMove(root layout.LibraryRoot, seriesDir layout.SeriesDir, title layout.FilesystemTitle) (*Move, string, error) {
-	currentName := seriesDir.Name()
-	if title.EqualName(currentName) {
-		return nil, seriesDir.Path(), nil
-	}
-	targetSeriesDir := filepath.Join(root.Path(), title.String())
-	if _, err := os.Stat(targetSeriesDir); err == nil {
-		return nil, "", fmt.Errorf("target series directory %q already exists", targetSeriesDir)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, "", err
-	}
-	return &Move{From: currentName, To: title.String()}, targetSeriesDir, nil
-}
-
 func validateMoves(seriesDir layout.SeriesDir, moves []Move) error {
 	targets := map[string]string{}
 	for _, move := range moves {
@@ -366,22 +331,6 @@ func copyThenRemove(from string, to string) error {
 		return err
 	}
 	return syncDir(filepath.Dir(from))
-}
-
-func safeMoveDir(from string, to string) error {
-	if from == to {
-		return nil
-	}
-	if err := os.Rename(from, to); err == nil {
-		if err := syncDir(filepath.Dir(from)); err != nil {
-			return err
-		}
-		return syncDir(filepath.Dir(to))
-	} else if isCrossDeviceMove(err) {
-		return fmt.Errorf("library: cross-device series directory move from %q to %q is not supported", from, to)
-	} else {
-		return err
-	}
 }
 
 func isCrossDeviceMove(err error) bool {

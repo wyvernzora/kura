@@ -39,10 +39,6 @@
       "type": "string",
       "minLength": 1
     },
-    "filesystemTitle": {
-      "type": "string",
-      "minLength": 1
-    },
     "lastScanned": {
       "type": "string",
       "minLength": 1

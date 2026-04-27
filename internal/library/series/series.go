@@ -29,7 +29,6 @@ type Series struct {
 	PreferredProvider string            `json:"preferredProvider"`
 	PreferredTitle    string            `json:"preferredTitle"`
 	CanonicalTitle    string            `json:"canonicalTitle"`
-	FilesystemTitle   string            `json:"filesystemTitle,omitempty"`
 	LastScanned       string            `json:"lastScanned,omitempty"`
 	Notes             string            `json:"notes,omitempty"`
 	Seasons           map[string]Season `json:"seasons,omitempty"`

@@ -22,7 +22,6 @@ func TestSaveLoadSeries(t *testing.T) {
 	series.PreferredProvider = "tvdb"
 	series.PreferredTitle = "本好きの下剋上"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
-	series.FilesystemTitle = "Bookworm"
 	if err := lib.SaveSeries(*series); err != nil {
 		t.Fatalf("SaveSeries: %v", err)
 	}
@@ -51,9 +50,6 @@ func TestSaveLoadSeries(t *testing.T) {
 	}
 	if got.CanonicalTitle != "Ascendance of a Bookworm" {
 		t.Fatalf("CanonicalTitle = %q, want Ascendance of a Bookworm", got.CanonicalTitle)
-	}
-	if got.FilesystemTitle != "Bookworm" {
-		t.Fatalf("FilesystemTitle = %q, want Bookworm", got.FilesystemTitle)
 	}
 }
 

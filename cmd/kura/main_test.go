@@ -76,8 +76,8 @@ func TestSeriesSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
 	if got := series["preferredProvider"]; got != "tvdb" {
 		t.Fatalf("preferredProvider = %v, want tvdb", got)
 	}
-	if got := series["filesystemTitle"]; got != "Bookworm" {
-		t.Fatalf("filesystemTitle = %v, want Bookworm", got)
+	if _, ok := series["filesystemTitle"]; ok {
+		t.Fatal("filesystemTitle present, want derived from directory name")
 	}
 	if len(stdout.Bytes()) == 0 {
 		t.Fatal("stdout is empty, want written series document")
@@ -188,7 +188,6 @@ func TestSeriesReconcileCommandPrintsDryRunJSON(t *testing.T) {
 		"preferredProvider": "tvdb",
 		"preferredTitle": "Long Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
-		"filesystemTitle": "Bookworm",
 		"seasons": [
 			{
 				"number": 1,
@@ -248,7 +247,6 @@ func TestSeriesReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 		"preferredProvider": "tvdb",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
-		"filesystemTitle": "Bookworm",
 		"seasons": [
 			{
 				"number": 1,

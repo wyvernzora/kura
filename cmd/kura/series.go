@@ -37,14 +37,12 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 	}
 
 	var providerSeries *metadata.Series
-	var selectedProviderRef bool
 	if _, err := os.Stat(library.SeriesPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
-		resolved, selected, err := cmd.resolveProviderSeries(rt)
+		resolved, _, err := cmd.resolveProviderSeries(rt)
 		if err != nil {
 			return err
 		}
 		providerSeries = &resolved
-		selectedProviderRef = selected
 	} else if err != nil {
 		return err
 	}
@@ -54,10 +52,9 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		root,
 		cmd.Dirname,
 		library.SeriesSyncOptions{
-			ProviderSeries:          providerSeries,
-			PreserveFilesystemTitle: selectedProviderRef,
-			Inspector:               mediaInspector(rt),
-			DryRun:                  cmd.DryRun,
+			ProviderSeries: providerSeries,
+			Inspector:      mediaInspector(rt),
+			DryRun:         cmd.DryRun,
 		},
 	)
 	if err != nil {

@@ -2,6 +2,7 @@ package library
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -131,10 +132,9 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	}
 	providerSeries := testProviderSeries()
 	result, err := New().SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries:          &providerSeries,
-		PreserveFilesystemTitle: true,
-		Inspector:               fakeInspector,
-		Apply:                   true,
+		ProviderSeries: &providerSeries,
+		Inspector:      fakeInspector,
+		Apply:          true,
 	})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
@@ -153,15 +153,53 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
-	if loaded.FilesystemTitle != "Bookworm" {
-		t.Fatalf("FilesystemTitle = %q, want Bookworm", loaded.FilesystemTitle)
-	}
 	episode := loaded.Seasons["1"].Episodes["1"]
 	if episode.Media.Path != "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv" {
 		t.Fatalf("Media.Path = %q", episode.Media.Path)
 	}
 	if len(episode.Companions) != 1 {
 		t.Fatalf("len(Companions) = %d, want 1", len(episode.Companions))
+	}
+}
+
+func TestSyncSeriesDoesNotPersistFilesystemTitle(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Short Title")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "Short Title - S01E01.mkv"), "episode")
+
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	providerSeries := testProviderSeries()
+	providerSeries.PreferredTitle = "A Much Longer Provider Title"
+	providerSeries.CanonicalTitle = "Canonical Provider Title"
+	if _, err := New().SyncSeries(context.Background(), root, "Short Title", SeriesSyncOptions{
+		ProviderSeries: &providerSeries,
+		Inspector:      fakeInspector,
+		Apply:          true,
+	}); err != nil {
+		t.Fatalf("SyncSeries: %v", err)
+	}
+
+	loaded, err := New().LoadSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadSeries: %v", err)
+	}
+	data, err := json.Marshal(loaded)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if _, ok := raw["filesystemTitle"]; ok {
+		t.Fatal("filesystemTitle present, want derived from directory name")
 	}
 }
 
@@ -336,7 +374,7 @@ func TestImportEpisodeFileFindsSeriesAndRecordsCompanion(t *testing.T) {
 	}
 }
 
-func TestPlanAndApplyReconcileRenamesTrackedFilesThenRoot(t *testing.T) {
+func TestPlanAndApplyReconcileRenamesTrackedFiles(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Long Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -356,7 +394,6 @@ func TestPlanAndApplyReconcileRenamesTrackedFilesThenRoot(t *testing.T) {
 		"preferredProvider": "tvdb",
 		"preferredTitle": "Long Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
-		"filesystemTitle": "Bookworm",
 		"seasons": [
 			{
 				"number": 1,
@@ -407,20 +444,13 @@ func TestPlanAndApplyReconcileRenamesTrackedFilesThenRoot(t *testing.T) {
 	if len(plan.FileMoves) != 3 {
 		t.Fatalf("len(FileMoves) = %d, want 3", len(plan.FileMoves))
 	}
-	if plan.RootMove == nil || plan.RootMove.To != "Bookworm" {
-		t.Fatalf("RootMove = %#v, want Bookworm", plan.RootMove)
-	}
 	if err := lib.ApplyReconcile(context.Background(), plan); err != nil {
 		t.Fatalf("ApplyReconcile: %v", err)
 	}
-	targetSeriesDir := filepath.Join(rootPath, "Bookworm")
-	if _, err := os.Stat(seriesDir); !os.IsNotExist(err) {
-		t.Fatalf("old series dir stat err = %v, want not exists", err)
-	}
 	for _, path := range []string{
-		filepath.Join(targetSeriesDir, "Season 1", "Bookworm - S01E01 (WebRip 1080p).mkv"),
-		filepath.Join(targetSeriesDir, "Season 1", "Bookworm - S01E01 (WebRip 1080p).en.ass"),
-		filepath.Join(targetSeriesDir, "Bookworm - S00E01 (BDRip 720p).mp4"),
+		filepath.Join(seriesDir, "Season 1", "Long Bookworm - S01E01 (WebRip 1080p).mkv"),
+		filepath.Join(seriesDir, "Season 1", "Long Bookworm - S01E01 (WebRip 1080p).en.ass"),
+		filepath.Join(seriesDir, "Long Bookworm - S00E01 (BDRip 720p).mp4"),
 	} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("Stat %s: %v", path, err)
@@ -468,8 +498,70 @@ func TestPlanReconcileTreatsCanonicallyEquivalentRootNameAsUnchanged(t *testing.
 	if err != nil {
 		t.Fatalf("PlanReconcile: %v", err)
 	}
-	if plan.RootMove != nil {
-		t.Fatalf("RootMove = %#v, want nil", plan.RootMove)
+	if plan.Target != "本好きの下剋上 司書になるためには手段を選んでいられません" {
+		t.Fatalf("Target = %q, want normalized directory name", plan.Target)
+	}
+	if len(plan.FileMoves) != 1 {
+		t.Fatalf("len(FileMoves) = %d, want 1", len(plan.FileMoves))
+	}
+	if got := plan.FileMoves[0].To; got != "本好きの下剋上 司書になるためには手段を選んでいられません - S00E01 (WebRip 1080p).mkv" {
+		t.Fatalf("FileMoves[0].To = %q", got)
+	}
+}
+
+func TestPlanReconcileUsesCurrentDirectoryName(t *testing.T) {
+	rootPath := t.TempDir()
+	seriesDir := filepath.Join(rootPath, "Short Title")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
+		t.Fatalf("MkdirAll .kura: %v", err)
+	}
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "old episode.mkv"), "episode")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "A Much Longer Provider Title",
+		"canonicalTitle": "Canonical Provider Title",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/old episode.mkv",
+							"source": "webrip",
+							"size": 7,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`)
+	root, err := ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	plan, err := New().PlanReconcile(context.Background(), root, "Short Title")
+	if err != nil {
+		t.Fatalf("PlanReconcile: %v", err)
+	}
+	if plan.Target != "Short Title" {
+		t.Fatalf("Target = %q, want Short Title", plan.Target)
+	}
+	if len(plan.FileMoves) != 1 {
+		t.Fatalf("len(FileMoves) = %d, want 1", len(plan.FileMoves))
+	}
+	if got := plan.FileMoves[0].To; got != "Season 1/Short Title - S01E01 (WebRip 1080p).mkv" {
+		t.Fatalf("FileMoves[0].To = %q", got)
 	}
 }
 
@@ -491,7 +583,6 @@ func TestApplyReconcileSkipsUnchangedPlan(t *testing.T) {
 		"preferredProvider": "tvdb",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
-		"filesystemTitle": "Bookworm",
 		"seasons": [
 			{
 				"number": 1,
