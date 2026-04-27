@@ -15,7 +15,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/library/layout"
 	mediafacts "github.com/wyvernzora/kura/internal/library/media"
-	"github.com/wyvernzora/kura/internal/library/series"
+	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/progress"
 )
 
@@ -25,7 +25,8 @@ type Plan struct {
 	DryRun        bool          `json:"dryRun"`
 	FileMoves     []Move        `json:"fileMoves"`
 	SeriesDir     string        `json:"-"`
-	UpdatedSeries series.Series `json:"-"`
+	UpdatedSeries models.Series `json:"-"`
+	UpdatedTrash  models.Trash  `json:"-"`
 }
 
 func (p Plan) HasChanges() bool {
@@ -37,7 +38,7 @@ type Move struct {
 	To   string `json:"to"`
 }
 
-func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, store series.Store) (Plan, error) {
+func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, store models.Store) (Plan, error) {
 	seriesDir, err := root.SeriesDir(dirname)
 	if err != nil {
 		return Plan{}, err
@@ -52,7 +53,12 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 	}
 
 	updated := *loaded
-	fileMoves, err := reconcileEpisodes(seriesDir, title, &updated)
+	trash, err := store.LoadTrash(seriesDir.Path())
+	if err != nil {
+		return Plan{}, err
+	}
+	updatedTrash := *trash
+	fileMoves, err := reconcileEpisodes(seriesDir, title, &updated, &updatedTrash)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -66,10 +72,11 @@ func PlanSeries(_ context.Context, root layout.LibraryRoot, dirname string, stor
 		FileMoves:     fileMoves,
 		SeriesDir:     seriesDir.Path(),
 		UpdatedSeries: updated,
+		UpdatedTrash:  updatedTrash,
 	}, nil
 }
 
-func ApplyPlan(ctx context.Context, plan Plan, store series.Store) error {
+func ApplyPlan(ctx context.Context, plan Plan, store models.Store) error {
 	if !plan.HasChanges() {
 		return nil
 	}
@@ -86,16 +93,20 @@ func ApplyPlan(ctx context.Context, plan Plan, store series.Store) error {
 			return err
 		}
 	}
-	progress.Update(ctx, "series-reconcile", fmt.Sprintf("Writing series metadata: %s", series.SeriesPath(plan.SeriesDir)), len(plan.FileMoves), len(plan.FileMoves))
+	progress.Update(ctx, "series-reconcile", fmt.Sprintf("Writing series metadata: %s", models.SeriesPath(plan.SeriesDir)), len(plan.FileMoves), len(plan.FileMoves))
 	if err := store.Save(plan.UpdatedSeries); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing series metadata", len(plan.FileMoves), len(plan.FileMoves))
+		return err
+	}
+	if err := store.SaveTrash(plan.UpdatedTrash); err != nil {
+		progress.Failure(ctx, "series-reconcile", "Failed writing trash metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}
 	progress.Success(ctx, "series-reconcile", fmt.Sprintf("Reconciled %d file move(s)", len(plan.FileMoves)), len(plan.FileMoves))
 	return nil
 }
 
-func reconcileEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle, series *series.Series) ([]Move, error) {
+func reconcileEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle, series *models.Series, trash *models.Trash) ([]Move, error) {
 	var moves []Move
 	regularKeys := make([]int, 0, len(series.Seasons))
 	for key := range series.Seasons {
@@ -123,7 +134,7 @@ func reconcileEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle,
 		}
 		moves = append(moves, seasonMoves...)
 	}
-	trashMoves, err := reconcileTrash(seriesDir, series)
+	trashMoves, err := reconcileTrash(seriesDir, trash)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +142,7 @@ func reconcileEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle,
 	return moves, nil
 }
 
-func reconcileSeasonEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle, seasonNumber int, season *series.Season) ([]Move, error) {
+func reconcileSeasonEpisodes(seriesDir layout.SeriesDir, title layout.FilesystemTitle, seasonNumber int, season *models.Season) ([]Move, error) {
 	var moves []Move
 	episodeNumbers := make([]int, 0, len(season.Episodes))
 	for key := range season.Episodes {
@@ -155,7 +166,7 @@ func reconcileSeasonEpisodes(seriesDir layout.SeriesDir, title layout.Filesystem
 	return moves, nil
 }
 
-func reconcileEpisode(seriesDir layout.SeriesDir, title layout.FilesystemTitle, seasonNumber int, episodeNumber int, episode *series.Episode) ([]Move, error) {
+func reconcileEpisode(seriesDir layout.SeriesDir, title layout.FilesystemTitle, seasonNumber int, episodeNumber int, episode *models.Episode) ([]Move, error) {
 	var moves []Move
 	mediaFile := episode.Media
 	if mediaFile.Path == "" {
@@ -197,14 +208,14 @@ func reconcileEpisode(seriesDir layout.SeriesDir, title layout.FilesystemTitle, 
 	return moves, nil
 }
 
-func reconcileTrash(seriesDir layout.SeriesDir, series *series.Series) ([]Move, error) {
+func reconcileTrash(seriesDir layout.SeriesDir, trash *models.Trash) ([]Move, error) {
 	var moves []Move
-	for index := range series.Trash {
-		trashed := &series.Trash[index]
-		if trashed.TrashID == "" {
-			return nil, errors.New("trashed episode has no trashId")
+	for index := range trash.Entries {
+		trashed := &trash.Entries[index]
+		if trashed.ID == "" {
+			return nil, errors.New("trashed episode has no id")
 		}
-		targetMediaPath := filepath.ToSlash(filepath.Join(layout.KuraDir, layout.KuraTrashDir, trashed.TrashID, filepath.Base(trashed.Media.Path)))
+		targetMediaPath := filepath.ToSlash(filepath.Join(layout.KuraDir, layout.KuraTrashDir, trashed.ID, filepath.Base(trashed.Media.Path)))
 		if targetMediaPath != trashed.Media.Path {
 			if _, err := os.Stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(trashed.Media.Path))); err != nil {
 				return nil, err
@@ -214,7 +225,7 @@ func reconcileTrash(seriesDir layout.SeriesDir, series *series.Series) ([]Move, 
 		}
 		for companionIndex := range trashed.Companions {
 			companion := &trashed.Companions[companionIndex]
-			targetCompanionPath := filepath.ToSlash(filepath.Join(layout.KuraDir, layout.KuraTrashDir, trashed.TrashID, filepath.Base(companion.Path)))
+			targetCompanionPath := filepath.ToSlash(filepath.Join(layout.KuraDir, layout.KuraTrashDir, trashed.ID, filepath.Base(companion.Path)))
 			if targetCompanionPath == companion.Path {
 				continue
 			}
@@ -235,7 +246,7 @@ func targetEpisodeDir(seasonNumber int) string {
 	return fmt.Sprintf("Season %d", seasonNumber)
 }
 
-func reconciledMediaFilename(title layout.FilesystemTitle, seasonNumber int, episodeNumber int, media series.MediaFile) (string, error) {
+func reconciledMediaFilename(title layout.FilesystemTitle, seasonNumber int, episodeNumber int, media models.MediaFile) (string, error) {
 	season, err := layout.NewSeasonNumber(seasonNumber)
 	if err != nil {
 		return "", err

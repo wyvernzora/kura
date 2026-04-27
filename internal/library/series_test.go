@@ -253,11 +253,13 @@ func TestAddEpisodeReplacesMediaForSameEpisodeWithTrash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddEpisode first: %v", err)
 	}
+	trash := Trash{SchemaVersion: TrashSchemaVersion}
 	updated, err = AddEpisode(seriesDir, updated, AddEpisodeOptions{
 		Season:  1,
 		Episode: 1,
 		Path:    "Season 1/episode-720p.mkv",
 		Replace: true,
+		Trash:   &trash,
 	})
 	if err != nil {
 		t.Fatalf("AddEpisode second: %v", err)
@@ -267,17 +269,17 @@ func TestAddEpisodeReplacesMediaForSameEpisodeWithTrash(t *testing.T) {
 	if media.Path != "Season 1/episode-720p.mkv" {
 		t.Fatalf("media path = %q, want replacement path", media.Path)
 	}
-	if len(updated.Trash) != 1 {
-		t.Fatalf("len(Trash) = %d, want 1", len(updated.Trash))
+	if len(trash.Entries) != 1 {
+		t.Fatalf("len(Trash.Entries) = %d, want 1", len(trash.Entries))
 	}
-	if _, err := ulid.Parse(updated.Trash[0].TrashID); err != nil {
-		t.Fatalf("TrashID = %q, want ULID: %v", updated.Trash[0].TrashID, err)
+	if _, err := ulid.Parse(trash.Entries[0].ID); err != nil {
+		t.Fatalf("Trash ID = %q, want ULID: %v", trash.Entries[0].ID, err)
 	}
-	if updated.Trash[0].Season != 1 || updated.Trash[0].Number != 1 {
-		t.Fatalf("trash episode = S%02dE%02d, want S01E01", updated.Trash[0].Season, updated.Trash[0].Number)
+	if trash.Entries[0].Season != 1 || trash.Entries[0].Number != 1 {
+		t.Fatalf("trash episode = S%02dE%02d, want S01E01", trash.Entries[0].Season, trash.Entries[0].Number)
 	}
-	if updated.Trash[0].Media.Path != "Season 1/episode-1080p.mkv" {
-		t.Fatalf("trash media path = %q, want old path", updated.Trash[0].Media.Path)
+	if trash.Entries[0].Media.Path != "Season 1/episode-1080p.mkv" {
+		t.Fatalf("trash media path = %q, want old path", trash.Entries[0].Media.Path)
 	}
 }
 

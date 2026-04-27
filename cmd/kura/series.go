@@ -94,6 +94,10 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		progress.Fail("Failed writing series metadata")
 		return err
 	}
+	if err := lib.SaveTrash(result.UpdatedTrash); err != nil {
+		progress.Fail("Failed writing trash metadata")
+		return err
+	}
 	progress.Succeed("Synced %d episode media file(s)", len(result.Synced))
 	return nil
 }

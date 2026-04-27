@@ -1,61 +1,16 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "series_v1.schema.json",
+  "$id": "trash_v1.schema.json",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schemaVersion",
-    "id",
-    "providerRefs",
-    "preferredProvider",
-    "preferredTitle",
-    "canonicalTitle"
+    "schemaVersion"
   ],
   "properties": {
     "schemaVersion": {
       "const": 1
     },
-    "id": {
-      "type": "string",
-      "minLength": 1
-    },
-    "providerRefs": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "string",
-        "pattern": "^[^:]+:.+$"
-      }
-    },
-    "preferredProvider": {
-      "type": "string",
-      "minLength": 1
-    },
-    "preferredTitle": {
-      "type": "string",
-      "minLength": 1
-    },
-    "canonicalTitle": {
-      "type": "string",
-      "minLength": 1
-    },
-    "lastScanned": {
-      "type": "string",
-      "minLength": 1
-    },
-    "notes": {
-      "type": "string"
-    },
-    "seasons": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/season"
-      }
-    },
-    "specials": {
-      "$ref": "#/$defs/season"
-    },
-    "trash": {
+    "entries": {
       "type": "array",
       "items": {
         "$ref": "#/$defs/trash"
@@ -63,64 +18,18 @@
     }
   },
   "$defs": {
-    "season": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "number"
-      ],
-      "properties": {
-        "number": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "notes": {
-          "type": "string"
-        },
-        "episodes": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/episode"
-          }
-        }
-      }
-    },
-    "episode": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "number",
-        "media",
-        "companions"
-      ],
-      "properties": {
-        "number": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "media": {
-          "$ref": "#/$defs/mediaFile"
-        },
-        "companions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/companionFile"
-          }
-        }
-      }
-    },
     "trash": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "trashId",
+        "id",
         "season",
         "number",
         "media",
         "companions"
       ],
       "properties": {
-        "trashId": {
+        "id": {
           "type": "string",
           "minLength": 1
         },

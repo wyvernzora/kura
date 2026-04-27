@@ -35,17 +35,25 @@ func (cmd *libraryAddEpisodeCmd) Run(rt runContext) error {
 	if err != nil {
 		return err
 	}
+	trash, err := lib.LoadTrash(seriesDir)
+	if err != nil {
+		return err
+	}
 	updated, err := library.AddEpisode(seriesDir, *series, library.AddEpisodeOptions{
 		Season:  cmd.Season,
 		Episode: cmd.Episode,
 		Path:    cmd.File,
 		Replace: cmd.Replace,
+		Trash:   trash,
 	})
 	if err != nil {
 		return err
 	}
 	if !cmd.DryRun {
 		if err := lib.SaveSeries(updated); err != nil {
+			return err
+		}
+		if err := lib.SaveTrash(*trash); err != nil {
 			return err
 		}
 	}

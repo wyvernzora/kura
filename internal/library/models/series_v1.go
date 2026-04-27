@@ -1,4 +1,4 @@
-package series
+package models
 
 import (
 	"bytes"
@@ -31,7 +31,6 @@ type seriesV1 struct {
 	Notes             string     `json:"notes,omitempty"`
 	Seasons           []seasonV1 `json:"seasons,omitempty"`
 	Specials          *seasonV1  `json:"specials,omitempty"`
-	Trash             []trashV1  `json:"trash,omitempty"`
 }
 
 type seasonV1 struct {
@@ -41,14 +40,6 @@ type seasonV1 struct {
 }
 
 type episodeV1 struct {
-	Number     int               `json:"number"`
-	Media      mediaFileV1       `json:"media"`
-	Companions []companionFileV1 `json:"companions"`
-}
-
-type trashV1 struct {
-	TrashID    string            `json:"trashId"`
-	Season     int               `json:"season"`
 	Number     int               `json:"number"`
 	Media      mediaFileV1       `json:"media"`
 	Companions []companionFileV1 `json:"companions"`
@@ -137,7 +128,6 @@ func seriesToV1(series Series) seriesV1 {
 		Notes:             series.Notes,
 		Seasons:           seasonsToV1(series.Seasons),
 		Specials:          seasonToV1Ptr(0, series.Specials),
-		Trash:             trashToV1(series.Trash),
 	}
 }
 
@@ -153,7 +143,6 @@ func seriesFromV1(disk seriesV1) Series {
 		Notes:             disk.Notes,
 		Seasons:           seasonsFromV1(disk.Seasons),
 		Specials:          seasonFromV1Ptr(disk.Specials),
-		Trash:             trashFromV1(disk.Trash),
 	}
 }
 
@@ -282,42 +271,6 @@ func episodesFromV1(episodes []episodeV1) map[string]Episode {
 			Media:      mediaFileFromV1(episode.Media),
 			Companions: companionsFromV1(episode.Companions),
 		}
-	}
-	return out
-}
-
-func trashToV1(trash []TrashedEpisode) []trashV1 {
-	if len(trash) == 0 {
-		return nil
-	}
-	out := make([]trashV1, 0, len(trash))
-	for _, trashed := range trash {
-		out = append(out, trashV1{
-			TrashID:    trashed.TrashID,
-			Season:     trashed.Season,
-			Number:     trashed.Number,
-			Media:      mediaFileToV1(trashed.Media),
-			Companions: companionsToV1(trashed.Companions),
-		})
-	}
-	return out
-}
-
-func trashFromV1(trash []trashV1) []TrashedEpisode {
-	if len(trash) == 0 {
-		return nil
-	}
-	out := make([]TrashedEpisode, 0, len(trash))
-	for _, trashed := range trash {
-		out = append(out, TrashedEpisode{
-			TrashID: trashed.TrashID,
-			Season:  trashed.Season,
-			Number:  trashed.Number,
-			Episode: Episode{
-				Media:      mediaFileFromV1(trashed.Media),
-				Companions: companionsFromV1(trashed.Companions),
-			},
-		})
 	}
 	return out
 }

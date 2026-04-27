@@ -6,9 +6,9 @@ import (
 	"github.com/wyvernzora/kura/internal/library/layout"
 	"github.com/wyvernzora/kura/internal/library/match"
 	"github.com/wyvernzora/kura/internal/library/media"
+	"github.com/wyvernzora/kura/internal/library/models"
 	"github.com/wyvernzora/kura/internal/library/reconcile"
 	"github.com/wyvernzora/kura/internal/library/scan"
-	"github.com/wyvernzora/kura/internal/library/series"
 	"github.com/wyvernzora/kura/internal/progress"
 )
 
@@ -26,15 +26,14 @@ type Codec = media.Codec
 type Resolution = media.Resolution
 type MediaInfo = media.MediaInfo
 
-type Series = series.Series
-type Season = series.Season
-type Episode = series.Episode
-type TrashedEpisode = series.TrashedEpisode
-type MediaFile = series.MediaFile
-type CompanionFile = series.CompanionFile
-type AddEpisodeOptions = series.AddEpisodeOptions
-type DuplicateEpisodeNumberError = series.DuplicateEpisodeNumberError
-type EpisodeAlreadyExistsError = series.EpisodeAlreadyExistsError
+type Series = models.Series
+type Season = models.Season
+type Episode = models.Episode
+type Trash = models.Trash
+type TrashedEpisode = models.TrashedEpisode
+type MediaFile = models.MediaFile
+type CompanionFile = models.CompanionFile
+type DuplicateEpisodeNumberError = models.DuplicateEpisodeNumberError
 
 type DiscoveredEpisode = scan.DiscoveredEpisode
 type ImportSkip = scan.ImportSkip
@@ -50,7 +49,8 @@ type ProgressEvent = progress.Event
 type ProgressReporter = progress.Reporter
 
 const (
-	SeriesSchemaVersion = series.SeriesSchemaVersion
+	SeriesSchemaVersion = models.SeriesSchemaVersion
+	TrashSchemaVersion  = models.TrashSchemaVersion
 
 	MediaSourceUnknown = media.MediaSourceUnknown
 	MediaSourceTVRip   = media.MediaSourceTVRip
@@ -86,8 +86,6 @@ var (
 	NewResolution    = media.NewResolution
 	ParseResolution  = media.ParseResolution
 
-	AddEpisode = series.AddEpisode
-
 	DiscoverSeriesEpisodes   = scan.DiscoverSeriesEpisodes
 	ParseSeasonDir           = scan.ParseSeasonDir
 	InferEpisodeFromFilename = scan.InferEpisodeFromFilename
@@ -103,7 +101,7 @@ var (
 )
 
 func SeriesPath(seriesDir string) string {
-	return series.SeriesPath(seriesDir)
+	return models.SeriesPath(seriesDir)
 }
 
 func WithProgress(ctx context.Context, reporter ProgressReporter) context.Context {
@@ -115,6 +113,8 @@ type Library interface {
 	NewSeries(dirname string) (*Series, error)
 	LoadSeries(dirname string) (*Series, error)
 	SaveSeries(series Series) error
+	LoadTrash(dirname string) (*Trash, error)
+	SaveTrash(trash Trash) error
 	SyncSeries(ctx context.Context, root LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error)
 	ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts ImportEpisodeFileOptions) (Series, error)
 	PlanReconcile(ctx context.Context, root LibraryRoot, dirname string) (ReconcilePlan, error)
@@ -122,14 +122,14 @@ type Library interface {
 }
 
 type library struct {
-	store series.Store
+	store models.Store
 }
 
 var _ Library = library{}
 
 // New returns the default filesystem-backed library implementation.
 func New() Library {
-	return library{store: series.NewStore()}
+	return library{store: models.NewStore()}
 }
 
 func (l library) NewSeries(dirname string) (*Series, error) {
@@ -142,6 +142,14 @@ func (l library) LoadSeries(dirname string) (*Series, error) {
 
 func (l library) SaveSeries(series Series) error {
 	return l.store.Save(series)
+}
+
+func (l library) LoadTrash(dirname string) (*Trash, error) {
+	return l.store.LoadTrash(dirname)
+}
+
+func (l library) SaveTrash(trash Trash) error {
+	return l.store.SaveTrash(trash)
 }
 
 func (l library) PlanReconcile(ctx context.Context, root LibraryRoot, dirname string) (ReconcilePlan, error) {

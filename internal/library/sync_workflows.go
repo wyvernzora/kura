@@ -42,6 +42,7 @@ type SeriesSyncResult struct {
 	Synced        []SeriesSyncEntry `json:"synced"`
 	Skipped       []ImportSkip      `json:"skipped"`
 	UpdatedSeries Series            `json:"-"`
+	UpdatedTrash  Trash             `json:"-"`
 }
 
 func (r SeriesSyncResult) HasChanges() bool {
@@ -102,6 +103,11 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 	}
 
 	updated := *series
+	trash, err := l.store.LoadTrash(seriesDir.Path())
+	if err != nil {
+		return SeriesSyncResult{}, err
+	}
+	updatedTrash := *trash
 	var providerSeries *metadata.Series
 	synced := make([]SeriesSyncEntry, 0, len(discovered))
 	progress.Start(ctx, "series-sync", fmt.Sprintf("Found %d episode media file(s) for %s", len(discovered), seriesDir.Name()), len(discovered))
@@ -146,6 +152,7 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 			Companions: episode.Companions,
 			MediaInfo:  &mediaInfo,
 			Replace:    opts.Replace,
+			Trash:      &updatedTrash,
 		})
 		if err != nil {
 			progress.Failure(ctx, "series-sync", fmt.Sprintf("Failed recording %s", episode.Path), index+1, len(discovered))
@@ -176,11 +183,16 @@ func (l library) SyncSeries(ctx context.Context, root LibraryRoot, dirname strin
 		Synced:        synced,
 		Skipped:       skipped,
 		UpdatedSeries: updated,
+		UpdatedTrash:  updatedTrash,
 	}
 	if opts.Apply && result.HasChanges() {
 		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", SeriesPath(seriesDir.Path())), 0)
 		if err := l.SaveSeries(updated); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing series metadata", 0, 0)
+			return SeriesSyncResult{}, err
+		}
+		if err := l.SaveTrash(updatedTrash); err != nil {
+			progress.Failure(ctx, "series-sync-write", "Failed writing trash metadata", 0, 0)
 			return SeriesSyncResult{}, err
 		}
 		progress.Success(ctx, "series-sync-write", fmt.Sprintf("Synced %d episode media file(s)", len(synced)), len(synced))
@@ -244,6 +256,10 @@ func (l library) ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts I
 	if err != nil {
 		return Series{}, err
 	}
+	trash, err := l.store.LoadTrash(seriesDir.Path())
+	if err != nil {
+		return Series{}, err
+	}
 	providerSeries, err := providerSeriesForLocal(ctx, *series, opts.ProviderSeries, opts.ProviderResolver)
 	if err != nil {
 		return Series{}, err
@@ -276,6 +292,7 @@ func (l library) ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts I
 		Companions: seriesCompanions,
 		MediaInfo:  &mediaInfo,
 		Replace:    opts.Replace,
+		Trash:      trash,
 	})
 	if err != nil {
 		progress.Failure(ctx, "episode-import", fmt.Sprintf("Failed recording %s", mediaPath), 1, 1)
@@ -285,6 +302,10 @@ func (l library) ImportEpisodeFile(ctx context.Context, root LibraryRoot, opts I
 		progress.Update(ctx, "episode-import", fmt.Sprintf("Writing series metadata: %s", SeriesPath(seriesDir.Path())), 1, 1)
 		if err := l.SaveSeries(updated); err != nil {
 			progress.Failure(ctx, "episode-import", "Failed writing series metadata", 1, 1)
+			return Series{}, err
+		}
+		if err := l.SaveTrash(*trash); err != nil {
+			progress.Failure(ctx, "episode-import", "Failed writing trash metadata", 1, 1)
 			return Series{}, err
 		}
 	}
@@ -372,14 +393,8 @@ func validateUniqueDiscoveredEpisodes(discovered []DiscoveredEpisode) error {
 }
 
 func episodeExists(series Series, seasonNumber int, episodeNumber int) bool {
-	if seasonNumber == 0 {
-		return series.Specials != nil && series.Specials.Episodes != nil && series.Specials.Episodes[strconv.Itoa(episodeNumber)].Media.Path != ""
-	}
-	season, ok := series.Seasons[strconv.Itoa(seasonNumber)]
-	if !ok || season.Episodes == nil {
-		return false
-	}
-	return season.Episodes[strconv.Itoa(episodeNumber)].Media.Path != ""
+	_, ok := series.LookupEpisode(seasonNumber, episodeNumber)
+	return ok
 }
 
 func episodeKey(seasonNumber int, episodeNumber int) string {

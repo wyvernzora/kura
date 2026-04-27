@@ -13,10 +13,15 @@ const (
 	KuraDir        = ".kura"
 	KuraTrashDir   = "trash"
 	SeriesFileName = "series.json"
+	TrashFileName  = "trash.json"
 )
 
 func SeriesMetadataPath(seriesDir string) string {
 	return filepath.Join(seriesDir, KuraDir, SeriesFileName)
+}
+
+func TrashMetadataPath(seriesDir string) string {
+	return filepath.Join(seriesDir, KuraDir, TrashFileName)
 }
 
 // LibraryRoot is a validated absolute anime library root.

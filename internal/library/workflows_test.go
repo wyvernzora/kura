@@ -485,16 +485,16 @@ func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.
 		t.Fatalf("Synced = %#v, want replaced entry", result.Synced)
 	}
 
-	loaded, err := lib.LoadSeries(seriesDir)
+	trash, err := lib.LoadTrash(seriesDir)
 	if err != nil {
-		t.Fatalf("LoadSeries: %v", err)
+		t.Fatalf("LoadTrash: %v", err)
 	}
-	if len(loaded.Trash) != 1 {
-		t.Fatalf("len(Trash) = %d, want 1", len(loaded.Trash))
+	if len(trash.Entries) != 1 {
+		t.Fatalf("len(Trash.Entries) = %d, want 1", len(trash.Entries))
 	}
-	trashID := loaded.Trash[0].TrashID
+	trashID := trash.Entries[0].ID
 	if _, err := ulid.Parse(trashID); err != nil {
-		t.Fatalf("TrashID = %q, want ULID: %v", trashID, err)
+		t.Fatalf("Trash ID = %q, want ULID: %v", trashID, err)
 	}
 
 	plan, err := lib.PlanReconcile(context.Background(), root, "Bookworm")
