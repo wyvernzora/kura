@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/resolve"
 )
 
 type metaCmd struct {
@@ -12,11 +12,9 @@ type metaCmd struct {
 }
 
 type metaSearchCmd struct {
-	Provider    string `help:"Metadata provider to use." enum:"tvdb" default:"tvdb"`
-	Limit       int    `help:"Maximum number of results. Zero uses the provider default."`
-	Year        int    `help:"Restrict results to an initial release year when supported."`
-	TVDBBaseURL string `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
-	Query       string `arg:"" help:"Title query."`
+	Provider    string   `help:"Metadata provider to use." enum:"tvdb" default:"tvdb"`
+	TVDBBaseURL string   `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
+	Terms       []string `arg:"" required:"" help:"Resolver terms. Use plain text or provider refs such as tvdb:370070."`
 }
 
 type metaGetCmd struct {
@@ -30,11 +28,11 @@ func (cmd *metaSearchCmd) Run(rt runContext) error {
 		return err
 	}
 
-	results, err := metadataSource.Search(rt.Context, cmd.Query, metadata.SearchOptions{
-		Limit: cmd.Limit,
-		Year:  cmd.Year,
-		Type:  metadata.MediaTypeSeries,
-	})
+	resolver := resolve.New(
+		resolve.NewProviderIDStrategy(metadataSource),
+		resolve.NewTextSearchStrategy(metadataSource),
+	)
+	results, err := resolver.Resolve(rt.Context, resolve.ParseQuery(cmd.Terms))
 	if err != nil {
 		return err
 	}

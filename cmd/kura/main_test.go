@@ -23,21 +23,25 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 		"meta",
 		"search",
 		"--tvdb-base-url", server.URL,
-		"--limit", "1",
 		"honzuki",
 	}, testRunContext(&stdout, &stderr))
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
 	}
 
-	var results []map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &results); err != nil {
+	var resolution map[string][]map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &resolution); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
+	results := resolution["Results"]
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))
 	}
-	if got := results[0]["ProviderRef"]; got != "tvdb:370070" {
+	summary, ok := results[0]["Summary"].(map[string]any)
+	if !ok {
+		t.Fatalf("Summary = %#v, want object", results[0]["Summary"])
+	}
+	if got := summary["ProviderRef"]; got != "tvdb:370070" {
 		t.Fatalf("ProviderRef = %v, want tvdb:370070", got)
 	}
 }
