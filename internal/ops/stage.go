@@ -8,15 +8,17 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain"
+	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/store"
 )
 
 type StageEpisodeFileOptions struct {
-	Season           SeasonNumber
-	Episode          EpisodeNumber
-	Source           MediaSource
+	Season           domain.SeasonNumber
+	Episode          domain.EpisodeNumber
+	Source           domain.MediaSource
 	Companions       []string
 	MediaPath        string
 	Inspector        MediaInspector
@@ -27,11 +29,11 @@ type StageEpisodeFileOptions struct {
 }
 
 type StageEpisodeFileResult struct {
-	Series        string        `json:"series"`
-	DryRun        bool          `json:"dryRun"`
-	Replaced      bool          `json:"replaced"`
-	Entry         StagedEpisode `json:"entry"`
-	UpdatedStaged Staged        `json:"-"`
+	Series        string              `json:"series"`
+	DryRun        bool                `json:"dryRun"`
+	Replaced      bool                `json:"replaced"`
+	Entry         store.StagedEpisode `json:"entry"`
+	UpdatedStaged store.Staged        `json:"-"`
 }
 
 type StagedEpisodeAlreadyExistsError struct {
@@ -43,7 +45,7 @@ func (err StagedEpisodeAlreadyExistsError) Error() string {
 	return fmt.Sprintf("staged episode S%02dE%02d already exists; pass --replace to replace it", err.Season, err.Episode)
 }
 
-func StageEpisodeFile(ctx context.Context, repo store.Repo, root LibraryRoot, dirname string, opts StageEpisodeFileOptions) (StageEpisodeFileResult, error) {
+func StageEpisodeFile(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, dirname string, opts StageEpisodeFileOptions) (StageEpisodeFileResult, error) {
 	seriesDir, err := resolveSeriesForWorkflow(root, dirname)
 	if err != nil {
 		return StageEpisodeFileResult{}, err
@@ -64,7 +66,7 @@ func StageEpisodeFile(ctx context.Context, repo store.Repo, root LibraryRoot, di
 	if err != nil {
 		return StageEpisodeFileResult{}, err
 	}
-	if !RecognizedVideoFile(mediaPath) {
+	if !fsroot.RecognizedVideoFile(mediaPath) {
 		return StageEpisodeFileResult{}, fmt.Errorf("episode path %q is not a recognized video file", mediaPath)
 	}
 	companionPaths := make([]string, 0, len(opts.Companions))
@@ -101,7 +103,7 @@ func StageEpisodeFile(ctx context.Context, repo store.Repo, root LibraryRoot, di
 	}
 	source := opts.Source
 	if source == "" {
-		source = InferSourceFromFilename(mediaPath)
+		source = fsroot.InferSourceFromFilename(mediaPath)
 	}
 	entry, err := stagedEpisode(opts.Season.Int(), opts.Episode.Int(), mediaPath, source.String(), companionPaths, &mediaInfo)
 	if err != nil {
@@ -117,7 +119,7 @@ func StageEpisodeFile(ctx context.Context, repo store.Repo, root LibraryRoot, di
 	}
 
 	if opts.Apply {
-		progress.Update(ctx, "episode-stage", fmt.Sprintf("Writing staged metadata: %s", StagedPath(seriesDir.Path())), 1, 1)
+		progress.Update(ctx, "episode-stage", fmt.Sprintf("Writing staged metadata: %s", store.StagedPath(seriesDir.Path())), 1, 1)
 		if err := repo.SaveStaged(updated); err != nil {
 			progress.Failure(ctx, "episode-stage", "Failed writing staged metadata", 1, 1)
 			return StageEpisodeFileResult{}, err
@@ -133,26 +135,26 @@ func StageEpisodeFile(ctx context.Context, repo store.Repo, root LibraryRoot, di
 	}, nil
 }
 
-func stagedEpisode(season int, number int, mediaPath string, source string, companions []string, mediaInfo *MediaInfo) (StagedEpisode, error) {
+func stagedEpisode(season int, number int, mediaPath string, source string, companions []string, mediaInfo *domain.MediaInfo) (store.StagedEpisode, error) {
 	info, err := os.Stat(mediaPath)
 	if err != nil {
-		return StagedEpisode{}, err
+		return store.StagedEpisode{}, err
 	}
 	if info.IsDir() {
-		return StagedEpisode{}, fmt.Errorf("library: episode path %q is a directory", mediaPath)
+		return store.StagedEpisode{}, fmt.Errorf("library: episode path %q is a directory", mediaPath)
 	}
 	companionFiles, err := absoluteCompanionFiles(companions)
 	if err != nil {
-		return StagedEpisode{}, err
+		return store.StagedEpisode{}, err
 	}
-	return StagedEpisode{
+	return store.StagedEpisode{
 		Season: season,
 		Number: number,
-		Episode: Episode{
+		Episode: store.Episode{
 			Number: number,
-			Media: MediaFile{
+			Media: store.MediaFile{
 				Path:      mediaPath,
-				Source:    ParseMediaSource(source).String(),
+				Source:    domain.ParseMediaSource(source).String(),
 				Size:      info.Size(),
 				MTime:     info.ModTime().UTC().Format(time.RFC3339),
 				MediaInfo: mediaInfo,
@@ -162,11 +164,11 @@ func stagedEpisode(season int, number int, mediaPath string, source string, comp
 	}, nil
 }
 
-func absoluteCompanionFiles(paths []string) ([]CompanionFile, error) {
+func absoluteCompanionFiles(paths []string) ([]store.CompanionFile, error) {
 	if len(paths) == 0 {
-		return []CompanionFile{}, nil
+		return []store.CompanionFile{}, nil
 	}
-	out := make([]CompanionFile, 0, len(paths))
+	out := make([]store.CompanionFile, 0, len(paths))
 	for _, path := range paths {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -175,7 +177,7 @@ func absoluteCompanionFiles(paths []string) ([]CompanionFile, error) {
 		if info.IsDir() {
 			return nil, fmt.Errorf("library: companion path %q is a directory", path)
 		}
-		out = append(out, CompanionFile{
+		out = append(out, store.CompanionFile{
 			Path:  path,
 			Size:  info.Size(),
 			MTime: info.ModTime().UTC().Format(time.RFC3339),
@@ -195,6 +197,6 @@ func cleanAbsoluteFilePath(path string) (string, error) {
 	return path, nil
 }
 
-func resolveSeriesForWorkflow(root LibraryRoot, series string) (SeriesDir, error) {
+func resolveSeriesForWorkflow(root fsroot.LibraryRoot, series string) (fsroot.SeriesDir, error) {
 	return root.SeriesDir(series)
 }

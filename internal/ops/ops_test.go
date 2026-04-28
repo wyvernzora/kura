@@ -1407,8 +1407,8 @@ func TestAddEpisodeRejectsEscapingPath(t *testing.T) {
 	}
 }
 
-var fakeInspector = MediaInspectorFunc(func(context.Context, string) (MediaInfo, error) {
-	return MediaInfo{
+var fakeInspector = MediaInspectorFunc(func(context.Context, string) (domain.MediaInfo, error) {
+	return domain.MediaInfo{
 		VideoCodec: "HEVC",
 		Resolution: "1920x1080",
 	}, nil
@@ -1450,7 +1450,7 @@ func writeSeriesJSON(t *testing.T, seriesDir string, content string) {
 	}
 }
 
-func testEpisode(t *testing.T, series *Series, seasonNumber int, episodeNumber int) Episode {
+func testEpisode(t *testing.T, series *store.Series, seasonNumber int, episodeNumber int) store.Episode {
 	t.Helper()
 	episode, ok := series.LookupEpisode(seasonNumber, episodeNumber)
 	if !ok {
@@ -1459,7 +1459,7 @@ func testEpisode(t *testing.T, series *Series, seasonNumber int, episodeNumber i
 	return episode
 }
 
-func newTestSeries(repo store.Repo, seriesDir string) (*Series, error) {
+func newTestSeries(repo store.Repo, seriesDir string) (*store.Series, error) {
 	series, err := repo.NewSeries(seriesDir)
 	if err != nil {
 		return nil, err

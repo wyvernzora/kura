@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	media "github.com/wyvernzora/kura/internal/domain"
-	layout "github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/domain"
+	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/store"
 )
 
@@ -18,10 +18,10 @@ type AddEpisodeOptions struct {
 	Path       string
 	Source     string
 	Companions []string
-	MediaInfo  *MediaInfo
+	MediaInfo  *domain.MediaInfo
 	Replace    bool
 	Refresh    bool
-	Trash      *Trash
+	Trash      *store.Trash
 }
 
 type EpisodeAlreadyExistsError struct {
@@ -35,32 +35,32 @@ func (err EpisodeAlreadyExistsError) Error() string {
 
 // AddEpisode records an existing media path in a series document and returns the
 // updated document. The path is relative to the series root.
-func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series, error) {
-	seriesPath, err := layout.ParseSeriesDir(seriesDir)
+func AddEpisode(seriesDir string, series store.Series, opts AddEpisodeOptions) (store.Series, error) {
+	seriesPath, err := fsroot.ParseSeriesDir(seriesDir)
 	if err != nil {
-		return Series{}, err
+		return store.Series{}, err
 	}
 	if opts.Season < 0 {
-		return Series{}, fmt.Errorf("library: invalid season %d", opts.Season)
+		return store.Series{}, fmt.Errorf("library: invalid season %d", opts.Season)
 	}
 	if opts.Episode < 1 {
-		return Series{}, fmt.Errorf("library: invalid episode %d", opts.Episode)
+		return store.Series{}, fmt.Errorf("library: invalid episode %d", opts.Episode)
 	}
 
-	relPath, err := layout.CleanSeriesRelPath(opts.Path)
+	relPath, err := fsroot.CleanSeriesRelPath(opts.Path)
 	if err != nil {
-		return Series{}, err
+		return store.Series{}, err
 	}
 	fullPath := filepath.Join(seriesPath.Path(), filepath.FromSlash(relPath))
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		return Series{}, err
+		return store.Series{}, err
 	}
 	if info.IsDir() {
-		return Series{}, fmt.Errorf("library: episode path %q is a directory", relPath)
+		return store.Series{}, fmt.Errorf("library: episode path %q is a directory", relPath)
 	}
 
-	season := Season{}
+	season := store.Season{}
 	if opts.Season == 0 {
 		if series.Specials != nil {
 			season = *series.Specials
@@ -73,38 +73,38 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 	season.Number = opts.Season
 	companions, err := companionFiles(seriesPath.Path(), opts.Companions)
 	if err != nil {
-		return Series{}, err
+		return store.Series{}, err
 	}
 
-	mediaFile := MediaFile{
+	mediaFile := store.MediaFile{
 		Path:      relPath,
-		Source:    media.ParseMediaSource(opts.Source).String(),
+		Source:    domain.ParseMediaSource(opts.Source).String(),
 		Size:      info.Size(),
 		MTime:     info.ModTime().UTC().Format(time.RFC3339),
 		MediaInfo: opts.MediaInfo,
 	}
 	episodePtr, exists := season.Episode(opts.Episode)
-	episode := Episode{}
+	episode := store.Episode{}
 	if exists {
 		episode = *episodePtr
 	}
-	samePath := exists && media.CleanFilesystemTitle(episode.Media.Path).EqualName(relPath)
+	samePath := exists && domain.CleanFilesystemTitle(episode.Media.Path).EqualName(relPath)
 	if exists && !opts.Replace && !(opts.Refresh && samePath) {
-		return Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
+		return store.Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
 	}
-	var replaced *Episode
+	var replaced *store.Episode
 	if exists {
 		if opts.Replace {
 			if opts.Trash == nil {
-				return Series{}, fmt.Errorf("library: trash document is required to replace S%02dE%02d", opts.Season, opts.Episode)
+				return store.Series{}, fmt.Errorf("library: trash document is required to replace S%02dE%02d", opts.Season, opts.Episode)
 			}
 			existing := episode
 			replaced = &existing
-			episode = Episode{}
+			episode = store.Episode{}
 		} else if opts.Refresh {
-			episode = Episode{}
+			episode = store.Episode{}
 		} else {
-			return Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
+			return store.Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
 		}
 	}
 	episode.Media = mediaFile
@@ -116,26 +116,26 @@ func AddEpisode(seriesDir string, series Series, opts AddEpisodeOptions) (Series
 	series.UpsertSeason(season)
 
 	if err := series.Validate(); err != nil {
-		return Series{}, err
+		return store.Series{}, err
 	}
 	if replaced != nil {
 		trash := *opts.Trash
-		trash.Entries = append(append([]TrashedEpisode(nil), opts.Trash.Entries...), store.NewTrashedEpisode(opts.Season, opts.Episode, *replaced))
+		trash.Entries = append(append([]store.TrashedEpisode(nil), opts.Trash.Entries...), store.NewTrashedEpisode(opts.Season, opts.Episode, *replaced))
 		if err := trash.Validate(); err != nil {
-			return Series{}, err
+			return store.Series{}, err
 		}
 		*opts.Trash = trash
 	}
 	return series, nil
 }
 
-func companionFiles(seriesDir string, paths []string) ([]CompanionFile, error) {
+func companionFiles(seriesDir string, paths []string) ([]store.CompanionFile, error) {
 	if len(paths) == 0 {
-		return []CompanionFile{}, nil
+		return []store.CompanionFile{}, nil
 	}
-	out := make([]CompanionFile, 0, len(paths))
+	out := make([]store.CompanionFile, 0, len(paths))
 	for _, path := range paths {
-		relPath, err := layout.CleanSeriesRelPath(path)
+		relPath, err := fsroot.CleanSeriesRelPath(path)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +147,7 @@ func companionFiles(seriesDir string, paths []string) ([]CompanionFile, error) {
 		if info.IsDir() {
 			return nil, fmt.Errorf("library: companion path %q is a directory", relPath)
 		}
-		out = append(out, CompanionFile{
+		out = append(out, store.CompanionFile{
 			Path:  relPath,
 			Size:  info.Size(),
 			MTime: info.ModTime().UTC().Format(time.RFC3339),

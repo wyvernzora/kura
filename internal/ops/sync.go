@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain"
+	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/store"
@@ -25,13 +26,13 @@ type SeriesSyncOptions struct {
 }
 
 type SeriesSyncResult struct {
-	Series        string            `json:"series"`
-	Initialized   bool              `json:"initialized"`
-	DryRun        bool              `json:"dryRun"`
-	Synced        []SeriesSyncEntry `json:"synced"`
-	Skipped       []ImportSkip      `json:"skipped"`
-	UpdatedSeries Series            `json:"-"`
-	UpdatedTrash  Trash             `json:"-"`
+	Series        string              `json:"series"`
+	Initialized   bool                `json:"initialized"`
+	DryRun        bool                `json:"dryRun"`
+	Synced        []SeriesSyncEntry   `json:"synced"`
+	Skipped       []fsroot.ImportSkip `json:"skipped"`
+	UpdatedSeries store.Series        `json:"-"`
+	UpdatedTrash  store.Trash         `json:"-"`
 }
 
 func (r SeriesSyncResult) HasChanges() bool {
@@ -57,15 +58,15 @@ type SeriesSyncEntry struct {
 	Companions []string `json:"companions"`
 }
 
-func SyncSeries(ctx context.Context, repo store.Repo, root LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
+func SyncSeries(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
 	seriesDir, err := root.SeriesDir(dirname)
 	if err != nil {
 		return SeriesSyncResult{}, err
 	}
 
 	var initialized bool
-	var series *Series
-	if _, err := os.Stat(SeriesPath(seriesDir.Path())); err == nil {
+	var series *store.Series
+	if _, err := os.Stat(store.SeriesPath(seriesDir.Path())); err == nil {
 		series, err = repo.LoadSeries(seriesDir.Path())
 		if err != nil {
 			return SeriesSyncResult{}, err
@@ -83,7 +84,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root LibraryRoot, dirname 
 		return SeriesSyncResult{}, err
 	}
 
-	discovered, skipped, err := DiscoverSeriesEpisodes(seriesDir)
+	discovered, skipped, err := fsroot.DiscoverSeriesEpisodes(seriesDir)
 	if err != nil {
 		return SeriesSyncResult{}, err
 	}
@@ -121,7 +122,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root LibraryRoot, dirname 
 			return SeriesSyncResult{}, err
 		}
 		trackedEpisode, tracked := updated.LookupEpisode(episode.Season, episode.Number)
-		refreshing := tracked && CleanFilesystemTitle(trackedEpisode.Media.Path).EqualName(episode.Path)
+		refreshing := tracked && domain.CleanFilesystemTitle(trackedEpisode.Media.Path).EqualName(episode.Path)
 		replacing := tracked && !refreshing
 		if replacing && !opts.Replace {
 			return SeriesSyncResult{}, EpisodeAlreadyExistsError{Season: episode.Season, Episode: episode.Number}
@@ -162,7 +163,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root LibraryRoot, dirname 
 			Season:     episode.Season,
 			Special:    episode.Special,
 			Number:     episode.Number,
-			Source:     ParseMediaSource(episode.Source).Display(),
+			Source:     domain.ParseMediaSource(episode.Source).Display(),
 			Resolution: mediaInfo.Resolution,
 			Path:       episode.Path,
 			Companions: episode.Companions,
@@ -180,7 +181,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root LibraryRoot, dirname 
 		UpdatedTrash:  updatedTrash,
 	}
 	if opts.Apply && !opts.DryRun && result.HasChanges() {
-		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", SeriesPath(seriesDir.Path())), 0)
+		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", store.SeriesPath(seriesDir.Path())), 0)
 		if err := repo.SaveSeries(updated); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing series metadata", 0, 0)
 			return SeriesSyncResult{}, err
@@ -194,7 +195,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root LibraryRoot, dirname 
 	return result, nil
 }
 
-func newSeriesFromProvider(repo store.Repo, seriesDir string, providerSeries metadata.Series) (*Series, error) {
+func newSeriesFromProvider(repo store.Repo, seriesDir string, providerSeries metadata.Series) (*store.Series, error) {
 	series, err := repo.NewSeries(seriesDir)
 	if err != nil {
 		return nil, err
@@ -213,7 +214,7 @@ func newSeriesFromProvider(repo store.Repo, seriesDir string, providerSeries met
 	return series, nil
 }
 
-func providerSeriesForLocal(ctx context.Context, series Series, explicit *metadata.Series, resolve ProviderSeriesResolver) (*metadata.Series, error) {
+func providerSeriesForLocal(ctx context.Context, series store.Series, explicit *metadata.Series, resolve ProviderSeriesResolver) (*metadata.Series, error) {
 	if explicit != nil {
 		return explicit, nil
 	}
@@ -260,8 +261,8 @@ func providerEpisodeExists(series metadata.Series, seasonNumber int, episodeNumb
 	return false
 }
 
-func validateUniqueDiscoveredEpisodes(discovered []DiscoveredEpisode) error {
-	seen := map[string]DiscoveredEpisode{}
+func validateUniqueDiscoveredEpisodes(discovered []fsroot.DiscoveredEpisode) error {
+	seen := map[string]fsroot.DiscoveredEpisode{}
 	for _, episode := range discovered {
 		key := episodeKey(episode.Season, episode.Number)
 		existing, exists := seen[key]
@@ -273,7 +274,7 @@ func validateUniqueDiscoveredEpisodes(discovered []DiscoveredEpisode) error {
 	return nil
 }
 
-func episodeExists(series Series, seasonNumber int, episodeNumber int) bool {
+func episodeExists(series store.Series, seasonNumber int, episodeNumber int) bool {
 	_, ok := series.LookupEpisode(seasonNumber, episodeNumber)
 	return ok
 }
@@ -282,36 +283,36 @@ func episodeKey(seasonNumber int, episodeNumber int) string {
 	return strconv.Itoa(seasonNumber) + ":" + strconv.Itoa(episodeNumber)
 }
 
-func unchangedTrackedEpisode(seriesDir SeriesDir, series Series, discovered DiscoveredEpisode) (Episode, bool, error) {
+func unchangedTrackedEpisode(seriesDir fsroot.SeriesDir, series store.Series, discovered fsroot.DiscoveredEpisode) (store.Episode, bool, error) {
 	episode, ok := series.LookupEpisode(discovered.Season, discovered.Number)
-	if !ok || !CleanFilesystemTitle(episode.Media.Path).EqualName(discovered.Path) {
-		return Episode{}, false, nil
+	if !ok || !domain.CleanFilesystemTitle(episode.Media.Path).EqualName(discovered.Path) {
+		return store.Episode{}, false, nil
 	}
 
 	info, err := os.Stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(discovered.Path)))
 	if err != nil {
-		return Episode{}, false, err
+		return store.Episode{}, false, err
 	}
 	if info.IsDir() {
-		return Episode{}, false, fmt.Errorf("series sync: media path %q is a directory", discovered.Path)
+		return store.Episode{}, false, fmt.Errorf("series sync: media path %q is a directory", discovered.Path)
 	}
 	if episode.Media.Size != info.Size() {
-		return Episode{}, false, nil
+		return store.Episode{}, false, nil
 	}
 	if episode.Media.MTime != info.ModTime().UTC().Format(time.RFC3339) {
-		return Episode{}, false, nil
+		return store.Episode{}, false, nil
 	}
 	if !companionsUnchanged(seriesDir, episode.Companions, discovered.Companions) {
-		return Episode{}, false, nil
+		return store.Episode{}, false, nil
 	}
 	return episode, true, nil
 }
 
-func companionsUnchanged(seriesDir SeriesDir, tracked []CompanionFile, discovered []string) bool {
+func companionsUnchanged(seriesDir fsroot.SeriesDir, tracked []store.CompanionFile, discovered []string) bool {
 	if len(tracked) != len(discovered) {
 		return false
 	}
-	trackedByPath := make(map[string]CompanionFile, len(tracked))
+	trackedByPath := make(map[string]store.CompanionFile, len(tracked))
 	for _, companion := range tracked {
 		trackedByPath[companion.Path] = companion
 	}
@@ -334,7 +335,7 @@ func companionsUnchanged(seriesDir SeriesDir, tracked []CompanionFile, discovere
 	return true
 }
 
-func existingSyncEntry(discovered DiscoveredEpisode, episode Episode) SeriesSyncEntry {
+func existingSyncEntry(discovered fsroot.DiscoveredEpisode, episode store.Episode) SeriesSyncEntry {
 	resolution := ""
 	if episode.Media.MediaInfo != nil {
 		resolution = episode.Media.MediaInfo.Resolution
@@ -348,7 +349,7 @@ func existingSyncEntry(discovered DiscoveredEpisode, episode Episode) SeriesSync
 		Season:     discovered.Season,
 		Special:    discovered.Special,
 		Number:     discovered.Number,
-		Source:     ParseMediaSource(episode.Media.Source).Display(),
+		Source:     domain.ParseMediaSource(episode.Media.Source).Display(),
 		Resolution: resolution,
 		Path:       episode.Media.Path,
 		Companions: companions,
