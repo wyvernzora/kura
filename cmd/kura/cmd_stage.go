@@ -9,7 +9,7 @@ import (
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/ops"
 	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/terminalui"
+	"github.com/wyvernzora/kura/internal/ui"
 )
 
 type stageCmd struct {
@@ -56,7 +56,7 @@ func (cmd *stageCmd) Run(rt runContext) error {
 		source = domain.ParseMediaSource(cmd.Source)
 	}
 	result, err := ops.StageEpisodeFile(
-		progress.With(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
 		newRepo(),
 		root,
 		cmd.Series,

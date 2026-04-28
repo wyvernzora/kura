@@ -11,7 +11,7 @@ import (
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/resolve"
 	"github.com/wyvernzora/kura/internal/store"
-	"github.com/wyvernzora/kura/internal/terminalui"
+	"github.com/wyvernzora/kura/internal/ui"
 )
 
 type seriesSyncCmd struct {
@@ -48,7 +48,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 	}
 
 	result, err := ops.SyncSeries(
-		progress.With(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
 		repo,
 		root,
 		cmd.Series,
@@ -69,7 +69,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		if err := encoder.Encode(result); err != nil {
 			return err
 		}
-	} else if err := terminalui.WriteSeriesSyncResult(rt.Stdout, result); err != nil {
+	} else if err := ui.WriteSeriesSyncResult(rt.Stdout, result); err != nil {
 		return err
 	}
 
@@ -77,7 +77,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		return nil
 	}
 	if !cmd.Yes {
-		confirmed, err := terminalui.Confirm(rt.Stdin, rt.Stderr, "Apply this sync? [y/N] ")
+		confirmed, err := ui.Confirm(rt.Stdin, rt.Stderr, "Apply this sync? [y/N] ")
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 			return nil
 		}
 	}
-	progress := terminalui.NewProgress(rt.Stderr)
+	progress := ui.NewProgress(rt.Stderr)
 	progress.Start("Writing series metadata: %s", store.SeriesPath(seriesDir.Path()))
 	defer progress.Stop()
 	if err := repo.SaveSeries(result.UpdatedSeries); err != nil {
@@ -116,7 +116,7 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 		}
 		stdin := rt.Stdin.(*os.File)
 		stdout := rt.Stdout.(*os.File)
-		match, ok, selectErr := terminalui.SelectSeriesCandidate(stdin, stdout, rt.Stderr, cmd.Series, selectionRequired.Candidates)
+		match, ok, selectErr := ui.SelectSeriesCandidate(stdin, stdout, rt.Stderr, cmd.Series, selectionRequired.Candidates)
 		if selectErr != nil {
 			return metadata.Series{}, false, selectErr
 		}

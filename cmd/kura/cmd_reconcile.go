@@ -9,7 +9,7 @@ import (
 	"github.com/wyvernzora/kura/internal/ops"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/store"
-	"github.com/wyvernzora/kura/internal/terminalui"
+	"github.com/wyvernzora/kura/internal/ui"
 )
 
 type seriesReconcileCmd struct {
@@ -41,14 +41,14 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 		if err := encoder.Encode(plan); err != nil {
 			return err
 		}
-	} else if err := terminalui.WriteReconcilePlan(rt.Stdout, plan); err != nil {
+	} else if err := ui.WriteReconcilePlan(rt.Stdout, plan); err != nil {
 		return err
 	}
 	if cmd.DryRun || !plan.HasChanges() {
 		return nil
 	}
 	if !cmd.Yes {
-		confirmed, err := terminalui.Confirm(rt.Stdin, rt.Stderr, "Apply these changes? [y/N] ")
+		confirmed, err := ui.Confirm(rt.Stdin, rt.Stderr, "Apply these changes? [y/N] ")
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 		}
 	}
 	return ops.ApplyPlan(
-		progress.With(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
 		plan,
 		repo,
 	)

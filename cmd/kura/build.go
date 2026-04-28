@@ -12,7 +12,7 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/ops"
 	"github.com/wyvernzora/kura/internal/store"
-	"github.com/wyvernzora/kura/internal/terminalui"
+	"github.com/wyvernzora/kura/internal/ui"
 )
 
 func newRepo() store.Repo {
@@ -77,5 +77,5 @@ func providerSeriesResolver(rt runContext, providerKey string, tvdbBaseURL strin
 func isInteractiveRun(rt runContext) bool {
 	stdin, stdinOK := rt.Stdin.(*os.File)
 	stdout, stdoutOK := rt.Stdout.(*os.File)
-	return stdinOK && stdoutOK && terminalui.IsTerminal(stdin) && terminalui.IsTerminal(stdout)
+	return stdinOK && stdoutOK && ui.IsTerminal(stdin) && ui.IsTerminal(stdout)
 }
