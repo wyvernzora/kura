@@ -46,7 +46,7 @@ These notes capture project intent and working conventions for future agent thre
 - Main command entrypoint: `cmd/kura`.
 - All Kura-generated JSON files must include top-level `schemaVersion`; initial version is `1`.
 - Series metadata uses local `id`, provider-neutral `providerRefs`, and `preferredProvider`; do not add provider-specific top-level ID fields.
-- Keep persistent models dumb. Workflow behavior belongs in `internal/library/workflows` or `internal/library/reconcile`.
+- Keep persistent models dumb. Workflow behavior belongs in `internal/ops`.
 - Keep dependencies intentional and minimal.
 - Always prefer established libraries for common tasks such as language tags, time/date parsing, structured data parsing, CLI handling, hashing, and media/container metadata instead of rolling custom implementations.
 - Prefer clear CLI/MCP surfaces over background magic.
