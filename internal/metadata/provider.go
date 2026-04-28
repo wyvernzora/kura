@@ -95,7 +95,6 @@ type Series struct {
 
 	LastAired string
 	Seasons   []Season
-	Specials  *Season
 }
 
 // Error sentinels shared across metadata providers.

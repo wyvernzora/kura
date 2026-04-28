@@ -61,14 +61,8 @@ func AddEpisode(seriesDir string, series store.Series, opts AddEpisodeOptions) (
 	}
 
 	season := store.Season{}
-	if opts.Season == 0 {
-		if series.Specials != nil {
-			season = *series.Specials
-		}
-	} else {
-		if existingSeason, ok := series.Season(opts.Season); ok {
-			season = *existingSeason
-		}
+	if existingSeason, ok := series.Season(opts.Season); ok {
+		season = *existingSeason
 	}
 	season.Number = opts.Season
 	companions, err := companionFiles(seriesPath.Path(), opts.Companions)

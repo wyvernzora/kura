@@ -135,16 +135,7 @@ func cloneSeries(in Series) Series {
 	out := in
 	out.SeriesSummary = cloneSeriesSummary(in.SeriesSummary)
 	out.Seasons = cloneSeasons(in.Seasons)
-	out.Specials = cloneSeasonPointer(in.Specials)
 	return out
-}
-
-func cloneSeasonPointer(in *Season) *Season {
-	if in == nil {
-		return nil
-	}
-	season := cloneSeason(*in)
-	return &season
 }
 
 func cloneSeason(in Season) Season {

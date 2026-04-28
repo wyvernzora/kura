@@ -29,12 +29,11 @@ type Series struct {
 	LastScanned       string   `json:"lastScanned,omitempty"`
 	Notes             string   `json:"notes,omitempty"`
 	Seasons           []Season `json:"seasons,omitempty"`
-	Specials          *Season  `json:"specials,omitempty"`
 
 	dirname string
 }
 
-// Season stores local state for one regular season or the specials collection.
+// Season stores local state for one season. Season 0 represents specials.
 type Season struct {
 	Number   int       `json:"number"`
 	Notes    string    `json:"notes,omitempty"`
@@ -97,7 +96,7 @@ func (s Series) Validate() error {
 		return fmt.Errorf("library: validate series: %w", err)
 	}
 	for _, season := range s.Seasons {
-		if season.Number < 1 {
+		if season.Number < 0 {
 			return fmt.Errorf("library: invalid season number %d", season.Number)
 		}
 		if err := validateSeasonPaths(season.Number, season); err != nil {
@@ -107,24 +106,13 @@ func (s Series) Validate() error {
 			return err
 		}
 	}
-	if s.Specials != nil {
-		if err := validateSeasonPaths(0, *s.Specials); err != nil {
-			return err
-		}
-		if err := validateUniqueEpisodes(0, *s.Specials); err != nil {
-			return err
-		}
+	if err := validateUniqueSeasons(s.Seasons); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (s Series) Season(number int) (*Season, bool) {
-	if number == 0 {
-		if s.Specials == nil {
-			return nil, false
-		}
-		return s.Specials, true
-	}
 	for i := range s.Seasons {
 		if s.Seasons[i].Number == number {
 			return &s.Seasons[i], true
@@ -146,10 +134,6 @@ func (s Series) LookupEpisode(seasonNumber int, episodeNumber int) (Episode, boo
 }
 
 func (s *Series) UpsertSeason(season Season) {
-	if season.Number == 0 {
-		s.Specials = &season
-		return
-	}
 	for i := range s.Seasons {
 		if s.Seasons[i].Number == season.Number {
 			s.Seasons[i] = season
@@ -201,6 +185,17 @@ func validateSeasonPaths(seasonNumber int, season Season) error {
 	return nil
 }
 
+func validateUniqueSeasons(seasons []Season) error {
+	seen := map[int]struct{}{}
+	for _, season := range seasons {
+		if _, exists := seen[season.Number]; exists {
+			return fmt.Errorf("library: duplicate season number %d", season.Number)
+		}
+		seen[season.Number] = struct{}{}
+	}
+	return nil
+}
+
 func validateUniqueEpisodes(seasonNumber int, season Season) error {
 	seen := map[int]struct{}{}
 	for _, episode := range season.Episodes {
@@ -240,10 +235,8 @@ func decodeSeries(data []byte, path string) (Series, error) {
 			return Series{}, fmt.Errorf("library: validate %s: %w", path, err)
 		}
 	}
-	if series.Specials != nil {
-		if err := validateUniqueEpisodes(0, *series.Specials); err != nil {
-			return Series{}, fmt.Errorf("library: validate %s: %w", path, err)
-		}
+	if err := validateUniqueSeasons(series.Seasons); err != nil {
+		return Series{}, fmt.Errorf("library: validate %s: %w", path, err)
 	}
 	canonicalizeSeries(&series)
 	return series, nil
@@ -265,9 +258,6 @@ func canonicalizeSeries(s *Series) {
 	}
 	for i := range s.Seasons {
 		canonicalizeSeason(&s.Seasons[i])
-	}
-	if s.Specials != nil {
-		canonicalizeSeason(s.Specials)
 	}
 	sort.Slice(s.Seasons, func(i, j int) bool { return s.Seasons[i].Number < s.Seasons[j].Number })
 }

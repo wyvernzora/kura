@@ -66,13 +66,10 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 	if got := series.Seasons[1].Episodes[0].Aired; got != "2019-10-03" {
 		t.Fatalf("Aired = %q, want 2019-10-03", got)
 	}
-	if series.Specials == nil {
-		t.Fatalf("Specials = nil, want season")
+	if len(series.Seasons[0].Episodes) != 1 {
+		t.Fatalf("len(Seasons[0].Episodes) = %d, want 1", len(series.Seasons[0].Episodes))
 	}
-	if len(series.Specials.Episodes) != 1 {
-		t.Fatalf("len(Specials.Episodes) = %d, want 1", len(series.Specials.Episodes))
-	}
-	if got := series.Specials.Episodes[0]; got.ProviderRef != "tvdb:9001" || got.SeasonNumber != 0 || got.EpisodeNumber != 1 {
+	if got := series.Seasons[0].Episodes[0]; got.ProviderRef != "tvdb:9001" || got.SeasonNumber != 0 || got.EpisodeNumber != 1 {
 		t.Fatalf("first special = %#v", got)
 	}
 }

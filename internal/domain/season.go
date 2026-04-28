@@ -7,7 +7,7 @@ import (
 )
 
 // SeasonNumber is an episode identity season number. Season 0 represents
-// specials, even though specials are stored separately in Series.Specials.
+// specials.
 type SeasonNumber int
 
 func NewSeasonNumber(number int) (SeasonNumber, error) {

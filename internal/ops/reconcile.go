@@ -213,17 +213,6 @@ func setSeriesEpisode(series *store.Series, seasonNumber int, episodeNumber int,
 	if episodeNumber < 1 {
 		return fmt.Errorf("library: invalid episode %d", episodeNumber)
 	}
-	if seasonNumber == 0 {
-		season := store.Season{}
-		if series.Specials != nil {
-			season = *series.Specials
-		}
-		season.Number = 0
-		episode.Number = episodeNumber
-		season.UpsertEpisode(episode)
-		series.UpsertSeason(season)
-		return nil
-	}
 	season := store.Season{Number: seasonNumber}
 	if existingSeason, ok := series.Season(seasonNumber); ok {
 		season = *existingSeason
@@ -236,12 +225,12 @@ func setSeriesEpisode(series *store.Series, seasonNumber int, episodeNumber int,
 
 func reconcileEpisodes(seriesDir fsroot.SeriesDir, title domain.FilesystemTitle, series *store.Series, trash *store.Trash) ([]Move, error) {
 	var moves []Move
-	regularSeasons := append([]store.Season(nil), series.Seasons...)
-	sort.Slice(regularSeasons, func(i, j int) bool {
-		return regularSeasons[i].Number < regularSeasons[j].Number
+	seasons := append([]store.Season(nil), series.Seasons...)
+	sort.Slice(seasons, func(i, j int) bool {
+		return seasons[i].Number < seasons[j].Number
 	})
-	for _, season := range regularSeasons {
-		if season.Number < 1 {
+	for _, season := range seasons {
+		if season.Number < 0 {
 			continue
 		}
 		seasonMoves, err := reconcileSeasonEpisodes(seriesDir, title, season.Number, &season)
@@ -250,13 +239,6 @@ func reconcileEpisodes(seriesDir fsroot.SeriesDir, title domain.FilesystemTitle,
 		}
 		moves = append(moves, seasonMoves...)
 		series.UpsertSeason(season)
-	}
-	if series.Specials != nil {
-		seasonMoves, err := reconcileSeasonEpisodes(seriesDir, title, 0, series.Specials)
-		if err != nil {
-			return nil, err
-		}
-		moves = append(moves, seasonMoves...)
 	}
 	trashMoves, err := reconcileTrash(seriesDir, trash)
 	if err != nil {

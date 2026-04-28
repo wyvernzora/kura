@@ -51,9 +51,6 @@
       "items": {
         "$ref": "#/$defs/season"
       }
-    },
-    "specials": {
-      "$ref": "#/$defs/season"
     }
   },
   "$defs": {

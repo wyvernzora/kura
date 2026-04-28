@@ -940,24 +940,24 @@ func TestPlanAndApplyReconcileRenamesTrackedFiles(t *testing.T) {
 						]
 					}
 				]
+			},
+			{
+				"number": 0,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "bad special.mp4",
+							"source": "bdrip",
+							"size": 7,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"videoCodec": "AVC", "resolution": "1280x720"}
+						},
+						"companions": []
+					}
+				]
 			}
-		],
-		"specials": {
-			"number": 0,
-			"episodes": [
-				{
-					"number": 1,
-					"media": {
-						"path": "bad special.mp4",
-						"source": "bdrip",
-						"size": 7,
-						"mtime": "2026-04-20T03:00:00Z",
-						"mediainfo": {"videoCodec": "AVC", "resolution": "1280x720"}
-					},
-					"companions": []
-				}
-			]
-		}
+		]
 	}`)
 
 	root, err := fsroot.ParseLibraryRoot(rootPath)
@@ -1001,22 +1001,24 @@ func TestPlanReconcileTreatsCanonicallyEquivalentRootNameAsUnchanged(t *testing.
 		"preferredProvider": "tvdb",
 		"preferredTitle": "本好きの下剋上 司書になるためには手段を選んでいられません",
 		"canonicalTitle": "Ascendance of a Bookworm",
-		"specials": {
-			"number": 0,
-			"episodes": [
-				{
-					"number": 1,
-					"media": {
-						"path": "episode.mkv",
-						"source": "webrip",
-						"size": 7,
-						"mtime": "2026-04-20T03:00:00Z",
-						"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
-					},
-					"companions": []
-				}
-			]
-		}
+		"seasons": [
+			{
+				"number": 0,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "episode.mkv",
+							"source": "webrip",
+							"size": 7,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
 	}`)
 	root, err := fsroot.ParseLibraryRoot(rootPath)
 	if err != nil {
@@ -1228,7 +1230,7 @@ func TestAddEpisodeRecordsRelativeFileFacts(t *testing.T) {
 	}
 }
 
-func TestAddEpisodeRecordsSpecialsSeparately(t *testing.T) {
+func TestAddEpisodeRecordsSpecialsAsSeasonZero(t *testing.T) {
 	seriesDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(seriesDir, "special.mkv"), []byte("special"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -1248,19 +1250,14 @@ func TestAddEpisodeRecordsSpecialsSeparately(t *testing.T) {
 		t.Fatalf("AddEpisode: %v", err)
 	}
 
-	if updated.Specials == nil {
-		t.Fatal("Specials = nil, want season")
-	}
 	if got := testEpisode(t, &updated, 0, 1).Media.Path; got != "special.mkv" {
 		t.Fatalf("special media path = %q, want special.mkv", got)
 	}
 	if _, ok := updated.Season(0); !ok {
-		t.Fatal("Specials missing")
+		t.Fatal("season 0 missing")
 	}
-	for _, season := range updated.Seasons {
-		if season.Number == 0 {
-			t.Fatal("Seasons[0] exists, want specials separate")
-		}
+	if updated.Seasons[0].Number != 0 {
+		t.Fatalf("first season number = %d, want 0", updated.Seasons[0].Number)
 	}
 }
 
@@ -1423,17 +1420,19 @@ func testProviderSeries() metadata.Series {
 			CanonicalTitle:   "Ascendance of a Bookworm",
 			OriginalLanguage: "jpn",
 		},
-		Seasons: []metadata.Season{{
-			Number: 1,
-			Episodes: []metadata.Episode{
-				{SeasonNumber: 1, EpisodeNumber: 1},
-				{SeasonNumber: 1, EpisodeNumber: 2},
+		Seasons: []metadata.Season{
+			{
+				Number: 0,
+				Episodes: []metadata.Episode{
+					{SeasonNumber: 0, EpisodeNumber: 1},
+				},
 			},
-		}},
-		Specials: &metadata.Season{
-			Number: 0,
-			Episodes: []metadata.Episode{
-				{SeasonNumber: 0, EpisodeNumber: 1},
+			{
+				Number: 1,
+				Episodes: []metadata.Episode{
+					{SeasonNumber: 1, EpisodeNumber: 1},
+					{SeasonNumber: 1, EpisodeNumber: 2},
+				},
 			},
 		},
 	}

@@ -58,19 +58,8 @@ func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episo
 		}),
 		LastAired: normalizeDate(record.LastAired),
 		Seasons:   seasons,
-		Specials:  specialsSeason(seasons),
 	}
 	return series
-}
-
-func specialsSeason(seasons []metadata.Season) *metadata.Season {
-	for _, season := range seasons {
-		if season.Number == 0 {
-			copy := season
-			return &copy
-		}
-	}
-	return nil
 }
 
 func seriesTitleCandidates(record seriesExtendedRecord) []titleCandidate {
