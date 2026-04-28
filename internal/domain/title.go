@@ -9,37 +9,37 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// FilesystemTitle is a normalized title used in generated folder and file names.
-type FilesystemTitle string
+// FileTitle is a normalized title used in generated folder and file names.
+type FileTitle string
 
-func ParseFilesystemTitle(title string) (FilesystemTitle, error) {
-	clean := CleanFilesystemTitle(title)
+func ParseFileTitle(title string) (FileTitle, error) {
+	clean := CleanFileTitle(title)
 	if clean.IsZero() {
 		return "", errors.New("library: filesystem title is required")
 	}
-	if invalidFilesystemTitle(string(clean)) {
+	if invalidFileTitle(string(clean)) {
 		return "", fmt.Errorf("library: invalid filesystem title %q", title)
 	}
 	return clean, nil
 }
 
-func CleanFilesystemTitle(title string) FilesystemTitle {
-	return FilesystemTitle(norm.NFC.String(strings.TrimSpace(title)))
+func CleanFileTitle(title string) FileTitle {
+	return FileTitle(norm.NFC.String(strings.TrimSpace(title)))
 }
 
-func (t FilesystemTitle) String() string {
+func (t FileTitle) String() string {
 	return string(t)
 }
 
-func (t FilesystemTitle) IsZero() bool {
+func (t FileTitle) IsZero() bool {
 	return strings.TrimSpace(string(t)) == ""
 }
 
-func (t FilesystemTitle) EqualName(name string) bool {
-	return t == CleanFilesystemTitle(name)
+func (t FileTitle) EqualName(name string) bool {
+	return t == CleanFileTitle(name)
 }
 
-func invalidFilesystemTitle(title string) bool {
+func invalidFileTitle(title string) bool {
 	return strings.ContainsFunc(title, func(r rune) bool {
 		return r == '/' || r == '\\' || r == 0 || unicode.IsControl(r)
 	})

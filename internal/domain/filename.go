@@ -11,7 +11,7 @@ type MediaFilenameFacts struct {
 	Resolution Resolution
 }
 
-func BuildMediaFilename(title FilesystemTitle, episode EpisodeRef, facts MediaFilenameFacts, extension string) MediaFilename {
+func BuildMediaFilename(title FileTitle, episode EpisodeRef, facts MediaFilenameFacts, extension string) MediaFilename {
 	source := facts.Source.Display()
 	resolution := facts.Resolution.Display()
 	if resolution == "" {

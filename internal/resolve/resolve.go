@@ -29,7 +29,7 @@ func ResolveProviderSeries(ctx context.Context, metadataSource metadata.Source, 
 		return series, true, err
 	}
 
-	query := domain.CleanFilesystemTitle(dirname).String()
+	query := domain.CleanFileTitle(dirname).String()
 	results, err := metadataSource.Search(ctx, query, metadata.SearchOptions{
 		Limit: opts.SearchLimit,
 		Type:  metadata.MediaTypeSeries,
@@ -91,13 +91,13 @@ func ExactSearchMatch(dirname string, results []metadata.SearchResult) (metadata
 }
 
 func ExactTitleMatch(query string, title string) bool {
-	return domain.CleanFilesystemTitle(query).String() == domain.CleanFilesystemTitle(title).String()
+	return domain.CleanFileTitle(query).String() == domain.CleanFileTitle(title).String()
 }
 
 func TitleContainsQuery(query string, title string) bool {
-	cleanQuery := domain.CleanFilesystemTitle(query).String()
+	cleanQuery := domain.CleanFileTitle(query).String()
 	if cleanQuery == "" {
 		return false
 	}
-	return strings.Contains(domain.CleanFilesystemTitle(title).String(), cleanQuery)
+	return strings.Contains(domain.CleanFileTitle(title).String(), cleanQuery)
 }

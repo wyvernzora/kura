@@ -100,7 +100,7 @@ func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
 	}
 }
 
-func TestSyncSeriesDoesNotPersistFilesystemTitle(t *testing.T) {
+func TestSyncSeriesDoesNotPersistFileTitle(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Short Title")
 	seasonDir := filepath.Join(seriesDir, "Season 1")

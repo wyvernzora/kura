@@ -4,16 +4,16 @@ import (
 	"testing"
 )
 
-func TestFilesystemTitleNormalizesAndCompares(t *testing.T) {
-	title, err := ParseFilesystemTitle(" 本好きの下剋上 司書になるためには手段を選んでいられません ")
+func TestFileTitleNormalizesAndCompares(t *testing.T) {
+	title, err := ParseFileTitle(" 本好きの下剋上 司書になるためには手段を選んでいられません ")
 	if err != nil {
-		t.Fatalf("ParseFilesystemTitle: %v", err)
+		t.Fatalf("ParseFileTitle: %v", err)
 	}
 	if !title.EqualName("本好きの下剋上 司書になるためには手段を選んでいられません") {
 		t.Fatal("EqualName = false, want NFC-equivalent title match")
 	}
-	if _, err := ParseFilesystemTitle("Bad/Title"); err == nil {
-		t.Fatal("ParseFilesystemTitle returned nil error, want separator rejection")
+	if _, err := ParseFileTitle("Bad/Title"); err == nil {
+		t.Fatal("ParseFileTitle returned nil error, want separator rejection")
 	}
 }
 
@@ -84,9 +84,9 @@ func TestResolution(t *testing.T) {
 }
 
 func TestBuildMediaFilename(t *testing.T) {
-	title, err := ParseFilesystemTitle("Bookworm")
+	title, err := ParseFileTitle("Bookworm")
 	if err != nil {
-		t.Fatalf("ParseFilesystemTitle: %v", err)
+		t.Fatalf("ParseFileTitle: %v", err)
 	}
 	season, _ := RegularSeason(1)
 	episode, _ := NewEpisodeNumber(1)

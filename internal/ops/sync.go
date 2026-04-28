@@ -122,7 +122,7 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 			return SeriesSyncResult{}, err
 		}
 		trackedEpisode, tracked := updated.LookupEpisode(episode.Season, episode.Number)
-		refreshing := tracked && domain.CleanFilesystemTitle(trackedEpisode.Media.Path).EqualName(episode.Path)
+		refreshing := tracked && domain.CleanFileTitle(trackedEpisode.Media.Path).EqualName(episode.Path)
 		replacing := tracked && !refreshing
 		if replacing && !opts.Replace {
 			return SeriesSyncResult{}, EpisodeAlreadyExistsError{Season: episode.Season, Episode: episode.Number}
@@ -277,7 +277,7 @@ func episodeKey(seasonNumber int, episodeNumber int) string {
 
 func unchangedTrackedEpisode(seriesDir fsroot.SeriesDir, series store.Series, discovered fsroot.DiscoveredEpisode) (store.Episode, bool, error) {
 	episode, ok := series.LookupEpisode(discovered.Season, discovered.Number)
-	if !ok || !domain.CleanFilesystemTitle(episode.Media.Path).EqualName(discovered.Path) {
+	if !ok || !domain.CleanFileTitle(episode.Media.Path).EqualName(discovered.Path) {
 		return store.Episode{}, false, nil
 	}
 

@@ -82,7 +82,7 @@ func AddEpisode(seriesDir string, series store.Series, opts AddEpisodeOptions) (
 	if exists {
 		episode = *episodePtr
 	}
-	samePath := exists && domain.CleanFilesystemTitle(episode.Media.Path).EqualName(relPath)
+	samePath := exists && domain.CleanFileTitle(episode.Media.Path).EqualName(relPath)
 	if exists && !opts.Replace && !(opts.Refresh && samePath) {
 		return store.Series{}, EpisodeAlreadyExistsError{Season: opts.Season, Episode: opts.Episode}
 	}

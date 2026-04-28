@@ -46,8 +46,8 @@ func PlanSeries(_ context.Context, root fsroot.LibraryRoot, dirname string) (Pla
 	if err != nil {
 		return Plan{}, err
 	}
-	title := domain.CleanFilesystemTitle(seriesDir.Name())
-	if _, err := domain.ParseFilesystemTitle(title.String()); err != nil {
+	title := domain.CleanFileTitle(seriesDir.Name())
+	if _, err := domain.ParseFileTitle(title.String()); err != nil {
 		return Plan{}, err
 	}
 
@@ -124,7 +124,7 @@ func ApplyPlan(ctx context.Context, plan Plan) error {
 	return nil
 }
 
-func applyStagedEpisodes(title domain.FilesystemTitle, series *store.Series, staged *store.Staged, trash *store.Trash) ([]Move, bool, error) {
+func applyStagedEpisodes(title domain.FileTitle, series *store.Series, staged *store.Staged, trash *store.Trash) ([]Move, bool, error) {
 	if staged.IsEmpty() {
 		return nil, false, nil
 	}
@@ -182,7 +182,7 @@ func validateStagedSource(staged store.StagedEpisode) error {
 	return nil
 }
 
-func activeEpisodeFromStaged(title domain.FilesystemTitle, staged store.StagedEpisode) (store.Episode, []Move, error) {
+func activeEpisodeFromStaged(title domain.FileTitle, staged store.StagedEpisode) (store.Episode, []Move, error) {
 	targetMediaFilename, err := reconciledMediaFilename(title, staged.Season, staged.Number, staged.Media)
 	if err != nil {
 		return store.Episode{}, nil, err
@@ -223,7 +223,7 @@ func setSeriesEpisode(series *store.Series, seasonNumber int, episodeNumber int,
 	return nil
 }
 
-func reconcileEpisodes(seriesDir fsroot.SeriesDir, title domain.FilesystemTitle, series *store.Series, trash *store.Trash) ([]Move, error) {
+func reconcileEpisodes(seriesDir fsroot.SeriesDir, title domain.FileTitle, series *store.Series, trash *store.Trash) ([]Move, error) {
 	var moves []Move
 	seasons := append([]store.Season(nil), series.Seasons...)
 	sort.Slice(seasons, func(i, j int) bool {
@@ -248,7 +248,7 @@ func reconcileEpisodes(seriesDir fsroot.SeriesDir, title domain.FilesystemTitle,
 	return moves, nil
 }
 
-func reconcileSeasonEpisodes(seriesDir fsroot.SeriesDir, title domain.FilesystemTitle, seasonNumber int, season *store.Season) ([]Move, error) {
+func reconcileSeasonEpisodes(seriesDir fsroot.SeriesDir, title domain.FileTitle, seasonNumber int, season *store.Season) ([]Move, error) {
 	var moves []Move
 	episodes := append([]store.Episode(nil), season.Episodes...)
 	sort.Slice(episodes, func(i, j int) bool {
@@ -268,7 +268,7 @@ func reconcileSeasonEpisodes(seriesDir fsroot.SeriesDir, title domain.Filesystem
 	return moves, nil
 }
 
-func reconcileEpisode(seriesDir fsroot.SeriesDir, title domain.FilesystemTitle, seasonNumber int, episodeNumber int, episode *store.Episode) ([]Move, error) {
+func reconcileEpisode(seriesDir fsroot.SeriesDir, title domain.FileTitle, seasonNumber int, episodeNumber int, episode *store.Episode) ([]Move, error) {
 	var moves []Move
 	mediaFile := episode.Media
 	if mediaFile.Path == "" {
@@ -348,7 +348,7 @@ func targetEpisodeDir(seasonNumber int) string {
 	return fmt.Sprintf("Season %d", seasonNumber)
 }
 
-func reconciledMediaFilename(title domain.FilesystemTitle, seasonNumber int, episodeNumber int, media store.MediaFile) (string, error) {
+func reconciledMediaFilename(title domain.FileTitle, seasonNumber int, episodeNumber int, media store.MediaFile) (string, error) {
 	season, err := domain.NewSeasonNumber(seasonNumber)
 	if err != nil {
 		return "", err
