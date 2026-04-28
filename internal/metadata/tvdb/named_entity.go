@@ -27,20 +27,33 @@ func providerIntRef(id int) string {
 	return providerRef(strconv.Itoa(id))
 }
 
-func (p *Provider) normalizeSeriesSummary(ref, canonicalTitle, originalLanguage, originalCountry, firstAired string, status metadata.SeriesStatus, year int, genres []string, linkedRefs []string, titles []titleCandidate) metadata.SeriesSummary {
-	canonicalTitle = normalizeTitle(canonicalTitle)
+type seriesSummaryInput struct {
+	ref              string
+	canonicalTitle   string
+	originalLanguage string
+	originalCountry  string
+	firstAired       string
+	status           metadata.SeriesStatus
+	year             int
+	genres           []string
+	linkedRefs       []string
+	titles           []titleCandidate
+}
+
+func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) metadata.SeriesSummary {
+	canonicalTitle := normalizeTitle(input.canonicalTitle)
 	return metadata.SeriesSummary{
-		ProviderRef:      ref,
-		ProviderRefs:     providerRefs(ref, linkedRefs),
-		PreferredTitle:   p.selectTitle(canonicalTitle, originalLanguage, titles),
+		ProviderRef:      input.ref,
+		ProviderRefs:     providerRefs(input.ref, input.linkedRefs),
+		PreferredTitle:   p.selectTitle(canonicalTitle, input.originalLanguage, input.titles),
 		CanonicalTitle:   canonicalTitle,
 		Type:             metadata.MediaTypeSeries,
-		Status:           status,
-		Year:             year,
-		OriginalLanguage: normalizeLanguage(originalLanguage),
-		OriginalCountry:  normalizeCountry(originalCountry),
-		FirstAired:       normalizeDate(firstAired),
-		Genres:           genres,
+		Status:           input.status,
+		Year:             input.year,
+		OriginalLanguage: normalizeLanguage(input.originalLanguage),
+		OriginalCountry:  normalizeCountry(input.originalCountry),
+		FirstAired:       normalizeDate(input.firstAired),
+		Genres:           input.genres,
 	}
 }
 

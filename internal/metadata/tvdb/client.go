@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,15 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
 
-var (
-	// ErrNotFound means TVDB did not find the requested entity.
-	ErrNotFound = errors.New("tvdb: not found")
-	// ErrUnauthorized means TVDB rejected authentication credentials.
-	ErrUnauthorized = errors.New("tvdb: unauthorized")
-	// ErrUnavailable means TVDB could not satisfy the request.
-	ErrUnavailable = errors.New("tvdb: unavailable")
+	"github.com/wyvernzora/kura/internal/metadata"
 )
 
 type client struct {
@@ -96,7 +88,7 @@ func (c *client) doJSON(ctx context.Context, method, path string, values url.Val
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrUnavailable, err)
+		return fmt.Errorf("%w: %v", metadata.ErrUnavailable, err)
 	}
 	defer resp.Body.Close()
 
@@ -124,10 +116,10 @@ func (c *client) doJSON(ctx context.Context, method, path string, values url.Val
 func tvdbHTTPError(resp *http.Response) error {
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return fmt.Errorf("%w: status %d", ErrUnauthorized, resp.StatusCode)
+		return fmt.Errorf("%w: status %d", metadata.ErrUnauthorized, resp.StatusCode)
 	case http.StatusNotFound:
-		return fmt.Errorf("%w: status %d", ErrNotFound, resp.StatusCode)
+		return fmt.Errorf("%w: status %d", metadata.ErrNotFound, resp.StatusCode)
 	default:
-		return fmt.Errorf("%w: status %d", ErrUnavailable, resp.StatusCode)
+		return fmt.Errorf("%w: status %d", metadata.ErrUnavailable, resp.StatusCode)
 	}
 }

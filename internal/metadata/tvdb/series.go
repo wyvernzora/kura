@@ -29,17 +29,6 @@ type seriesExtendedRecord struct {
 	OverviewTranslations []string       `json:"overviewTranslations"`
 }
 
-type seriesBaseRecord struct {
-	ID               int          `json:"id"`
-	Name             string       `json:"name"`
-	Slug             string       `json:"slug"`
-	FirstAired       string       `json:"firstAired"`
-	LastAired        string       `json:"lastAired"`
-	OriginalCountry  string       `json:"originalCountry"`
-	OriginalLanguage string       `json:"originalLanguage"`
-	Status           statusRecord `json:"status"`
-}
-
 func (c *client) seriesExtended(ctx context.Context, id string) (seriesExtendedRecord, error) {
 	values := url.Values{}
 	values.Set("meta", "translations")
@@ -53,25 +42,35 @@ func (c *client) seriesExtended(ctx context.Context, id string) (seriesExtendedR
 }
 
 func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episodeRecord) metadata.Series {
-	seasons, specials := normalizeSeasons(record.Seasons, episodes)
+	seasons := normalizeSeasons(record.Seasons, episodes)
 	series := metadata.Series{
-		SeriesSummary: p.normalizeSeriesSummary(
-			providerIntRef(record.ID),
-			record.Name,
-			record.OriginalLanguage,
-			record.OriginalCountry,
-			record.FirstAired,
-			normalizeStatus(record.Status.Name),
-			yearFromDate(record.FirstAired),
-			normalizeGenres(record.Genres),
-			normalizeRemoteRefs(record.RemoteIDs),
-			seriesTitleCandidates(record),
-		),
+		SeriesSummary: p.normalizeSeriesSummary(seriesSummaryInput{
+			ref:              providerIntRef(record.ID),
+			canonicalTitle:   record.Name,
+			originalLanguage: record.OriginalLanguage,
+			originalCountry:  record.OriginalCountry,
+			firstAired:       record.FirstAired,
+			status:           normalizeStatus(record.Status.Name),
+			year:             yearFromDate(record.FirstAired),
+			genres:           normalizeGenres(record.Genres),
+			linkedRefs:       normalizeRemoteRefs(record.RemoteIDs),
+			titles:           seriesTitleCandidates(record),
+		}),
 		LastAired: normalizeDate(record.LastAired),
 		Seasons:   seasons,
-		Specials:  specials,
+		Specials:  specialsSeason(seasons),
 	}
 	return series
+}
+
+func specialsSeason(seasons []metadata.Season) *metadata.Season {
+	for _, season := range seasons {
+		if season.Number == 0 {
+			copy := season
+			return &copy
+		}
+	}
+	return nil
 }
 
 func seriesTitleCandidates(record seriesExtendedRecord) []titleCandidate {

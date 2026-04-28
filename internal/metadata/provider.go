@@ -5,7 +5,10 @@
 // and are not the persistent on-disk schema for .kura/series.json.
 package metadata
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // Source retrieves series, season, and episode metadata from an external
 // metadata source.
@@ -42,8 +45,18 @@ type SearchOptions struct {
 // SearchResult is a lightweight candidate returned by Source.Search. It is
 // intended for matching and disambiguation, not for building full library read
 // views.
+//
+// This includes search-only metadata beyond the shared SeriesSummary to support
+// match reporting and ranking in the caller.
 type SearchResult struct {
 	SeriesSummary
+
+	// Score is the provider-reported relevance score when available.
+	Score float64
+
+	// MatchSource identifies the search response field that matched the query,
+	// for example "title".
+	MatchSource string
 }
 
 // SeriesSummary contains series-level metadata shared by search results and
@@ -82,8 +95,16 @@ type Series struct {
 
 	LastAired string
 	Seasons   []Season
-	Specials  []Episode
+	Specials  *Season
 }
+
+// Error sentinels shared across metadata providers.
+
+var (
+	ErrNotFound     = errors.New("metadata: not found")
+	ErrUnauthorized = errors.New("metadata: unauthorized")
+	ErrUnavailable  = errors.New("metadata: unavailable")
+)
 
 // Season contains external metadata for one season.
 type Season struct {

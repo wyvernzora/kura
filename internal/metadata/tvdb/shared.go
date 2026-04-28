@@ -76,12 +76,6 @@ func (s *tvdbString) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	var floatValue float64
-	if err := json.Unmarshal(data, &floatValue); err == nil {
-		*s = tvdbString(strconv.FormatFloat(floatValue, 'f', -1, 64))
-		return nil
-	}
-
 	return fmt.Errorf("tvdb: expected string or number, got %s", string(data))
 }
 

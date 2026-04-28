@@ -240,8 +240,11 @@ func validateProviderEpisode(providerSeries *metadata.Series, seasonNumber int, 
 
 func providerEpisodeExists(series metadata.Series, seasonNumber int, episodeNumber int) bool {
 	if seasonNumber == 0 {
-		for _, episode := range series.Specials {
-			if episode.SeasonNumber == 0 && episode.EpisodeNumber == episodeNumber {
+		if series.Specials == nil {
+			return false
+		}
+		for _, episode := range series.Specials.Episodes {
+			if episode.EpisodeNumber == episodeNumber {
 				return true
 			}
 		}

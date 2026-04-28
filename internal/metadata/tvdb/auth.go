@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/wyvernzora/kura/internal/metadata"
 )
 
 type loginRequest struct {
@@ -36,7 +38,7 @@ func (c *client) token(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if out.Data.Token == "" {
-		return "", fmt.Errorf("%w: empty token", ErrUnauthorized)
+		return "", fmt.Errorf("%w: empty token", metadata.ErrUnauthorized)
 	}
 
 	c.bearerToken = out.Data.Token

@@ -24,6 +24,7 @@ type searchRecord struct {
 	Genres          searchGenres       `json:"genres"`
 	Type            string             `json:"type"`
 	Status          string             `json:"status"`
+	Score           float64            `json:"score"`
 	Year            tvdbString         `json:"year"`
 	FirstAired      string             `json:"first_air_time"`
 	PrimaryLanguage string             `json:"primary_language"`
@@ -52,18 +53,20 @@ func (p *Provider) normalizeSearchResult(record searchRecord) metadata.SearchRes
 	id := firstNonEmpty(record.TVDBID.String(), trimObjectID(record.ObjectID), trimObjectID(record.ID.String()), record.ID.String())
 
 	return metadata.SearchResult{
-		SeriesSummary: p.normalizeSeriesSummary(
-			providerRef(id),
-			record.Name,
-			record.PrimaryLanguage,
-			record.Country,
-			record.FirstAired,
-			normalizeStatus(record.Status),
-			parseInt(record.Year.String()),
-			record.Genres.Values,
-			normalizeRemoteRefs(record.RemoteIDs),
-			searchTitleCandidates(record),
-		),
+		SeriesSummary: p.normalizeSeriesSummary(seriesSummaryInput{
+			ref:              providerRef(id),
+			canonicalTitle:   record.Name,
+			originalLanguage: record.PrimaryLanguage,
+			originalCountry:  record.Country,
+			firstAired:       record.FirstAired,
+			status:           normalizeStatus(record.Status),
+			year:             parseInt(record.Year.String()),
+			genres:           record.Genres.Values,
+			linkedRefs:       normalizeRemoteRefs(record.RemoteIDs),
+			titles:           searchTitleCandidates(record),
+		}),
+		Score:       record.Score,
+		MatchSource: "query",
 	}
 }
 

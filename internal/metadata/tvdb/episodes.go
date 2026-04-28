@@ -12,8 +12,7 @@ import (
 
 type seriesEpisodesResponse struct {
 	Data struct {
-		Series   seriesBaseRecord `json:"series"`
-		Episodes []episodeRecord  `json:"episodes"`
+		Episodes []episodeRecord `json:"episodes"`
 	} `json:"data"`
 	Status string `json:"status"`
 	Links  links  `json:"links"`
@@ -60,27 +59,24 @@ func (c *client) seriesEpisodes(ctx context.Context, id string) ([]episodeRecord
 			break
 		}
 		if page == maxEpisodePages-1 {
-			return nil, fmt.Errorf("%w: episode pagination exceeded %d pages", ErrUnavailable, maxEpisodePages)
+			return nil, fmt.Errorf("%w: episode pagination exceeded %d pages", metadata.ErrUnavailable, maxEpisodePages)
 		}
 	}
 
 	return episodes, nil
 }
 
-func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) ([]metadata.Season, []metadata.Episode) {
+func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metadata.Season {
 	bySeason := map[int][]metadata.Episode{}
 	for _, episode := range episodes {
 		number := episode.SeasonNumber
 		bySeason[number] = append(bySeason[number], normalizeEpisodeRecord(episode, number))
 	}
 
-	specials := bySeason[0]
-	delete(bySeason, 0)
-
 	out := make([]metadata.Season, 0, len(bySeason))
 	seen := map[int]bool{}
 	for _, season := range seasons {
-		if season.Number <= 0 {
+		if season.Number < 0 {
 			continue
 		}
 		if seen[season.Number] {
@@ -123,11 +119,8 @@ func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) ([]metad
 			return out[i].Episodes[j].EpisodeNumber < out[i].Episodes[k].EpisodeNumber
 		})
 	}
-	sort.Slice(specials, func(i, j int) bool {
-		return specials[i].EpisodeNumber < specials[j].EpisodeNumber
-	})
 
-	return out, specials
+	return out
 }
 
 func normalizeEmbeddedEpisodes(episodes []episodeRecord, seasonNumber int) []metadata.Episode {

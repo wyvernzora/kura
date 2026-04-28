@@ -1430,8 +1430,11 @@ func testProviderSeries() metadata.Series {
 				{SeasonNumber: 1, EpisodeNumber: 2},
 			},
 		}},
-		Specials: []metadata.Episode{
-			{SeasonNumber: 0, EpisodeNumber: 1},
+		Specials: &metadata.Season{
+			Number: 0,
+			Episodes: []metadata.Episode{
+				{SeasonNumber: 0, EpisodeNumber: 1},
+			},
 		},
 	}
 }
