@@ -9,10 +9,10 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
-	"github.com/wyvernzora/kura/internal/library"
+	"github.com/wyvernzora/kura/internal/ops"
 )
 
-func WriteSeriesSyncResult(w io.Writer, result library.SeriesSyncResult) error {
+func WriteSeriesSyncResult(w io.Writer, result ops.SeriesSyncResult) error {
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"STATUS", "SEASON", "EPISODE", "SOURCE", "RESOLUTION", "FILE"})
 	tw.SetStyle(borderlessTableStyle())
@@ -64,7 +64,7 @@ func WriteSeriesSyncResult(w io.Writer, result library.SeriesSyncResult) error {
 	return writeStyledTable(w, skippedTable, nil)
 }
 
-func WriteReconcilePlan(w io.Writer, plan library.ReconcilePlan) error {
+func WriteReconcilePlan(w io.Writer, plan ops.Plan) error {
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"KIND", "FROM", "TO"})
 	tw.SetStyle(borderlessTableStyle())

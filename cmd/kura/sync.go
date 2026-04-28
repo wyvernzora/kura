@@ -6,8 +6,12 @@ import (
 	"errors"
 	"os"
 
-	"github.com/wyvernzora/kura/internal/library"
+	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/ops"
+	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/resolve"
+	"github.com/wyvernzora/kura/internal/store"
 	"github.com/wyvernzora/kura/internal/terminalui"
 )
 
@@ -23,18 +27,18 @@ type seriesSyncCmd struct {
 }
 
 func (cmd *seriesSyncCmd) Run(rt runContext) error {
-	lib := library.New()
-	root, err := library.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
+	repo := store.NewRepo()
+	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
 	}
-	seriesDir, err := resolveSeriesSelector(root, cmd.Series)
+	seriesDir, err := root.SeriesDir(cmd.Series)
 	if err != nil {
 		return err
 	}
 
 	var providerSeries *metadata.Series
-	if _, err := os.Stat(library.SeriesPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(store.SeriesPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
 		resolved, _, err := cmd.resolveProviderSeries(rt)
 		if err != nil {
 			return err
@@ -44,11 +48,12 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		return err
 	}
 
-	result, err := lib.SyncSeries(
-		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+	result, err := ops.SyncSeries(
+		progress.With(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+		repo,
 		root,
 		cmd.Series,
-		library.SeriesSyncOptions{
+		ops.SeriesSyncOptions{
 			ProviderSeries:   providerSeries,
 			ProviderResolver: cmd.providerSeriesResolver(rt),
 			Inspector:        mediaInspector(rt),
@@ -82,13 +87,13 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		}
 	}
 	progress := terminalui.NewProgress(rt.Stderr)
-	progress.Start("Writing series metadata: %s", library.SeriesPath(seriesDir.Path()))
+	progress.Start("Writing series metadata: %s", store.SeriesPath(seriesDir.Path()))
 	defer progress.Stop()
-	if err := lib.SaveSeries(result.UpdatedSeries); err != nil {
+	if err := repo.SaveSeries(result.UpdatedSeries); err != nil {
 		progress.Fail("Failed writing series metadata")
 		return err
 	}
-	if err := lib.SaveTrash(result.UpdatedTrash); err != nil {
+	if err := repo.SaveTrash(result.UpdatedTrash); err != nil {
 		progress.Fail("Failed writing trash metadata")
 		return err
 	}
@@ -101,12 +106,12 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 	if err != nil {
 		return metadata.Series{}, false, err
 	}
-	resolved, selected, err := library.ResolveProviderSeries(rt.Context, metadataSource, cmd.Series, library.ResolveSeriesOptions{
+	resolved, selected, err := resolve.ResolveProviderSeries(rt.Context, metadataSource, cmd.Series, resolve.ResolveSeriesOptions{
 		ProviderRef: cmd.ProviderRef,
 		SearchLimit: 5,
 	})
 	if err != nil {
-		selectionRequired, ok := errors.AsType[library.SeriesSelectionRequiredError](err)
+		selectionRequired, ok := errors.AsType[resolve.SeriesSelectionRequiredError](err)
 		if !ok || !isInteractiveRun(rt) {
 			return metadata.Series{}, false, err
 		}
@@ -119,7 +124,7 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 		if !ok {
 			return metadata.Series{}, false, err
 		}
-		resolved, err = library.GetProviderSeriesByRef(rt.Context, metadataSource, match.ProviderRef)
+		resolved, err = resolve.GetProviderSeriesByRef(rt.Context, metadataSource, match.ProviderRef)
 		if err != nil {
 			return metadata.Series{}, false, err
 		}
@@ -128,8 +133,8 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 	return resolved, selected, nil
 }
 
-func (cmd *seriesSyncCmd) providerSeriesResolver(rt runContext) library.ProviderSeriesResolver {
-	return func(ctx context.Context, local library.Series) (metadata.Series, error) {
+func (cmd *seriesSyncCmd) providerSeriesResolver(rt runContext) ops.ProviderSeriesResolver {
+	return func(ctx context.Context, local store.Series) (metadata.Series, error) {
 		metadataSource, err := buildMetadataSource(rt, cmd.Provider, cmd.TVDBBaseURL)
 		if err != nil {
 			return metadata.Series{}, err

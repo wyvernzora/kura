@@ -10,9 +10,9 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/store"
 )
 
 type cli struct {
@@ -106,7 +106,7 @@ func parseRemoteSeriesRef(seriesRef string) (string, string, error) {
 	return ref.Source(), ref.ID(), nil
 }
 
-func providerRefForSource(series library.Series, source string) (domain.RemoteSeriesRef, error) {
+func providerRefForSource(series store.Series, source string) (domain.RemoteSeriesRef, error) {
 	for _, raw := range series.ProviderRefs {
 		ref, err := domain.ParseRemoteSeriesRef(raw)
 		if err != nil {

@@ -6,8 +6,12 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/library"
+	"github.com/wyvernzora/kura/internal/domain"
+	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/ops"
+	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/store"
 	"github.com/wyvernzora/kura/internal/terminalui"
 )
 
@@ -33,32 +37,33 @@ func (cmd *stageCmd) Run(rt runContext) error {
 		return errors.New("--season is required unless --special is set")
 	}
 
-	season := library.SpecialsSeason()
+	season := domain.SpecialsSeason()
 	var err error
 	if !cmd.Special {
-		season, err = library.RegularSeason(cmd.Season)
+		season, err = domain.RegularSeason(cmd.Season)
 		if err != nil {
 			return err
 		}
 	}
-	episode, err := library.NewEpisodeNumber(cmd.Number)
+	episode, err := domain.NewEpisodeNumber(cmd.Number)
 	if err != nil {
 		return errors.New("--number must be greater than zero")
 	}
-	root, err := library.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
+	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
 	}
 
-	source := library.MediaSource("")
+	source := domain.MediaSource("")
 	if strings.TrimSpace(cmd.Source) != "" {
-		source = library.ParseMediaSource(cmd.Source)
+		source = domain.ParseMediaSource(cmd.Source)
 	}
-	result, err := library.New().StageEpisodeFile(
-		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+	result, err := ops.StageEpisodeFile(
+		progress.With(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+		store.NewRepo(),
 		root,
 		cmd.Series,
-		library.StageEpisodeFileOptions{
+		ops.StageEpisodeFileOptions{
 			Season:           season,
 			Episode:          episode,
 			Source:           source,
@@ -82,8 +87,8 @@ func (cmd *stageCmd) Run(rt runContext) error {
 	return encoder.Encode(result)
 }
 
-func episodeProviderSeriesResolver(rt runContext, provider string, tvdbBaseURL string) library.ProviderSeriesResolver {
-	return func(ctx context.Context, local library.Series) (metadata.Series, error) {
+func episodeProviderSeriesResolver(rt runContext, provider string, tvdbBaseURL string) ops.ProviderSeriesResolver {
+	return func(ctx context.Context, local store.Series) (metadata.Series, error) {
 		metadataSource, err := buildMetadataSource(rt, provider, tvdbBaseURL)
 		if err != nil {
 			return metadata.Series{}, err

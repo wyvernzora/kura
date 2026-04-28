@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/library"
+	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/ops"
+	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/store"
 	"github.com/wyvernzora/kura/internal/terminalui"
 )
 
@@ -17,13 +20,13 @@ type seriesReconcileCmd struct {
 }
 
 func (cmd *seriesReconcileCmd) Run(rt runContext) error {
-	lib := library.New()
-	root, err := library.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
+	repo := store.NewRepo()
+	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
 	}
-	seriesDir, dirErr := resolveSeriesSelector(root, cmd.Series)
-	plan, err := lib.PlanReconcile(rt.Context, root, cmd.Series)
+	seriesDir, dirErr := root.SeriesDir(cmd.Series)
+	plan, err := ops.PlanSeries(rt.Context, root, cmd.Series, repo)
 	if err != nil {
 		if dirErr == nil {
 			warnDuplicateSeries(rt, seriesDir.Path(), err)
@@ -53,15 +56,16 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 			return nil
 		}
 	}
-	return lib.ApplyReconcile(
-		library.WithProgress(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
+	return ops.ApplyPlan(
+		progress.With(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
 		plan,
+		repo,
 	)
 }
 
 func warnDuplicateSeries(rt runContext, seriesDir string, err error) {
-	if !errors.Is(err, library.DuplicateEpisodeNumberError{}) {
+	if !errors.Is(err, store.DuplicateEpisodeNumberError{}) {
 		return
 	}
-	fmt.Fprintf(rt.Stderr, "warning: %s contains duplicate episode entries; manually edit series.json before continuing\n", library.SeriesPath(seriesDir))
+	fmt.Fprintf(rt.Stderr, "warning: %s contains duplicate episode entries; manually edit series.json before continuing\n", store.SeriesPath(seriesDir))
 }
