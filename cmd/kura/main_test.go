@@ -23,6 +23,7 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 		"meta",
 		"search",
 		"--tvdb-base-url", server.URL,
+		"--limit", "1",
 		"honzuki",
 	}, testRunContext(&stdout, &stderr))
 	if err != nil {
@@ -434,6 +435,15 @@ func newCLITestServer(t *testing.T) *httptest.Server {
 						"jpn": "本好きの下剋上",
 						"eng": "Ascendance of a Bookworm",
 					},
+				},
+				{
+					"id":             999999,
+					"tvdb_id":        "999999",
+					"name":           "Bookworm Extra",
+					"type":           "series",
+					"year":           2020,
+					"first_air_time": "2020-01-01",
+					"genres":         nil,
 				},
 			},
 		})

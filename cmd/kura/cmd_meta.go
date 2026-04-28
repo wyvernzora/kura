@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/wyvernzora/kura/internal/resolve"
 )
@@ -13,6 +14,7 @@ type metaCmd struct {
 
 type metaSearchCmd struct {
 	Provider    string   `help:"Metadata provider to use." enum:"tvdb" default:"tvdb"`
+	Limit       int      `help:"Maximum number of resolver results to print. Zero prints all results."`
 	TVDBBaseURL string   `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
 	Terms       []string `arg:"" required:"" help:"Resolver terms. Use plain text or provider refs such as tvdb:370070."`
 }
@@ -23,6 +25,10 @@ type metaGetCmd struct {
 }
 
 func (cmd *metaSearchCmd) Run(rt runContext) error {
+	if cmd.Limit < 0 {
+		return fmt.Errorf("--limit must be greater than or equal to zero")
+	}
+
 	metadataSource, err := buildMetadataSource(rt, cmd.Provider, cmd.TVDBBaseURL)
 	if err != nil {
 		return err
@@ -35,6 +41,9 @@ func (cmd *metaSearchCmd) Run(rt runContext) error {
 	results, err := resolver.Resolve(rt.Context, resolve.ParseQuery(cmd.Terms))
 	if err != nil {
 		return err
+	}
+	if cmd.Limit > 0 && len(results.Results) > cmd.Limit {
+		results.Results = results.Results[:cmd.Limit]
 	}
 
 	encoder := json.NewEncoder(rt.Stdout)
