@@ -11,22 +11,11 @@ import (
 	"github.com/wyvernzora/kura/internal/fsroot"
 )
 
-// Repo is the value-typed repository entrypoint for per-series persistence.
-//
-// It owns every read and write of .kura/{series,staged,trash}.json. All
-// callers that touch tracked series state go through Repo so the schema and
-// atomic-write disciplines stay in one place.
-type Repo struct{}
-
-func NewRepo() Repo {
-	return Repo{}
-}
-
 // NewSeries creates an unsaved series model bound to dirname.
 //
 // Metadata-derived fields are intentionally left for the caller to populate
 // before Save. SaveSeries performs full schema validation.
-func (Repo) NewSeries(dirname string) (*Series, error) {
+func NewSeries(dirname string) (*Series, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -38,7 +27,7 @@ func (Repo) NewSeries(dirname string) (*Series, error) {
 	}, nil
 }
 
-func (Repo) LoadSeries(dirname string) (*Series, error) {
+func LoadSeries(dirname string) (*Series, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -59,7 +48,7 @@ func (Repo) LoadSeries(dirname string) (*Series, error) {
 	return &series, nil
 }
 
-func (Repo) SaveSeries(series Series) error {
+func SaveSeries(series Series) error {
 	if series.dirname == "" {
 		return errors.New("library: series is not bound to a directory")
 	}
@@ -75,7 +64,7 @@ func (Repo) SaveSeries(series Series) error {
 	})
 }
 
-func (Repo) NewStaged(dirname string) (*Staged, error) {
+func NewStaged(dirname string) (*Staged, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -86,7 +75,7 @@ func (Repo) NewStaged(dirname string) (*Staged, error) {
 	}, nil
 }
 
-func (repo Repo) LoadStaged(dirname string) (*Staged, error) {
+func LoadStaged(dirname string) (*Staged, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -94,7 +83,7 @@ func (repo Repo) LoadStaged(dirname string) (*Staged, error) {
 	path := StagedPath(dirname)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return repo.NewStaged(dirname)
+		return NewStaged(dirname)
 	}
 	if err != nil {
 		return nil, err
@@ -110,7 +99,7 @@ func (repo Repo) LoadStaged(dirname string) (*Staged, error) {
 	return &staged, nil
 }
 
-func (Repo) SaveStaged(staged Staged) error {
+func SaveStaged(staged Staged) error {
 	if staged.dirname == "" {
 		return errors.New("library: staged is not bound to a directory")
 	}
@@ -129,7 +118,7 @@ func (Repo) SaveStaged(staged Staged) error {
 	})
 }
 
-func (Repo) NewTrash(dirname string) (*Trash, error) {
+func NewTrash(dirname string) (*Trash, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -140,7 +129,7 @@ func (Repo) NewTrash(dirname string) (*Trash, error) {
 	}, nil
 }
 
-func (repo Repo) LoadTrash(dirname string) (*Trash, error) {
+func LoadTrash(dirname string) (*Trash, error) {
 	dirname, err := cleanDirname(dirname)
 	if err != nil {
 		return nil, err
@@ -148,7 +137,7 @@ func (repo Repo) LoadTrash(dirname string) (*Trash, error) {
 	path := TrashPath(dirname)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return repo.NewTrash(dirname)
+		return NewTrash(dirname)
 	}
 	if err != nil {
 		return nil, err
@@ -164,7 +153,7 @@ func (repo Repo) LoadTrash(dirname string) (*Trash, error) {
 	return &trash, nil
 }
 
-func (Repo) SaveTrash(trash Trash) error {
+func SaveTrash(trash Trash) error {
 	if trash.dirname == "" {
 		return errors.New("library: trash is not bound to a directory")
 	}

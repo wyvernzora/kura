@@ -8,7 +8,6 @@ import (
 
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/store"
 )
 
 func TestResolverJourneys(t *testing.T) {
@@ -90,9 +89,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseLibraryRoot: %v", err)
 		}
-		repo := store.NewRepo()
 		source := &strategyFakeSource{series: map[string]metadata.Series{"370070": testMetadataSeries("tvdb:370070")}}
-		resolver := New(NewDirnameStrategy(root, &repo, source), NewProviderIDStrategy(source), NewTextSearchStrategy(source))
+		resolver := New(NewDirnameStrategy(root, source), NewProviderIDStrategy(source), NewTextSearchStrategy(source))
 
 		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
 		if err != nil {
@@ -131,9 +129,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseLibraryRoot: %v", err)
 		}
-		repo := store.NewRepo()
 		source := &strategyFakeSource{seriesErr: metadata.ErrNotFound}
-		resolver := New(NewDirnameStrategy(root, &repo, source))
+		resolver := New(NewDirnameStrategy(root, source))
 		_, err = resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
 		if !errors.Is(err, ErrStaleProviderRef) {
 			t.Fatalf("error = %v, want ErrStaleProviderRef", err)
@@ -147,9 +144,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ParseLibraryRoot: %v", err)
 		}
-		repo := store.NewRepo()
 		source := &strategyFakeSource{}
-		resolver := New(NewDirnameStrategy(root, &repo, source))
+		resolver := New(NewDirnameStrategy(root, source))
 		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)

@@ -12,9 +12,8 @@ import (
 
 func TestSaveLoadSeries(t *testing.T) {
 	seriesDir := t.TempDir()
-	repo := NewRepo()
 
-	series, err := repo.NewSeries(seriesDir)
+	series, err := NewSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -22,11 +21,11 @@ func TestSaveLoadSeries(t *testing.T) {
 	series.PreferredProvider = "tvdb"
 	series.PreferredTitle = "本好きの下剋上"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
-	if err := repo.SaveSeries(*series); err != nil {
+	if err := SaveSeries(*series); err != nil {
 		t.Fatalf("SaveSeries: %v", err)
 	}
 
-	got, err := repo.LoadSeries(seriesDir)
+	got, err := LoadSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
@@ -62,7 +61,7 @@ func TestLoadSeriesRejectsFutureSchema(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if _, err := NewRepo().LoadSeries(seriesDir); err == nil {
+	if _, err := LoadSeries(seriesDir); err == nil {
 		t.Fatal("LoadSeries returned nil error, want future schema error")
 	}
 }
@@ -76,7 +75,7 @@ func TestLoadSeriesRejectsSchemaInvalidDocument(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	if _, err := NewRepo().LoadSeries(seriesDir); err == nil {
+	if _, err := LoadSeries(seriesDir); err == nil {
 		t.Fatal("LoadSeries returned nil error, want schema validation error")
 	}
 }
@@ -91,7 +90,7 @@ func TestSaveSeriesRejectsUnboundSeries(t *testing.T) {
 		CanonicalTitle:    "Ascendance of a Bookworm",
 	}
 
-	if err := NewRepo().SaveSeries(series); err == nil {
+	if err := SaveSeries(series); err == nil {
 		t.Fatal("SaveSeries returned nil error, want unbound series error")
 	}
 }
@@ -138,7 +137,7 @@ func TestLoadSeriesRejectsDuplicateEpisodeNumber(t *testing.T) {
 		t.Fatalf("WriteFile series.json: %v", err)
 	}
 
-	if _, err := NewRepo().LoadSeries(seriesDir); err == nil {
+	if _, err := LoadSeries(seriesDir); err == nil {
 		t.Fatal("LoadSeries returned nil error, want duplicate episode rejection")
 	}
 }
@@ -184,7 +183,7 @@ func TestSeriesJSONUsesPersistentFieldNames(t *testing.T) {
 }
 
 func newTestSeries(seriesDir string) (*Series, error) {
-	series, err := NewRepo().NewSeries(seriesDir)
+	series, err := NewSeries(seriesDir)
 	if err != nil {
 		return nil, err
 	}

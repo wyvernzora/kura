@@ -58,7 +58,7 @@ type SeriesSyncEntry struct {
 	Companions []string `json:"companions"`
 }
 
-func SyncSeries(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
+func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
 	seriesDir, err := root.SeriesDir(dirname)
 	if err != nil {
 		return SeriesSyncResult{}, err
@@ -67,7 +67,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, d
 	var initialized bool
 	var series *store.Series
 	if _, err := os.Stat(store.SeriesPath(seriesDir.Path())); err == nil {
-		series, err = repo.LoadSeries(seriesDir.Path())
+		series, err = store.LoadSeries(seriesDir.Path())
 		if err != nil {
 			return SeriesSyncResult{}, err
 		}
@@ -75,7 +75,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, d
 		if opts.ProviderSeries == nil {
 			return SeriesSyncResult{}, fmt.Errorf("library: provider series is required to initialize %q", dirname)
 		}
-		series, err = newSeriesFromProvider(repo, seriesDir.Path(), *opts.ProviderSeries)
+		series, err = newSeriesFromProvider(seriesDir.Path(), *opts.ProviderSeries)
 		if err != nil {
 			return SeriesSyncResult{}, err
 		}
@@ -93,7 +93,7 @@ func SyncSeries(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, d
 	}
 
 	updated := *series
-	trash, err := repo.LoadTrash(seriesDir.Path())
+	trash, err := store.LoadTrash(seriesDir.Path())
 	if err != nil {
 		return SeriesSyncResult{}, err
 	}
@@ -182,11 +182,11 @@ func SyncSeries(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, d
 	}
 	if opts.Apply && !opts.DryRun && result.HasChanges() {
 		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", store.SeriesPath(seriesDir.Path())), 0)
-		if err := repo.SaveSeries(updated); err != nil {
+		if err := store.SaveSeries(updated); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing series metadata", 0, 0)
 			return SeriesSyncResult{}, err
 		}
-		if err := repo.SaveTrash(updatedTrash); err != nil {
+		if err := store.SaveTrash(updatedTrash); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing trash metadata", 0, 0)
 			return SeriesSyncResult{}, err
 		}
@@ -195,8 +195,8 @@ func SyncSeries(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, d
 	return result, nil
 }
 
-func newSeriesFromProvider(repo store.Repo, seriesDir string, providerSeries metadata.Series) (*store.Series, error) {
-	series, err := repo.NewSeries(seriesDir)
+func newSeriesFromProvider(seriesDir string, providerSeries metadata.Series) (*store.Series, error) {
+	series, err := store.NewSeries(seriesDir)
 	if err != nil {
 		return nil, err
 	}

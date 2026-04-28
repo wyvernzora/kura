@@ -142,15 +142,13 @@ func newTestDirnameStrategy(t *testing.T, rootDir string, source metadata.Source
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	repo := store.NewRepo()
-	return NewDirnameStrategy(root, &repo, source)
+	return NewDirnameStrategy(root, source)
 }
 
 func writeTrackedSeries(t *testing.T, seriesDir string, providerRefs []string, preferredProvider string) {
 	t.Helper()
 	mkdir(t, seriesDir)
-	repo := store.NewRepo()
-	series, err := repo.NewSeries(seriesDir)
+	series, err := store.NewSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -158,7 +156,7 @@ func writeTrackedSeries(t *testing.T, seriesDir string, providerRefs []string, p
 	series.PreferredProvider = preferredProvider
 	series.PreferredTitle = "Bookworm"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
-	if err := repo.SaveSeries(*series); err != nil {
+	if err := store.SaveSeries(*series); err != nil {
 		t.Fatalf("SaveSeries: %v", err)
 	}
 }

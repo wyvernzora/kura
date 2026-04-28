@@ -37,12 +37,12 @@ type Move struct {
 	To   string `json:"to"`
 }
 
-func PlanSeries(_ context.Context, root fsroot.LibraryRoot, dirname string, repo store.Repo) (Plan, error) {
+func PlanSeries(_ context.Context, root fsroot.LibraryRoot, dirname string) (Plan, error) {
 	seriesDir, err := root.SeriesDir(dirname)
 	if err != nil {
 		return Plan{}, err
 	}
-	loaded, err := repo.LoadSeries(seriesDir.Path())
+	loaded, err := store.LoadSeries(seriesDir.Path())
 	if err != nil {
 		return Plan{}, err
 	}
@@ -52,12 +52,12 @@ func PlanSeries(_ context.Context, root fsroot.LibraryRoot, dirname string, repo
 	}
 
 	updated := *loaded
-	staged, err := repo.LoadStaged(seriesDir.Path())
+	staged, err := store.LoadStaged(seriesDir.Path())
 	if err != nil {
 		return Plan{}, err
 	}
 	updatedStaged := *staged
-	trash, err := repo.LoadTrash(seriesDir.Path())
+	trash, err := store.LoadTrash(seriesDir.Path())
 	if err != nil {
 		return Plan{}, err
 	}
@@ -87,7 +87,7 @@ func PlanSeries(_ context.Context, root fsroot.LibraryRoot, dirname string, repo
 	}, nil
 }
 
-func ApplyPlan(ctx context.Context, plan Plan, repo store.Repo) error {
+func ApplyPlan(ctx context.Context, plan Plan) error {
 	if !plan.HasChanges() {
 		return nil
 	}
@@ -108,15 +108,15 @@ func ApplyPlan(ctx context.Context, plan Plan, repo store.Repo) error {
 		}
 	}
 	progress.Update(ctx, "series-reconcile", fmt.Sprintf("Writing series metadata: %s", store.SeriesPath(plan.SeriesDir)), len(plan.FileMoves), len(plan.FileMoves))
-	if err := repo.SaveSeries(plan.UpdatedSeries); err != nil {
+	if err := store.SaveSeries(plan.UpdatedSeries); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing series metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}
-	if err := repo.SaveTrash(plan.UpdatedTrash); err != nil {
+	if err := store.SaveTrash(plan.UpdatedTrash); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing trash metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}
-	if err := repo.SaveStaged(plan.UpdatedStaged); err != nil {
+	if err := store.SaveStaged(plan.UpdatedStaged); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing staged metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
 	}

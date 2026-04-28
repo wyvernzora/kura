@@ -20,13 +20,12 @@ type seriesReconcileCmd struct {
 }
 
 func (cmd *seriesReconcileCmd) Run(rt runContext) error {
-	repo := newRepo()
 	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
 	}
 	seriesDir, dirErr := root.SeriesDir(cmd.Series)
-	plan, err := ops.PlanSeries(rt.Context, root, cmd.Series, repo)
+	plan, err := ops.PlanSeries(rt.Context, root, cmd.Series)
 	if err != nil {
 		if dirErr == nil {
 			warnDuplicateSeries(rt, seriesDir.Path(), err)
@@ -59,7 +58,6 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 	return ops.ApplyPlan(
 		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
 		plan,
-		repo,
 	)
 }
 

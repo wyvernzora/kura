@@ -57,7 +57,6 @@ func (cmd *stageCmd) Run(rt runContext) error {
 	}
 	result, err := ops.StageEpisodeFile(
 		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
-		newRepo(),
 		root,
 		cmd.Series,
 		ops.StageEpisodeFileOptions{

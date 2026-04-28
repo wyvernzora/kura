@@ -14,12 +14,11 @@ import (
 
 type dirnameStrategy struct {
 	root   fsroot.LibraryRoot
-	repo   *store.Repo
 	source metadata.Source
 }
 
-func NewDirnameStrategy(root fsroot.LibraryRoot, repo *store.Repo, source metadata.Source) ResolveStrategy {
-	return &dirnameStrategy{root: root, repo: repo, source: source}
+func NewDirnameStrategy(root fsroot.LibraryRoot, source metadata.Source) ResolveStrategy {
+	return &dirnameStrategy{root: root, source: source}
 }
 
 func (s *dirnameStrategy) Name() string {
@@ -43,7 +42,7 @@ func (s *dirnameStrategy) Resolve(ctx context.Context, t Term) ([]TermHit, error
 		return nil, err
 	}
 
-	series, err := s.repo.LoadSeries(dir.Path())
+	series, err := store.LoadSeries(dir.Path())
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil

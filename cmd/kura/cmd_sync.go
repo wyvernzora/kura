@@ -26,7 +26,6 @@ type seriesSyncCmd struct {
 }
 
 func (cmd *seriesSyncCmd) Run(rt runContext) error {
-	repo := newRepo()
 	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
@@ -49,7 +48,6 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 
 	result, err := ops.SyncSeries(
 		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
-		repo,
 		root,
 		cmd.Series,
 		ops.SeriesSyncOptions{
@@ -88,11 +86,11 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 	progress := ui.NewProgress(rt.Stderr)
 	progress.Start("Writing series metadata: %s", store.SeriesPath(seriesDir.Path()))
 	defer progress.Stop()
-	if err := repo.SaveSeries(result.UpdatedSeries); err != nil {
+	if err := store.SaveSeries(result.UpdatedSeries); err != nil {
 		progress.Fail("Failed writing series metadata")
 		return err
 	}
-	if err := repo.SaveTrash(result.UpdatedTrash); err != nil {
+	if err := store.SaveTrash(result.UpdatedTrash); err != nil {
 		progress.Fail("Failed writing trash metadata")
 		return err
 	}

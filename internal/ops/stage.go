@@ -45,12 +45,12 @@ func (err StagedEpisodeAlreadyExistsError) Error() string {
 	return fmt.Sprintf("staged episode S%02dE%02d already exists; pass --replace to replace it", err.Season, err.Episode)
 }
 
-func StageEpisodeFile(ctx context.Context, repo store.Repo, root fsroot.LibraryRoot, dirname string, opts StageEpisodeFileOptions) (StageEpisodeFileResult, error) {
+func StageEpisodeFile(ctx context.Context, root fsroot.LibraryRoot, dirname string, opts StageEpisodeFileOptions) (StageEpisodeFileResult, error) {
 	seriesDir, err := resolveSeriesForWorkflow(root, dirname)
 	if err != nil {
 		return StageEpisodeFileResult{}, err
 	}
-	series, err := repo.LoadSeries(seriesDir.Path())
+	series, err := store.LoadSeries(seriesDir.Path())
 	if err != nil {
 		return StageEpisodeFileResult{}, err
 	}
@@ -85,7 +85,7 @@ func StageEpisodeFile(ctx context.Context, repo store.Repo, root fsroot.LibraryR
 	if activeExists && !opts.Replace {
 		return StageEpisodeFileResult{}, EpisodeAlreadyExistsError{Season: opts.Season.Int(), Episode: opts.Episode.Int()}
 	}
-	staged, err := repo.LoadStaged(seriesDir.Path())
+	staged, err := store.LoadStaged(seriesDir.Path())
 	if err != nil {
 		return StageEpisodeFileResult{}, err
 	}
@@ -120,7 +120,7 @@ func StageEpisodeFile(ctx context.Context, repo store.Repo, root fsroot.LibraryR
 
 	if opts.Apply {
 		progress.Update(ctx, "episode-stage", fmt.Sprintf("Writing staged metadata: %s", store.StagedPath(seriesDir.Path())), 1, 1)
-		if err := repo.SaveStaged(updated); err != nil {
+		if err := store.SaveStaged(updated); err != nil {
 			progress.Failure(ctx, "episode-stage", "Failed writing staged metadata", 1, 1)
 			return StageEpisodeFileResult{}, err
 		}

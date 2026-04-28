@@ -15,10 +15,6 @@ import (
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
-func newRepo() store.Repo {
-	return store.NewRepo()
-}
-
 func buildMetadataSource(rt runContext, providerKey string, tvdbBaseURL string) (metadata.Source, error) {
 	return config.BuildMetadataSource(config.MetadataSourceOptions{
 		Key:         providerKey,

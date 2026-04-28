@@ -34,9 +34,8 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	repo := store.NewRepo()
 	providerSeries := testProviderSeries()
-	result, err := SyncSeries(context.Background(), repo, root, "Bookworm", SeriesSyncOptions{
+	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
@@ -54,7 +53,7 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 		t.Fatalf("Skipped = %#v, want bonus skip", result.Skipped)
 	}
 
-	loaded, err := repo.LoadSeries(seriesDir)
+	loaded, err := store.LoadSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
@@ -78,9 +77,8 @@ func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	repo := store.NewRepo()
 	providerSeries := testProviderSeries()
-	result, err := SyncSeries(context.Background(), repo, root, "Bookworm", SeriesSyncOptions{
+	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Apply:          true,
 	})
@@ -93,7 +91,7 @@ func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
 	if len(result.Synced) != 0 || len(result.Skipped) != 0 {
 		t.Fatalf("Synced/Skipped = %#v/%#v, want empty", result.Synced, result.Skipped)
 	}
-	loaded, err := repo.LoadSeries(seriesDir)
+	loaded, err := store.LoadSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
@@ -115,11 +113,10 @@ func TestSyncSeriesDoesNotPersistFilesystemTitle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	repo := store.NewRepo()
 	providerSeries := testProviderSeries()
 	providerSeries.PreferredTitle = "A Much Longer Provider Title"
 	providerSeries.CanonicalTitle = "Canonical Provider Title"
-	if _, err := SyncSeries(context.Background(), repo, root, "Short Title", SeriesSyncOptions{
+	if _, err := SyncSeries(context.Background(), root, "Short Title", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
@@ -127,7 +124,7 @@ func TestSyncSeriesDoesNotPersistFilesystemTitle(t *testing.T) {
 		t.Fatalf("SyncSeries: %v", err)
 	}
 
-	loaded, err := repo.LoadSeries(seriesDir)
+	loaded, err := store.LoadSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
@@ -191,7 +188,7 @@ func TestSyncSeriesKeepsUnchangedTrackedEpisodeWithoutInspector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	result, err := SyncSeries(context.Background(), store.NewRepo(), root, "Bookworm", SeriesSyncOptions{})
+	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
 	}
@@ -254,9 +251,8 @@ func TestSyncSeriesRefreshesChangedCompanionWithoutReplace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	repo := store.NewRepo()
 	providerSeries := testProviderSeries()
-	result, err := SyncSeries(context.Background(), repo, root, "Bookworm", SeriesSyncOptions{
+	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
@@ -267,7 +263,7 @@ func TestSyncSeriesRefreshesChangedCompanionWithoutReplace(t *testing.T) {
 	if len(result.Synced) != 1 || result.Synced[0].Status != "updated" {
 		t.Fatalf("Synced = %#v, want updated entry", result.Synced)
 	}
-	loaded, err := repo.LoadSeries(seriesDir)
+	loaded, err := store.LoadSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
@@ -295,7 +291,7 @@ func TestSyncSeriesDryRunDoesNotApplyWhenApplyIsAlsoTrue(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	providerSeries := testProviderSeries()
-	result, err := SyncSeries(context.Background(), store.NewRepo(), root, "Bookworm", SeriesSyncOptions{
+	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
@@ -365,7 +361,7 @@ func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 
-	result, err := SyncSeries(context.Background(), store.NewRepo(), root, "Bookworm", SeriesSyncOptions{Apply: true})
+	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{Apply: true})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
 	}
@@ -395,7 +391,7 @@ func TestSyncSeriesRejectsEpisodeMissingFromProviderMetadata(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	providerSeries := testProviderSeries()
-	_, err = SyncSeries(context.Background(), store.NewRepo(), root, "Bookworm", SeriesSyncOptions{
+	_, err = SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Inspector:      fakeInspector,
 	})
@@ -419,7 +415,7 @@ func TestSyncSeriesRejectsDuplicateParsedEpisodes(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	providerSeries := testProviderSeries()
-	_, err = SyncSeries(context.Background(), store.NewRepo(), root, "Bookworm", SeriesSyncOptions{
+	_, err = SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Inspector:      fakeInspector,
 	})
@@ -434,12 +430,11 @@ func TestStageEpisodeFileRecordsAbsolutePathsInStaged(t *testing.T) {
 	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll series: %v", err)
 	}
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("testSeries: %v", err)
 	}
-	if err := repo.SaveSeries(*series); err != nil {
+	if err := store.SaveSeries(*series); err != nil {
 		t.Fatalf("SaveSeries: %v", err)
 	}
 	stageDir := t.TempDir()
@@ -455,7 +450,7 @@ func TestStageEpisodeFileRecordsAbsolutePathsInStaged(t *testing.T) {
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
 	providerSeries := testProviderSeries()
-	result, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	result, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		Companions:     []string{companionPath},
@@ -470,7 +465,7 @@ func TestStageEpisodeFileRecordsAbsolutePathsInStaged(t *testing.T) {
 	if result.Entry.Media.Path != mediaPath {
 		t.Fatalf("Media.Path = %q, want %q", result.Entry.Media.Path, mediaPath)
 	}
-	staged, err := repo.LoadStaged(seriesDir)
+	staged, err := store.LoadStaged(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadStaged: %v", err)
 	}
@@ -491,12 +486,11 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll series: %v", err)
 	}
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("testSeries: %v", err)
 	}
-	if err := repo.SaveSeries(*series); err != nil {
+	if err := store.SaveSeries(*series); err != nil {
 		t.Fatalf("SaveSeries: %v", err)
 	}
 	stageDir := t.TempDir()
@@ -512,7 +506,7 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
 	providerSeries := testProviderSeries()
-	if _, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		MediaPath:      firstPath,
@@ -522,7 +516,7 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("StageEpisodeFile first: %v", err)
 	}
-	if _, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		MediaPath:      secondPath,
@@ -532,7 +526,7 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 	}); err == nil {
 		t.Fatal("StageEpisodeFile second returned nil error, want staged episode exists error")
 	}
-	result, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	result, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		MediaPath:      secondPath,
@@ -547,7 +541,7 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 	if !result.Replaced {
 		t.Fatal("Replaced = false, want true")
 	}
-	staged, err := repo.LoadStaged(seriesDir)
+	staged, err := store.LoadStaged(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadStaged: %v", err)
 	}
@@ -603,8 +597,7 @@ func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
 	providerSeries := testProviderSeries()
-	repo := store.NewRepo()
-	if _, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		MediaPath:      mediaPath,
@@ -614,7 +607,7 @@ func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
 	}); err == nil {
 		t.Fatal("StageEpisodeFile returned nil error, want active episode exists error")
 	}
-	result, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	result, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		MediaPath:      mediaPath,
@@ -629,7 +622,7 @@ func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
 	if !result.Replaced {
 		t.Fatal("Replaced = false, want true")
 	}
-	staged, err := repo.LoadStaged(seriesDir)
+	staged, err := store.LoadStaged(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadStaged: %v", err)
 	}
@@ -644,12 +637,11 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll series: %v", err)
 	}
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("testSeries: %v", err)
 	}
-	if err := repo.SaveSeries(*series); err != nil {
+	if err := store.SaveSeries(*series); err != nil {
 		t.Fatalf("SaveSeries: %v", err)
 	}
 
@@ -665,7 +657,7 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
 	providerSeries := testProviderSeries()
-	if _, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		Source:         domain.MediaSourceWebRip,
@@ -678,14 +670,14 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 		t.Fatalf("StageEpisodeFile: %v", err)
 	}
 
-	plan, err := PlanSeries(context.Background(), root, "Bookworm", repo)
+	plan, err := PlanSeries(context.Background(), root, "Bookworm")
 	if err != nil {
 		t.Fatalf("PlanSeries: %v", err)
 	}
 	if len(plan.FileMoves) != 2 {
 		t.Fatalf("len(FileMoves) = %d, want media plus companion", len(plan.FileMoves))
 	}
-	if err := ApplyPlan(context.Background(), plan, repo); err != nil {
+	if err := ApplyPlan(context.Background(), plan); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
 	}
 
@@ -702,7 +694,7 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 	if _, err := os.Stat(store.StagedPath(seriesDir)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("Stat staged.json = %v, want not exist", err)
 	}
-	loaded, err := repo.LoadSeries(seriesDir)
+	loaded, err := store.LoadSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
@@ -763,8 +755,7 @@ func TestReconcileAppliesStagedReplacementAfterTrashingActiveEpisode(t *testing.
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
 	providerSeries := testProviderSeries()
-	repo := store.NewRepo()
-	if _, err := StageEpisodeFile(context.Background(), repo, root, "Bookworm", StageEpisodeFileOptions{
+	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		Source:         domain.MediaSourceWebRip,
@@ -776,18 +767,18 @@ func TestReconcileAppliesStagedReplacementAfterTrashingActiveEpisode(t *testing.
 	}); err != nil {
 		t.Fatalf("StageEpisodeFile replace: %v", err)
 	}
-	plan, err := PlanSeries(context.Background(), root, "Bookworm", repo)
+	plan, err := PlanSeries(context.Background(), root, "Bookworm")
 	if err != nil {
 		t.Fatalf("PlanSeries: %v", err)
 	}
 	if len(plan.FileMoves) != 2 {
 		t.Fatalf("len(FileMoves) = %d, want trash move plus staged media move", len(plan.FileMoves))
 	}
-	if err := ApplyPlan(context.Background(), plan, repo); err != nil {
+	if err := ApplyPlan(context.Background(), plan); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
 	}
 
-	trash, err := repo.LoadTrash(seriesDir)
+	trash, err := store.LoadTrash(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadTrash: %v", err)
 	}
@@ -855,8 +846,7 @@ func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	providerSeries := testProviderSeries()
-	repo := store.NewRepo()
-	result, err := SyncSeries(context.Background(), repo, root, "Bookworm", SeriesSyncOptions{
+	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
 		ProviderSeries: &providerSeries,
 		Inspector:      fakeInspector,
 		Replace:        true,
@@ -869,7 +859,7 @@ func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.
 		t.Fatalf("Synced = %#v, want replaced entry", result.Synced)
 	}
 
-	trash, err := repo.LoadTrash(seriesDir)
+	trash, err := store.LoadTrash(seriesDir)
 	if err != nil {
 		t.Fatalf("LoadTrash: %v", err)
 	}
@@ -881,14 +871,14 @@ func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.
 		t.Fatalf("Trash ID = %q, want ULID: %v", trashID, err)
 	}
 
-	plan, err := PlanSeries(context.Background(), root, "Bookworm", repo)
+	plan, err := PlanSeries(context.Background(), root, "Bookworm")
 	if err != nil {
 		t.Fatalf("PlanSeries: %v", err)
 	}
 	if len(plan.FileMoves) != 3 {
 		t.Fatalf("len(FileMoves) = %d, want active media plus trashed media/companion", len(plan.FileMoves))
 	}
-	if err := ApplyPlan(context.Background(), plan, repo); err != nil {
+	if err := ApplyPlan(context.Background(), plan); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
 	}
 	for _, path := range []string{
@@ -964,15 +954,14 @@ func TestPlanAndApplyReconcileRenamesTrackedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	repo := store.NewRepo()
-	plan, err := PlanSeries(context.Background(), root, "Long Bookworm", repo)
+	plan, err := PlanSeries(context.Background(), root, "Long Bookworm")
 	if err != nil {
 		t.Fatalf("PlanSeries: %v", err)
 	}
 	if len(plan.FileMoves) != 3 {
 		t.Fatalf("len(FileMoves) = %d, want 3", len(plan.FileMoves))
 	}
-	if err := ApplyPlan(context.Background(), plan, repo); err != nil {
+	if err := ApplyPlan(context.Background(), plan); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
 	}
 	for _, path := range []string{
@@ -1024,7 +1013,7 @@ func TestPlanReconcileTreatsCanonicallyEquivalentRootNameAsUnchanged(t *testing.
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	plan, err := PlanSeries(context.Background(), root, dirname, store.NewRepo())
+	plan, err := PlanSeries(context.Background(), root, dirname)
 	if err != nil {
 		t.Fatalf("PlanSeries: %v", err)
 	}
@@ -1080,7 +1069,7 @@ func TestPlanReconcileUsesCurrentDirectoryName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	plan, err := PlanSeries(context.Background(), root, "Short Title", store.NewRepo())
+	plan, err := PlanSeries(context.Background(), root, "Short Title")
 	if err != nil {
 		t.Fatalf("PlanSeries: %v", err)
 	}
@@ -1141,15 +1130,14 @@ func TestApplyReconcileSkipsUnchangedPlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	repo := store.NewRepo()
-	plan, err := PlanSeries(context.Background(), root, "Bookworm", repo)
+	plan, err := PlanSeries(context.Background(), root, "Bookworm")
 	if err != nil {
 		t.Fatalf("PlanSeries: %v", err)
 	}
 	if plan.HasChanges() {
 		t.Fatalf("HasChanges = true, want false: %#v", plan)
 	}
-	if err := ApplyPlan(context.Background(), plan, repo); err != nil {
+	if err := ApplyPlan(context.Background(), plan); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
 	}
 	metadataInfo, err := os.Stat(metadataPath)
@@ -1174,8 +1162,7 @@ func TestAddEpisodeRecordsRelativeFileFacts(t *testing.T) {
 		t.Fatalf("WriteFile companion: %v", err)
 	}
 
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -1236,8 +1223,7 @@ func TestAddEpisodeRecordsSpecialsAsSeasonZero(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -1274,8 +1260,7 @@ func TestAddEpisodeRejectsExistingEpisodeWithoutReplace(t *testing.T) {
 		t.Fatalf("WriteFile 720p: %v", err)
 	}
 
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -1309,8 +1294,7 @@ func TestAddEpisodeReplacesMediaForSameEpisodeWithTrash(t *testing.T) {
 		t.Fatalf("WriteFile 720p: %v", err)
 	}
 
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -1363,8 +1347,7 @@ func TestAddEpisodeRejectsRefreshWithoutReplace(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -1390,8 +1373,7 @@ func TestAddEpisodeRejectsRefreshWithoutReplace(t *testing.T) {
 
 func TestAddEpisodeRejectsEscapingPath(t *testing.T) {
 	seriesDir := t.TempDir()
-	repo := store.NewRepo()
-	series, err := newTestSeries(repo, seriesDir)
+	series, err := newTestSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
@@ -1461,8 +1443,8 @@ func testEpisode(t *testing.T, series *store.Series, seasonNumber int, episodeNu
 	return episode
 }
 
-func newTestSeries(repo store.Repo, seriesDir string) (*store.Series, error) {
-	series, err := repo.NewSeries(seriesDir)
+func newTestSeries(seriesDir string) (*store.Series, error) {
+	series, err := store.NewSeries(seriesDir)
 	if err != nil {
 		return nil, err
 	}
