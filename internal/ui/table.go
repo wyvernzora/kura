@@ -10,6 +10,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/ops"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
 func WriteSeriesSyncResult(w io.Writer, result ops.SeriesSyncResult) error {
@@ -91,8 +92,8 @@ func writeStyledTable(w io.Writer, tw table.Writer, dimLine func(string) bool) e
 		return nil
 	}
 	lines := strings.Split(rendered, "\n")
-	if file, ok := w.(*os.File); ok && IsTerminal(file) {
-		width := TerminalWidth(file)
+	if file, ok := w.(*os.File); ok && stdio.IsTerminal(file) {
+		width := stdio.TerminalWidth(file)
 		if width > 0 {
 			lines[0] = padRight(lines[0], width)
 		}

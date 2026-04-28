@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/config"
@@ -12,7 +11,7 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/ops"
 	"github.com/wyvernzora/kura/internal/store"
-	"github.com/wyvernzora/kura/internal/ui"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
 func buildMetadataSource(rt runContext, providerKey string, tvdbBaseURL string) (metadata.Source, error) {
@@ -71,7 +70,5 @@ func providerSeriesResolver(rt runContext, providerKey string, tvdbBaseURL strin
 }
 
 func isInteractiveRun(rt runContext) bool {
-	stdin, stdinOK := rt.Stdin.(*os.File)
-	stdout, stdoutOK := rt.Stdout.(*os.File)
-	return stdinOK && stdoutOK && ui.IsTerminal(stdin) && ui.IsTerminal(stdout)
+	return stdio.From(rt.Context).IsInteractive()
 }

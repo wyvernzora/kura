@@ -9,7 +9,7 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/wyvernzora/kura/internal/progress"
-	"golang.org/x/term"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
 type Progress struct {
@@ -20,7 +20,7 @@ type Progress struct {
 
 func NewProgress(stderr io.Writer) *Progress {
 	file, ok := stderr.(*os.File)
-	if !ok || !IsTerminal(file) {
+	if !ok || !stdio.IsTerminal(file) {
 		return &Progress{}
 	}
 	s := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(stderr))
@@ -80,23 +80,4 @@ func (p *Progress) Stop() {
 		return
 	}
 	p.spinner.Stop()
-}
-
-func IsTerminal(file *os.File) bool {
-	info, err := file.Stat()
-	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	return term.IsTerminal(int(file.Fd()))
-}
-
-func TerminalWidth(file *os.File) int {
-	if !IsTerminal(file) {
-		return 0
-	}
-	width, _, err := term.GetSize(int(file.Fd()))
-	if err != nil {
-		return 0
-	}
-	return width
 }
