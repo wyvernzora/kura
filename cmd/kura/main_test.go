@@ -299,6 +299,63 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	}
 }
 
+func TestReconcileCommandDoesNotRequireTVDBKey(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
+		"providerRefs": ["tvdb:370070"],
+		"preferredProvider": "tvdb",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm"
+	}`)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := runContext{
+		Stdin:  bytes.NewBuffer(nil),
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Getenv: func(key string) string {
+			if key == "KURA_LIBRARY_ROOT" {
+				return root
+			}
+			return ""
+		},
+	}
+	err := run([]string{
+		"reconcile",
+		"--dry-run",
+		"--json",
+		"Bookworm",
+	}, rt)
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+}
+
+func TestMetaSearchReportsMissingTVDBKey(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := runContext{
+		Stdin:  bytes.NewBuffer(nil),
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Getenv: func(string) string { return "" },
+	}
+	err := run([]string{"meta", "search", "honzuki"}, rt)
+	if err == nil {
+		t.Fatal("run: nil error, want missing-key failure")
+	}
+	if !strings.Contains(err.Error(), "KURA_TVDB_KEY") {
+		t.Fatalf("error = %v, want mention of KURA_TVDB_KEY", err)
+	}
+}
+
 func TestStageCommandWritesStagedJSON(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()

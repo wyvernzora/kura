@@ -14,15 +14,18 @@ import (
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
-func buildMetadataSource(rt runContext, providerKey string, tvdbBaseURL string) (metadata.Source, error) {
+// buildSourceFromFlags constructs the configured metadata source from the
+// global CLI flags. Used by run.go to seed the lazy metadata.WithSource
+// builder.
+func buildSourceFromFlags(rt *runContext, flags *cli) (metadata.Source, error) {
 	return config.BuildMetadataSource(config.MetadataSourceOptions{
-		Key:         providerKey,
-		TVDBBaseURL: tvdbBaseURL,
+		Key:         flags.Provider,
+		TVDBBaseURL: flags.TVDBBaseURL,
 		Getenv:      rt.Getenv,
 	})
 }
 
-func mediaInspector(rt runContext) mediainfo.Inspector {
+func mediaInspector(rt *runContext) mediainfo.Inspector {
 	inspector := mediainfo.New()
 	command := strings.TrimSpace(rt.Getenv("KURA_MEDIAINFO_COMMAND"))
 	if command != "" {
@@ -55,9 +58,9 @@ func providerRefForSource(series store.Series, source string) (domain.RemoteSeri
 	return domain.RemoteSeriesRef{}, fmt.Errorf("series has no %s provider ref", source)
 }
 
-func providerSeriesResolver(rt runContext, providerKey string, tvdbBaseURL string) ops.ProviderSeriesResolver {
+func providerSeriesResolver(rt *runContext) ops.ProviderSeriesResolver {
 	return func(ctx context.Context, local store.Series) (metadata.Series, error) {
-		metadataSource, err := buildMetadataSource(rt, providerKey, tvdbBaseURL)
+		metadataSource, err := metadata.SourceFrom(rt.Context)
 		if err != nil {
 			return metadata.Series{}, err
 		}
@@ -69,6 +72,6 @@ func providerSeriesResolver(rt runContext, providerKey string, tvdbBaseURL strin
 	}
 }
 
-func isInteractiveRun(rt runContext) bool {
+func isInteractiveRun(rt *runContext) bool {
 	return stdio.From(rt.Context).IsInteractive()
 }

@@ -15,9 +15,7 @@ import (
 )
 
 type seriesSyncCmd struct {
-	Provider    string `help:"Metadata provider to use when searching." enum:"tvdb" default:"tvdb"`
 	ProviderRef string `name:"provider-ref" help:"Provider series reference, such as tvdb:370070. Bypasses search."`
-	TVDBBaseURL string `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
 	DryRun      bool   `name:"dry-run" help:"Print planned changes without writing series metadata."`
 	JSON        bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Yes         bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
@@ -25,7 +23,7 @@ type seriesSyncCmd struct {
 	Series      string `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
 }
 
-func (cmd *seriesSyncCmd) Run(rt runContext) error {
+func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
@@ -52,7 +50,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		cmd.Series,
 		ops.SeriesSyncOptions{
 			ProviderSeries:   providerSeries,
-			ProviderResolver: providerSeriesResolver(rt, cmd.Provider, cmd.TVDBBaseURL),
+			ProviderResolver: providerSeriesResolver(rt),
 			Inspector:        mediaInspector(rt),
 			DryRun:           cmd.DryRun,
 			Replace:          cmd.Replace,
@@ -98,8 +96,8 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 	return nil
 }
 
-func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series, bool, error) {
-	metadataSource, err := buildMetadataSource(rt, cmd.Provider, cmd.TVDBBaseURL)
+func (cmd *seriesSyncCmd) resolveProviderSeries(rt *runContext) (metadata.Series, bool, error) {
+	metadataSource, err := metadata.SourceFrom(rt.Context)
 	if err != nil {
 		return metadata.Series{}, false, err
 	}

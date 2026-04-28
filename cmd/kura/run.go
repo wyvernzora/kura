@@ -6,8 +6,20 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
+	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/resolve"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
+// runContext is the per-invocation harness bound to kong as a pointer so
+// run() can enrich Context after flag parsing. After run() returns from
+// parser.Parse, Context carries:
+//   - stdio.Stdio          (always; via stdio.With)
+//   - lazy metadata.Source (via metadata.WithSource)
+//   - lazy *resolve.Resolver (via resolve.WithResolver)
+//
+// Commands receive *runContext via kong.Bind and read these via stdio.From,
+// metadata.SourceFrom, and resolve.ResolverFrom respectively.
 type runContext struct {
 	Context context.Context
 	Stdin   io.Reader
@@ -33,19 +45,35 @@ func run(args []string, rt runContext) error {
 		rt.Getenv = os.Getenv
 	}
 
-	parser, err := kong.New(&cli{},
+	flags := &cli{}
+	parser, err := kong.New(flags,
 		kong.Name("kura"),
 		kong.Description("Anime-first library manager."),
-		kong.Bind(rt),
+		kong.Bind(&rt),
 		kong.Writers(rt.Stdout, rt.Stderr),
 	)
 	if err != nil {
 		return err
 	}
 
-	ctx, err := parser.Parse(args)
+	kctx, err := parser.Parse(args)
 	if err != nil {
 		return err
 	}
-	return ctx.Run()
+
+	rt.Context = stdio.With(rt.Context, stdio.New(rt.Stdin, rt.Stdout, rt.Stderr))
+	rt.Context = metadata.WithSource(rt.Context, func() (metadata.Source, error) {
+		return buildSourceFromFlags(&rt, flags)
+	})
+	rt.Context = resolve.WithResolver(rt.Context, func() (*resolve.Resolver, error) {
+		src, err := metadata.SourceFrom(rt.Context)
+		if err != nil {
+			return nil, err
+		}
+		return resolve.New(
+			resolve.NewProviderIDStrategy(src),
+			resolve.NewTextSearchStrategy(src),
+		), nil
+	})
+	return kctx.Run()
 }

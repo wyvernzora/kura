@@ -19,7 +19,7 @@ type seriesReconcileCmd struct {
 	Series string `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
 }
 
-func (cmd *seriesReconcileCmd) Run(rt runContext) error {
+func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func (cmd *seriesReconcileCmd) Run(rt runContext) error {
 	)
 }
 
-func warnDuplicateSeries(rt runContext, seriesDir string, err error) {
+func warnDuplicateSeries(rt *runContext, seriesDir string, err error) {
 	if !errors.Is(err, store.DuplicateEpisodeNumberError{}) {
 		return
 	}

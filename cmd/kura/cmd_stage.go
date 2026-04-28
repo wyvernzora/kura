@@ -13,20 +13,18 @@ import (
 )
 
 type stageCmd struct {
-	Season      int      `help:"Season number."`
-	Special     bool     `help:"Stage as a special."`
-	Number      int      `help:"Episode number." required:""`
-	Provider    string   `help:"Metadata provider to validate against." enum:"tvdb" default:"tvdb"`
-	TVDBBaseURL string   `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
-	Source      string   `help:"Media source. Defaults to filename source or unknown."`
-	Companions  []string `name:"companion" help:"Absolute companion file path."`
-	DryRun      bool     `name:"dry-run" help:"Print the updated staged document without writing it."`
-	Replace     bool     `name:"replace" help:"Stage over an active episode or replace an existing staged entry for the same season and episode."`
-	Series      string   `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
-	Path        string   `arg:"" help:"Absolute media file path to stage."`
+	Season     int      `help:"Season number."`
+	Special    bool     `help:"Stage as a special."`
+	Number     int      `help:"Episode number." required:""`
+	Source     string   `help:"Media source. Defaults to filename source or unknown."`
+	Companions []string `name:"companion" help:"Absolute companion file path."`
+	DryRun     bool     `name:"dry-run" help:"Print the updated staged document without writing it."`
+	Replace    bool     `name:"replace" help:"Stage over an active episode or replace an existing staged entry for the same season and episode."`
+	Series     string   `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
+	Path       string   `arg:"" help:"Absolute media file path to stage."`
 }
 
-func (cmd *stageCmd) Run(rt runContext) error {
+func (cmd *stageCmd) Run(rt *runContext) error {
 	if cmd.Special && cmd.Season != 0 {
 		return errors.New("--season and --special are mutually exclusive")
 	}
@@ -66,7 +64,7 @@ func (cmd *stageCmd) Run(rt runContext) error {
 			Companions:       cmd.Companions,
 			MediaPath:        cmd.Path,
 			Inspector:        mediaInspector(rt),
-			ProviderResolver: providerSeriesResolver(rt, cmd.Provider, cmd.TVDBBaseURL),
+			ProviderResolver: providerSeriesResolver(rt),
 			Apply:            !cmd.DryRun,
 			Replace:          cmd.Replace,
 		},
