@@ -6,6 +6,9 @@ import (
 )
 
 type cli struct {
+	Provider    string `help:"Metadata provider." enum:"tvdb" default:"tvdb"`
+	TVDBBaseURL string `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
+
 	Sync      seriesSyncCmd      `cmd:"" help:"Scan a series and sync it into Kura metadata."`
 	Reconcile seriesReconcileCmd `cmd:"" help:"Rename tracked files to match Kura metadata."`
 	Stage     stageCmd           `cmd:"" help:"Stage an external episode file for a series."`
