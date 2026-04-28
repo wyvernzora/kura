@@ -174,13 +174,6 @@ func cloneEpisodes(in []Episode) []Episode {
 	return out
 }
 
-func cloneEpisodeList(in []Episode) []Episode {
-	if len(in) == 0 {
-		return []Episode{}
-	}
-	return cloneEpisodes(in)
-}
-
 func cloneInt(in *int) *int {
 	if in == nil {
 		return nil
