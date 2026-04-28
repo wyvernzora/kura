@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 
-	layout "github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/store/schema"
 )
 
-const (
-	StagedSchemaVersion = 1
-)
+const StagedSchemaVersion = 1
 
 // StagedEpisode stores an explicitly admitted external media file before Kura
 // applies it to active series metadata and filesystem layout.
@@ -22,6 +22,50 @@ type StagedEpisode struct {
 	Episode
 }
 
+// MarshalJSON serializes StagedEpisode as a flat document so the outer Season
+// and Number fields appear alongside the embedded Episode's media and
+// companion fields. Required to override the embedded Episode's MarshalJSON
+// which would otherwise hide the outer fields.
+func (s StagedEpisode) MarshalJSON() ([]byte, error) {
+	out := stagedEntryWire{
+		Season:     s.Season,
+		Number:     s.Number,
+		Media:      s.Media,
+		Companions: s.Companions,
+	}
+	if out.Companions == nil {
+		out.Companions = []CompanionFile{}
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON decodes the flat wire shape and mirrors Number into the
+// embedded Episode so callers that read s.Episode see consistent state.
+func (s *StagedEpisode) UnmarshalJSON(data []byte) error {
+	var wire stagedEntryWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	s.Season = wire.Season
+	s.Number = wire.Number
+	s.Episode = Episode{
+		Number:     wire.Number,
+		Media:      wire.Media,
+		Companions: wire.Companions,
+	}
+	if s.Companions == nil {
+		s.Companions = []CompanionFile{}
+	}
+	return nil
+}
+
+type stagedEntryWire struct {
+	Season     int             `json:"season"`
+	Number     int             `json:"number"`
+	Media      MediaFile       `json:"media"`
+	Companions []CompanionFile `json:"companions"`
+}
+
 // Staged is the persistent .kura/staged.json document for one local series.
 type Staged struct {
 	SchemaVersion int             `json:"schemaVersion"`
@@ -30,20 +74,21 @@ type Staged struct {
 	dirname string
 }
 
-func (i Staged) MarshalJSON() ([]byte, error) {
-	return json.Marshal(stagedDocumentToV1(i))
-}
-
+// StagedPath returns the metadata path for a series directory's staged document.
 func StagedPath(seriesDir string) string {
-	return layout.StagedMetadataPath(seriesDir)
+	return fsroot.StagedMetadataPath(seriesDir)
 }
 
-func (i Staged) Validate() error {
-	if err := validateStagedV1Schema(stagedDocumentToV1(i)); err != nil {
+func (s Staged) Validate() error {
+	schemaStaged, err := schema.StagedV1()
+	if err != nil {
 		return err
 	}
+	if err := schema.ValidateValue(schemaStaged, s); err != nil {
+		return fmt.Errorf("library: validate staged: %w", err)
+	}
 	seen := map[string]struct{}{}
-	for _, staged := range i.Entries {
+	for _, staged := range s.Entries {
 		if staged.Season < 0 {
 			return fmt.Errorf("library: invalid staged season %d", staged.Season)
 		}
@@ -67,12 +112,12 @@ func (i Staged) Validate() error {
 	return nil
 }
 
-func (i Staged) IsEmpty() bool {
-	return len(i.Entries) == 0
+func (s Staged) IsEmpty() bool {
+	return len(s.Entries) == 0
 }
 
-func (i Staged) Lookup(season int, number int) (StagedEpisode, int, bool) {
-	for index, staged := range i.Entries {
+func (s Staged) Lookup(season int, number int) (StagedEpisode, int, bool) {
+	for index, staged := range s.Entries {
 		if staged.Season == season && staged.Number == number {
 			return staged, index, true
 		}
@@ -88,4 +133,35 @@ func validateAbsolutePath(path string) error {
 		return fmt.Errorf("path %q must be absolute", path)
 	}
 	return nil
+}
+
+func decodeStaged(data []byte, path string) (Staged, error) {
+	var header schemaHeader
+	if err := json.Unmarshal(data, &header); err != nil {
+		return Staged{}, fmt.Errorf("library: decode %s: %w", path, err)
+	}
+	if header.SchemaVersion != StagedSchemaVersion {
+		return Staged{}, fmt.Errorf("library: unsupported staged schemaVersion %d", header.SchemaVersion)
+	}
+	schemaStaged, err := schema.StagedV1()
+	if err != nil {
+		return Staged{}, err
+	}
+	if err := schema.ValidateBytes(schemaStaged, data); err != nil {
+		return Staged{}, fmt.Errorf("library: validate %s: %w", path, err)
+	}
+	var staged Staged
+	if err := json.Unmarshal(data, &staged); err != nil {
+		return Staged{}, fmt.Errorf("library: decode %s: %w", path, err)
+	}
+	return staged, nil
+}
+
+func encodeStaged(w io.Writer, staged Staged) error {
+	if staged.SchemaVersion != StagedSchemaVersion {
+		return fmt.Errorf("library: unsupported staged schemaVersion %d", staged.SchemaVersion)
+	}
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(staged)
 }

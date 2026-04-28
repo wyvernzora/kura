@@ -4,15 +4,15 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 
 	media "github.com/wyvernzora/kura/internal/domain"
-	layout "github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/store/schema"
 )
 
-const (
-	SeriesSchemaVersion = 1
-)
+const SeriesSchemaVersion = 1
 
 // Series is the persistent .kura/series.json document for one local series.
 //
@@ -34,10 +34,6 @@ type Series struct {
 	dirname string
 }
 
-func (s Series) MarshalJSON() ([]byte, error) {
-	return json.Marshal(seriesToV1(s))
-}
-
 // Season stores local state for one regular season or the specials collection.
 type Season struct {
 	Number   int       `json:"number"`
@@ -52,6 +48,8 @@ type Episode struct {
 	Companions []CompanionFile `json:"companions"`
 }
 
+// MarshalJSON ensures Companions serializes as `[]` rather than `null` so the
+// schema's required-field invariant holds.
 func (e Episode) MarshalJSON() ([]byte, error) {
 	type episode Episode
 	out := episode(e)
@@ -81,21 +79,22 @@ type CompanionFile struct {
 	MTime    string `json:"mtime"`
 }
 
+// MediaInfo aliases the canonical MediaInfo type from the domain layer so
+// callers within store can refer to it without importing domain.
 type MediaInfo = media.MediaInfo
 
 // SeriesPath returns the metadata path for a series directory.
 func SeriesPath(seriesDir string) string {
-	return layout.SeriesMetadataPath(seriesDir)
+	return fsroot.SeriesMetadataPath(seriesDir)
 }
 
-func cleanSource(source string) string {
-	return media.ParseMediaSource(source).String()
-}
-
-// Validate checks whether the series document is safe to persist.
 func (s Series) Validate() error {
-	if err := validateSeriesV1Schema(seriesToV1(s)); err != nil {
+	schemaSeries, err := schema.SeriesV1()
+	if err != nil {
 		return err
+	}
+	if err := schema.ValidateValue(schemaSeries, s); err != nil {
+		return fmt.Errorf("library: validate series: %w", err)
 	}
 	for _, season := range s.Seasons {
 		if season.Number < 1 {
@@ -104,9 +103,15 @@ func (s Series) Validate() error {
 		if err := validateSeasonPaths(season.Number, season); err != nil {
 			return err
 		}
+		if err := validateUniqueEpisodes(season.Number, season); err != nil {
+			return err
+		}
 	}
 	if s.Specials != nil {
 		if err := validateSeasonPaths(0, *s.Specials); err != nil {
+			return err
+		}
+		if err := validateUniqueEpisodes(0, *s.Specials); err != nil {
 			return err
 		}
 	}
@@ -184,14 +189,95 @@ func validateSeasonPaths(seasonNumber int, season Season) error {
 		if episode.Number < 1 {
 			return fmt.Errorf("library: invalid episode number %d in season %d", episode.Number, seasonNumber)
 		}
-		if _, err := layout.CleanSeriesRelPath(episode.Media.Path); err != nil {
+		if _, err := fsroot.CleanSeriesRelPath(episode.Media.Path); err != nil {
 			return fmt.Errorf("library: invalid media path for S%02dE%02d: %w", seasonNumber, episode.Number, err)
 		}
 		for _, companion := range episode.Companions {
-			if _, err := layout.CleanSeriesRelPath(companion.Path); err != nil {
+			if _, err := fsroot.CleanSeriesRelPath(companion.Path); err != nil {
 				return fmt.Errorf("library: invalid companion path for S%02dE%02d: %w", seasonNumber, episode.Number, err)
 			}
 		}
 	}
 	return nil
+}
+
+func validateUniqueEpisodes(seasonNumber int, season Season) error {
+	seen := map[int]struct{}{}
+	for _, episode := range season.Episodes {
+		if _, exists := seen[episode.Number]; exists {
+			return DuplicateEpisodeNumberError{Season: seasonNumber, Episode: episode.Number}
+		}
+		seen[episode.Number] = struct{}{}
+	}
+	return nil
+}
+
+type schemaHeader struct {
+	SchemaVersion int `json:"schemaVersion"`
+}
+
+func decodeSeries(data []byte, path string) (Series, error) {
+	var header schemaHeader
+	if err := json.Unmarshal(data, &header); err != nil {
+		return Series{}, fmt.Errorf("library: decode %s: %w", path, err)
+	}
+	if header.SchemaVersion != SeriesSchemaVersion {
+		return Series{}, fmt.Errorf("library: unsupported series schemaVersion %d", header.SchemaVersion)
+	}
+	schemaSeries, err := schema.SeriesV1()
+	if err != nil {
+		return Series{}, err
+	}
+	if err := schema.ValidateBytes(schemaSeries, data); err != nil {
+		return Series{}, fmt.Errorf("library: validate %s: %w", path, err)
+	}
+	var series Series
+	if err := json.Unmarshal(data, &series); err != nil {
+		return Series{}, fmt.Errorf("library: decode %s: %w", path, err)
+	}
+	for _, season := range series.Seasons {
+		if err := validateUniqueEpisodes(season.Number, season); err != nil {
+			return Series{}, fmt.Errorf("library: validate %s: %w", path, err)
+		}
+	}
+	if series.Specials != nil {
+		if err := validateUniqueEpisodes(0, *series.Specials); err != nil {
+			return Series{}, fmt.Errorf("library: validate %s: %w", path, err)
+		}
+	}
+	canonicalizeSeries(&series)
+	return series, nil
+}
+
+func encodeSeries(w io.Writer, series Series) error {
+	if series.SchemaVersion != SeriesSchemaVersion {
+		return fmt.Errorf("library: unsupported series schemaVersion %d", series.SchemaVersion)
+	}
+	canonicalizeSeries(&series)
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(series)
+}
+
+func canonicalizeSeries(s *Series) {
+	if s.ProviderRefs == nil {
+		s.ProviderRefs = []string{}
+	}
+	for i := range s.Seasons {
+		canonicalizeSeason(&s.Seasons[i])
+	}
+	if s.Specials != nil {
+		canonicalizeSeason(s.Specials)
+	}
+	sort.Slice(s.Seasons, func(i, j int) bool { return s.Seasons[i].Number < s.Seasons[j].Number })
+}
+
+func canonicalizeSeason(s *Season) {
+	for i := range s.Episodes {
+		s.Episodes[i].Media.Source = media.ParseMediaSource(s.Episodes[i].Media.Source).String()
+		if s.Episodes[i].Companions == nil {
+			s.Episodes[i].Companions = []CompanionFile{}
+		}
+	}
+	sort.Slice(s.Episodes, func(i, j int) bool { return s.Episodes[i].Number < s.Episodes[j].Number })
 }

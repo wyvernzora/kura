@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/oklog/ulid/v2"
-	layout "github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/store/schema"
 )
 
-const (
-	TrashSchemaVersion = 1
-)
+const TrashSchemaVersion = 1
 
 // TrashedEpisode stores a replaced local episode until reconciliation moves it
 // out of the active series layout.
@@ -24,6 +24,51 @@ type TrashedEpisode struct {
 	Episode
 }
 
+// MarshalJSON serializes TrashedEpisode as a flat document, overriding the
+// embedded Episode's MarshalJSON which would otherwise hide the outer fields.
+func (t TrashedEpisode) MarshalJSON() ([]byte, error) {
+	out := trashEntryWire{
+		ID:         t.ID,
+		Season:     t.Season,
+		Number:     t.Number,
+		Media:      t.Media,
+		Companions: t.Companions,
+	}
+	if out.Companions == nil {
+		out.Companions = []CompanionFile{}
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON decodes the flat wire shape and mirrors Number into the
+// embedded Episode so callers reading t.Episode see consistent state.
+func (t *TrashedEpisode) UnmarshalJSON(data []byte) error {
+	var wire trashEntryWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	t.ID = wire.ID
+	t.Season = wire.Season
+	t.Number = wire.Number
+	t.Episode = Episode{
+		Number:     wire.Number,
+		Media:      wire.Media,
+		Companions: wire.Companions,
+	}
+	if t.Companions == nil {
+		t.Companions = []CompanionFile{}
+	}
+	return nil
+}
+
+type trashEntryWire struct {
+	ID         string          `json:"id"`
+	Season     int             `json:"season"`
+	Number     int             `json:"number"`
+	Media      MediaFile       `json:"media"`
+	Companions []CompanionFile `json:"companions"`
+}
+
 // Trash is the persistent .kura/trash.json document for one local series.
 type Trash struct {
 	SchemaVersion int              `json:"schemaVersion"`
@@ -32,12 +77,9 @@ type Trash struct {
 	dirname string
 }
 
-func (t Trash) MarshalJSON() ([]byte, error) {
-	return json.Marshal(trashDocumentToV1(t))
-}
-
+// TrashPath returns the metadata path for a series directory's trash document.
 func TrashPath(seriesDir string) string {
-	return layout.TrashMetadataPath(seriesDir)
+	return fsroot.TrashMetadataPath(seriesDir)
 }
 
 func NewTrashedEpisode(season int, number int, episode Episode) TrashedEpisode {
@@ -51,8 +93,12 @@ func NewTrashedEpisode(season int, number int, episode Episode) TrashedEpisode {
 }
 
 func (t Trash) Validate() error {
-	if err := validateTrashV1Schema(trashDocumentToV1(t)); err != nil {
+	schemaTrash, err := schema.TrashV1()
+	if err != nil {
 		return err
+	}
+	if err := schema.ValidateValue(schemaTrash, t); err != nil {
+		return fmt.Errorf("library: validate trash: %w", err)
 	}
 	ids := map[string]struct{}{}
 	for _, trashed := range t.Entries {
@@ -69,11 +115,11 @@ func (t Trash) Validate() error {
 		if trashed.Number < 1 {
 			return fmt.Errorf("library: invalid trash episode %d", trashed.Number)
 		}
-		if _, err := cleanTrashRelPath(trashed.Media.Path); err != nil {
+		if _, err := fsroot.CleanRelPathAllowingKura(trashed.Media.Path); err != nil {
 			return fmt.Errorf("library: invalid trashed media path for %s: %w", trashed.ID, err)
 		}
 		for _, companion := range trashed.Companions {
-			if _, err := cleanTrashRelPath(companion.Path); err != nil {
+			if _, err := fsroot.CleanRelPathAllowingKura(companion.Path); err != nil {
 				return fmt.Errorf("library: invalid trashed companion path for %s: %w", trashed.ID, err)
 			}
 		}
@@ -85,10 +131,33 @@ func (t Trash) IsEmpty() bool {
 	return len(t.Entries) == 0
 }
 
-func cleanTrashRelPath(path string) (string, error) {
-	relPath, err := layout.CleanRelPathAllowingKura(path)
-	if err != nil {
-		return "", err
+func decodeTrash(data []byte, path string) (Trash, error) {
+	var header schemaHeader
+	if err := json.Unmarshal(data, &header); err != nil {
+		return Trash{}, fmt.Errorf("library: decode %s: %w", path, err)
 	}
-	return relPath, nil
+	if header.SchemaVersion != TrashSchemaVersion {
+		return Trash{}, fmt.Errorf("library: unsupported trash schemaVersion %d", header.SchemaVersion)
+	}
+	schemaTrash, err := schema.TrashV1()
+	if err != nil {
+		return Trash{}, err
+	}
+	if err := schema.ValidateBytes(schemaTrash, data); err != nil {
+		return Trash{}, fmt.Errorf("library: validate %s: %w", path, err)
+	}
+	var trash Trash
+	if err := json.Unmarshal(data, &trash); err != nil {
+		return Trash{}, fmt.Errorf("library: decode %s: %w", path, err)
+	}
+	return trash, nil
+}
+
+func encodeTrash(w io.Writer, trash Trash) error {
+	if trash.SchemaVersion != TrashSchemaVersion {
+		return fmt.Errorf("library: unsupported trash schemaVersion %d", trash.SchemaVersion)
+	}
+	encoder := json.NewEncoder(w)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(trash)
 }
