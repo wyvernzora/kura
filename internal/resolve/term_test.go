@@ -36,3 +36,23 @@ func TestParseQuery(t *testing.T) {
 		t.Fatalf("ParseQuery = %#v, want %#v", got, want)
 	}
 }
+
+func TestTermString(t *testing.T) {
+	tests := []struct {
+		name string
+		term Term
+		want string
+	}{
+		{name: "text", term: Term{Value: "Bookworm"}, want: "Bookworm"},
+		{name: "prefixed", term: Term{Prefix: "tvdb", Value: "370070"}, want: "tvdb:370070"},
+		{name: "empty", term: Term{}, want: ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.term.String(); got != test.want {
+				t.Fatalf("String = %q, want %q", got, test.want)
+			}
+		})
+	}
+}

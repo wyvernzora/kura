@@ -44,7 +44,7 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 	for _, term := range terms {
 		strategy, ok := r.matchStrategy(term)
 		if !ok {
-			return Resolution{}, fmt.Errorf("%w: %q", ErrNoStrategyMatch, formatTerm(term))
+			return Resolution{}, fmt.Errorf("%w: %q", ErrNoStrategyMatch, term.String())
 		}
 		matched = append(matched, matchedTerm{term: term, strategy: strategy})
 	}
@@ -54,7 +54,7 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 
 	matched = dedupeMatched(matched)
 	var mu sync.Mutex
-	var hits []TermHit
+	var hits []termHit
 	group, gctx := errgroup.WithContext(ctx)
 	for _, entry := range matched {
 		group.Go(func() error {
@@ -79,7 +79,10 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 			result = &Result{Summary: hit.Summary}
 			resultsByRef[hit.ProviderRef] = result
 		}
-		result.Evidence = append(result.Evidence, hit)
+		result.Evidence = append(result.Evidence, Evidence{
+			Term: hit.Term.String(),
+			Rank: hit.Rank,
+		})
 	}
 
 	results := make([]Result, 0, len(resultsByRef))
@@ -138,14 +141,7 @@ func dedupeMatched(matched []matchedTerm) []matchedTerm {
 	return out
 }
 
-func formatTerm(term Term) string {
-	if term.Prefix == "" {
-		return term.Value
-	}
-	return term.Prefix + ":" + term.Value
-}
-
-func sumRank(hits []TermHit) int {
+func sumRank(hits []Evidence) int {
 	sum := 0
 	for _, hit := range hits {
 		sum += hit.Rank
@@ -153,7 +149,7 @@ func sumRank(hits []TermHit) int {
 	return sum
 }
 
-func minRank(hits []TermHit) int {
+func minRank(hits []Evidence) int {
 	if len(hits) == 0 {
 		return 0
 	}

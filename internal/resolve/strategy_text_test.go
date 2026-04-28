@@ -30,8 +30,8 @@ func TestTextSearchStrategyResolveOne(t *testing.T) {
 	if len(hits) != 1 {
 		t.Fatalf("len(hits) = %d, want 1", len(hits))
 	}
-	if hits[0].Rank != 0 || hits[0].ProviderRef != "tvdb:1" || hits[0].Strategy != "text_search" {
-		t.Fatalf("hit = %#v, want rank 0 tvdb:1 text_search", hits[0])
+	if hits[0].Rank != 0 || hits[0].ProviderRef != "tvdb:1" {
+		t.Fatalf("hit = %#v, want rank 0 tvdb:1", hits[0])
 	}
 }
 

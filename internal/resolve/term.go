@@ -12,6 +12,13 @@ type Term struct {
 	Value  string
 }
 
+func (t Term) String() string {
+	if t.Prefix == "" {
+		return t.Value
+	}
+	return t.Prefix + ":" + t.Value
+}
+
 // Query is a collection of search terms.
 type Query struct {
 	Terms []Term

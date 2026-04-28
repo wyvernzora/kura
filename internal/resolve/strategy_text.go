@@ -27,7 +27,7 @@ func (s *textSearchStrategy) Authoritative() bool {
 	return false
 }
 
-func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]TermHit, error) {
+func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
 	results, err := s.source.Search(ctx, t.Value, metadata.SearchOptions{Type: metadata.MediaTypeSeries})
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
@@ -35,11 +35,10 @@ func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]TermHit, er
 		}
 		return nil, err
 	}
-	hits := make([]TermHit, 0, len(results))
+	hits := make([]termHit, 0, len(results))
 	for i, result := range results {
-		hits = append(hits, TermHit{
+		hits = append(hits, termHit{
 			Term:        t,
-			Strategy:    s.Name(),
 			ProviderRef: result.ProviderRef,
 			Summary:     result.SeriesSummary,
 			Rank:        i,

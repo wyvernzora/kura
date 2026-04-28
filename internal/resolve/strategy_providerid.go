@@ -27,7 +27,7 @@ func (s *providerIDStrategy) Authoritative() bool {
 	return true
 }
 
-func (s *providerIDStrategy) Resolve(ctx context.Context, t Term) ([]TermHit, error) {
+func (s *providerIDStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
 	series, err := s.source.GetSeries(ctx, t.Value)
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
@@ -35,9 +35,8 @@ func (s *providerIDStrategy) Resolve(ctx context.Context, t Term) ([]TermHit, er
 		}
 		return nil, err
 	}
-	return []TermHit{{
+	return []termHit{{
 		Term:        t,
-		Strategy:    s.Name(),
 		ProviderRef: series.ProviderRef,
 		Summary:     series.SeriesSummary,
 		Rank:        0,

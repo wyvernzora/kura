@@ -33,7 +33,7 @@ func (s *dirnameStrategy) Authoritative() bool {
 	return true
 }
 
-func (s *dirnameStrategy) Resolve(ctx context.Context, t Term) ([]TermHit, error) {
+func (s *dirnameStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
 	dir, err := s.root.SeriesDir(t.Value)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -68,9 +68,8 @@ func (s *dirnameStrategy) Resolve(ctx context.Context, t Term) ([]TermHit, error
 		}
 		return nil, err
 	}
-	return []TermHit{{
+	return []termHit{{
 		Term:        t,
-		Strategy:    s.Name(),
 		ProviderRef: providerSeries.ProviderRef,
 		Summary:     providerSeries.SeriesSummary,
 		Rank:        0,

@@ -19,7 +19,7 @@ func TestResolverEmptyQuery(t *testing.T) {
 func TestResolverEmptyValuedTermsAreIgnored(t *testing.T) {
 	strategy := &countingStrategy{fakeStrategy: fakeStrategy{
 		match: true,
-		hits: []TermHit{{
+		hits: []termHit{{
 			ProviderRef: "tvdb:1",
 			Summary:     testSummary("tvdb:1"),
 		}},
@@ -94,7 +94,7 @@ func TestResolverDuplicateAuthoritativeTermCollapses(t *testing.T) {
 	strategy := &countingStrategy{fakeStrategy: fakeStrategy{
 		match:         true,
 		authoritative: true,
-		hits: []TermHit{{
+		hits: []termHit{{
 			ProviderRef: "tvdb:1",
 			Summary:     testSummary("tvdb:1"),
 		}},
@@ -133,7 +133,7 @@ func TestResolverAuthoritativeAndNonAuthoritativeConflict(t *testing.T) {
 func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
-		hitsForTerm: map[Term][]TermHit{
+		hitsForTerm: map[Term][]termHit{
 			{Value: "jp"}: {{
 				Term:        Term{Value: "jp"},
 				ProviderRef: "tvdb:1",
@@ -159,12 +159,15 @@ func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 	if len(result.Results[0].Evidence) != 2 {
 		t.Fatalf("evidence count = %d, want 2", len(result.Results[0].Evidence))
 	}
+	if !slices.Contains(result.Results[0].Evidence, Evidence{Term: "jp", Rank: 0}) {
+		t.Fatalf("evidence = %#v, want jp rank 0", result.Results[0].Evidence)
+	}
 }
 
 func TestResolverUnresolvedDistinctRemoteRefs(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
-		hits: []TermHit{
+		hits: []termHit{
 			{ProviderRef: "tvdb:1", Summary: testSummary("tvdb:1")},
 			{ProviderRef: "tvdb:2", Summary: testSummary("tvdb:2")},
 			{ProviderRef: "tvdb:3", Summary: testSummary("tvdb:3")},
@@ -196,7 +199,7 @@ func TestResolverPropagatesErrorAndCancelsSiblings(t *testing.T) {
 	cancelled := make(chan struct{})
 	blocking := fakeStrategy{
 		matchPrefix: "wait",
-		resolveFunc: func(ctx context.Context, _ Term) ([]TermHit, error) {
+		resolveFunc: func(ctx context.Context, _ Term) ([]termHit, error) {
 			close(ready)
 			<-ctx.Done()
 			close(cancelled)
@@ -205,7 +208,7 @@ func TestResolverPropagatesErrorAndCancelsSiblings(t *testing.T) {
 	}
 	failing := fakeStrategy{
 		matchPrefix: "fail",
-		resolveFunc: func(context.Context, Term) ([]TermHit, error) {
+		resolveFunc: func(context.Context, Term) ([]termHit, error) {
 			<-ready
 			return nil, errors.New("boom")
 		},
@@ -225,7 +228,7 @@ func TestResolverPropagatesErrorAndCancelsSiblings(t *testing.T) {
 func TestResolverSortOrder(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
-		hitsForTerm: map[Term][]TermHit{
+		hitsForTerm: map[Term][]termHit{
 			{Value: "a"}: {
 				{ProviderRef: "tvdb:1", Summary: testSummary("tvdb:1"), Rank: 0},
 				{ProviderRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 1},
@@ -261,10 +264,10 @@ type fakeStrategy struct {
 	matchPrefix      string
 	matchEmptyPrefix bool
 	authoritative    bool
-	hits             []TermHit
-	hitsForTerm      map[Term][]TermHit
+	hits             []termHit
+	hitsForTerm      map[Term][]termHit
 	err              error
-	resolveFunc      func(context.Context, Term) ([]TermHit, error)
+	resolveFunc      func(context.Context, Term) ([]termHit, error)
 }
 
 func (s fakeStrategy) Name() string {
@@ -288,7 +291,7 @@ func (s fakeStrategy) Authoritative() bool {
 	return s.authoritative
 }
 
-func (s fakeStrategy) Resolve(ctx context.Context, term Term) ([]TermHit, error) {
+func (s fakeStrategy) Resolve(ctx context.Context, term Term) ([]termHit, error) {
 	if s.resolveFunc != nil {
 		return s.resolveFunc(ctx, term)
 	}
@@ -306,7 +309,7 @@ type countingStrategy struct {
 	calls atomic.Int64
 }
 
-func (s *countingStrategy) Resolve(ctx context.Context, term Term) ([]TermHit, error) {
+func (s *countingStrategy) Resolve(ctx context.Context, term Term) ([]termHit, error) {
 	s.calls.Add(1)
 	return s.fakeStrategy.Resolve(ctx, term)
 }

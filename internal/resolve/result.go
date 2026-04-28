@@ -2,15 +2,6 @@ package resolve
 
 import "github.com/wyvernzora/kura/internal/metadata"
 
-// TermHit is one term's contribution for one provider candidate.
-type TermHit struct {
-	Term        Term
-	Strategy    string
-	ProviderRef string
-	Summary     metadata.SeriesSummary
-	Rank        int
-}
-
 // Resolution is the resolver's success-path output. Outcome is encoded by
 // result cardinality: zero is not found, one is resolved, many is unresolved.
 type Resolution struct {
@@ -32,5 +23,11 @@ func (r Resolution) IsNotFound() bool {
 // Result is one provider candidate with all evidence supporting it.
 type Result struct {
 	Summary  metadata.SeriesSummary
-	Evidence []TermHit
+	Evidence []Evidence
+}
+
+// Evidence is one term's visible contribution to a result.
+type Evidence struct {
+	Term string
+	Rank int
 }

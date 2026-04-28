@@ -44,6 +44,23 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 	if got := summary["ProviderRef"]; got != "tvdb:370070" {
 		t.Fatalf("ProviderRef = %v, want tvdb:370070", got)
 	}
+	evidence, ok := results[0]["Evidence"].([]any)
+	if !ok || len(evidence) != 1 {
+		t.Fatalf("Evidence = %#v, want one entry", results[0]["Evidence"])
+	}
+	firstEvidence, ok := evidence[0].(map[string]any)
+	if !ok {
+		t.Fatalf("Evidence[0] = %#v, want object", evidence[0])
+	}
+	if got := firstEvidence["Term"]; got != "honzuki" {
+		t.Fatalf("Evidence[0].Term = %v, want honzuki", got)
+	}
+	if _, ok := firstEvidence["Summary"]; ok {
+		t.Fatal("Evidence[0].Summary present, want omitted")
+	}
+	if _, ok := firstEvidence["ProviderRef"]; ok {
+		t.Fatal("Evidence[0].ProviderRef present, want omitted")
+	}
 }
 
 func TestSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {

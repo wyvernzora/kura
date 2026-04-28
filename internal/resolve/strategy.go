@@ -1,11 +1,15 @@
 package resolve
 
-import "context"
+import (
+	"context"
+
+	"github.com/wyvernzora/kura/internal/metadata"
+)
 
 // ResolveStrategy is the unit of term-resolution behavior. Strategies hold
 // their own dependencies, identify matching terms, and return term-level hits.
 type ResolveStrategy interface {
-	// Name reports a stable identifier for evidence labelling and telemetry.
+	// Name reports a stable identifier for telemetry.
 	Name() string
 
 	// Match reports whether this strategy handles the given term.
@@ -17,5 +21,13 @@ type ResolveStrategy interface {
 
 	// Resolve produces this term's candidate hits. An empty slice with nil error
 	// is a normal term-level not-found outcome.
-	Resolve(ctx context.Context, term Term) ([]TermHit, error)
+	Resolve(ctx context.Context, term Term) ([]termHit, error)
+}
+
+// termHit is one term's contribution for one provider candidate.
+type termHit struct {
+	Term        Term
+	ProviderRef string
+	Summary     metadata.SeriesSummary
+	Rank        int
 }

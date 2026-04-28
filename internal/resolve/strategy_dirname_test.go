@@ -83,8 +83,8 @@ func TestDirnameStrategyResolveSeries(t *testing.T) {
 	if len(hits) != 1 {
 		t.Fatalf("len(hits) = %d, want 1", len(hits))
 	}
-	if hits[0].ProviderRef != "tvdb:1" || hits[0].Rank != 0 || hits[0].Strategy != "dirname" {
-		t.Fatalf("hit = %#v, want tvdb:1 rank 0 dirname", hits[0])
+	if hits[0].ProviderRef != "tvdb:1" || hits[0].Rank != 0 {
+		t.Fatalf("hit = %#v, want tvdb:1 rank 0", hits[0])
 	}
 }
 
