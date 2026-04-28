@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -27,7 +26,7 @@ type seriesSyncCmd struct {
 }
 
 func (cmd *seriesSyncCmd) Run(rt runContext) error {
-	repo := store.NewRepo()
+	repo := newRepo()
 	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
@@ -55,7 +54,7 @@ func (cmd *seriesSyncCmd) Run(rt runContext) error {
 		cmd.Series,
 		ops.SeriesSyncOptions{
 			ProviderSeries:   providerSeries,
-			ProviderResolver: cmd.providerSeriesResolver(rt),
+			ProviderResolver: providerSeriesResolver(rt, cmd.Provider, cmd.TVDBBaseURL),
 			Inspector:        mediaInspector(rt),
 			DryRun:           cmd.DryRun,
 			Replace:          cmd.Replace,
@@ -131,24 +130,4 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt runContext) (metadata.Series,
 		selected = true
 	}
 	return resolved, selected, nil
-}
-
-func (cmd *seriesSyncCmd) providerSeriesResolver(rt runContext) ops.ProviderSeriesResolver {
-	return func(ctx context.Context, local store.Series) (metadata.Series, error) {
-		metadataSource, err := buildMetadataSource(rt, cmd.Provider, cmd.TVDBBaseURL)
-		if err != nil {
-			return metadata.Series{}, err
-		}
-		ref, err := providerRefForSource(local, metadataSource.Key())
-		if err != nil {
-			return metadata.Series{}, err
-		}
-		return metadataSource.GetSeries(ctx, ref.ID())
-	}
-}
-
-func isInteractiveRun(rt runContext) bool {
-	stdin, stdinOK := rt.Stdin.(*os.File)
-	stdout, stdoutOK := rt.Stdout.(*os.File)
-	return stdinOK && stdoutOK && terminalui.IsTerminal(stdin) && terminalui.IsTerminal(stdout)
 }

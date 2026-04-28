@@ -1,17 +1,14 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/ops"
 	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/store"
 	"github.com/wyvernzora/kura/internal/terminalui"
 )
 
@@ -60,7 +57,7 @@ func (cmd *stageCmd) Run(rt runContext) error {
 	}
 	result, err := ops.StageEpisodeFile(
 		progress.With(rt.Context, terminalui.NewProgressReporter(rt.Stderr)),
-		store.NewRepo(),
+		newRepo(),
 		root,
 		cmd.Series,
 		ops.StageEpisodeFileOptions{
@@ -70,7 +67,7 @@ func (cmd *stageCmd) Run(rt runContext) error {
 			Companions:       cmd.Companions,
 			MediaPath:        cmd.Path,
 			Inspector:        mediaInspector(rt),
-			ProviderResolver: episodeProviderSeriesResolver(rt, cmd.Provider, cmd.TVDBBaseURL),
+			ProviderResolver: providerSeriesResolver(rt, cmd.Provider, cmd.TVDBBaseURL),
 			Apply:            !cmd.DryRun,
 			Replace:          cmd.Replace,
 		},
@@ -85,18 +82,4 @@ func (cmd *stageCmd) Run(rt runContext) error {
 		return encoder.Encode(result.UpdatedStaged)
 	}
 	return encoder.Encode(result)
-}
-
-func episodeProviderSeriesResolver(rt runContext, provider string, tvdbBaseURL string) ops.ProviderSeriesResolver {
-	return func(ctx context.Context, local store.Series) (metadata.Series, error) {
-		metadataSource, err := buildMetadataSource(rt, provider, tvdbBaseURL)
-		if err != nil {
-			return metadata.Series{}, err
-		}
-		ref, err := providerRefForSource(local, metadataSource.Key())
-		if err != nil {
-			return metadata.Series{}, err
-		}
-		return metadataSource.GetSeries(ctx, ref.ID())
-	}
 }

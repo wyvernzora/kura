@@ -20,7 +20,7 @@ type seriesReconcileCmd struct {
 }
 
 func (cmd *seriesReconcileCmd) Run(rt runContext) error {
-	repo := store.NewRepo()
+	repo := newRepo()
 	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
 	if err != nil {
 		return err
