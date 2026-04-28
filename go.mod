@@ -12,6 +12,7 @@ require (
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/briandowns/spinner v1.23.2
+	github.com/google/renameio/v2 v2.0.2
 	github.com/jedib0t/go-pretty/v6 v6.7.10
 	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/oklog/ulid/v2 v2.1.1

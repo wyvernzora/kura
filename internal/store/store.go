@@ -1,12 +1,13 @@
 package store
 
 import (
+	"bytes"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/google/renameio/v2"
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/fsroot"
 )
@@ -59,9 +60,11 @@ func SaveSeries(series Series) error {
 	if err := os.MkdirAll(metaDir, 0o755); err != nil {
 		return err
 	}
-	return atomicWrite(metaDir, SeriesPath(series.dirname), ".series-*.tmp", func(w io.Writer) error {
-		return encodeSeries(w, series)
-	})
+	var data bytes.Buffer
+	if err := encodeSeries(&data, series); err != nil {
+		return err
+	}
+	return renameio.WriteFile(SeriesPath(series.dirname), data.Bytes(), 0o644)
 }
 
 func NewStaged(dirname string) (*Staged, error) {
@@ -113,9 +116,11 @@ func SaveStaged(staged Staged) error {
 	if err := os.MkdirAll(metaDir, 0o755); err != nil {
 		return err
 	}
-	return atomicWrite(metaDir, StagedPath(staged.dirname), ".staged-*.tmp", func(w io.Writer) error {
-		return encodeStaged(w, staged)
-	})
+	var data bytes.Buffer
+	if err := encodeStaged(&data, staged); err != nil {
+		return err
+	}
+	return renameio.WriteFile(StagedPath(staged.dirname), data.Bytes(), 0o644)
 }
 
 func NewTrash(dirname string) (*Trash, error) {
@@ -167,38 +172,11 @@ func SaveTrash(trash Trash) error {
 	if err := os.MkdirAll(metaDir, 0o755); err != nil {
 		return err
 	}
-	return atomicWrite(metaDir, TrashPath(trash.dirname), ".trash-*.tmp", func(w io.Writer) error {
-		return encodeTrash(w, trash)
-	})
-}
-
-// atomicWrite stages the encoded payload through a tempfile in dir, fsyncs it,
-// renames into place, and fsyncs the parent directory. Permission errors on
-// the directory fsync are swallowed because some filesystems reject it for
-// non-owners while still honoring the rename.
-func atomicWrite(dir string, finalPath string, tmpPattern string, encode func(io.Writer) error) error {
-	tmp, err := os.CreateTemp(dir, tmpPattern)
-	if err != nil {
+	var data bytes.Buffer
+	if err := encodeTrash(&data, trash); err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-
-	if err := encode(tmp); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, finalPath); err != nil {
-		return err
-	}
-	return fsroot.SyncDir(dir)
+	return renameio.WriteFile(TrashPath(trash.dirname), data.Bytes(), 0o644)
 }
 
 func removeMetadataFile(path string) error {
