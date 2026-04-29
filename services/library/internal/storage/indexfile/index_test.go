@@ -1,0 +1,107 @@
+package indexfile_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/wyvernzora/kura/internal/coord"
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
+)
+
+func mustSeries(t *testing.T, value string) refs.Series {
+	t.Helper()
+	ref, err := refs.ParseSeries(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ref
+}
+
+func TestIndexSaveLoad(t *testing.T) {
+	root := t.TempDir()
+	idx := indexfile.New(root)
+	honzuki := mustSeries(t, "Honzuki")
+	if err := idx.Put(refs.Metadata("tvdb:370070"), honzuki); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Save(coord.NewMutator("test")); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := indexfile.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := loaded.Get(refs.Metadata("tvdb:370070"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got != honzuki {
+		t.Fatalf("index get = %q, %v", got, ok)
+	}
+}
+
+func TestIndexRejectsDuplicateMetadataRef(t *testing.T) {
+	idx := indexfile.New(t.TempDir())
+	if err := idx.Put(refs.Metadata("tvdb:370070"), mustSeries(t, "A")); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Put(refs.Metadata("tvdb:370070"), mustSeries(t, "B")); err == nil {
+		t.Fatal("expected duplicate ref error")
+	}
+}
+
+func TestIndexRemove(t *testing.T) {
+	idx := indexfile.New(t.TempDir())
+	bookworm := mustSeries(t, "Bookworm")
+	other := mustSeries(t, "Other")
+	if err := idx.Put(refs.Metadata("tvdb:370070"), bookworm); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Put(refs.Metadata("tvdb:999999"), bookworm); err != nil {
+		t.Fatal(err)
+	}
+	if err := idx.Put(refs.Metadata("tvdb:111111"), other); err != nil {
+		t.Fatal(err)
+	}
+	idx.Remove(bookworm)
+	if _, ok, err := idx.Get(refs.Metadata("tvdb:370070")); err != nil || ok {
+		t.Fatalf("Get old ref = _, %v, %v; want absent", ok, err)
+	}
+	if _, ok, err := idx.Get(refs.Metadata("tvdb:999999")); err != nil || ok {
+		t.Fatalf("Get second old ref = _, %v, %v; want absent", ok, err)
+	}
+	if got, ok, err := idx.Get(refs.Metadata("tvdb:111111")); err != nil || !ok || got != other {
+		t.Fatalf("Get other = %q, %v, %v; want %q, true, nil", got, ok, err, other)
+	}
+}
+
+func TestRebuildReportsProgress(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Bookworm"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var events []progress.Event
+	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
+		events = append(events, event)
+	})
+	_, err := indexfile.Rebuild(ctx, root, func(_ string, ref refs.Series, _ time.Time) (indexfile.Row, error) {
+		return indexfile.Row{Series: ref, Metadata: refs.Metadata("tvdb:370070"), Title: ref.String()}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) < 3 {
+		t.Fatalf("events = %#v, want start/update/success", events)
+	}
+	if events[0].Status != progress.StartStatus || events[0].Stage != "reindex" {
+		t.Fatalf("first event = %#v, want reindex start", events[0])
+	}
+	if events[len(events)-1].Status != progress.SuccessStatus || events[len(events)-1].Stage != "reindex" {
+		t.Fatalf("last event = %#v, want reindex success", events[len(events)-1])
+	}
+}
