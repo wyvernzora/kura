@@ -407,8 +407,12 @@ func TestSyncSeriesRejectsEpisodeMissingFromMetadata(t *testing.T) {
 		MetadataResolver: metadataResolverFor(metadataSeries),
 		Inspector:        fakeInspector,
 	})
-	if err == nil || !strings.Contains(err.Error(), "metadata has no S01E03") {
-		t.Fatalf("SyncSeries error = %v, want missing metadata episode", err)
+	var missing MetadataMissingEpisodeError
+	if !errors.As(err, &missing) {
+		t.Fatalf("SyncSeries error = %v, want MetadataMissingEpisodeError", err)
+	}
+	if missing.Season != 1 || missing.Episode != 3 {
+		t.Fatalf("missing episode = S%02dE%02d, want S01E03", missing.Season, missing.Episode)
 	}
 }
 
