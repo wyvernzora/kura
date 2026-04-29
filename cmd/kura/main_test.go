@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wyvernzora/kura/internal/domain"
+	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/store"
+	"github.com/wyvernzora/kura/internal/ui"
 )
 
 func TestMetaSearchPrintsJSON(t *testing.T) {
@@ -109,6 +115,140 @@ func TestSyncCommandInitializesAndWritesMetadata(t *testing.T) {
 	}
 	if len(stdout.Bytes()) == 0 {
 		t.Fatal("stdout is empty, want written series document")
+	}
+}
+
+func TestAddCommandCreatesDirAndWritesMetadata(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"add",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	seriesDir := filepath.Join(root, "本好きの下剋上")
+	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
+	if err != nil {
+		t.Fatalf("ReadFile series.json: %v", err)
+	}
+	var series map[string]any
+	if err := json.Unmarshal(data, &series); err != nil {
+		t.Fatalf("unmarshal series.json: %v", err)
+	}
+	if got := series["metadataRef"]; got != "tvdb:370070" {
+		t.Fatalf("metadataRef = %v, want tvdb:370070", got)
+	}
+	if got := series["preferredTitle"]; got != "本好きの下剋上" {
+		t.Fatalf("preferredTitle = %v, want 本好きの下剋上", got)
+	}
+	if got := libraryIndexPathForRef(t, root, "tvdb:370070"); got != "本好きの下剋上" {
+		t.Fatalf("index path = %q, want 本好きの下剋上", got)
+	}
+}
+
+func TestAddCommandUsesDirnameOverride(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"add",
+		"--tvdb-base-url", server.URL,
+		"--dirname", "Bookworm",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "Bookworm", ".kura", "series.json")); err != nil {
+		t.Fatalf("Stat Bookworm series.json: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "本好きの下剋上")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Stat default dir error = %v, want not exist", err)
+	}
+}
+
+func TestAddCommandRejectsExistingDirectory(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Bookworm"), 0o755); err != nil {
+		t.Fatalf("Mkdir Bookworm: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"add",
+		"--tvdb-base-url", server.URL,
+		"--dirname", "Bookworm",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil {
+		t.Fatal("run returned nil error, want existing directory error")
+	}
+	if !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("error = %v, want already exists", err)
+	}
+}
+
+func TestAddCommandRejectsRefAlreadyTracked(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	bookwormDir := filepath.Join(root, "Bookworm")
+	if err := os.Mkdir(bookwormDir, 0o755); err != nil {
+		t.Fatalf("Mkdir Bookworm: %v", err)
+	}
+	writeSeriesJSON(t, bookwormDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm"
+	}`)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"add",
+		"--tvdb-base-url", server.URL,
+		"--dirname", "Other",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	var duplicate store.DuplicateLibraryIndexRefError
+	if !errors.As(err, &duplicate) {
+		t.Fatalf("error = %v, want DuplicateLibraryIndexRefError", err)
+	}
+}
+
+func TestAddCommandRejectsAmbiguousQueryNonInteractive(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"add",
+		"--tvdb-base-url", server.URL,
+		"bookworm",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if !errors.Is(err, ui.ErrSelectionRequired) {
+		t.Fatalf("error = %v, want ErrSelectionRequired", err)
+	}
+	if !strings.Contains(stderr.String(), "tvdb:370070") || !strings.Contains(stderr.String(), "tvdb:999999") {
+		t.Fatalf("stderr = %q, want candidate refs", stderr.String())
 	}
 }
 
@@ -495,6 +635,30 @@ func testRunContextWithLibraryRootAndMediaInfo(stdout, stderr *bytes.Buffer, lib
 		return baseGetenv(key)
 	}
 	return rt
+}
+
+func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) string {
+	t.Helper()
+	root, err := fsroot.ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	index, err := store.LoadLibraryIndex(root)
+	if err != nil {
+		t.Fatalf("LoadLibraryIndex: %v", err)
+	}
+	ref, err := domain.ParseMetadataRef(metadataRef)
+	if err != nil {
+		t.Fatalf("ParseMetadataRef: %v", err)
+	}
+	path, ok, err := index.Get(ref)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !ok {
+		t.Fatalf("Get(%s) = false", metadataRef)
+	}
+	return path.String()
 }
 
 func newCLITestServer(t *testing.T) *httptest.Server {
