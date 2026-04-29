@@ -33,7 +33,7 @@ func SelectSeriesCandidate(stdin *os.File, stdout *os.File, stderr io.Writer, di
 	}
 	options := make([]string, 0, len(results)+1)
 	for _, result := range results {
-		options = append(options, FormatSeriesCandidate(result))
+		options = append(options, FormatSeriesCandidate(result.SeriesSummary))
 	}
 	noneOption := "None of these"
 	options = append(options, noneOption)
@@ -58,7 +58,7 @@ func SelectSeriesCandidate(stdin *os.File, stdout *os.File, stderr io.Writer, di
 	return metadata.SearchResult{}, false, nil
 }
 
-func FormatSeriesCandidate(result metadata.SearchResult) string {
+func FormatSeriesCandidate(result metadata.SeriesSummary) string {
 	title := result.PreferredTitle
 	if title == "" {
 		title = result.CanonicalTitle
