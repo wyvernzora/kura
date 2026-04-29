@@ -2,6 +2,7 @@ package tvdb
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -88,5 +89,33 @@ func TestSearchUsesCanonicalTitleWhenNoPreferredLanguages(t *testing.T) {
 	}
 	if results[0].PreferredTitle != "Ascendance of a Bookworm" {
 		t.Fatalf("PreferredTitle = %q, want canonical title", results[0].PreferredTitle)
+	}
+}
+
+func TestSearchNormalizesQueryToNFC(t *testing.T) {
+	server := newTestServer(t, func(w http.ResponseWriter, r *http.Request) bool {
+		requireAuth(t, r)
+		if got := r.URL.Query().Get("query"); got != "転生したらドラゴンの卵だった" {
+			t.Fatalf("query = %q, want NFC-normalized title", got)
+		}
+		writeJSON(t, w, map[string]any{
+			"status": "success",
+			"data":   []map[string]any{},
+		})
+		return true
+	})
+	defer server.Close()
+
+	p, err := New("test-key", Options{
+		BaseURL:    server.URL,
+		HTTPClient: server.Client(),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	_, err = p.Search(context.Background(), "転生したらドラゴンの卵だった", metadata.SearchOptions{})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
 	}
 }

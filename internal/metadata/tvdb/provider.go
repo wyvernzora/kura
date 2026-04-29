@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
@@ -66,7 +68,7 @@ func (p *Provider) Key() string {
 
 // Search returns lightweight TVDB series candidates for a title query.
 func (p *Provider) Search(ctx context.Context, query string, opts metadata.SearchOptions) ([]metadata.SearchResult, error) {
-	query = strings.TrimSpace(query)
+	query = norm.NFC.String(strings.TrimSpace(query))
 	if query == "" {
 		return nil, errors.New("tvdb: empty search query")
 	}

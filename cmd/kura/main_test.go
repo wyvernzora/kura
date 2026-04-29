@@ -230,6 +230,32 @@ func TestImportCommandInitializesExistingDirectory(t *testing.T) {
 	}
 }
 
+func TestImportCommandUsesDirnameAsSearchTerm(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Honzuki"), 0o755); err != nil {
+		t.Fatalf("Mkdir Honzuki: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"import",
+		"--tvdb-base-url", server.URL,
+		"Honzuki",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "Honzuki", ".kura", "series.json")); err != nil {
+		t.Fatalf("Stat series.json: %v", err)
+	}
+	if got := libraryIndexPathForRef(t, root, "tvdb:370070"); got != "Honzuki" {
+		t.Fatalf("index path = %q, want Honzuki", got)
+	}
+}
+
 func TestImportCommandRejectsAlreadyTrackedDirectory(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
@@ -723,32 +749,36 @@ func newCLITestServer(t *testing.T) *httptest.Server {
 	})
 	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
 		requireAuth(t, r)
-		writeJSON(t, w, map[string]any{
-			"status": "success",
-			"data": []map[string]any{
-				{
-					"id":             370070,
-					"tvdb_id":        "370070",
-					"name":           "Ascendance of a Bookworm",
-					"type":           "series",
-					"year":           2019,
-					"first_air_time": "2019-10-03",
-					"genres":         nil,
-					"translations": map[string]any{
-						"jpn": "本好きの下剋上",
-						"eng": "Ascendance of a Bookworm",
-					},
-				},
-				{
-					"id":             999999,
-					"tvdb_id":        "999999",
-					"name":           "Bookworm Extra",
-					"type":           "series",
-					"year":           2020,
-					"first_air_time": "2020-01-01",
-					"genres":         nil,
+		results := []map[string]any{
+			{
+				"id":             370070,
+				"tvdb_id":        "370070",
+				"name":           "Ascendance of a Bookworm",
+				"type":           "series",
+				"year":           2019,
+				"first_air_time": "2019-10-03",
+				"genres":         nil,
+				"translations": map[string]any{
+					"jpn": "本好きの下剋上",
+					"eng": "Ascendance of a Bookworm",
 				},
 			},
+			{
+				"id":             999999,
+				"tvdb_id":        "999999",
+				"name":           "Bookworm Extra",
+				"type":           "series",
+				"year":           2020,
+				"first_air_time": "2020-01-01",
+				"genres":         nil,
+			},
+		}
+		if r.URL.Query().Get("query") == "Honzuki" {
+			results = results[:1]
+		}
+		writeJSON(t, w, map[string]any{
+			"status": "success",
+			"data":   results,
 		})
 	})
 	mux.HandleFunc("/series/370070/extended", func(w http.ResponseWriter, r *http.Request) {
