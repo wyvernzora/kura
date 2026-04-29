@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/ops"
@@ -37,6 +38,9 @@ func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
 		resolved, _, err := cmd.resolveMetadataSeries(rt)
 		if err != nil {
+			return err
+		}
+		if err := cmd.ensureMetadataRefIsAvailable(rt, seriesDir, resolved.MetadataRef); err != nil {
 			return err
 		}
 		metadataSeries = &resolved
@@ -92,8 +96,50 @@ func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 		progress.Fail("Failed writing trash metadata")
 		return err
 	}
+	if err := cmd.updateLibraryIndex(rt, seriesDir, result.UpdatedSeries); err != nil {
+		progress.Fail("Failed writing library index")
+		return err
+	}
 	progress.Succeed("Synced %d episode media file(s)", len(result.Synced))
 	return nil
+}
+
+func (cmd *seriesSyncCmd) ensureMetadataRefIsAvailable(rt *runContext, seriesDir fsroot.SeriesDir, metadataRef string) error {
+	ref, err := domain.ParseMetadataRef(metadataRef)
+	if err != nil {
+		return err
+	}
+	index, err := store.LibraryIndexFrom(rt.Context)
+	if err != nil {
+		return err
+	}
+	currentPath, err := domain.ParseSeriesPath(seriesDir.Name())
+	if err != nil {
+		return err
+	}
+	existingPath, exists, err := index.Get(ref)
+	if err != nil {
+		return err
+	}
+	if exists && existingPath.String() != currentPath.String() {
+		return store.DuplicateLibraryIndexRefError{Ref: ref, Existing: existingPath, Next: currentPath}
+	}
+	return nil
+}
+
+func (cmd *seriesSyncCmd) updateLibraryIndex(rt *runContext, seriesDir fsroot.SeriesDir, series store.Series) error {
+	index, err := store.LibraryIndexFrom(rt.Context)
+	if err != nil {
+		return err
+	}
+	seriesPath, err := domain.ParseSeriesPath(seriesDir.Name())
+	if err != nil {
+		return err
+	}
+	if err := index.Put(series, seriesPath); err != nil {
+		return err
+	}
+	return index.Save()
 }
 
 func (cmd *seriesSyncCmd) resolveMetadataSeries(rt *runContext) (metadata.Series, bool, error) {

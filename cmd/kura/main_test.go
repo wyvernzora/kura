@@ -100,8 +100,52 @@ func TestSyncCommandInitializesAndWritesMetadata(t *testing.T) {
 	if _, ok := series["filesystemTitle"]; ok {
 		t.Fatal("filesystemTitle present, want derived from directory name")
 	}
+	index, err := os.ReadFile(filepath.Join(root, ".kura", "index.tsv"))
+	if err != nil {
+		t.Fatalf("ReadFile index.tsv: %v", err)
+	}
+	if got, want := string(index), "tvdb:370070\tBookworm\n"; got != want {
+		t.Fatalf("index.tsv = %q, want %q", got, want)
+	}
 	if len(stdout.Bytes()) == 0 {
 		t.Fatal("stdout is empty, want written series document")
+	}
+}
+
+func TestSyncCommandRejectsMetadataRefTrackedElsewhere(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	bookwormDir := filepath.Join(root, "Bookworm")
+	if err := os.MkdirAll(bookwormDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll Bookworm: %v", err)
+	}
+	writeSeriesJSON(t, bookwormDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm"
+	}`)
+	otherDir := filepath.Join(root, "Other")
+	if err := os.Mkdir(otherDir, 0o755); err != nil {
+		t.Fatalf("Mkdir Other: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"sync",
+		"--yes",
+		"--tvdb-base-url", server.URL,
+		"--metadata-ref", "tvdb:370070",
+		"Other",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil {
+		t.Fatal("run returned nil error, want duplicate metadata ref error")
+	}
+	if !strings.Contains(err.Error(), "already tracked at") || !strings.Contains(err.Error(), "Bookworm") {
+		t.Fatalf("error = %v, want duplicate ref at Bookworm", err)
 	}
 }
 
