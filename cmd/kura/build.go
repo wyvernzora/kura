@@ -1,16 +1,13 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"strings"
 
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/kura"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/ops"
-	"github.com/wyvernzora/kura/internal/store"
+	"github.com/wyvernzora/kura/internal/ui"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
@@ -23,13 +20,30 @@ func buildSourceFromFlags(rt *runContext, flags *cli) (metadata.Source, error) {
 	})
 }
 
-func mediaInspector(rt *runContext) mediainfo.Inspector {
-	inspector := mediainfo.New()
-	command := strings.TrimSpace(rt.Getenv("KURA_MEDIAINFO_COMMAND"))
-	if command != "" {
-		inspector.Command = command
+func libraryFromFlags(rt *runContext, flags *cli) (*kura.Library, error) {
+	preferredLanguages, err := config.ParsePreferredLanguages(rt.Getenv("KURA_PREFERRED_LANGUAGES"))
+	if err != nil {
+		return nil, err
 	}
-	return inspector
+	return kura.New(kura.Config{
+		Root:               rt.Getenv("KURA_LIBRARY_ROOT"),
+		MediainfoCommand:   rt.Getenv("KURA_MEDIAINFO_COMMAND"),
+		TVDBKey:            rt.Getenv("KURA_TVDB_KEY"),
+		TVDBBaseURL:        flags.TVDBBaseURL,
+		PreferredLanguages: preferredLanguages.Tags(),
+	})
+}
+
+func resolveMetadataRef(rt *runContext, lib *kura.Library, terms []string) (kura.MetadataRef, error) {
+	resolution, err := lib.Resolve(rt.Context, kura.ResolveInput{Terms: terms})
+	if err != nil {
+		return "", err
+	}
+	picked, err := ui.SelectFromResolution(stdio.From(rt.Context), resolution, terms)
+	if err != nil {
+		return "", err
+	}
+	return kura.MetadataRef(picked.Summary.MetadataRef), nil
 }
 
 func parseMetadataRef(seriesRef string) (string, string, error) {
@@ -41,33 +55,4 @@ func parseMetadataRef(seriesRef string) (string, string, error) {
 		return "", "", fmt.Errorf("unsupported metadata ref source %q; only tvdb:<id> is supported", ref.Source())
 	}
 	return ref.Source(), ref.ID(), nil
-}
-
-func metadataRefForSource(series store.Series, source string) (domain.MetadataRef, error) {
-	ref, err := domain.ParseMetadataRef(series.MetadataRef)
-	if err != nil {
-		return domain.MetadataRef{}, err
-	}
-	if ref.Source() != source {
-		return domain.MetadataRef{}, fmt.Errorf("series metadata ref source %q does not match %q", ref.Source(), source)
-	}
-	return ref, nil
-}
-
-func metadataSeriesResolver(rt *runContext) ops.MetadataSeriesResolver {
-	return func(ctx context.Context, local store.Series) (metadata.Series, error) {
-		metadataSource, err := metadata.SourceFrom(rt.Context)
-		if err != nil {
-			return metadata.Series{}, err
-		}
-		ref, err := metadataRefForSource(local, metadataSource.Key())
-		if err != nil {
-			return metadata.Series{}, err
-		}
-		return metadataSource.GetSeries(ctx, ref.ID())
-	}
-}
-
-func isInteractiveRun(rt *runContext) bool {
-	return stdio.From(rt.Context).IsInteractive()
 }

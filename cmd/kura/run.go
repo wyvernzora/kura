@@ -2,17 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"io"
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/resolve"
-	"github.com/wyvernzora/kura/internal/store"
-	"github.com/wyvernzora/kura/internal/ui"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
@@ -22,16 +17,16 @@ import (
 //   - stdio.Stdio          (always; via stdio.With)
 //   - lazy metadata.Source (via metadata.WithSource)
 //   - lazy *resolve.Resolver (via resolve.WithResolver)
-//   - lazy *store.LibraryIndex (via store.WithLibraryIndex)
 //
 // Commands receive *runContext via kong.Bind and read these via stdio.From,
-// metadata.SourceFrom, resolve.ResolverFrom, and store.LibraryIndexFrom respectively.
+// metadata.SourceFrom, and resolve.ResolverFrom respectively.
 type runContext struct {
 	Context context.Context
 	Stdin   io.Reader
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Getenv  func(string) string
+	flags   *cli
 }
 
 func run(args []string, rt runContext) error {
@@ -52,6 +47,7 @@ func run(args []string, rt runContext) error {
 	}
 
 	flags := &cli{}
+	rt.flags = flags
 	parser, err := kong.New(flags,
 		kong.Name("kura"),
 		kong.Description("Anime-first library manager."),
@@ -80,17 +76,6 @@ func run(args []string, rt runContext) error {
 			resolve.NewMetadataIDStrategy(src),
 			resolve.NewTextSearchStrategy(src),
 		), nil
-	})
-	rt.Context = store.WithLibraryIndex(rt.Context, func() (*store.LibraryIndex, error) {
-		root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
-		if err != nil {
-			return nil, err
-		}
-		index, err := store.LoadLibraryIndex(root)
-		if errors.Is(err, store.ErrLibraryIndexNotFound) {
-			return store.RebuildLibraryIndex(progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)), root)
-		}
-		return index, err
 	})
 	return kctx.Run()
 }
