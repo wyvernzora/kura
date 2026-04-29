@@ -1,15 +1,12 @@
 package ui
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	"github.com/AlecAivazis/survey/v2"
-	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/resolve"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
@@ -21,55 +18,29 @@ var (
 	errInteractiveRequires = errors.New("ui: interactive metadata selection requires file stdio")
 )
 
-func ResolveSeries(ctx context.Context, terms []string) (metadata.Series, error) {
-	src, err := metadata.SourceFrom(ctx)
-	if err != nil {
-		return metadata.Series{}, err
-	}
-	resolver, err := resolve.ResolverFrom(ctx)
-	if err != nil {
-		return metadata.Series{}, err
-	}
-	io := stdio.From(ctx)
-
-	resolution, err := resolver.Resolve(ctx, resolve.ParseQuery(terms))
-	if err != nil {
-		return metadata.Series{}, err
-	}
-
+func SelectFromResolution(io stdio.Stdio, resolution resolve.Resolution, terms []string) (resolve.Result, error) {
 	switch len(resolution.Results) {
 	case 0:
-		return metadata.Series{}, fmt.Errorf("%w for %v", ErrNoMetadataMatch, terms)
+		return resolve.Result{}, fmt.Errorf("%w for %v", ErrNoMetadataMatch, terms)
 	case 1:
-		return fetchSeries(ctx, src, resolution.Results[0].Summary.MetadataRef)
+		return resolution.Results[0], nil
 	}
 
 	if !io.IsInteractive() {
-		writeCandidatesHint(io.Err, terms, resolution.Results)
-		return metadata.Series{}, ErrSelectionRequired
+		writeCandidatesHint(io.Err, resolution.Results)
+		return resolve.Result{}, ErrSelectionRequired
 	}
 	picked, ok, err := selectResolveCandidate(io, terms, resolution.Results)
 	if err != nil {
-		return metadata.Series{}, err
+		return resolve.Result{}, err
 	}
 	if !ok {
-		return metadata.Series{}, ErrSelectionCancelled
+		return resolve.Result{}, ErrSelectionCancelled
 	}
-	return fetchSeries(ctx, src, picked.Summary.MetadataRef)
+	return picked, nil
 }
 
-func fetchSeries(ctx context.Context, src metadata.Source, metadataRef string) (metadata.Series, error) {
-	ref, err := domain.ParseMetadataRef(metadataRef)
-	if err != nil {
-		return metadata.Series{}, err
-	}
-	if ref.Source() != src.Key() {
-		return metadata.Series{}, fmt.Errorf("ui: unsupported metadata ref source %q; expected %s:<id>", ref.Source(), src.Key())
-	}
-	return src.GetSeries(ctx, ref.ID())
-}
-
-func writeCandidatesHint(w io.Writer, terms []string, results []resolve.Result) {
+func writeCandidatesHint(w io.Writer, results []resolve.Result) {
 	if w == nil {
 		return
 	}
