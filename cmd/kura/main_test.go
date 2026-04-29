@@ -13,6 +13,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/kura"
 	"github.com/wyvernzora/kura/internal/store"
 	"github.com/wyvernzora/kura/internal/ui"
 )
@@ -176,9 +177,9 @@ func TestAddCommandRejectsRefAlreadyTracked(t *testing.T) {
 		"--dirname", "Other",
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	var duplicate store.DuplicateLibraryIndexRefError
+	var duplicate kura.MetadataRefConflictError
 	if !errors.As(err, &duplicate) {
-		t.Fatalf("error = %v, want DuplicateLibraryIndexRefError", err)
+		t.Fatalf("error = %v, want MetadataRefConflictError", err)
 	}
 }
 
@@ -305,9 +306,9 @@ func TestImportCommandRejectsRefAlreadyTracked(t *testing.T) {
 		"Other",
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	var duplicate store.DuplicateLibraryIndexRefError
+	var duplicate kura.MetadataRefConflictError
 	if !errors.As(err, &duplicate) {
-		t.Fatalf("error = %v, want DuplicateLibraryIndexRefError", err)
+		t.Fatalf("error = %v, want MetadataRefConflictError", err)
 	}
 }
 
@@ -341,7 +342,6 @@ func TestScanCommandSyncsTrackedSeries(t *testing.T) {
 	stderr.Reset()
 	err := run([]string{
 		"scan",
-		"--yes",
 		"--tvdb-base-url", server.URL,
 		"tvdb:370070",
 	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
@@ -375,8 +375,9 @@ func TestScanCommandFailsWhenRefNotTracked(t *testing.T) {
 	if err == nil {
 		t.Fatal("run returned nil error, want missing tracked series error")
 	}
-	if !strings.Contains(err.Error(), "no tracked series") {
-		t.Fatalf("error = %v, want no tracked series", err)
+	var notIndexed kura.MetadataRefNotIndexedError
+	if !errors.As(err, &notIndexed) {
+		t.Fatalf("error = %v, want MetadataRefNotIndexedError", err)
 	}
 }
 
@@ -409,7 +410,6 @@ func TestScanCommandUsesIndexToFindDirectory(t *testing.T) {
 	stderr.Reset()
 	err := run([]string{
 		"scan",
-		"--yes",
 		"--tvdb-base-url", server.URL,
 		"tvdb:370070",
 	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
@@ -473,11 +473,8 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &plan); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
-	if got := plan["dryRun"]; got != true {
-		t.Fatalf("dryRun = %v, want true", got)
-	}
-	if moves := plan["fileMoves"].([]any); len(moves) != 1 {
-		t.Fatalf("len(fileMoves) = %d, want 1", len(moves))
+	if changes := plan["changes"].([]any); len(changes) != 1 {
+		t.Fatalf("len(changes) = %d, want 1", len(changes))
 	}
 }
 
@@ -528,7 +525,7 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	}
 }
 
-func TestReconcileCommandDoesNotRequireTVDBKey(t *testing.T) {
+func TestReconcileCommandReportsMissingTVDBKey(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Bookworm")
 	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
@@ -560,8 +557,8 @@ func TestReconcileCommandDoesNotRequireTVDBKey(t *testing.T) {
 		"--json",
 		"Bookworm",
 	}, rt)
-	if err != nil {
-		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	if !errors.Is(err, kura.ErrMissingTVDBKey) {
+		t.Fatalf("run error = %v, want ErrMissingTVDBKey", err)
 	}
 }
 
