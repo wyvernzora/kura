@@ -2,15 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
 
-	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/ops"
-	"github.com/wyvernzora/kura/internal/store"
-	"github.com/wyvernzora/kura/internal/ui"
+	"github.com/wyvernzora/kura/internal/kura"
 )
 
 type importCmd struct {
@@ -20,50 +14,30 @@ type importCmd struct {
 }
 
 func (cmd *importCmd) Run(rt *runContext) error {
-	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
+	lib, err := libraryFromFlags(rt, rt.flags)
 	if err != nil {
 		return err
 	}
-	seriesDir, err := root.SeriesDir(cmd.Dirname)
+	metadataRef, err := resolveMetadataRef(rt, lib, cmd.Terms)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir.Path())); err == nil {
-		return fmt.Errorf("library: %q already has .kura/series.json; use kura scan instead", cmd.Dirname)
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-
-	meta, err := ui.ResolveSeries(rt.Context, cmd.Terms)
+	series, err := lib.Import(rt.Context, kura.ImportInput{
+		Ref:         kura.SeriesRef(cmd.Dirname),
+		MetadataRef: metadataRef,
+	})
 	if err != nil {
 		return err
 	}
-	seriesPath, err := domain.ParseSeriesPath(seriesDir.Name())
-	if err != nil {
-		return err
-	}
-	if err := assertMetadataRefAvailable(rt, meta.MetadataRef, seriesPath); err != nil {
-		return err
-	}
-	result, err := ops.InitSeries(ops.InitSeriesOptions{SeriesDir: seriesDir, Metadata: meta})
-	if err != nil {
-		return err
-	}
-	if err := store.SaveSeries(result.Series); err != nil {
-		return err
-	}
-	if err := updateLibraryIndex(rt, result.Series, result.SeriesPath); err != nil {
-		return err
-	}
-	return cmd.writeSummary(rt, result)
+	return cmd.writeSummary(rt, series)
 }
 
-func (cmd *importCmd) writeSummary(rt *runContext, result ops.InitSeriesResult) error {
+func (cmd *importCmd) writeSummary(rt *runContext, series *kura.Series) error {
 	if cmd.JSON {
 		encoder := json.NewEncoder(rt.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(result.Series)
+		return encoder.Encode(series)
 	}
-	_, err := fmt.Fprintf(rt.Stdout, "Imported %s (%s)\n", result.SeriesPath, result.Series.MetadataRef)
+	_, err := fmt.Fprintf(rt.Stdout, "Imported %s (%s)\n", series.Ref(), series.MetadataRef())
 	return err
 }
