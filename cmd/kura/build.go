@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/wyvernzora/kura/internal/config"
@@ -44,6 +45,16 @@ func resolveMetadataRef(rt *runContext, lib *kura.Library, terms []string) (kura
 		return "", err
 	}
 	return kura.MetadataRef(picked.Summary.MetadataRef), nil
+}
+
+func writeSeriesSummary(rt *runContext, series *kura.Series, verb string, asJSON bool) error {
+	if asJSON {
+		encoder := json.NewEncoder(rt.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(series)
+	}
+	_, err := fmt.Fprintf(rt.Stdout, "%s %s (%s)\n", verb, series.Ref(), series.MetadataRef())
+	return err
 }
 
 func parseMetadataRef(seriesRef string) (string, string, error) {

@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-
 	"github.com/wyvernzora/kura/internal/kura"
 )
 
@@ -29,15 +26,5 @@ func (cmd *importCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	return cmd.writeSummary(rt, series)
-}
-
-func (cmd *importCmd) writeSummary(rt *runContext, series *kura.Series) error {
-	if cmd.JSON {
-		encoder := json.NewEncoder(rt.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(series)
-	}
-	_, err := fmt.Fprintf(rt.Stdout, "Imported %s (%s)\n", series.Ref(), series.MetadataRef())
-	return err
+	return writeSeriesSummary(rt, series, "Imported", cmd.JSON)
 }

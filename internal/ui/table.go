@@ -10,25 +10,8 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/kura"
-	"github.com/wyvernzora/kura/internal/ops"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
-
-func WriteSeriesSyncResult(w io.Writer, result ops.SeriesSyncResult) error {
-	entries := make([]scanTableEntry, 0, len(result.Synced))
-	for _, entry := range result.Synced {
-		entries = append(entries, scanTableEntry{
-			Status:     entry.Status,
-			Season:     entry.Season,
-			Number:     entry.Number,
-			Source:     entry.Source,
-			Resolution: entry.Resolution,
-			Path:       entry.Path,
-			Companions: entry.Companions,
-		})
-	}
-	return writeScanTable(w, entries, result.Skipped)
-}
 
 func WriteScanResult(w io.Writer, result kura.ScanResult) error {
 	entries := make([]scanTableEntry, 0, len(result.Synced))
@@ -106,14 +89,6 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []kura.Import
 		skippedTable.AppendRow(table.Row{skipped.Path, skipped.Code, skipped.Reason})
 	}
 	return writeStyledTable(w, skippedTable, nil)
-}
-
-func WriteReconcilePlan(w io.Writer, plan ops.Plan) error {
-	moves := make([]kura.FileMove, 0, len(plan.FileMoves))
-	for _, move := range plan.FileMoves {
-		moves = append(moves, kura.FileMove{From: move.From, To: move.To})
-	}
-	return writeReconcileMoves(w, moves)
 }
 
 func WriteKuraReconcilePlan(w io.Writer, plan kura.ReconcilePlan) error {
