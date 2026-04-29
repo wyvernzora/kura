@@ -2,13 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/ops"
+	"github.com/wyvernzora/kura/internal/kura"
 	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/store"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -20,19 +16,18 @@ type seriesReconcileCmd struct {
 }
 
 func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
-	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
+	lib, err := libraryFromFlags(rt, rt.flags)
 	if err != nil {
 		return err
 	}
-	seriesDir, dirErr := root.SeriesDir(cmd.Series)
-	plan, err := ops.PlanSeries(rt.Context, root, cmd.Series)
+	series, err := lib.Get(kura.SeriesRef(cmd.Series))
 	if err != nil {
-		if dirErr == nil {
-			warnDuplicateSeries(rt, seriesDir.Path(), err)
-		}
 		return err
 	}
-	plan.DryRun = cmd.DryRun
+	plan, err := series.PlanReconcile(rt.Context, kura.ReconcileInput{})
+	if err != nil {
+		return err
+	}
 
 	if cmd.JSON {
 		encoder := json.NewEncoder(rt.Stdout)
@@ -40,7 +35,7 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 		if err := encoder.Encode(plan); err != nil {
 			return err
 		}
-	} else if err := ui.WriteReconcilePlan(rt.Stdout, plan); err != nil {
+	} else if err := ui.WriteKuraReconcilePlan(rt.Stdout, plan); err != nil {
 		return err
 	}
 	if cmd.DryRun || !plan.HasChanges() {
@@ -55,15 +50,9 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 			return nil
 		}
 	}
-	return ops.ApplyPlan(
+	_, err = series.ApplyReconcile(
 		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
 		plan,
 	)
-}
-
-func warnDuplicateSeries(rt *runContext, seriesDir string, err error) {
-	if !errors.Is(err, store.DuplicateEpisodeNumberError{}) {
-		return
-	}
-	fmt.Fprintf(rt.Stderr, "warning: %s contains duplicate episode entries; manually edit series.json before continuing\n", store.SeriesMetadataPath(seriesDir))
+	return err
 }

@@ -3,11 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/ops"
+	"github.com/wyvernzora/kura/internal/kura"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/ui"
 )
@@ -18,7 +15,6 @@ type stageCmd struct {
 	Number     int      `help:"Episode number." required:""`
 	Source     string   `help:"Media source. Defaults to filename source or unknown."`
 	Companions []string `name:"companion" help:"Absolute companion file path."`
-	DryRun     bool     `name:"dry-run" help:"Print the updated staged document without writing it."`
 	Replace    bool     `name:"replace" help:"Stage over an active episode or replace an existing staged entry for the same season and episode."`
 	Series     string   `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
 	Path       string   `arg:"" help:"Absolute media file path to stage."`
@@ -32,41 +28,31 @@ func (cmd *stageCmd) Run(rt *runContext) error {
 		return errors.New("--season is required unless --special is set")
 	}
 
-	season := domain.SpecialsSeason()
-	var err error
+	season := 0
 	if !cmd.Special {
-		season, err = domain.RegularSeason(cmd.Season)
-		if err != nil {
-			return err
-		}
+		season = cmd.Season
 	}
-	episode, err := domain.NewEpisodeNumber(cmd.Number)
-	if err != nil {
+	if cmd.Number < 1 {
 		return errors.New("--number must be greater than zero")
 	}
-	root, err := fsroot.ParseLibraryRoot(rt.Getenv("KURA_LIBRARY_ROOT"))
+	lib, err := libraryFromFlags(rt, rt.flags)
+	if err != nil {
+		return err
+	}
+	series, err := lib.Get(kura.SeriesRef(cmd.Series))
 	if err != nil {
 		return err
 	}
 
-	source := domain.MediaSource("")
-	if strings.TrimSpace(cmd.Source) != "" {
-		source = domain.ParseMediaSource(cmd.Source)
-	}
-	result, err := ops.StageEpisodeFile(
+	result, err := series.Stage(
 		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
-		root,
-		cmd.Series,
-		ops.StageEpisodeFileOptions{
-			Season:           season,
-			Episode:          episode,
-			Source:           source,
-			Companions:       cmd.Companions,
-			MediaPath:        cmd.Path,
-			Inspector:        mediaInspector(rt),
-			MetadataResolver: metadataSeriesResolver(rt),
-			Apply:            !cmd.DryRun,
-			Replace:          cmd.Replace,
+		kura.StageInput{
+			Season:     season,
+			Episode:    cmd.Number,
+			Source:     cmd.Source,
+			Companions: cmd.Companions,
+			MediaPath:  cmd.Path,
+			Replace:    cmd.Replace,
 		},
 	)
 	if err != nil {
@@ -75,8 +61,5 @@ func (cmd *stageCmd) Run(rt *runContext) error {
 
 	encoder := json.NewEncoder(rt.Stdout)
 	encoder.SetIndent("", "  ")
-	if cmd.DryRun {
-		return encoder.Encode(result.UpdatedStaged)
-	}
 	return encoder.Encode(result)
 }
