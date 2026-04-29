@@ -36,15 +36,13 @@ type seriesSummaryInput struct {
 	status           metadata.SeriesStatus
 	year             int
 	genres           []string
-	linkedRefs       []string
 	titles           []titleCandidate
 }
 
 func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) metadata.SeriesSummary {
 	canonicalTitle := normalizeTitle(input.canonicalTitle)
 	return metadata.SeriesSummary{
-		ProviderRef:      input.ref,
-		ProviderRefs:     providerRefs(input.ref, input.linkedRefs),
+		MetadataRef:      input.ref,
 		PreferredTitle:   p.selectTitle(canonicalTitle, input.originalLanguage, input.titles),
 		CanonicalTitle:   canonicalTitle,
 		Type:             metadata.MediaTypeSeries,
@@ -55,23 +53,6 @@ func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) metadata.Ser
 		FirstAired:       normalizeDate(input.firstAired),
 		Genres:           input.genres,
 	}
-}
-
-func providerRefs(primary string, linked []string) []string {
-	refs := make([]string, 0, 1+len(linked))
-	seen := map[string]bool{}
-	if primary != "" {
-		refs = append(refs, primary)
-		seen[primary] = true
-	}
-	for _, ref := range linked {
-		if ref == "" || seen[ref] {
-			continue
-		}
-		refs = append(refs, ref)
-		seen[ref] = true
-	}
-	return refs
 }
 
 func (p *Provider) selectTitle(canonicalTitle, originalLanguage string, titles []titleCandidate) string {

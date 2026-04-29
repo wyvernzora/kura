@@ -20,7 +20,7 @@ func TestResolverEmptyValuedTermsAreIgnored(t *testing.T) {
 	strategy := &countingStrategy{fakeStrategy: fakeStrategy{
 		match: true,
 		hits: []termHit{{
-			ProviderRef: "tvdb:1",
+			MetadataRef: "tvdb:1",
 			Summary:     testSummary("tvdb:1"),
 		}},
 	}}
@@ -95,7 +95,7 @@ func TestResolverDuplicateAuthoritativeTermCollapses(t *testing.T) {
 		match:         true,
 		authoritative: true,
 		hits: []termHit{{
-			ProviderRef: "tvdb:1",
+			MetadataRef: "tvdb:1",
 			Summary:     testSummary("tvdb:1"),
 		}},
 	}}
@@ -136,13 +136,13 @@ func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 		hitsForTerm: map[Term][]termHit{
 			{Value: "jp"}: {{
 				Term:        Term{Value: "jp"},
-				ProviderRef: "tvdb:1",
+				MetadataRef: "tvdb:1",
 				Summary:     testSummary("tvdb:1"),
 				Rank:        0,
 			}},
 			{Value: "en"}: {{
 				Term:        Term{Value: "en"},
-				ProviderRef: "tvdb:1",
+				MetadataRef: "tvdb:1",
 				Summary:     testSummary("tvdb:1"),
 				Rank:        1,
 			}},
@@ -168,9 +168,9 @@ func TestResolverUnresolvedDistinctRemoteRefs(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
 		hits: []termHit{
-			{ProviderRef: "tvdb:1", Summary: testSummary("tvdb:1")},
-			{ProviderRef: "tvdb:2", Summary: testSummary("tvdb:2")},
-			{ProviderRef: "tvdb:3", Summary: testSummary("tvdb:3")},
+			{MetadataRef: "tvdb:1", Summary: testSummary("tvdb:1")},
+			{MetadataRef: "tvdb:2", Summary: testSummary("tvdb:2")},
+			{MetadataRef: "tvdb:3", Summary: testSummary("tvdb:3")},
 		},
 	})
 
@@ -230,16 +230,16 @@ func TestResolverSortOrder(t *testing.T) {
 		match: true,
 		hitsForTerm: map[Term][]termHit{
 			{Value: "a"}: {
-				{ProviderRef: "tvdb:1", Summary: testSummary("tvdb:1"), Rank: 0},
-				{ProviderRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 1},
-				{ProviderRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 0},
+				{MetadataRef: "tvdb:1", Summary: testSummary("tvdb:1"), Rank: 0},
+				{MetadataRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 1},
+				{MetadataRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 0},
 			},
 			{Value: "b"}: {
-				{ProviderRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 3},
-				{ProviderRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 1},
+				{MetadataRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 3},
+				{MetadataRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 1},
 			},
 			{Value: "c"}: {
-				{ProviderRef: "tvdb:4", Summary: testSummary("tvdb:4"), Rank: 0},
+				{MetadataRef: "tvdb:4", Summary: testSummary("tvdb:4"), Rank: 0},
 			},
 		},
 	})
@@ -250,7 +250,7 @@ func TestResolverSortOrder(t *testing.T) {
 	}
 	var refs []string
 	for _, candidate := range result.Results {
-		refs = append(refs, candidate.Summary.ProviderRef)
+		refs = append(refs, candidate.Summary.MetadataRef)
 	}
 	want := []string{"tvdb:3", "tvdb:2", "tvdb:1", "tvdb:4"}
 	if !slices.Equal(refs, want) {

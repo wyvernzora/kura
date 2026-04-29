@@ -15,7 +15,7 @@ import (
 )
 
 type seriesSyncCmd struct {
-	ProviderRef string `name:"provider-ref" help:"Provider series reference, such as tvdb:370070. Bypasses search."`
+	MetadataRef string `name:"metadata-ref" help:"Metadata series reference, such as tvdb:370070. Bypasses search."`
 	DryRun      bool   `name:"dry-run" help:"Print planned changes without writing series metadata."`
 	JSON        bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Yes         bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
@@ -33,13 +33,13 @@ func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 		return err
 	}
 
-	var providerSeries *metadata.Series
+	var metadataSeries *metadata.Series
 	if _, err := os.Stat(store.SeriesPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
-		resolved, _, err := cmd.resolveProviderSeries(rt)
+		resolved, _, err := cmd.resolveMetadataSeries(rt)
 		if err != nil {
 			return err
 		}
-		providerSeries = &resolved
+		metadataSeries = &resolved
 	} else if err != nil {
 		return err
 	}
@@ -49,8 +49,8 @@ func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 		root,
 		cmd.Series,
 		ops.SeriesSyncOptions{
-			ProviderSeries:   providerSeries,
-			ProviderResolver: providerSeriesResolver(rt),
+			MetadataSeries:   metadataSeries,
+			MetadataResolver: metadataSeriesResolver(rt),
 			Inspector:        mediaInspector(rt),
 			DryRun:           cmd.DryRun,
 			Replace:          cmd.Replace,
@@ -96,13 +96,13 @@ func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 	return nil
 }
 
-func (cmd *seriesSyncCmd) resolveProviderSeries(rt *runContext) (metadata.Series, bool, error) {
+func (cmd *seriesSyncCmd) resolveMetadataSeries(rt *runContext) (metadata.Series, bool, error) {
 	metadataSource, err := metadata.SourceFrom(rt.Context)
 	if err != nil {
 		return metadata.Series{}, false, err
 	}
-	resolved, selected, err := resolve.ResolveProviderSeries(rt.Context, metadataSource, cmd.Series, resolve.ResolveSeriesOptions{
-		ProviderRef: cmd.ProviderRef,
+	resolved, selected, err := resolve.ResolveMetadataSeries(rt.Context, metadataSource, cmd.Series, resolve.ResolveSeriesOptions{
+		MetadataRef: cmd.MetadataRef,
 		SearchLimit: 5,
 	})
 	if err != nil {
@@ -119,7 +119,7 @@ func (cmd *seriesSyncCmd) resolveProviderSeries(rt *runContext) (metadata.Series
 		if !ok {
 			return metadata.Series{}, false, err
 		}
-		resolved, err = resolve.GetProviderSeriesByRef(rt.Context, metadataSource, match.ProviderRef)
+		resolved, err = resolve.GetMetadataSeriesByRef(rt.Context, metadataSource, match.MetadataRef)
 		if err != nil {
 			return metadata.Series{}, false, err
 		}

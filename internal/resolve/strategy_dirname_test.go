@@ -58,20 +58,20 @@ func TestDirnameStrategyCorruptSeriesFile(t *testing.T) {
 	}
 }
 
-func TestDirnameStrategyStaleProviderRef(t *testing.T) {
+func TestDirnameStrategyStaleMetadataRef(t *testing.T) {
 	rootDir := t.TempDir()
-	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), []string{"tvdb:1"}, "tvdb")
+	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tvdb:1")
 	strategy := newTestDirnameStrategy(t, rootDir, &strategyFakeSource{seriesErr: metadata.ErrNotFound})
 
 	_, err := strategy.Resolve(context.Background(), Term{Prefix: "dir", Value: "Bookworm"})
-	if !errors.Is(err, ErrStaleProviderRef) {
-		t.Fatalf("error = %v, want ErrStaleProviderRef", err)
+	if !errors.Is(err, ErrStaleMetadataRef) {
+		t.Fatalf("error = %v, want ErrStaleMetadataRef", err)
 	}
 }
 
 func TestDirnameStrategyResolveSeries(t *testing.T) {
 	rootDir := t.TempDir()
-	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), []string{"imdb:tt1", "tvdb:1"}, "tvdb")
+	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tvdb:1")
 	strategy := newTestDirnameStrategy(t, rootDir, &strategyFakeSource{
 		series: map[string]metadata.Series{"1": testMetadataSeries("tvdb:1")},
 	})
@@ -83,14 +83,14 @@ func TestDirnameStrategyResolveSeries(t *testing.T) {
 	if len(hits) != 1 {
 		t.Fatalf("len(hits) = %d, want 1", len(hits))
 	}
-	if hits[0].ProviderRef != "tvdb:1" || hits[0].Rank != 0 {
+	if hits[0].MetadataRef != "tvdb:1" || hits[0].Rank != 0 {
 		t.Fatalf("hit = %#v, want tvdb:1 rank 0", hits[0])
 	}
 }
 
 func TestDirnameStrategyPropagatesTransportError(t *testing.T) {
 	rootDir := t.TempDir()
-	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), []string{"tvdb:1"}, "tvdb")
+	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tvdb:1")
 	strategy := newTestDirnameStrategy(t, rootDir, &strategyFakeSource{seriesErr: metadata.ErrUnavailable})
 
 	_, err := strategy.Resolve(context.Background(), Term{Prefix: "dir", Value: "Bookworm"})
@@ -99,9 +99,9 @@ func TestDirnameStrategyPropagatesTransportError(t *testing.T) {
 	}
 }
 
-func TestDirnameStrategyDifferentProviderIsCorrupt(t *testing.T) {
+func TestDirnameStrategyDifferentMetadataSourceIsCorrupt(t *testing.T) {
 	rootDir := t.TempDir()
-	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), []string{"tmdb:1"}, "tmdb")
+	writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tmdb:1")
 	strategy := newTestDirnameStrategy(t, rootDir, &strategyFakeSource{key: "tvdb"})
 
 	_, err := strategy.Resolve(context.Background(), Term{Prefix: "dir", Value: "Bookworm"})
@@ -110,11 +110,11 @@ func TestDirnameStrategyDifferentProviderIsCorrupt(t *testing.T) {
 	}
 }
 
-func TestDirnameStrategyNoProviderRefsIsCorrupt(t *testing.T) {
+func TestDirnameStrategyMissingMetadataRefIsCorrupt(t *testing.T) {
 	rootDir := t.TempDir()
 	seriesDir := filepath.Join(rootDir, "Bookworm")
 	mkdir(t, filepath.Join(seriesDir, ".kura"))
-	writeFile(t, store.SeriesPath(seriesDir), []byte(`{"schemaVersion":1,"id":"01JZ7P0Q2V3W4X5Y6Z7A8B9C0D","providerRefs":[],"preferredProvider":"tvdb","preferredTitle":"Bookworm","canonicalTitle":"Ascendance of a Bookworm"}`))
+	writeFile(t, store.SeriesPath(seriesDir), []byte(`{"schemaVersion":1,"metadataRef":"","preferredTitle":"Bookworm","canonicalTitle":"Ascendance of a Bookworm"}`))
 	strategy := newTestDirnameStrategy(t, rootDir, &strategyFakeSource{})
 
 	_, err := strategy.Resolve(context.Background(), Term{Prefix: "dir", Value: "Bookworm"})
@@ -145,15 +145,14 @@ func newTestDirnameStrategy(t *testing.T, rootDir string, source metadata.Source
 	return NewDirnameStrategy(root, source)
 }
 
-func writeTrackedSeries(t *testing.T, seriesDir string, providerRefs []string, preferredProvider string) {
+func writeTrackedSeries(t *testing.T, seriesDir string, metadataRef string) {
 	t.Helper()
 	mkdir(t, seriesDir)
 	series, err := store.NewSeries(seriesDir)
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
-	series.ProviderRefs = providerRefs
-	series.PreferredProvider = preferredProvider
+	series.MetadataRef = metadataRef
 	series.PreferredTitle = "Bookworm"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
 	if err := store.SaveSeries(*series); err != nil {

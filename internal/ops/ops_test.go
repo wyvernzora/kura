@@ -34,9 +34,9 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
 	})
@@ -77,9 +77,9 @@ func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 	})
 	if err != nil {
@@ -95,8 +95,8 @@ func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSeries: %v", err)
 	}
-	if loaded.PreferredTitle != providerSeries.PreferredTitle {
-		t.Fatalf("PreferredTitle = %q, want %q", loaded.PreferredTitle, providerSeries.PreferredTitle)
+	if loaded.PreferredTitle != metadataSeries.PreferredTitle {
+		t.Fatalf("PreferredTitle = %q, want %q", loaded.PreferredTitle, metadataSeries.PreferredTitle)
 	}
 }
 
@@ -113,11 +113,11 @@ func TestSyncSeriesDoesNotPersistFileTitle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
-	providerSeries.PreferredTitle = "A Much Longer Provider Title"
-	providerSeries.CanonicalTitle = "Canonical Provider Title"
+	metadataSeries := testMetadataSeries()
+	metadataSeries.PreferredTitle = "A Much Longer Metadata Title"
+	metadataSeries.CanonicalTitle = "Canonical Metadata Title"
 	if _, err := SyncSeries(context.Background(), root, "Short Title", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
 	}); err != nil {
@@ -159,9 +159,7 @@ func TestSyncSeriesKeepsUnchangedTrackedEpisodeWithoutInspector(t *testing.T) {
 	}
 	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -220,9 +218,7 @@ func TestSyncSeriesRefreshesChangedCompanionWithoutReplace(t *testing.T) {
 	}
 	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -251,9 +247,9 @@ func TestSyncSeriesRefreshesChangedCompanionWithoutReplace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
 	})
@@ -290,9 +286,9 @@ func TestSyncSeriesDryRunDoesNotApplyWhenApplyIsAlsoTrue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Inspector:      fakeInspector,
 		Apply:          true,
 		DryRun:         true,
@@ -326,9 +322,7 @@ func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
 	}
 	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -377,7 +371,7 @@ func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
 	}
 }
 
-func TestSyncSeriesRejectsEpisodeMissingFromProviderMetadata(t *testing.T) {
+func TestSyncSeriesRejectsEpisodeMissingFromMetadata(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -390,13 +384,13 @@ func TestSyncSeriesRejectsEpisodeMissingFromProviderMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	_, err = SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Inspector:      fakeInspector,
 	})
-	if err == nil || !strings.Contains(err.Error(), "provider metadata has no S01E03") {
-		t.Fatalf("SyncSeries error = %v, want missing provider episode", err)
+	if err == nil || !strings.Contains(err.Error(), "metadata has no S01E03") {
+		t.Fatalf("SyncSeries error = %v, want missing metadata episode", err)
 	}
 }
 
@@ -414,9 +408,9 @@ func TestSyncSeriesRejectsDuplicateParsedEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	_, err = SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Inspector:      fakeInspector,
 	})
 	if err == nil || !strings.Contains(err.Error(), "multiple files parsed as S01E01") {
@@ -449,14 +443,14 @@ func TestStageEpisodeFileRecordsAbsolutePathsInStaged(t *testing.T) {
 	}
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	result, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		Companions:     []string{companionPath},
 		MediaPath:      mediaPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 	})
 	if err != nil {
@@ -505,13 +499,13 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 	}
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		MediaPath:      firstPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 	}); err != nil {
 		t.Fatalf("StageEpisodeFile first: %v", err)
@@ -521,7 +515,7 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 		Episode:        episode,
 		MediaPath:      secondPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 	}); err == nil {
 		t.Fatal("StageEpisodeFile second returned nil error, want staged episode exists error")
@@ -531,7 +525,7 @@ func TestStageEpisodeFileReplaceOverwritesStagedEntry(t *testing.T) {
 		Episode:        episode,
 		MediaPath:      secondPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 		Replace:        true,
 	})
@@ -563,9 +557,7 @@ func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
 	writeFile(t, filepath.Join(seasonDir, "active.mkv"), "active")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -596,13 +588,13 @@ func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
 	}
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		MediaPath:      mediaPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 	}); err == nil {
 		t.Fatal("StageEpisodeFile returned nil error, want active episode exists error")
@@ -612,7 +604,7 @@ func TestStageEpisodeFileRequiresReplaceForActiveEpisode(t *testing.T) {
 		Episode:        episode,
 		MediaPath:      mediaPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 		Replace:        true,
 	})
@@ -656,7 +648,7 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 	}
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
@@ -664,7 +656,7 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 		Companions:     []string{companionPath},
 		MediaPath:      mediaPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 	}); err != nil {
 		t.Fatalf("StageEpisodeFile: %v", err)
@@ -720,9 +712,7 @@ func TestReconcileAppliesStagedReplacementAfterTrashingActiveEpisode(t *testing.
 	writeFile(t, filepath.Join(seriesDir, filepath.FromSlash(activeRelPath)), "old episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -754,14 +744,14 @@ func TestReconcileAppliesStagedReplacementAfterTrashingActiveEpisode(t *testing.
 	}
 	season, _ := domain.RegularSeason(1)
 	episode, _ := domain.NewEpisodeNumber(1)
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	if _, err := StageEpisodeFile(context.Background(), root, "Bookworm", StageEpisodeFileOptions{
 		Season:         season,
 		Episode:        episode,
 		Source:         domain.MediaSourceWebRip,
 		MediaPath:      mediaPath,
 		Inspector:      fakeInspector,
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Apply:          true,
 		Replace:        true,
 	}); err != nil {
@@ -815,9 +805,7 @@ func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip).mkv"), "new episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -845,9 +833,9 @@ func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	providerSeries := testProviderSeries()
+	metadataSeries := testMetadataSeries()
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		ProviderSeries: &providerSeries,
+		MetadataSeries: &metadataSeries,
 		Inspector:      fakeInspector,
 		Replace:        true,
 		Apply:          true,
@@ -907,9 +895,7 @@ func TestPlanAndApplyReconcileRenamesTrackedFiles(t *testing.T) {
 	writeFile(t, filepath.Join(seriesDir, "bad special.mp4"), "special")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Long Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -985,9 +971,7 @@ func TestPlanReconcileTreatsCanonicallyEquivalentRootNameAsUnchanged(t *testing.
 	writeFile(t, filepath.Join(seriesDir, "episode.mkv"), "episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:123"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:123",
 		"preferredTitle": "本好きの下剋上 司書になるためには手段を選んでいられません",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -1041,11 +1025,9 @@ func TestPlanReconcileUsesCurrentDirectoryName(t *testing.T) {
 	writeFile(t, filepath.Join(seasonDir, "old episode.mkv"), "episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
-		"preferredTitle": "A Much Longer Provider Title",
-		"canonicalTitle": "Canonical Provider Title",
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "A Much Longer Metadata Title",
+		"canonicalTitle": "Canonical Metadata Title",
 		"seasons": [
 			{
 				"number": 1,
@@ -1097,9 +1079,7 @@ func TestApplyReconcileSkipsUnchangedPlan(t *testing.T) {
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -1393,11 +1373,10 @@ var fakeInspector = MediaInspectorFunc(func(context.Context, string) (domain.Med
 	}, nil
 })
 
-func testProviderSeries() metadata.Series {
+func testMetadataSeries() metadata.Series {
 	return metadata.Series{
 		SeriesSummary: metadata.SeriesSummary{
-			ProviderRef:      "tvdb:370070",
-			ProviderRefs:     []string{"tvdb:370070", "imdb:tt10885406", "tmdb:12345"},
+			MetadataRef:      "tvdb:370070",
 			PreferredTitle:   "本好きの下剋上",
 			CanonicalTitle:   "Ascendance of a Bookworm",
 			OriginalLanguage: "jpn",
@@ -1448,8 +1427,7 @@ func newTestSeries(seriesDir string) (*store.Series, error) {
 	if err != nil {
 		return nil, err
 	}
-	series.ProviderRefs = []string{"tvdb:370070"}
-	series.PreferredProvider = "tvdb"
+	series.MetadataRef = "tvdb:370070"
 	series.PreferredTitle = "Honzuki"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
 	return series, nil

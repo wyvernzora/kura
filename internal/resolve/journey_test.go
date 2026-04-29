@@ -72,7 +72,7 @@ func TestResolverJourneys(t *testing.T) {
 
 	t.Run("direct id retry resolves", func(t *testing.T) {
 		source := &strategyFakeSource{series: map[string]metadata.Series{"370070": testMetadataSeries("tvdb:370070")}}
-		resolver := New(NewProviderIDStrategy(source), NewTextSearchStrategy(source))
+		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
 		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"tvdb:370070"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
@@ -84,13 +84,13 @@ func TestResolverJourneys(t *testing.T) {
 
 	t.Run("dirname term resolves tracked dir", func(t *testing.T) {
 		rootDir := t.TempDir()
-		writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), []string{"tvdb:370070"}, "tvdb")
+		writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tvdb:370070")
 		root, err := fsroot.ParseLibraryRoot(rootDir)
 		if err != nil {
 			t.Fatalf("ParseLibraryRoot: %v", err)
 		}
 		source := &strategyFakeSource{series: map[string]metadata.Series{"370070": testMetadataSeries("tvdb:370070")}}
-		resolver := New(NewDirnameStrategy(root, source), NewProviderIDStrategy(source), NewTextSearchStrategy(source))
+		resolver := New(NewDirnameStrategy(root, source), NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
 
 		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
 		if err != nil {
@@ -113,7 +113,7 @@ func TestResolverJourneys(t *testing.T) {
 		}
 	})
 
-	t.Run("provider down errors", func(t *testing.T) {
+	t.Run("metadata source down errors", func(t *testing.T) {
 		source := &strategyFakeSource{searchErr: metadata.ErrUnavailable}
 		resolver := New(NewTextSearchStrategy(source))
 		_, err := resolver.Resolve(context.Background(), ParseQuery([]string{"Bookworm"}))
@@ -124,7 +124,7 @@ func TestResolverJourneys(t *testing.T) {
 
 	t.Run("stale dirname ref errors", func(t *testing.T) {
 		rootDir := t.TempDir()
-		writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), []string{"tvdb:99999"}, "tvdb")
+		writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tvdb:99999")
 		root, err := fsroot.ParseLibraryRoot(rootDir)
 		if err != nil {
 			t.Fatalf("ParseLibraryRoot: %v", err)
@@ -132,8 +132,8 @@ func TestResolverJourneys(t *testing.T) {
 		source := &strategyFakeSource{seriesErr: metadata.ErrNotFound}
 		resolver := New(NewDirnameStrategy(root, source))
 		_, err = resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
-		if !errors.Is(err, ErrStaleProviderRef) {
-			t.Fatalf("error = %v, want ErrStaleProviderRef", err)
+		if !errors.Is(err, ErrStaleMetadataRef) {
+			t.Fatalf("error = %v, want ErrStaleMetadataRef", err)
 		}
 	})
 
@@ -157,7 +157,7 @@ func TestResolverJourneys(t *testing.T) {
 
 	t.Run("conflicting terms error", func(t *testing.T) {
 		source := &strategyFakeSource{}
-		resolver := New(NewProviderIDStrategy(source), NewTextSearchStrategy(source))
+		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
 		_, err := resolver.Resolve(context.Background(), ParseQuery([]string{"X-Men", "tvdb:370070"}))
 		if !errors.Is(err, ErrConflictingTerms) {
 			t.Fatalf("error = %v, want ErrConflictingTerms", err)

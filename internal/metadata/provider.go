@@ -13,7 +13,7 @@ import (
 // Source retrieves series, season, and episode metadata from an external
 // metadata source.
 type Source interface {
-	// Key returns the stable provider key used in provider refs, such as "tvdb".
+	// Key returns the stable source key used in metadata refs, such as "tvdb".
 	Key() string
 
 	// Search returns lightweight candidate matches for a title query.
@@ -25,7 +25,7 @@ type Source interface {
 	// Callers should treat the returned data as live external metadata suitable for
 	// read views, matching, and filesystem title selection, not as durable local
 	// library state.
-	GetSeries(ctx context.Context, providerID string) (Series, error)
+	GetSeries(ctx context.Context, metadataID string) (Series, error)
 }
 
 // SearchOptions scopes metadata search without making the search interface
@@ -51,7 +51,7 @@ type SearchOptions struct {
 type SearchResult struct {
 	SeriesSummary
 
-	// Score is the provider-reported relevance score when available.
+	// Score is the source-reported relevance score when available.
 	Score float64
 
 	// MatchSource identifies the search response field that matched the query,
@@ -62,12 +62,8 @@ type SearchResult struct {
 // SeriesSummary contains series-level metadata shared by search results and
 // full series views.
 type SeriesSummary struct {
-	// ProviderRef is this series' opaque provider reference, such as "tvdb:12345".
-	ProviderRef string
-
-	// ProviderRefs contains ProviderRef plus any linked provider references
-	// discovered from the metadata source, such as imdb:tt12345.
-	ProviderRefs []string
+	// MetadataRef is this series' opaque metadata reference, such as "tvdb:12345".
+	MetadataRef string
 
 	// PreferredTitle is Kura's selected official title after source normalization and
 	// language preference handling.
@@ -97,7 +93,7 @@ type Series struct {
 	Seasons   []Season
 }
 
-// Error sentinels shared across metadata providers.
+// Error sentinels shared across metadata sources.
 
 var (
 	ErrNotFound     = errors.New("metadata: not found")
@@ -107,8 +103,8 @@ var (
 
 // Season contains external metadata for one season.
 type Season struct {
-	// ProviderRef is this season's opaque provider reference.
-	ProviderRef string
+	// MetadataRef is this season's opaque metadata reference.
+	MetadataRef string
 
 	Number int
 
@@ -117,14 +113,14 @@ type Season struct {
 
 // Episode contains external metadata for one episode.
 type Episode struct {
-	// ProviderRef is this episode's opaque provider reference.
-	ProviderRef string
+	// MetadataRef is this episode's opaque metadata reference.
+	MetadataRef string
 
 	SeasonNumber   int
 	EpisodeNumber  int
 	AbsoluteNumber *int
 
-	// Aired is the provider's YYYY-MM-DD air date when known.
+	// Aired is the source's YYYY-MM-DD air date when known.
 	Aired string
 }
 

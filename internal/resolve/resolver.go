@@ -74,10 +74,10 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 
 	resultsByRef := map[string]*Result{}
 	for _, hit := range hits {
-		result, ok := resultsByRef[hit.ProviderRef]
+		result, ok := resultsByRef[hit.MetadataRef]
 		if !ok {
 			result = &Result{Summary: hit.Summary}
-			resultsByRef[hit.ProviderRef] = result
+			resultsByRef[hit.MetadataRef] = result
 		}
 		result.Evidence = append(result.Evidence, Evidence{
 			Term: hit.Term.String(),
@@ -170,12 +170,12 @@ func compareResults(a, b Result) int {
 	if diff := minRank(a.Evidence) - minRank(b.Evidence); diff != 0 {
 		return diff
 	}
-	return compareProviderRef(a, b)
+	return compareMetadataRef(a, b)
 }
 
-func compareProviderRef(a, b Result) int {
-	aRef := a.Summary.ProviderRef
-	bRef := b.Summary.ProviderRef
+func compareMetadataRef(a, b Result) int {
+	aRef := a.Summary.MetadataRef
+	bRef := b.Summary.MetadataRef
 	if aRef < bRef {
 		return -1
 	}

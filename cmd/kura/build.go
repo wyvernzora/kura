@@ -14,12 +14,10 @@ import (
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
-// buildSourceFromFlags constructs the configured metadata source from the
-// global CLI flags. Used by run.go to seed the lazy metadata.WithSource
-// builder.
+// buildSourceFromFlags constructs the metadata source from the global CLI
+// flags. Used by run.go to seed the lazy metadata.WithSource builder.
 func buildSourceFromFlags(rt *runContext, flags *cli) (metadata.Source, error) {
 	return config.BuildMetadataSource(config.MetadataSourceOptions{
-		Key:         flags.Provider,
 		TVDBBaseURL: flags.TVDBBaseURL,
 		Getenv:      rt.Getenv,
 	})
@@ -34,37 +32,35 @@ func mediaInspector(rt *runContext) mediainfo.Inspector {
 	return inspector
 }
 
-func parseRemoteSeriesRef(seriesRef string) (string, string, error) {
-	ref, err := domain.ParseRemoteSeriesRef(seriesRef)
+func parseMetadataRef(seriesRef string) (string, string, error) {
+	ref, err := domain.ParseMetadataRef(seriesRef)
 	if err != nil {
 		return "", "", err
 	}
 	if ref.Source() != "tvdb" {
-		return "", "", fmt.Errorf("unsupported series ref provider %q; only tvdb:<id> is supported", ref.Source())
+		return "", "", fmt.Errorf("unsupported metadata ref source %q; only tvdb:<id> is supported", ref.Source())
 	}
 	return ref.Source(), ref.ID(), nil
 }
 
-func providerRefForSource(series store.Series, source string) (domain.RemoteSeriesRef, error) {
-	for _, raw := range series.ProviderRefs {
-		ref, err := domain.ParseRemoteSeriesRef(raw)
-		if err != nil {
-			return domain.RemoteSeriesRef{}, err
-		}
-		if ref.Source() == source {
-			return ref, nil
-		}
+func metadataRefForSource(series store.Series, source string) (domain.MetadataRef, error) {
+	ref, err := domain.ParseMetadataRef(series.MetadataRef)
+	if err != nil {
+		return domain.MetadataRef{}, err
 	}
-	return domain.RemoteSeriesRef{}, fmt.Errorf("series has no %s provider ref", source)
+	if ref.Source() != source {
+		return domain.MetadataRef{}, fmt.Errorf("series metadata ref source %q does not match %q", ref.Source(), source)
+	}
+	return ref, nil
 }
 
-func providerSeriesResolver(rt *runContext) ops.ProviderSeriesResolver {
+func metadataSeriesResolver(rt *runContext) ops.MetadataSeriesResolver {
 	return func(ctx context.Context, local store.Series) (metadata.Series, error) {
 		metadataSource, err := metadata.SourceFrom(rt.Context)
 		if err != nil {
 			return metadata.Series{}, err
 		}
-		ref, err := providerRefForSource(local, metadataSource.Key())
+		ref, err := metadataRefForSource(local, metadataSource.Key())
 		if err != nil {
 			return metadata.Series{}, err
 		}

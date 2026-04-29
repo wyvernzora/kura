@@ -10,8 +10,7 @@ func TestCachedSourceCachesAndClonesSearchResults(t *testing.T) {
 	fake := &fakeSource{
 		searchResults: []SearchResult{{
 			SeriesSummary: SeriesSummary{
-				ProviderRef:    "fake:1",
-				ProviderRefs:   []string{"fake:1", "imdb:tt1"},
+				MetadataRef:    "fake:1",
 				PreferredTitle: "Original",
 				CanonicalTitle: "Original",
 				Genres:         []string{"Fantasy"},
@@ -31,7 +30,6 @@ func TestCachedSourceCachesAndClonesSearchResults(t *testing.T) {
 		t.Fatalf("first Search: %v", err)
 	}
 	first[0].PreferredTitle = "Mutated"
-	first[0].ProviderRefs[1] = "mutated:1"
 	first[0].Genres[0] = "Mutated"
 
 	second, err := cached.Search(context.Background(), "query", SearchOptions{})
@@ -43,9 +41,6 @@ func TestCachedSourceCachesAndClonesSearchResults(t *testing.T) {
 	}
 	if got := second[0].PreferredTitle; got != "Original" {
 		t.Fatalf("cached title = %q, want Original", got)
-	}
-	if got := second[0].ProviderRefs[1]; got != "imdb:tt1" {
-		t.Fatalf("cached provider ref = %q, want imdb:tt1", got)
 	}
 	if got := second[0].Genres[0]; got != "Fantasy" {
 		t.Fatalf("cached genre = %q, want Fantasy", got)

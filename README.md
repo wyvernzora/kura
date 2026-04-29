@@ -39,7 +39,7 @@ kura reconcile <series-dir>
 ```
 
 `sync` can also bootstrap an empty show directory when metadata resolution
-succeeds or an explicit provider ref is supplied.
+succeeds or an explicit metadata ref is supplied.
 
 ## Requirements
 

@@ -62,7 +62,6 @@ func (p *Provider) normalizeSearchResult(record searchRecord) metadata.SearchRes
 			status:           normalizeStatus(record.Status),
 			year:             parseInt(record.Year.String()),
 			genres:           record.Genres.Values,
-			linkedRefs:       normalizeRemoteRefs(record.RemoteIDs),
 			titles:           searchTitleCandidates(record),
 		}),
 		Score:       record.Score,

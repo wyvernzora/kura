@@ -6,61 +6,61 @@ import (
 	"unicode"
 )
 
-// RemoteSeriesRef identifies a series in an external metadata system.
+// MetadataRef identifies a series in an external metadata system.
 //
 // It renders as "<source>:<id>", for example "tvdb:370070" or
 // "imdb:tt10885406".
-type RemoteSeriesRef struct {
+type MetadataRef struct {
 	source string
 	id     string
 }
 
-func ParseRemoteSeriesRef(value string) (RemoteSeriesRef, error) {
+func ParseMetadataRef(value string) (MetadataRef, error) {
 	value = strings.TrimSpace(value)
 	source, id, ok := strings.Cut(value, ":")
 	source = strings.ToLower(strings.TrimSpace(source))
 	id = strings.TrimSpace(id)
 	if !ok || source == "" || id == "" {
-		return RemoteSeriesRef{}, fmt.Errorf("invalid remote series ref %q; expected <source>:<id>", value)
+		return MetadataRef{}, fmt.Errorf("invalid metadata ref %q; expected <source>:<id>", value)
 	}
-	if !validRemoteRefSource(source) {
-		return RemoteSeriesRef{}, fmt.Errorf("invalid remote series ref source %q", source)
+	if !validMetadataRefSource(source) {
+		return MetadataRef{}, fmt.Errorf("invalid metadata ref source %q", source)
 	}
-	if !validRemoteRefID(id) {
-		return RemoteSeriesRef{}, fmt.Errorf("invalid remote series ref id %q", id)
+	if !validMetadataRefID(id) {
+		return MetadataRef{}, fmt.Errorf("invalid metadata ref id %q", id)
 	}
-	return RemoteSeriesRef{source: source, id: id}, nil
+	return MetadataRef{source: source, id: id}, nil
 }
 
-func (r RemoteSeriesRef) Source() string {
+func (r MetadataRef) Source() string {
 	return r.source
 }
 
-func (r RemoteSeriesRef) ID() string {
+func (r MetadataRef) ID() string {
 	return r.id
 }
 
-func (r RemoteSeriesRef) String() string {
+func (r MetadataRef) String() string {
 	if r.source == "" || r.id == "" {
 		return ""
 	}
 	return r.source + ":" + r.id
 }
 
-func (r RemoteSeriesRef) Equal(other RemoteSeriesRef) bool {
+func (r MetadataRef) Equal(other MetadataRef) bool {
 	return r.source == other.source && r.id == other.id
 }
 
-func (r RemoteSeriesRef) IsZero() bool {
+func (r MetadataRef) IsZero() bool {
 	return r.source == "" && r.id == ""
 }
 
-func (r RemoteSeriesRef) MarshalText() ([]byte, error) {
+func (r MetadataRef) MarshalText() ([]byte, error) {
 	return []byte(r.String()), nil
 }
 
-func (r *RemoteSeriesRef) UnmarshalText(data []byte) error {
-	parsed, err := ParseRemoteSeriesRef(string(data))
+func (r *MetadataRef) UnmarshalText(data []byte) error {
+	parsed, err := ParseMetadataRef(string(data))
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (r *RemoteSeriesRef) UnmarshalText(data []byte) error {
 	return nil
 }
 
-func validRemoteRefSource(source string) bool {
+func validMetadataRefSource(source string) bool {
 	for index, r := range source {
 		if r >= 'a' && r <= 'z' {
 			continue
@@ -84,7 +84,7 @@ func validRemoteRefSource(source string) bool {
 	return true
 }
 
-func validRemoteRefID(id string) bool {
+func validMetadataRefID(id string) bool {
 	return !strings.ContainsFunc(id, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsControl(r) || r == ':'
 	})

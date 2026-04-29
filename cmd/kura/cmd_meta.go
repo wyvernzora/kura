@@ -9,17 +9,17 @@ import (
 )
 
 type metaCmd struct {
-	Search metaSearchCmd `cmd:"" help:"Search metadata providers."`
-	Get    metaGetCmd    `cmd:"" help:"Fetch metadata for a provider series reference."`
+	Search metaSearchCmd `cmd:"" help:"Search metadata."`
+	Get    metaGetCmd    `cmd:"" help:"Fetch metadata for a series reference."`
 }
 
 type metaSearchCmd struct {
 	Limit int      `help:"Maximum number of resolver results to print. Zero prints all results."`
-	Terms []string `arg:"" required:"" help:"Resolver terms. Use plain text or provider refs such as tvdb:370070."`
+	Terms []string `arg:"" required:"" help:"Resolver terms. Use plain text or metadata refs such as tvdb:370070."`
 }
 
 type metaGetCmd struct {
-	SeriesRef string `arg:"" help:"Provider series reference. Only tvdb:<id> is supported."`
+	SeriesRef string `arg:"" help:"Metadata series reference. Only tvdb:<id> is supported."`
 }
 
 func (cmd *metaSearchCmd) Run(rt *runContext) error {
@@ -45,7 +45,7 @@ func (cmd *metaSearchCmd) Run(rt *runContext) error {
 }
 
 func (cmd *metaGetCmd) Run(rt *runContext) error {
-	providerKey, providerID, err := parseRemoteSeriesRef(cmd.SeriesRef)
+	sourceKey, metadataID, err := parseMetadataRef(cmd.SeriesRef)
 	if err != nil {
 		return err
 	}
@@ -54,11 +54,11 @@ func (cmd *metaGetCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	if metadataSource.Key() != providerKey {
-		return fmt.Errorf("configured metadata provider %q cannot fetch %s series refs", metadataSource.Key(), providerKey)
+	if metadataSource.Key() != sourceKey {
+		return fmt.Errorf("configured metadata source %q cannot fetch %s series refs", metadataSource.Key(), sourceKey)
 	}
 
-	series, err := metadataSource.GetSeries(rt.Context, providerID)
+	series, err := metadataSource.GetSeries(rt.Context, metadataID)
 	if err != nil {
 		return err
 	}

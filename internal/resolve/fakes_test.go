@@ -34,20 +34,20 @@ func (s *strategyFakeSource) Search(_ context.Context, query string, _ metadata.
 	return slices.Clone(s.searchResults), nil
 }
 
-func (s *strategyFakeSource) GetSeries(_ context.Context, providerID string) (metadata.Series, error) {
+func (s *strategyFakeSource) GetSeries(_ context.Context, metadataID string) (metadata.Series, error) {
 	if s.seriesErr != nil {
 		return metadata.Series{}, s.seriesErr
 	}
-	series, ok := s.series[providerID]
+	series, ok := s.series[metadataID]
 	if !ok {
-		return metadata.Series{}, fmt.Errorf("%w: series %s", metadata.ErrNotFound, providerID)
+		return metadata.Series{}, fmt.Errorf("%w: series %s", metadata.ErrNotFound, metadataID)
 	}
 	return series, nil
 }
 
 func testSummary(ref string) metadata.SeriesSummary {
 	return metadata.SeriesSummary{
-		ProviderRef:    ref,
+		MetadataRef:    ref,
 		PreferredTitle: ref + " preferred",
 		CanonicalTitle: ref + " canonical",
 	}

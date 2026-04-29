@@ -64,7 +64,7 @@ func (cmd *stageCmd) Run(rt *runContext) error {
 			Companions:       cmd.Companions,
 			MediaPath:        cmd.Path,
 			Inspector:        mediaInspector(rt),
-			ProviderResolver: providerSeriesResolver(rt),
+			MetadataResolver: metadataSeriesResolver(rt),
 			Apply:            !cmd.DryRun,
 			Replace:          cmd.Replace,
 		},

@@ -20,7 +20,7 @@ func (r Resolution) IsNotFound() bool {
 	return len(r.Results) == 0
 }
 
-// Result is one provider candidate with all evidence supporting it.
+// Result is one metadata candidate with all evidence supporting it.
 type Result struct {
 	Summary  metadata.SeriesSummary
 	Evidence []Evidence

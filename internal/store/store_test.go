@@ -4,10 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
-
-	"github.com/oklog/ulid/v2"
 )
 
 func TestSaveLoadSeries(t *testing.T) {
@@ -17,8 +14,7 @@ func TestSaveLoadSeries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
-	series.ProviderRefs = []string{"tvdb:370070"}
-	series.PreferredProvider = "tvdb"
+	series.MetadataRef = "tvdb:370070"
 	series.PreferredTitle = "本好きの下剋上"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
 	if err := SaveSeries(*series); err != nil {
@@ -32,17 +28,8 @@ func TestSaveLoadSeries(t *testing.T) {
 	if got.SchemaVersion != SeriesSchemaVersion {
 		t.Fatalf("SchemaVersion = %d, want %d", got.SchemaVersion, SeriesSchemaVersion)
 	}
-	if got.ID != series.ID {
-		t.Fatalf("ID = %q, want %q", got.ID, series.ID)
-	}
-	if _, err := ulid.Parse(got.ID); err != nil {
-		t.Fatalf("ID %q is not a valid ULID: %v", got.ID, err)
-	}
-	if !slices.Equal(got.ProviderRefs, []string{"tvdb:370070"}) {
-		t.Fatalf("ProviderRefs = %#v, want [tvdb:370070]", got.ProviderRefs)
-	}
-	if got.PreferredProvider != "tvdb" {
-		t.Fatalf("PreferredProvider = %q, want tvdb", got.PreferredProvider)
+	if got.MetadataRef != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %q, want tvdb:370070", got.MetadataRef)
 	}
 	if got.PreferredTitle != "本好きの下剋上" {
 		t.Fatalf("PreferredTitle = %q, want 本好きの下剋上", got.PreferredTitle)
@@ -57,7 +44,7 @@ func TestLoadSeriesRejectsFutureSchema(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{"schemaVersion":2,"id":"x","providerRefs":["tvdb:1"],"preferredProvider":"tvdb","preferredTitle":"x","canonicalTitle":"x"}`), 0o644); err != nil {
+	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{"schemaVersion":2,"metadataRef":"tvdb:1","preferredTitle":"x","canonicalTitle":"x"}`), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -71,7 +58,7 @@ func TestLoadSeriesRejectsSchemaInvalidDocument(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{"schemaVersion":1,"id":"x","providerRefs":["tvdb:1"],"preferredProvider":"tvdb","preferredTitle":"x","canonicalTitle":"x","externalIds":{"tvdb":"1"}}`), 0o644); err != nil {
+	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{"schemaVersion":1,"metadataRef":"tvdb:1","preferredTitle":"x","canonicalTitle":"x","externalIds":{"tvdb":"1"}}`), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -82,12 +69,10 @@ func TestLoadSeriesRejectsSchemaInvalidDocument(t *testing.T) {
 
 func TestSaveSeriesRejectsUnboundSeries(t *testing.T) {
 	series := Series{
-		SchemaVersion:     SeriesSchemaVersion,
-		ID:                "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		ProviderRefs:      []string{"tvdb:370070"},
-		PreferredProvider: "tvdb",
-		PreferredTitle:    "Honzuki",
-		CanonicalTitle:    "Ascendance of a Bookworm",
+		SchemaVersion:  SeriesSchemaVersion,
+		MetadataRef:    "tvdb:370070",
+		PreferredTitle: "Honzuki",
+		CanonicalTitle: "Ascendance of a Bookworm",
 	}
 
 	if err := SaveSeries(series); err == nil {
@@ -111,9 +96,7 @@ func TestLoadSeriesRejectsDuplicateEpisodeNumber(t *testing.T) {
 	}
 	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -159,11 +142,8 @@ func TestSeriesJSONUsesPersistentFieldNames(t *testing.T) {
 	if _, ok := raw["schemaVersion"]; !ok {
 		t.Fatal("schemaVersion missing")
 	}
-	if _, ok := raw["providerRefs"]; !ok {
-		t.Fatal("providerRefs missing")
-	}
-	if _, ok := raw["preferredProvider"]; !ok {
-		t.Fatal("preferredProvider missing")
+	if _, ok := raw["metadataRef"]; !ok {
+		t.Fatal("metadataRef missing")
 	}
 	if _, ok := raw["preferredTitle"]; !ok {
 		t.Fatal("preferredTitle missing")
@@ -175,7 +155,7 @@ func TestSeriesJSONUsesPersistentFieldNames(t *testing.T) {
 		t.Fatal("filesystemTitle present, want omitted when unset")
 	}
 	if _, ok := raw["externalIds"]; ok {
-		t.Fatal("externalIds present, want providerRefs")
+		t.Fatal("externalIds present, want metadataRef")
 	}
 	if _, ok := raw["title"]; ok {
 		t.Fatal("title present, want preferredTitle/canonicalTitle")
@@ -187,8 +167,7 @@ func newTestSeries(seriesDir string) (*Series, error) {
 	if err != nil {
 		return nil, err
 	}
-	series.ProviderRefs = []string{"tvdb:370070"}
-	series.PreferredProvider = "tvdb"
+	series.MetadataRef = "tvdb:370070"
 	series.PreferredTitle = "Honzuki"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
 	return series, nil

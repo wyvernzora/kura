@@ -15,7 +15,7 @@ func TestResolverFromUnsetReturnsError(t *testing.T) {
 }
 
 func TestWithResolverMemoizesValue(t *testing.T) {
-	want := New(NewProviderIDStrategy(fakeMetadataSource{}))
+	want := New(NewMetadataIDStrategy(fakeMetadataSource{}))
 	calls := 0
 	ctx := WithResolver(context.Background(), func() (*Resolver, error) {
 		calls++

@@ -2,10 +2,10 @@ package domain
 
 import "testing"
 
-func TestParseRemoteSeriesRef(t *testing.T) {
-	ref, err := ParseRemoteSeriesRef(" TVDB:370070 ")
+func TestParseMetadataRef(t *testing.T) {
+	ref, err := ParseMetadataRef(" TVDB:370070 ")
 	if err != nil {
-		t.Fatalf("ParseRemoteSeriesRef: %v", err)
+		t.Fatalf("ParseMetadataRef: %v", err)
 	}
 	if ref.Source() != "tvdb" {
 		t.Fatalf("Source = %q, want tvdb", ref.Source())
@@ -18,7 +18,7 @@ func TestParseRemoteSeriesRef(t *testing.T) {
 	}
 }
 
-func TestParseRemoteSeriesRefRejectsInvalidRefs(t *testing.T) {
+func TestParseMetadataRefRejectsInvalidRefs(t *testing.T) {
 	for _, value := range []string{
 		"",
 		"tvdb",
@@ -29,8 +29,8 @@ func TestParseRemoteSeriesRefRejectsInvalidRefs(t *testing.T) {
 		"tvdb:370:070",
 	} {
 		t.Run(value, func(t *testing.T) {
-			if _, err := ParseRemoteSeriesRef(value); err == nil {
-				t.Fatal("ParseRemoteSeriesRef returned nil error, want rejection")
+			if _, err := ParseMetadataRef(value); err == nil {
+				t.Fatal("ParseMetadataRef returned nil error, want rejection")
 			}
 		})
 	}

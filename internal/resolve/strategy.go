@@ -24,10 +24,10 @@ type ResolveStrategy interface {
 	Resolve(ctx context.Context, term Term) ([]termHit, error)
 }
 
-// termHit is one term's contribution for one provider candidate.
+// termHit is one term's contribution for one metadata candidate.
 type termHit struct {
 	Term        Term
-	ProviderRef string
+	MetadataRef string
 	Summary     metadata.SeriesSummary
 	Rank        int
 }

@@ -59,7 +59,7 @@ func New(apiKey string, opts Options) (*Provider, error) {
 	}, nil
 }
 
-// Key returns the stable provider key used in Kura provider refs.
+// Key returns the stable provider key used in Kura metadata refs.
 func (p *Provider) Key() string {
 	return providerKey
 }
@@ -92,18 +92,18 @@ func (p *Provider) Search(ctx context.Context, query string, opts metadata.Searc
 }
 
 // GetSeries returns the complete source-neutral series view Kura needs.
-func (p *Provider) GetSeries(ctx context.Context, providerID string) (metadata.Series, error) {
-	providerID = strings.TrimSpace(providerID)
-	if providerID == "" {
+func (p *Provider) GetSeries(ctx context.Context, metadataID string) (metadata.Series, error) {
+	metadataID = strings.TrimSpace(metadataID)
+	if metadataID == "" {
 		return metadata.Series{}, errors.New("tvdb: empty series id")
 	}
 
-	extended, err := p.client.seriesExtended(ctx, providerID)
+	extended, err := p.client.seriesExtended(ctx, metadataID)
 	if err != nil {
 		return metadata.Series{}, err
 	}
 
-	episodes, err := p.client.seriesEpisodes(ctx, providerID)
+	episodes, err := p.client.seriesEpisodes(ctx, metadataID)
 	if err != nil {
 		return metadata.Series{}, err
 	}

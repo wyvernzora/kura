@@ -53,7 +53,6 @@ func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episo
 			status:           normalizeStatus(record.Status.Name),
 			year:             yearFromDate(record.FirstAired),
 			genres:           normalizeGenres(record.Genres),
-			linkedRefs:       normalizeRemoteRefs(record.RemoteIDs),
 			titles:           seriesTitleCandidates(record),
 		}),
 		LastAired: normalizeDate(record.LastAired),

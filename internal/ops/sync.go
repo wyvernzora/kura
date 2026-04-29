@@ -17,8 +17,8 @@ import (
 )
 
 type SeriesSyncOptions struct {
-	ProviderSeries   *metadata.Series
-	ProviderResolver ProviderSeriesResolver
+	MetadataSeries   *metadata.Series
+	MetadataResolver MetadataSeriesResolver
 	Inspector        MediaInspector
 	Apply            bool
 	DryRun           bool
@@ -72,10 +72,10 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 			return SeriesSyncResult{}, err
 		}
 	} else if errors.Is(err, os.ErrNotExist) {
-		if opts.ProviderSeries == nil {
-			return SeriesSyncResult{}, fmt.Errorf("library: provider series is required to initialize %q", dirname)
+		if opts.MetadataSeries == nil {
+			return SeriesSyncResult{}, fmt.Errorf("library: metadata series is required to initialize %q", dirname)
 		}
-		series, err = newSeriesFromProvider(seriesDir.Path(), *opts.ProviderSeries)
+		series, err = newSeriesFromMetadata(seriesDir.Path(), *opts.MetadataSeries)
 		if err != nil {
 			return SeriesSyncResult{}, err
 		}
@@ -98,7 +98,7 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 		return SeriesSyncResult{}, err
 	}
 	updatedTrash := *trash
-	var providerSeries *metadata.Series
+	var metadataSeries *metadata.Series
 	synced := make([]SeriesSyncEntry, 0, len(discovered))
 	progress.Start(ctx, "series-sync", fmt.Sprintf("Found %d episode media file(s) for %s", len(discovered), seriesDir.Name()), len(discovered))
 	for index, episode := range discovered {
@@ -112,13 +112,13 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 			synced = append(synced, existingSyncEntry(episode, existing))
 			continue
 		}
-		if providerSeries == nil {
-			providerSeries, err = providerSeriesForLocal(ctx, updated, opts.ProviderSeries, opts.ProviderResolver)
+		if metadataSeries == nil {
+			metadataSeries, err = metadataSeriesForLocal(ctx, updated, opts.MetadataSeries, opts.MetadataResolver)
 			if err != nil {
 				return SeriesSyncResult{}, err
 			}
 		}
-		if err := validateProviderEpisode(providerSeries, episode.Season, episode.Number); err != nil {
+		if err := validateMetadataEpisode(metadataSeries, episode.Season, episode.Number); err != nil {
 			return SeriesSyncResult{}, err
 		}
 		trackedEpisode, tracked := updated.LookupEpisode(episode.Season, episode.Number)
@@ -195,50 +195,49 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 	return result, nil
 }
 
-func newSeriesFromProvider(seriesDir string, providerSeries metadata.Series) (*store.Series, error) {
+func newSeriesFromMetadata(seriesDir string, metadataSeries metadata.Series) (*store.Series, error) {
 	series, err := store.NewSeries(seriesDir)
 	if err != nil {
 		return nil, err
 	}
-	series.ProviderRefs = providerSeries.ProviderRefs
-	if len(series.ProviderRefs) == 0 {
-		series.ProviderRefs = []string{providerSeries.ProviderRef}
-	}
-	ref, err := domain.ParseRemoteSeriesRef(providerSeries.ProviderRef)
+	series.MetadataRef = metadataSeries.MetadataRef
+	ref, err := domain.ParseMetadataRef(metadataSeries.MetadataRef)
 	if err != nil {
 		return nil, err
 	}
-	series.PreferredProvider = ref.Source()
-	series.PreferredTitle = providerSeries.PreferredTitle
-	series.CanonicalTitle = providerSeries.CanonicalTitle
+	if ref.Source() != "tvdb" {
+		return nil, fmt.Errorf("library: unsupported metadata ref source %q", ref.Source())
+	}
+	series.PreferredTitle = metadataSeries.PreferredTitle
+	series.CanonicalTitle = metadataSeries.CanonicalTitle
 	return series, nil
 }
 
-func providerSeriesForLocal(ctx context.Context, series store.Series, explicit *metadata.Series, resolve ProviderSeriesResolver) (*metadata.Series, error) {
+func metadataSeriesForLocal(ctx context.Context, series store.Series, explicit *metadata.Series, resolve MetadataSeriesResolver) (*metadata.Series, error) {
 	if explicit != nil {
 		return explicit, nil
 	}
 	if resolve == nil {
 		return nil, nil
 	}
-	providerSeries, err := resolve(ctx, series)
+	metadataSeries, err := resolve(ctx, series)
 	if err != nil {
 		return nil, err
 	}
-	return &providerSeries, nil
+	return &metadataSeries, nil
 }
 
-func validateProviderEpisode(providerSeries *metadata.Series, seasonNumber int, episodeNumber int) error {
-	if providerSeries == nil {
-		return errors.New("library: provider series metadata is required to import episodes")
+func validateMetadataEpisode(metadataSeries *metadata.Series, seasonNumber int, episodeNumber int) error {
+	if metadataSeries == nil {
+		return errors.New("library: metadata series is required to import episodes")
 	}
-	if providerEpisodeExists(*providerSeries, seasonNumber, episodeNumber) {
+	if metadataEpisodeExists(*metadataSeries, seasonNumber, episodeNumber) {
 		return nil
 	}
-	return fmt.Errorf("library: provider metadata has no S%02dE%02d", seasonNumber, episodeNumber)
+	return fmt.Errorf("library: metadata has no S%02dE%02d", seasonNumber, episodeNumber)
 }
 
-func providerEpisodeExists(series metadata.Series, seasonNumber int, episodeNumber int) bool {
+func metadataEpisodeExists(series metadata.Series, seasonNumber int, episodeNumber int) bool {
 	for _, season := range series.Seasons {
 		if season.Number != seasonNumber {
 			continue

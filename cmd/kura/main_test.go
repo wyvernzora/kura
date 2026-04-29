@@ -42,8 +42,8 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 	if !ok {
 		t.Fatalf("Summary = %#v, want object", results[0]["Summary"])
 	}
-	if got := summary["ProviderRef"]; got != "tvdb:370070" {
-		t.Fatalf("ProviderRef = %v, want tvdb:370070", got)
+	if got := summary["MetadataRef"]; got != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %v, want tvdb:370070", got)
 	}
 	evidence, ok := results[0]["Evidence"].([]any)
 	if !ok || len(evidence) != 1 {
@@ -59,12 +59,12 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 	if _, ok := firstEvidence["Summary"]; ok {
 		t.Fatal("Evidence[0].Summary present, want omitted")
 	}
-	if _, ok := firstEvidence["ProviderRef"]; ok {
-		t.Fatal("Evidence[0].ProviderRef present, want omitted")
+	if _, ok := firstEvidence["MetadataRef"]; ok {
+		t.Fatal("Evidence[0].MetadataRef present, want omitted")
 	}
 }
 
-func TestSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
+func TestSyncCommandInitializesAndWritesMetadata(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -80,7 +80,7 @@ func TestSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
 		"sync",
 		"--yes",
 		"--tvdb-base-url", server.URL,
-		"--provider-ref", "tvdb:370070",
+		"--metadata-ref", "tvdb:370070",
 		"Bookworm",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
 	if err != nil {
@@ -94,8 +94,8 @@ func TestSyncCommandInitializesAndWritesProviderMetadata(t *testing.T) {
 	if err := json.Unmarshal(data, &series); err != nil {
 		t.Fatalf("unmarshal series.json: %v", err)
 	}
-	if got := series["preferredProvider"]; got != "tvdb" {
-		t.Fatalf("preferredProvider = %v, want tvdb", got)
+	if got := series["metadataRef"]; got != "tvdb:370070" {
+		t.Fatalf("metadataRef = %v, want tvdb:370070", got)
 	}
 	if _, ok := series["filesystemTitle"]; ok {
 		t.Fatal("filesystemTitle present, want derived from directory name")
@@ -124,7 +124,7 @@ func TestSyncCommandWritesSummaryAndMetadata(t *testing.T) {
 		"sync",
 		"--yes",
 		"--tvdb-base-url", server.URL,
-		"--provider-ref", "tvdb:370070",
+		"--metadata-ref", "tvdb:370070",
 		"Bookworm",
 	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
 	if err != nil {
@@ -153,9 +153,7 @@ func TestSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	}
 	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -202,9 +200,7 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	writeFile(t, filepath.Join(seasonDir, "old episode.mkv"), "episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Long Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -260,9 +256,7 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"seasons": [
@@ -307,9 +301,7 @@ func TestReconcileCommandDoesNotRequireTVDBKey(t *testing.T) {
 	}
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm"
 	}`)
@@ -368,9 +360,7 @@ func TestStageCommandWritesStagedJSON(t *testing.T) {
 	}
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
-		"id": "01JZ7P0Q2V3W4X5Y6Z7A8B9C0D",
-		"providerRefs": ["tvdb:370070"],
-		"preferredProvider": "tvdb",
+		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm"
 	}`)

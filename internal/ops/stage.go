@@ -22,8 +22,8 @@ type StageEpisodeFileOptions struct {
 	Companions       []string
 	MediaPath        string
 	Inspector        MediaInspector
-	ProviderSeries   *metadata.Series
-	ProviderResolver ProviderSeriesResolver
+	MetadataSeries   *metadata.Series
+	MetadataResolver MetadataSeriesResolver
 	Apply            bool
 	Replace          bool
 }
@@ -54,11 +54,11 @@ func StageEpisodeFile(ctx context.Context, root fsroot.LibraryRoot, dirname stri
 	if err != nil {
 		return StageEpisodeFileResult{}, err
 	}
-	providerSeries, err := providerSeriesForLocal(ctx, *series, opts.ProviderSeries, opts.ProviderResolver)
+	metadataSeries, err := metadataSeriesForLocal(ctx, *series, opts.MetadataSeries, opts.MetadataResolver)
 	if err != nil {
 		return StageEpisodeFileResult{}, err
 	}
-	if err := validateProviderEpisode(providerSeries, opts.Season.Int(), opts.Episode.Int()); err != nil {
+	if err := validateMetadataEpisode(metadataSeries, opts.Season.Int(), opts.Episode.Int()); err != nil {
 		return StageEpisodeFileResult{}, err
 	}
 

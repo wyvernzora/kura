@@ -16,19 +16,17 @@ const SeriesSchemaVersion = 1
 
 // Series is the persistent .kura/series.json document for one local series.
 //
-// It stores local library facts only. Live provider metadata, such as episode
-// titles and air dates, belongs in provider read views and is intentionally not
+// It stores local library facts only. Live source metadata, such as episode
+// titles and air dates, belongs in metadata read views and is intentionally not
 // persisted here.
 type Series struct {
-	SchemaVersion     int      `json:"schemaVersion"`
-	ID                string   `json:"id"`
-	ProviderRefs      []string `json:"providerRefs"`
-	PreferredProvider string   `json:"preferredProvider"`
-	PreferredTitle    string   `json:"preferredTitle"`
-	CanonicalTitle    string   `json:"canonicalTitle"`
-	LastScanned       string   `json:"lastScanned,omitempty"`
-	Notes             string   `json:"notes,omitempty"`
-	Seasons           []Season `json:"seasons,omitempty"`
+	SchemaVersion  int      `json:"schemaVersion"`
+	MetadataRef    string   `json:"metadataRef"`
+	PreferredTitle string   `json:"preferredTitle"`
+	CanonicalTitle string   `json:"canonicalTitle"`
+	LastScanned    string   `json:"lastScanned,omitempty"`
+	Notes          string   `json:"notes,omitempty"`
+	Seasons        []Season `json:"seasons,omitempty"`
 
 	dirname string
 }
@@ -253,9 +251,6 @@ func encodeSeries(w io.Writer, series Series) error {
 }
 
 func canonicalizeSeries(s *Series) {
-	if s.ProviderRefs == nil {
-		s.ProviderRefs = []string{}
-	}
 	for i := range s.Seasons {
 		canonicalizeSeason(&s.Seasons[i])
 	}

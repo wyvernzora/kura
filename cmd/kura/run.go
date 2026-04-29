@@ -71,7 +71,7 @@ func run(args []string, rt runContext) error {
 			return nil, err
 		}
 		return resolve.New(
-			resolve.NewProviderIDStrategy(src),
+			resolve.NewMetadataIDStrategy(src),
 			resolve.NewTextSearchStrategy(src),
 		), nil
 	})

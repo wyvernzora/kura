@@ -10,7 +10,7 @@ import (
 )
 
 type ResolveSeriesOptions struct {
-	ProviderRef string
+	MetadataRef string
 	SearchLimit int
 }
 
@@ -23,9 +23,9 @@ func (err SeriesSelectionRequiredError) Error() string {
 	return fmt.Sprintf("no exact metadata match for %q", err.Query)
 }
 
-func ResolveProviderSeries(ctx context.Context, metadataSource metadata.Source, dirname string, opts ResolveSeriesOptions) (metadata.Series, bool, error) {
-	if opts.ProviderRef != "" {
-		series, err := GetProviderSeriesByRef(ctx, metadataSource, opts.ProviderRef)
+func ResolveMetadataSeries(ctx context.Context, metadataSource metadata.Source, dirname string, opts ResolveSeriesOptions) (metadata.Series, bool, error) {
+	if opts.MetadataRef != "" {
+		series, err := GetMetadataSeriesByRef(ctx, metadataSource, opts.MetadataRef)
 		return series, true, err
 	}
 
@@ -44,17 +44,17 @@ func ResolveProviderSeries(ctx context.Context, metadataSource metadata.Source, 
 	if !ok {
 		return metadata.Series{}, false, SeriesSelectionRequiredError{Query: dirname, Candidates: results}
 	}
-	series, err := GetProviderSeriesByRef(ctx, metadataSource, match.ProviderRef)
+	series, err := GetMetadataSeriesByRef(ctx, metadataSource, match.MetadataRef)
 	return series, false, err
 }
 
-func GetProviderSeriesByRef(ctx context.Context, metadataSource metadata.Source, remoteRef string) (metadata.Series, error) {
-	ref, err := domain.ParseRemoteSeriesRef(remoteRef)
+func GetMetadataSeriesByRef(ctx context.Context, metadataSource metadata.Source, metadataRef string) (metadata.Series, error) {
+	ref, err := domain.ParseMetadataRef(metadataRef)
 	if err != nil {
 		return metadata.Series{}, err
 	}
 	if ref.Source() != metadataSource.Key() {
-		return metadata.Series{}, fmt.Errorf("unsupported series ref provider %q; expected %s:<id>", ref.Source(), metadataSource.Key())
+		return metadata.Series{}, fmt.Errorf("unsupported metadata ref source %q; expected %s:<id>", ref.Source(), metadataSource.Key())
 	}
 	return metadataSource.GetSeries(ctx, ref.ID())
 }

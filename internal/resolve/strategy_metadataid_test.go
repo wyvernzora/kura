@@ -8,8 +8,8 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
-func TestProviderIDStrategyProperties(t *testing.T) {
-	strategy := NewProviderIDStrategy(&strategyFakeSource{key: "tvdb"})
+func TestMetadataIDStrategyProperties(t *testing.T) {
+	strategy := NewMetadataIDStrategy(&strategyFakeSource{key: "tvdb"})
 	if !strategy.Match(Term{Prefix: "tvdb", Value: "1"}) {
 		t.Fatal("Match tvdb = false, want true")
 	}
@@ -21,8 +21,8 @@ func TestProviderIDStrategyProperties(t *testing.T) {
 	}
 }
 
-func TestProviderIDStrategyNotFound(t *testing.T) {
-	strategy := NewProviderIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrNotFound})
+func TestMetadataIDStrategyNotFound(t *testing.T) {
+	strategy := NewMetadataIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrNotFound})
 	hits, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: "1"})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -32,16 +32,16 @@ func TestProviderIDStrategyNotFound(t *testing.T) {
 	}
 }
 
-func TestProviderIDStrategyPropagatesError(t *testing.T) {
-	strategy := NewProviderIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrUnavailable})
+func TestMetadataIDStrategyPropagatesError(t *testing.T) {
+	strategy := NewMetadataIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrUnavailable})
 	_, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: "1"})
 	if !errors.Is(err, metadata.ErrUnavailable) {
 		t.Fatalf("error = %v, want ErrUnavailable", err)
 	}
 }
 
-func TestProviderIDStrategyResolveSeries(t *testing.T) {
-	strategy := NewProviderIDStrategy(&strategyFakeSource{
+func TestMetadataIDStrategyResolveSeries(t *testing.T) {
+	strategy := NewMetadataIDStrategy(&strategyFakeSource{
 		series: map[string]metadata.Series{"1": testMetadataSeries("tvdb:1")},
 	})
 	hits, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: "1"})
@@ -51,7 +51,7 @@ func TestProviderIDStrategyResolveSeries(t *testing.T) {
 	if len(hits) != 1 {
 		t.Fatalf("len(hits) = %d, want 1", len(hits))
 	}
-	if hits[0].Rank != 0 || hits[0].ProviderRef != "tvdb:1" {
+	if hits[0].Rank != 0 || hits[0].MetadataRef != "tvdb:1" {
 		t.Fatalf("hit = %#v, want rank 0 tvdb:1", hits[0])
 	}
 }

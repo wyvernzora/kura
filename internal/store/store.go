@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/google/renameio/v2"
-	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/fsroot"
 )
 
@@ -23,7 +22,6 @@ func NewSeries(dirname string) (*Series, error) {
 	}
 	return &Series{
 		SchemaVersion: SeriesSchemaVersion,
-		ID:            ulid.Make().String(),
 		dirname:       dirname,
 	}, nil
 }

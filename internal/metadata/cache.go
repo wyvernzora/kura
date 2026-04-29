@@ -82,8 +82,8 @@ func (p *cachedSource) Search(ctx context.Context, query string, opts SearchOpti
 	return cloneSearchResults(results), nil
 }
 
-func (p *cachedSource) GetSeries(ctx context.Context, providerID string) (Series, error) {
-	key, err := cacheKey(p.next.Key(), "series", providerID)
+func (p *cachedSource) GetSeries(ctx context.Context, metadataID string) (Series, error) {
+	key, err := cacheKey(p.next.Key(), "series", metadataID)
 	if err != nil {
 		return Series{}, err
 	}
@@ -91,7 +91,7 @@ func (p *cachedSource) GetSeries(ctx context.Context, providerID string) (Series
 		return cloneSeries(cached.(Series)), nil
 	}
 
-	series, err := p.next.GetSeries(ctx, providerID)
+	series, err := p.next.GetSeries(ctx, metadataID)
 	if err != nil {
 		return Series{}, err
 	}
@@ -146,7 +146,6 @@ func cloneSeason(in Season) Season {
 
 func cloneSeriesSummary(in SeriesSummary) SeriesSummary {
 	out := in
-	out.ProviderRefs = cloneStrings(in.ProviderRefs)
 	out.Genres = cloneStrings(in.Genres)
 	return out
 }

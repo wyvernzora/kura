@@ -18,4 +18,4 @@ func (f MediaInspectorFunc) Inspect(ctx context.Context, path string) (domain.Me
 	return f(ctx, path)
 }
 
-type ProviderSeriesResolver func(context.Context, store.Series) (metadata.Series, error)
+type MetadataSeriesResolver func(context.Context, store.Series) (metadata.Series, error)

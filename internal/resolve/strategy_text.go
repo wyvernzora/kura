@@ -39,7 +39,7 @@ func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]termHit, er
 	for i, result := range results {
 		hits = append(hits, termHit{
 			Term:        t,
-			ProviderRef: result.ProviderRef,
+			MetadataRef: result.MetadataRef,
 			Summary:     result.SeriesSummary,
 			Rank:        i,
 		})

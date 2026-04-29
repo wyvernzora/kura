@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
-	"slices"
 )
 
 func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
@@ -27,11 +26,8 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 		t.Fatalf("GetSeries: %v", err)
 	}
 
-	if series.ProviderRef != "tvdb:370070" {
-		t.Fatalf("ProviderRef = %q, want tvdb:370070", series.ProviderRef)
-	}
-	if !slices.Equal(series.ProviderRefs, []string{"tvdb:370070", "imdb:tt10885406", "tmdb:12345"}) {
-		t.Fatalf("ProviderRefs = %#v, want tvdb/imdb/tmdb refs", series.ProviderRefs)
+	if series.MetadataRef != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %q, want tvdb:370070", series.MetadataRef)
 	}
 	if series.CanonicalTitle != "Ascendance of a Bookworm" {
 		t.Fatalf("CanonicalTitle = %q", series.CanonicalTitle)
@@ -57,7 +53,7 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 	if series.Seasons[1].Number != 1 {
 		t.Fatalf("season number = %d, want 1", series.Seasons[1].Number)
 	}
-	if got := series.Seasons[1].Episodes[0]; got.ProviderRef != "tvdb:1001" || got.EpisodeNumber != 1 {
+	if got := series.Seasons[1].Episodes[0]; got.MetadataRef != "tvdb:1001" || got.EpisodeNumber != 1 {
 		t.Fatalf("first season 1 episode = %#v", got)
 	}
 	if series.Seasons[1].Episodes[0].AbsoluteNumber == nil || *series.Seasons[1].Episodes[0].AbsoluteNumber != 1 {
@@ -69,7 +65,7 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 	if len(series.Seasons[0].Episodes) != 1 {
 		t.Fatalf("len(Seasons[0].Episodes) = %d, want 1", len(series.Seasons[0].Episodes))
 	}
-	if got := series.Seasons[0].Episodes[0]; got.ProviderRef != "tvdb:9001" || got.SeasonNumber != 0 || got.EpisodeNumber != 1 {
+	if got := series.Seasons[0].Episodes[0]; got.MetadataRef != "tvdb:9001" || got.SeasonNumber != 0 || got.EpisodeNumber != 1 {
 		t.Fatalf("first special = %#v", got)
 	}
 }
@@ -146,7 +142,6 @@ func TestNormalizeSeriesSummaryNormalizesProviderTitlesToNFC(t *testing.T) {
 		firstAired:       "2019-10-03",
 		status:           metadata.SeriesStatusContinuing,
 		year:             2019,
-		linkedRefs:       nil,
 		titles: []titleCandidate{
 			{Language: "jpn", Value: "本好きの下剋上 司書になるためには手段を選んでいられません"},
 		},

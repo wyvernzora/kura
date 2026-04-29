@@ -49,45 +49,25 @@ func (s *dirnameStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error
 		}
 		return nil, fmt.Errorf("%w: %s: %v", ErrCorruptSeriesFile, dir.Path(), err)
 	}
-	refValue, err := preferredProviderRef(*series)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s: %v", ErrCorruptSeriesFile, dir.Path(), err)
-	}
-	ref, err := domain.ParseRemoteSeriesRef(refValue)
+	ref, err := domain.ParseMetadataRef(series.MetadataRef)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %v", ErrCorruptSeriesFile, dir.Path(), err)
 	}
 	if ref.Source() != s.source.Key() {
-		return nil, fmt.Errorf("%w: %s: provider %q does not match configured provider %q", ErrCorruptSeriesFile, dir.Path(), ref.Source(), s.source.Key())
+		return nil, fmt.Errorf("%w: %s: metadata ref source %q does not match configured source %q", ErrCorruptSeriesFile, dir.Path(), ref.Source(), s.source.Key())
 	}
 
-	providerSeries, err := s.source.GetSeries(ctx, ref.ID())
+	metadataSeries, err := s.source.GetSeries(ctx, ref.ID())
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
-			return nil, fmt.Errorf("%w: %s", ErrStaleProviderRef, ref)
+			return nil, fmt.Errorf("%w: %s", ErrStaleMetadataRef, ref)
 		}
 		return nil, err
 	}
 	return []termHit{{
 		Term:        t,
-		ProviderRef: providerSeries.ProviderRef,
-		Summary:     providerSeries.SeriesSummary,
+		MetadataRef: metadataSeries.MetadataRef,
+		Summary:     metadataSeries.SeriesSummary,
 		Rank:        0,
 	}}, nil
-}
-
-func preferredProviderRef(series store.Series) (string, error) {
-	if len(series.ProviderRefs) == 0 {
-		return "", errors.New("no provider refs")
-	}
-	for _, ref := range series.ProviderRefs {
-		parsed, err := domain.ParseRemoteSeriesRef(ref)
-		if err != nil {
-			continue
-		}
-		if series.PreferredProvider != "" && parsed.Source() == series.PreferredProvider {
-			return ref, nil
-		}
-	}
-	return series.ProviderRefs[0], nil
 }

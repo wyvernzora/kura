@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
-	"slices"
 )
 
 func TestSearchNormalizesSeriesResults(t *testing.T) {
@@ -33,17 +32,14 @@ func TestSearchNormalizesSeriesResults(t *testing.T) {
 	}
 
 	got := results[0]
-	if got.ProviderRef != "tvdb:370070" {
-		t.Fatalf("ProviderRef = %q, want tvdb:370070", got.ProviderRef)
+	if got.MetadataRef != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %q, want tvdb:370070", got.MetadataRef)
 	}
 	if got.Score != 42.5 {
 		t.Fatalf("Score = %v, want 42.5", got.Score)
 	}
 	if got.MatchSource != "query" {
 		t.Fatalf("MatchSource = %q, want query", got.MatchSource)
-	}
-	if !slices.Equal(got.ProviderRefs, []string{"tvdb:370070", "imdb:tt10885406", "tmdb:12345"}) {
-		t.Fatalf("ProviderRefs = %#v, want tvdb/imdb/tmdb refs", got.ProviderRefs)
 	}
 	if got.CanonicalTitle != "Ascendance of a Bookworm" {
 		t.Fatalf("CanonicalTitle = %q", got.CanonicalTitle)

@@ -91,7 +91,7 @@ func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metada
 		}
 
 		out = append(out, metadata.Season{
-			ProviderRef: providerIntRef(season.ID),
+			MetadataRef: providerIntRef(season.ID),
 			Number:      season.Number,
 			Episodes:    seasonEpisodes,
 		})
@@ -103,7 +103,7 @@ func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metada
 			continue
 		}
 		out = append(out, metadata.Season{
-			ProviderRef: "",
+			MetadataRef: "",
 			Number:      seasonNumber,
 			Episodes:    seasonEpisodes,
 		})
@@ -134,7 +134,7 @@ func normalizeEmbeddedEpisodes(episodes []episodeRecord, seasonNumber int) []met
 
 func normalizeEpisodeRecord(episode episodeRecord, seasonNumber int) metadata.Episode {
 	return metadata.Episode{
-		ProviderRef:    providerIntRef(episode.ID),
+		MetadataRef:    providerIntRef(episode.ID),
 		SeasonNumber:   seasonNumber,
 		EpisodeNumber:  episode.Number,
 		AbsoluteNumber: positiveIntPtr(episode.AbsoluteNumber),

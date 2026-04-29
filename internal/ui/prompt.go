@@ -67,8 +67,8 @@ func FormatSeriesCandidate(result metadata.SearchResult) string {
 	if result.Year > 0 {
 		parts = append(parts, strconv.Itoa(result.Year))
 	}
-	if result.ProviderRef != "" {
-		parts = append(parts, result.ProviderRef)
+	if result.MetadataRef != "" {
+		parts = append(parts, result.MetadataRef)
 	}
 	return strings.Join(parts, " | ")
 }

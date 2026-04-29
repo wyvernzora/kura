@@ -62,7 +62,7 @@ func TestNormalizeEpisodeRecordNormalizesAiredDate(t *testing.T) {
 	}
 }
 
-func TestNormalizeSeasonsUsesEmptyProviderRefForSyntheticSeasons(t *testing.T) {
+func TestNormalizeSeasonsUsesEmptyMetadataRefForSyntheticSeasons(t *testing.T) {
 	seasons := normalizeSeasons(nil, []episodeRecord{{
 		ID:           1,
 		Number:       1,
@@ -71,7 +71,7 @@ func TestNormalizeSeasonsUsesEmptyProviderRefForSyntheticSeasons(t *testing.T) {
 	if len(seasons) != 1 {
 		t.Fatalf("len(seasons) = %d, want 1", len(seasons))
 	}
-	if seasons[0].ProviderRef != "" {
-		t.Fatalf("ProviderRef = %q, want empty synthetic ref", seasons[0].ProviderRef)
+	if seasons[0].MetadataRef != "" {
+		t.Fatalf("MetadataRef = %q, want empty synthetic ref", seasons[0].MetadataRef)
 	}
 }

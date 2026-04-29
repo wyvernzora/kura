@@ -83,40 +83,6 @@ func (s tvdbString) String() string {
 	return string(s)
 }
 
-func normalizeRemoteRefs(ids []remoteID) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, id := range ids {
-		key := normalizeRemoteSource(id.SourceName)
-		if key == "" || id.ID.String() == "" {
-			continue
-		}
-		ref := key + ":" + id.ID.String()
-		if seen[ref] {
-			continue
-		}
-		out = append(out, ref)
-		seen[ref] = true
-	}
-	return out
-}
-
-func normalizeRemoteSource(source string) string {
-	source = strings.ToLower(strings.TrimSpace(source))
-	switch source {
-	case "imdb", "imdb.com":
-		return "imdb"
-	case "themoviedb.com", "the movie database", "tmdb":
-		return "tmdb"
-	case "myanimelist", "myanimelist.net", "mal":
-		return "mal"
-	case "anidb", "anidb.net":
-		return "anidb"
-	default:
-		return ""
-	}
-}
-
 func normalizeStatus(status string) metadata.SeriesStatus {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "continuing", "ongoing", "returning series":

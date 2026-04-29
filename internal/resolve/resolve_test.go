@@ -10,77 +10,77 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
-func TestResolveProviderSeriesExactMatch(t *testing.T) {
+func TestResolveMetadataSeriesExactMatch(t *testing.T) {
 	metadataSource := fakeMetadataSource{
 		searchResults: []metadata.SearchResult{{
 			SeriesSummary: metadata.SeriesSummary{
-				ProviderRef:    "tvdb:370070",
+				MetadataRef:    "tvdb:370070",
 				PreferredTitle: "本好きの下剋上",
 				CanonicalTitle: "Ascendance of a Bookworm",
 			},
 		}},
 		series: map[string]metadata.Series{
-			"370070": testProviderSeries(),
+			"370070": testResolvedMetadataSeries(),
 		},
 	}
 
-	series, selected, err := ResolveProviderSeries(context.Background(), metadataSource, "本好きの下剋上", ResolveSeriesOptions{})
+	series, selected, err := ResolveMetadataSeries(context.Background(), metadataSource, "本好きの下剋上", ResolveSeriesOptions{})
 	if err != nil {
-		t.Fatalf("ResolveProviderSeries: %v", err)
+		t.Fatalf("ResolveMetadataSeries: %v", err)
 	}
 	if selected {
 		t.Fatal("selected = true, want false for exact search match")
 	}
-	if series.ProviderRef != "tvdb:370070" {
-		t.Fatalf("ProviderRef = %q, want tvdb:370070", series.ProviderRef)
+	if series.MetadataRef != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %q, want tvdb:370070", series.MetadataRef)
 	}
 }
 
-func TestResolveProviderSeriesSingleSubstringMatch(t *testing.T) {
+func TestResolveMetadataSeriesSingleSubstringMatch(t *testing.T) {
 	metadataSource := fakeMetadataSource{
 		searchResults: []metadata.SearchResult{{
 			SeriesSummary: metadata.SeriesSummary{
-				ProviderRef:    "tvdb:370070",
+				MetadataRef:    "tvdb:370070",
 				PreferredTitle: "本好きの下剋上 司書になるためには手段を選んでいられません",
 				CanonicalTitle: "Ascendance of a Bookworm",
 			},
 		}},
 		series: map[string]metadata.Series{
-			"370070": testProviderSeries(),
+			"370070": testResolvedMetadataSeries(),
 		},
 	}
 
-	series, selected, err := ResolveProviderSeries(context.Background(), metadataSource, "本好きの下剋上", ResolveSeriesOptions{})
+	series, selected, err := ResolveMetadataSeries(context.Background(), metadataSource, "本好きの下剋上", ResolveSeriesOptions{})
 	if err != nil {
-		t.Fatalf("ResolveProviderSeries: %v", err)
+		t.Fatalf("ResolveMetadataSeries: %v", err)
 	}
 	if selected {
 		t.Fatal("selected = true, want false for search match")
 	}
-	if series.ProviderRef != "tvdb:370070" {
-		t.Fatalf("ProviderRef = %q, want tvdb:370070", series.ProviderRef)
+	if series.MetadataRef != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %q, want tvdb:370070", series.MetadataRef)
 	}
 }
 
-func TestResolveProviderSeriesDoesNotSubstringMatchMultipleResults(t *testing.T) {
+func TestResolveMetadataSeriesDoesNotSubstringMatchMultipleResults(t *testing.T) {
 	metadataSource := fakeMetadataSource{
 		searchResults: []metadata.SearchResult{
 			{
 				SeriesSummary: metadata.SeriesSummary{
-					ProviderRef:    "tvdb:1",
+					MetadataRef:    "tvdb:1",
 					PreferredTitle: "Bookworm Extra",
 				},
 			},
 			{
 				SeriesSummary: metadata.SeriesSummary{
-					ProviderRef:    "tvdb:2",
+					MetadataRef:    "tvdb:2",
 					CanonicalTitle: "Bookworm OVA",
 				},
 			},
 		},
 	}
 
-	_, _, err := ResolveProviderSeries(context.Background(), metadataSource, "Bookworm", ResolveSeriesOptions{})
+	_, _, err := ResolveMetadataSeries(context.Background(), metadataSource, "Bookworm", ResolveSeriesOptions{})
 	selectionRequired, ok := errors.AsType[SeriesSelectionRequiredError](err)
 	if !ok {
 		t.Fatalf("error = %v, want SeriesSelectionRequiredError", err)
@@ -90,17 +90,17 @@ func TestResolveProviderSeriesDoesNotSubstringMatchMultipleResults(t *testing.T)
 	}
 }
 
-func TestResolveProviderSeriesReturnsCandidatesWhenSelectionRequired(t *testing.T) {
+func TestResolveMetadataSeriesReturnsCandidatesWhenSelectionRequired(t *testing.T) {
 	metadataSource := fakeMetadataSource{
 		searchResults: []metadata.SearchResult{{
 			SeriesSummary: metadata.SeriesSummary{
-				ProviderRef:    "tvdb:1",
+				MetadataRef:    "tvdb:1",
 				PreferredTitle: "Candidate",
 			},
 		}},
 	}
 
-	_, _, err := ResolveProviderSeries(context.Background(), metadataSource, "No Match", ResolveSeriesOptions{})
+	_, _, err := ResolveMetadataSeries(context.Background(), metadataSource, "No Match", ResolveSeriesOptions{})
 	selectionRequired, ok := errors.AsType[SeriesSelectionRequiredError](err)
 	if !ok {
 		t.Fatalf("error = %v, want SeriesSelectionRequiredError", err)
@@ -123,19 +123,18 @@ func (p fakeMetadataSource) Search(context.Context, string, metadata.SearchOptio
 	return slices.Clone(p.searchResults), nil
 }
 
-func (p fakeMetadataSource) GetSeries(_ context.Context, providerID string) (metadata.Series, error) {
-	series, ok := p.series[providerID]
+func (p fakeMetadataSource) GetSeries(_ context.Context, metadataID string) (metadata.Series, error) {
+	series, ok := p.series[metadataID]
 	if !ok {
-		return metadata.Series{}, fmt.Errorf("series %s not found", providerID)
+		return metadata.Series{}, fmt.Errorf("series %s not found", metadataID)
 	}
 	return series, nil
 }
 
-func testProviderSeries() metadata.Series {
+func testResolvedMetadataSeries() metadata.Series {
 	return metadata.Series{
 		SeriesSummary: metadata.SeriesSummary{
-			ProviderRef:      "tvdb:370070",
-			ProviderRefs:     []string{"tvdb:370070", "imdb:tt10885406", "tmdb:12345"},
+			MetadataRef:      "tvdb:370070",
 			PreferredTitle:   "本好きの下剋上",
 			CanonicalTitle:   "Ascendance of a Bookworm",
 			OriginalLanguage: "jpn",

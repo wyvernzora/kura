@@ -7,27 +7,27 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
-type providerIDStrategy struct {
+type metadataIDStrategy struct {
 	source metadata.Source
 }
 
-func NewProviderIDStrategy(source metadata.Source) ResolveStrategy {
-	return &providerIDStrategy{source: source}
+func NewMetadataIDStrategy(source metadata.Source) ResolveStrategy {
+	return &metadataIDStrategy{source: source}
 }
 
-func (s *providerIDStrategy) Name() string {
-	return "provider_id"
+func (s *metadataIDStrategy) Name() string {
+	return "metadata_id"
 }
 
-func (s *providerIDStrategy) Match(t Term) bool {
+func (s *metadataIDStrategy) Match(t Term) bool {
 	return t.Prefix == s.source.Key()
 }
 
-func (s *providerIDStrategy) Authoritative() bool {
+func (s *metadataIDStrategy) Authoritative() bool {
 	return true
 }
 
-func (s *providerIDStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
+func (s *metadataIDStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
 	series, err := s.source.GetSeries(ctx, t.Value)
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
@@ -37,7 +37,7 @@ func (s *providerIDStrategy) Resolve(ctx context.Context, t Term) ([]termHit, er
 	}
 	return []termHit{{
 		Term:        t,
-		ProviderRef: series.ProviderRef,
+		MetadataRef: series.MetadataRef,
 		Summary:     series.SeriesSummary,
 		Rank:        0,
 	}}, nil

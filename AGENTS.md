@@ -37,7 +37,7 @@ These notes capture project intent and working conventions for future agent thre
 - `kura reconcile <dir>` moves staged files into the active layout, moves replaced active files under `.kura/trash/<trash_id>/`, updates metadata, and removes empty staged metadata.
 - `kura reconcile` does not rename the series root. It uses the current directory name for generated media filenames.
 - If sync or reconcile has no changes, the CLI must not ask to apply anything.
-- Current series selectors resolve direct child directories below `KURA_LIBRARY_ROOT`; fuzzy selectors and provider/local-id selectors require future library-wide indexing.
+- Current series selectors resolve direct child directories below `KURA_LIBRARY_ROOT`; fuzzy selectors and metadata-ref selectors require future library-wide indexing.
 
 ## Engineering Conventions
 
@@ -45,7 +45,7 @@ These notes capture project intent and working conventions for future agent thre
 - Go version: 1.26.2 or newer.
 - Main command entrypoint: `cmd/kura`.
 - All Kura-generated JSON files must include top-level `schemaVersion`; initial version is `1`.
-- Series metadata uses local `id`, provider-neutral `providerRefs`, and `preferredProvider`; do not add provider-specific top-level ID fields.
+- Series metadata uses a single source-neutral `metadataRef`; do not add local series IDs, `providerRefs`, or `preferredProvider`.
 - Keep persistent models dumb. Workflow behavior belongs in `internal/ops`.
 - Keep dependencies intentional and minimal.
 - Always prefer established libraries for common tasks such as language tags, time/date parsing, structured data parsing, CLI handling, hashing, and media/container metadata instead of rolling custom implementations.
