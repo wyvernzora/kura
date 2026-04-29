@@ -23,6 +23,7 @@ LOCAL_NOTES.md
 docs/LOCAL.md
 .local/
 scratch
+.claude
 
 # Editor and OS files
 .DS_Store
