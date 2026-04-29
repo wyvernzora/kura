@@ -451,6 +451,130 @@ func TestScanCommandUsesIndexToFindDirectory(t *testing.T) {
 	}
 }
 
+func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "episode-1.mkv"), "episode 1")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/episode-1.mkv",
+							"source": "webrip",
+							"size": 9,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"find",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	output := stdout.String()
+	for _, want := range []string{
+		"MetadataRef: tvdb:370070",
+		"Root: " + seriesDir,
+		"Title: 本好きの下剋上 / Ascendance of a Bookworm",
+		"SEASON 1",
+		"present",
+		"missing",
+		"WebRip",
+		"1080p",
+		"Season 1/episode-1.mkv",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("stdout = %q, want %q", output, want)
+		}
+	}
+}
+
+func TestFindCommandPrintsJSON(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	if err := os.MkdirAll(filepath.Join(seriesDir, "Season 1"), 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seriesDir, "Season 1", "episode-1.mkv"), "episode 1")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"seasons": [
+			{
+				"number": 1,
+				"episodes": [
+					{
+						"number": 1,
+						"media": {
+							"path": "Season 1/episode-1.mkv",
+							"source": "webrip",
+							"size": 9,
+							"mtime": "2026-04-20T03:00:00Z",
+							"mediainfo": {"resolution": "1920x1080"}
+						},
+						"companions": []
+					}
+				]
+			}
+		]
+	}`)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"find",
+		"--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
+	}
+	seasons := result["seasons"].([]any)
+	episodes := seasons[0].(map[string]any)["episodes"].([]any)
+	if got := episodes[0].(map[string]any)["status"]; got != "present" {
+		t.Fatalf("episode 1 status = %v, want present", got)
+	}
+	if got := episodes[1].(map[string]any)["status"]; got != "missing" {
+		t.Fatalf("episode 2 status = %v, want missing", got)
+	}
+}
+
 func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Long Bookworm")

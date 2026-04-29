@@ -1,6 +1,8 @@
 package kura
 
 import (
+	"time"
+
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/resolve"
 	"github.com/wyvernzora/kura/internal/store"
@@ -48,6 +50,10 @@ type ScanInput struct {
 	Replace bool
 }
 
+type ReadInput struct {
+	Now time.Time
+}
+
 type StageInput struct {
 	MediaPath  string
 	Season     int
@@ -64,6 +70,49 @@ type ScanResult struct {
 	Synced  []ScannedEpisode `json:"synced"`
 	Skipped []ImportSkip     `json:"skipped"`
 }
+
+type SeriesRead struct {
+	MetadataRef    MetadataRef  `json:"metadataRef"`
+	Ref            SeriesRef    `json:"ref"`
+	Root           string       `json:"root"`
+	PreferredTitle string       `json:"preferredTitle"`
+	CanonicalTitle string       `json:"canonicalTitle,omitempty"`
+	Seasons        []SeasonRead `json:"seasons"`
+}
+
+type SeasonRead struct {
+	MetadataRef string        `json:"metadataRef,omitempty"`
+	Number      int           `json:"number"`
+	Episodes    []EpisodeRead `json:"episodes"`
+}
+
+type EpisodeRead struct {
+	MetadataRef    string        `json:"metadataRef,omitempty"`
+	Season         int           `json:"season"`
+	Number         int           `json:"number"`
+	AbsoluteNumber *int          `json:"absoluteNumber,omitempty"`
+	Aired          string        `json:"aired,omitempty"`
+	Status         EpisodeStatus `json:"status"`
+	Active         *EpisodeMedia `json:"active,omitempty"`
+	Staged         *EpisodeMedia `json:"staged,omitempty"`
+}
+
+type EpisodeMedia struct {
+	Source     string          `json:"source"`
+	Resolution string          `json:"resolution,omitempty"`
+	File       string          `json:"file"`
+	Companions []CompanionFile `json:"companions"`
+}
+
+type EpisodeStatus string
+
+const (
+	EpisodeStatusPending     EpisodeStatus = "pending"
+	EpisodeStatusMissing     EpisodeStatus = "missing"
+	EpisodeStatusPresent     EpisodeStatus = "present"
+	EpisodeStatusStaged      EpisodeStatus = "staged"
+	EpisodeStatusUnavailable EpisodeStatus = "unavailable"
+)
 
 type ScannedEpisode struct {
 	Status     ScanStatus `json:"status"`
