@@ -361,6 +361,120 @@ func TestImportCommandRejectsRefAlreadyTracked(t *testing.T) {
 	}
 }
 
+func TestScanCommandSyncsTrackedSeries(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	mediainfoCommand := newFakeMediaInfoCommand(t, root)
+	if err := os.Mkdir(filepath.Join(root, "Bookworm"), 0o755); err != nil {
+		t.Fatalf("Mkdir Bookworm: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := run([]string{
+		"import",
+		"--tvdb-base-url", server.URL,
+		"Bookworm",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("import: %v\nstderr:\n%s", err, stderr.String())
+	}
+	seasonDir := filepath.Join(root, "Bookworm", "Season 1")
+	if err := os.Mkdir(seasonDir, 0o755); err != nil {
+		t.Fatalf("Mkdir Season 1: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode 1")
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E02 (WebRip 1080p).mkv"), "episode 2")
+
+	stdout.Reset()
+	stderr.Reset()
+	err := run([]string{
+		"scan",
+		"--yes",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
+	if err != nil {
+		t.Fatalf("scan: %v\nstderr:\n%s", err, stderr.String())
+	}
+	series, err := store.LoadSeries(filepath.Join(root, "Bookworm"))
+	if err != nil {
+		t.Fatalf("LoadSeries: %v", err)
+	}
+	if _, ok := series.LookupEpisode(1, 1); !ok {
+		t.Fatal("LookupEpisode(1, 1) = false")
+	}
+	if _, ok := series.LookupEpisode(1, 2); !ok {
+		t.Fatal("LookupEpisode(1, 2) = false")
+	}
+}
+
+func TestScanCommandFailsWhenRefNotTracked(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"scan",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil {
+		t.Fatal("run returned nil error, want missing tracked series error")
+	}
+	if !strings.Contains(err.Error(), "no tracked series") {
+		t.Fatalf("error = %v, want no tracked series", err)
+	}
+}
+
+func TestScanCommandUsesIndexToFindDirectory(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	mediainfoCommand := newFakeMediaInfoCommand(t, root)
+	if err := os.Mkdir(filepath.Join(root, "Some Custom Name"), 0o755); err != nil {
+		t.Fatalf("Mkdir Some Custom Name: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := run([]string{
+		"import",
+		"--tvdb-base-url", server.URL,
+		"Some Custom Name",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("import: %v\nstderr:\n%s", err, stderr.String())
+	}
+	seasonDir := filepath.Join(root, "Some Custom Name", "Season 1")
+	if err := os.Mkdir(seasonDir, 0o755); err != nil {
+		t.Fatalf("Mkdir Season 1: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "Some Custom Name - S01E01 (WebRip 1080p).mkv"), "episode")
+
+	stdout.Reset()
+	stderr.Reset()
+	err := run([]string{
+		"scan",
+		"--yes",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
+	if err != nil {
+		t.Fatalf("scan: %v\nstderr:\n%s", err, stderr.String())
+	}
+	series, err := store.LoadSeries(filepath.Join(root, "Some Custom Name"))
+	if err != nil {
+		t.Fatalf("LoadSeries: %v", err)
+	}
+	if _, ok := series.LookupEpisode(1, 1); !ok {
+		t.Fatal("LookupEpisode(1, 1) = false")
+	}
+}
+
 func TestSyncCommandRejectsMetadataRefTrackedElsewhere(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
@@ -857,6 +971,15 @@ func newCLITestServer(t *testing.T) *httptest.Server {
 						"number":         1,
 						"seasonNumber":   1,
 						"absoluteNumber": 1,
+						"runtime":        24,
+					},
+					{
+						"id":             1002,
+						"name":           "Life Improvements and Slates",
+						"aired":          "2019-10-10",
+						"number":         2,
+						"seasonNumber":   1,
+						"absoluteNumber": 2,
 						"runtime":        24,
 					},
 				},
