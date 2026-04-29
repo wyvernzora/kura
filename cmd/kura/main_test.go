@@ -252,6 +252,115 @@ func TestAddCommandRejectsAmbiguousQueryNonInteractive(t *testing.T) {
 	}
 }
 
+func TestImportCommandInitializesExistingDirectory(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Bookworm"), 0o755); err != nil {
+		t.Fatalf("Mkdir Bookworm: %v", err)
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"import",
+		"--tvdb-base-url", server.URL,
+		"Bookworm",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(root, "Bookworm", ".kura", "series.json")); err != nil {
+		t.Fatalf("Stat series.json: %v", err)
+	}
+	if got := libraryIndexPathForRef(t, root, "tvdb:370070"); got != "Bookworm" {
+		t.Fatalf("index path = %q, want Bookworm", got)
+	}
+}
+
+func TestImportCommandRejectsAlreadyTrackedDirectory(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	if err := os.Mkdir(seriesDir, 0o755); err != nil {
+		t.Fatalf("Mkdir Bookworm: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm"
+	}`)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"import",
+		"--tvdb-base-url", server.URL,
+		"Bookworm",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil {
+		t.Fatal("run returned nil error, want already tracked error")
+	}
+	if !strings.Contains(err.Error(), "already has .kura/series.json") {
+		t.Fatalf("error = %v, want already tracked", err)
+	}
+}
+
+func TestImportCommandRejectsMissingDirectory(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"import",
+		"--tvdb-base-url", server.URL,
+		"Missing",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil {
+		t.Fatal("run returned nil error, want missing directory error")
+	}
+}
+
+func TestImportCommandRejectsRefAlreadyTracked(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	bookwormDir := filepath.Join(root, "Bookworm")
+	if err := os.Mkdir(bookwormDir, 0o755); err != nil {
+		t.Fatalf("Mkdir Bookworm: %v", err)
+	}
+	writeSeriesJSON(t, bookwormDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm"
+	}`)
+	if err := os.Mkdir(filepath.Join(root, "Other"), 0o755); err != nil {
+		t.Fatalf("Mkdir Other: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"import",
+		"--tvdb-base-url", server.URL,
+		"Other",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	var duplicate store.DuplicateLibraryIndexRefError
+	if !errors.As(err, &duplicate) {
+		t.Fatalf("error = %v, want DuplicateLibraryIndexRefError", err)
+	}
+}
+
 func TestSyncCommandRejectsMetadataRefTrackedElsewhere(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
