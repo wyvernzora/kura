@@ -18,7 +18,7 @@ import (
 	"github.com/wyvernzora/kura/internal/store"
 )
 
-func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
+func TestSyncSeriesImportsSeasonEpisodes(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -35,16 +35,14 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	metadataSeries := testMetadataSeries()
+	saveInitializedTestSeries(t, root, "Bookworm", metadataSeries)
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Inspector:      fakeInspector,
-		Apply:          true,
+		MetadataResolver: metadataResolverFor(metadataSeries),
+		Inspector:        fakeInspector,
+		Apply:            true,
 	})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
-	}
-	if !result.Initialized {
-		t.Fatal("Initialized = false, want true")
 	}
 	if len(result.Synced) != 2 {
 		t.Fatalf("len(Synced) = %d, want 2", len(result.Synced))
@@ -66,7 +64,7 @@ func TestSyncSeriesInitializesAndImportsSeasonEpisodes(t *testing.T) {
 	}
 }
 
-func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
+func TestSyncSeriesScansEmptyTrackedDirectory(t *testing.T) {
 	rootPath := t.TempDir()
 	seriesDir := filepath.Join(rootPath, "Bookworm")
 	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
@@ -78,15 +76,12 @@ func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	metadataSeries := testMetadataSeries()
+	saveInitializedTestSeries(t, root, "Bookworm", metadataSeries)
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Apply:          true,
+		Apply: true,
 	})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
-	}
-	if !result.Initialized {
-		t.Fatal("Initialized = false, want true")
 	}
 	if len(result.Synced) != 0 || len(result.Skipped) != 0 {
 		t.Fatalf("Synced/Skipped = %#v/%#v, want empty", result.Synced, result.Skipped)
@@ -97,6 +92,22 @@ func TestSyncSeriesInitializesEmptyDirectory(t *testing.T) {
 	}
 	if loaded.PreferredTitle != metadataSeries.PreferredTitle {
 		t.Fatalf("PreferredTitle = %q, want %q", loaded.PreferredTitle, metadataSeries.PreferredTitle)
+	}
+}
+
+func TestSyncSeriesReturnsErrSeriesNotTrackedWhenMissingMetadata(t *testing.T) {
+	rootPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rootPath, "Bookworm"), 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
+	}
+
+	root, err := fsroot.ParseLibraryRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseLibraryRoot: %v", err)
+	}
+	_, err = SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{})
+	if !errors.Is(err, ErrSeriesNotTracked) {
+		t.Fatalf("SyncSeries error = %v, want ErrSeriesNotTracked", err)
 	}
 }
 
@@ -116,10 +127,11 @@ func TestSyncSeriesDoesNotPersistFileTitle(t *testing.T) {
 	metadataSeries := testMetadataSeries()
 	metadataSeries.PreferredTitle = "A Much Longer Metadata Title"
 	metadataSeries.CanonicalTitle = "Canonical Metadata Title"
+	saveInitializedTestSeries(t, root, "Short Title", metadataSeries)
 	if _, err := SyncSeries(context.Background(), root, "Short Title", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Inspector:      fakeInspector,
-		Apply:          true,
+		MetadataResolver: metadataResolverFor(metadataSeries),
+		Inspector:        fakeInspector,
+		Apply:            true,
 	}); err != nil {
 		t.Fatalf("SyncSeries: %v", err)
 	}
@@ -249,9 +261,9 @@ func TestSyncSeriesRefreshesChangedCompanionWithoutReplace(t *testing.T) {
 	}
 	metadataSeries := testMetadataSeries()
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Inspector:      fakeInspector,
-		Apply:          true,
+		MetadataResolver: metadataResolverFor(metadataSeries),
+		Inspector:        fakeInspector,
+		Apply:            true,
 	})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
@@ -287,11 +299,12 @@ func TestSyncSeriesDryRunDoesNotApplyWhenApplyIsAlsoTrue(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	metadataSeries := testMetadataSeries()
+	saveInitializedTestSeries(t, root, "Bookworm", metadataSeries)
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Inspector:      fakeInspector,
-		Apply:          true,
-		DryRun:         true,
+		MetadataResolver: metadataResolverFor(metadataSeries),
+		Inspector:        fakeInspector,
+		Apply:            true,
+		DryRun:           true,
 	})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
@@ -299,8 +312,12 @@ func TestSyncSeriesDryRunDoesNotApplyWhenApplyIsAlsoTrue(t *testing.T) {
 	if !result.HasChanges() {
 		t.Fatal("HasChanges = false, want true")
 	}
-	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("Stat series.json = %v, want not exist", err)
+	loaded, err := store.LoadSeries(seriesDir)
+	if err != nil {
+		t.Fatalf("LoadSeries: %v", err)
+	}
+	if _, ok := loaded.LookupEpisode(1, 1); ok {
+		t.Fatal("LookupEpisode(1, 1) = true, want dry-run to skip persistence")
 	}
 }
 
@@ -385,9 +402,10 @@ func TestSyncSeriesRejectsEpisodeMissingFromMetadata(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	metadataSeries := testMetadataSeries()
+	saveInitializedTestSeries(t, root, "Bookworm", metadataSeries)
 	_, err = SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Inspector:      fakeInspector,
+		MetadataResolver: metadataResolverFor(metadataSeries),
+		Inspector:        fakeInspector,
 	})
 	if err == nil || !strings.Contains(err.Error(), "metadata has no S01E03") {
 		t.Fatalf("SyncSeries error = %v, want missing metadata episode", err)
@@ -409,9 +427,10 @@ func TestSyncSeriesRejectsDuplicateParsedEpisodes(t *testing.T) {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
 	metadataSeries := testMetadataSeries()
+	saveInitializedTestSeries(t, root, "Bookworm", metadataSeries)
 	_, err = SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Inspector:      fakeInspector,
+		MetadataResolver: metadataResolverFor(metadataSeries),
+		Inspector:        fakeInspector,
 	})
 	if err == nil || !strings.Contains(err.Error(), "multiple files parsed as S01E01") {
 		t.Fatalf("SyncSeries error = %v, want duplicate parsed episode", err)
@@ -838,10 +857,10 @@ func TestSyncSeriesReplaceMovesExistingEpisodeToTrashDuringReconcile(t *testing.
 	}
 	metadataSeries := testMetadataSeries()
 	result, err := SyncSeries(context.Background(), root, "Bookworm", SeriesSyncOptions{
-		MetadataSeries: &metadataSeries,
-		Inspector:      fakeInspector,
-		Replace:        true,
-		Apply:          true,
+		MetadataResolver: metadataResolverFor(metadataSeries),
+		Inspector:        fakeInspector,
+		Replace:          true,
+		Apply:            true,
 	})
 	if err != nil {
 		t.Fatalf("SyncSeries: %v", err)
@@ -1399,6 +1418,27 @@ func testMetadataSeries() metadata.Series {
 				},
 			},
 		},
+	}
+}
+
+func saveInitializedTestSeries(t *testing.T, root fsroot.LibraryRoot, dirname string, metadataSeries metadata.Series) {
+	t.Helper()
+	seriesDir, err := root.SeriesDir(dirname)
+	if err != nil {
+		t.Fatalf("SeriesDir: %v", err)
+	}
+	result, err := InitSeries(InitSeriesOptions{SeriesDir: seriesDir, Metadata: metadataSeries})
+	if err != nil {
+		t.Fatalf("InitSeries: %v", err)
+	}
+	if err := store.SaveSeries(result.Series); err != nil {
+		t.Fatalf("SaveSeries: %v", err)
+	}
+}
+
+func metadataResolverFor(metadataSeries metadata.Series) MetadataSeriesResolver {
+	return func(context.Context, store.Series) (metadata.Series, error) {
+		return metadataSeries, nil
 	}
 }
 

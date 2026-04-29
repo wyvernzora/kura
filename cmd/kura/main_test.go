@@ -71,6 +71,7 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 }
 
 func TestSyncCommandInitializesAndWritesMetadata(t *testing.T) {
+	t.Skip("legacy sync init path removed; sync command is removed in the next phase")
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -476,6 +477,7 @@ func TestScanCommandUsesIndexToFindDirectory(t *testing.T) {
 }
 
 func TestSyncCommandRejectsMetadataRefTrackedElsewhere(t *testing.T) {
+	t.Skip("legacy sync init path removed; sync command is removed in the next phase")
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -513,6 +515,7 @@ func TestSyncCommandRejectsMetadataRefTrackedElsewhere(t *testing.T) {
 }
 
 func TestSyncCommandWritesSummaryAndMetadata(t *testing.T) {
+	t.Skip("legacy sync init path removed; sync command is removed in the next phase")
 	server := newCLITestServer(t)
 	defer server.Close()
 

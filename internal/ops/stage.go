@@ -54,9 +54,12 @@ func StageEpisodeFile(ctx context.Context, root fsroot.LibraryRoot, dirname stri
 	if err != nil {
 		return StageEpisodeFileResult{}, err
 	}
-	metadataSeries, err := metadataSeriesForLocal(ctx, *series, opts.MetadataSeries, opts.MetadataResolver)
-	if err != nil {
-		return StageEpisodeFileResult{}, err
+	metadataSeries := opts.MetadataSeries
+	if metadataSeries == nil {
+		metadataSeries, err = metadataSeriesForLocal(ctx, *series, opts.MetadataResolver)
+		if err != nil {
+			return StageEpisodeFileResult{}, err
+		}
 	}
 	if err := validateMetadataEpisode(metadataSeries, opts.Season.Int(), opts.Episode.Int()); err != nil {
 		return StageEpisodeFileResult{}, err

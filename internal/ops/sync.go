@@ -17,7 +17,6 @@ import (
 )
 
 type SeriesSyncOptions struct {
-	MetadataSeries   *metadata.Series
 	MetadataResolver MetadataSeriesResolver
 	Inspector        MediaInspector
 	Apply            bool
@@ -27,7 +26,6 @@ type SeriesSyncOptions struct {
 
 type SeriesSyncResult struct {
 	Series        string              `json:"series"`
-	Initialized   bool                `json:"initialized"`
 	DryRun        bool                `json:"dryRun"`
 	Synced        []SeriesSyncEntry   `json:"synced"`
 	Skipped       []fsroot.ImportSkip `json:"skipped"`
@@ -36,9 +34,6 @@ type SeriesSyncResult struct {
 }
 
 func (r SeriesSyncResult) HasChanges() bool {
-	if r.Initialized {
-		return true
-	}
 	for _, entry := range r.Synced {
 		if entry.Status != "existing" {
 			return true
@@ -46,6 +41,8 @@ func (r SeriesSyncResult) HasChanges() bool {
 	}
 	return false
 }
+
+var ErrSeriesNotTracked = errors.New("library: series is not tracked; run kura import or kura add")
 
 type SeriesSyncEntry struct {
 	Status     string   `json:"status"`
@@ -64,23 +61,13 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 		return SeriesSyncResult{}, err
 	}
 
-	var initialized bool
-	var series *store.Series
-	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir.Path())); err == nil {
-		series, err = store.LoadSeries(seriesDir.Path())
-		if err != nil {
-			return SeriesSyncResult{}, err
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		if opts.MetadataSeries == nil {
-			return SeriesSyncResult{}, fmt.Errorf("library: metadata series is required to initialize %q", dirname)
-		}
-		series, err = newSeriesFromMetadata(seriesDir.Path(), *opts.MetadataSeries)
-		if err != nil {
-			return SeriesSyncResult{}, err
-		}
-		initialized = true
-	} else {
+	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
+		return SeriesSyncResult{}, ErrSeriesNotTracked
+	} else if err != nil {
+		return SeriesSyncResult{}, err
+	}
+	series, err := store.LoadSeries(seriesDir.Path())
+	if err != nil {
 		return SeriesSyncResult{}, err
 	}
 
@@ -113,7 +100,7 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 			continue
 		}
 		if metadataSeries == nil {
-			metadataSeries, err = metadataSeriesForLocal(ctx, updated, opts.MetadataSeries, opts.MetadataResolver)
+			metadataSeries, err = metadataSeriesForLocal(ctx, updated, opts.MetadataResolver)
 			if err != nil {
 				return SeriesSyncResult{}, err
 			}
@@ -173,7 +160,6 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 
 	result := SeriesSyncResult{
 		Series:        seriesDir.Name(),
-		Initialized:   initialized,
 		DryRun:        opts.DryRun,
 		Synced:        synced,
 		Skipped:       skipped,
@@ -195,28 +181,7 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 	return result, nil
 }
 
-func newSeriesFromMetadata(seriesDir string, metadataSeries metadata.Series) (*store.Series, error) {
-	series, err := store.NewSeries(seriesDir)
-	if err != nil {
-		return nil, err
-	}
-	series.MetadataRef = metadataSeries.MetadataRef
-	ref, err := domain.ParseMetadataRef(metadataSeries.MetadataRef)
-	if err != nil {
-		return nil, err
-	}
-	if ref.Source() != "tvdb" {
-		return nil, fmt.Errorf("library: unsupported metadata ref source %q", ref.Source())
-	}
-	series.PreferredTitle = metadataSeries.PreferredTitle
-	series.CanonicalTitle = metadataSeries.CanonicalTitle
-	return series, nil
-}
-
-func metadataSeriesForLocal(ctx context.Context, series store.Series, explicit *metadata.Series, resolve MetadataSeriesResolver) (*metadata.Series, error) {
-	if explicit != nil {
-		return explicit, nil
-	}
+func metadataSeriesForLocal(ctx context.Context, series store.Series, resolve MetadataSeriesResolver) (*metadata.Series, error) {
 	if resolve == nil {
 		return nil, nil
 	}
