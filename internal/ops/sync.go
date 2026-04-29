@@ -55,6 +55,15 @@ type SeriesSyncEntry struct {
 	Companions []string `json:"companions"`
 }
 
+type MetadataMissingEpisodeError struct {
+	Season  int
+	Episode int
+}
+
+func (err MetadataMissingEpisodeError) Error() string {
+	return fmt.Sprintf("library: metadata has no S%02dE%02d", err.Season, err.Episode)
+}
+
 func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, opts SeriesSyncOptions) (SeriesSyncResult, error) {
 	seriesDir, err := root.SeriesDir(dirname)
 	if err != nil {
@@ -199,7 +208,7 @@ func validateMetadataEpisode(metadataSeries *metadata.Series, seasonNumber int, 
 	if metadataEpisodeExists(*metadataSeries, seasonNumber, episodeNumber) {
 		return nil
 	}
-	return fmt.Errorf("library: metadata has no S%02dE%02d", seasonNumber, episodeNumber)
+	return MetadataMissingEpisodeError{Season: seasonNumber, Episode: episodeNumber}
 }
 
 func metadataEpisodeExists(series metadata.Series, seasonNumber int, episodeNumber int) bool {
