@@ -4,14 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
@@ -67,55 +65,6 @@ func TestMetaSearchPrintsJSON(t *testing.T) {
 	}
 	if _, ok := firstEvidence["MetadataRef"]; ok {
 		t.Fatal("Evidence[0].MetadataRef present, want omitted")
-	}
-}
-
-func TestSyncCommandInitializesAndWritesMetadata(t *testing.T) {
-	t.Skip("legacy sync init path removed; sync command is removed in the next phase")
-	server := newCLITestServer(t)
-	defer server.Close()
-
-	root := t.TempDir()
-	seriesDir := filepath.Join(root, "Bookworm")
-	if err := os.Mkdir(seriesDir, 0o755); err != nil {
-		t.Fatalf("Mkdir: %v", err)
-	}
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	err := run([]string{
-		"sync",
-		"--yes",
-		"--tvdb-base-url", server.URL,
-		"--metadata-ref", "tvdb:370070",
-		"Bookworm",
-	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	if err != nil {
-		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
-	}
-	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
-	if err != nil {
-		t.Fatalf("ReadFile series.json: %v", err)
-	}
-	var series map[string]any
-	if err := json.Unmarshal(data, &series); err != nil {
-		t.Fatalf("unmarshal series.json: %v", err)
-	}
-	if got := series["metadataRef"]; got != "tvdb:370070" {
-		t.Fatalf("metadataRef = %v, want tvdb:370070", got)
-	}
-	if _, ok := series["filesystemTitle"]; ok {
-		t.Fatal("filesystemTitle present, want derived from directory name")
-	}
-	index, err := os.ReadFile(filepath.Join(root, ".kura", "index.tsv"))
-	if err != nil {
-		t.Fatalf("ReadFile index.tsv: %v", err)
-	}
-	if got, want := string(index), "tvdb:370070\tBookworm\n"; got != want {
-		t.Fatalf("index.tsv = %q, want %q", got, want)
-	}
-	if len(stdout.Bytes()) == 0 {
-		t.Fatal("stdout is empty, want written series document")
 	}
 }
 
@@ -473,130 +422,6 @@ func TestScanCommandUsesIndexToFindDirectory(t *testing.T) {
 	}
 	if _, ok := series.LookupEpisode(1, 1); !ok {
 		t.Fatal("LookupEpisode(1, 1) = false")
-	}
-}
-
-func TestSyncCommandRejectsMetadataRefTrackedElsewhere(t *testing.T) {
-	t.Skip("legacy sync init path removed; sync command is removed in the next phase")
-	server := newCLITestServer(t)
-	defer server.Close()
-
-	root := t.TempDir()
-	bookwormDir := filepath.Join(root, "Bookworm")
-	if err := os.MkdirAll(bookwormDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll Bookworm: %v", err)
-	}
-	writeSeriesJSON(t, bookwormDir, `{
-		"schemaVersion": 1,
-		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm"
-	}`)
-	otherDir := filepath.Join(root, "Other")
-	if err := os.Mkdir(otherDir, 0o755); err != nil {
-		t.Fatalf("Mkdir Other: %v", err)
-	}
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	err := run([]string{
-		"sync",
-		"--yes",
-		"--tvdb-base-url", server.URL,
-		"--metadata-ref", "tvdb:370070",
-		"Other",
-	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	if err == nil {
-		t.Fatal("run returned nil error, want duplicate metadata ref error")
-	}
-	if !strings.Contains(err.Error(), "already tracked at") || !strings.Contains(err.Error(), "Bookworm") {
-		t.Fatalf("error = %v, want duplicate ref at Bookworm", err)
-	}
-}
-
-func TestSyncCommandWritesSummaryAndMetadata(t *testing.T) {
-	t.Skip("legacy sync init path removed; sync command is removed in the next phase")
-	server := newCLITestServer(t)
-	defer server.Close()
-
-	root := t.TempDir()
-	mediainfoCommand := newFakeMediaInfoCommand(t, root)
-	seriesDir := filepath.Join(root, "Bookworm")
-	seasonDir := filepath.Join(seriesDir, "Season 1")
-	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	err := run([]string{
-		"sync",
-		"--yes",
-		"--tvdb-base-url", server.URL,
-		"--metadata-ref", "tvdb:370070",
-		"Bookworm",
-	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
-	if err != nil {
-		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "STATUS") || !strings.Contains(stdout.String(), "WebRip") {
-		t.Fatalf("stdout = %q, want sync summary", stdout.String())
-	}
-	if _, err := os.Stat(filepath.Join(seriesDir, ".kura", "series.json")); err != nil {
-		t.Fatalf("Stat series.json: %v", err)
-	}
-}
-
-func TestSyncCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
-	root := t.TempDir()
-	seriesDir := filepath.Join(root, "Bookworm")
-	seasonDir := filepath.Join(seriesDir, "Season 1")
-	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	episodePath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
-	writeFile(t, episodePath, "episode")
-	info, err := os.Stat(episodePath)
-	if err != nil {
-		t.Fatalf("Stat episode: %v", err)
-	}
-	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
-		"schemaVersion": 1,
-		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
-							"source": "webrip",
-							"size": %d,
-							"mtime": %q,
-							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
-						},
-						"companions": []
-					}
-				]
-			}
-		]
-	}`, info.Size(), info.ModTime().UTC().Format(time.RFC3339)))
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	err = run([]string{
-		"sync",
-		"Bookworm",
-	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	if err != nil {
-		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
-	}
-	if strings.Contains(stderr.String(), "Apply this sync?") {
-		t.Fatalf("stderr = %q, want no apply prompt", stderr.String())
 	}
 }
 
