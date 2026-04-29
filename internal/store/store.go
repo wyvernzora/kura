@@ -31,7 +31,7 @@ func LoadSeries(dirname string) (*Series, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := SeriesPath(dirname)
+	path := SeriesMetadataPath(dirname)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func SaveSeries(series Series) error {
 	if err := encodeSeries(&data, series); err != nil {
 		return err
 	}
-	return renameio.WriteFile(SeriesPath(series.dirname), data.Bytes(), 0o644)
+	return renameio.WriteFile(SeriesMetadataPath(series.dirname), data.Bytes(), 0o644)
 }
 
 func NewStaged(dirname string) (*Staged, error) {

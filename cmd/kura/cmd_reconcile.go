@@ -65,5 +65,5 @@ func warnDuplicateSeries(rt *runContext, seriesDir string, err error) {
 	if !errors.Is(err, store.DuplicateEpisodeNumberError{}) {
 		return
 	}
-	fmt.Fprintf(rt.Stderr, "warning: %s contains duplicate episode entries; manually edit series.json before continuing\n", store.SeriesPath(seriesDir))
+	fmt.Fprintf(rt.Stderr, "warning: %s contains duplicate episode entries; manually edit series.json before continuing\n", store.SeriesMetadataPath(seriesDir))
 }

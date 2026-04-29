@@ -44,7 +44,7 @@ func TestLoadSeriesRejectsFutureSchema(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{"schemaVersion":2,"metadataRef":"tvdb:1","preferredTitle":"x","canonicalTitle":"x"}`), 0o644); err != nil {
+	if err := os.WriteFile(SeriesMetadataPath(seriesDir), []byte(`{"schemaVersion":2,"metadataRef":"tvdb:1","preferredTitle":"x","canonicalTitle":"x"}`), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestLoadSeriesRejectsSchemaInvalidDocument(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(seriesDir, ".kura"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{"schemaVersion":1,"metadataRef":"tvdb:1","preferredTitle":"x","canonicalTitle":"x","externalIds":{"tvdb":"1"}}`), 0o644); err != nil {
+	if err := os.WriteFile(SeriesMetadataPath(seriesDir), []byte(`{"schemaVersion":1,"metadataRef":"tvdb:1","preferredTitle":"x","canonicalTitle":"x","externalIds":{"tvdb":"1"}}`), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -94,7 +94,7 @@ func TestLoadSeriesRejectsDuplicateEpisodeNumber(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(seriesDir, "Season 1", "second.mkv"), []byte("second"), 0o644); err != nil {
 		t.Fatalf("WriteFile second: %v", err)
 	}
-	if err := os.WriteFile(SeriesPath(seriesDir), []byte(`{
+	if err := os.WriteFile(SeriesMetadataPath(seriesDir), []byte(`{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",

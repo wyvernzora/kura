@@ -66,7 +66,7 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 
 	var initialized bool
 	var series *store.Series
-	if _, err := os.Stat(store.SeriesPath(seriesDir.Path())); err == nil {
+	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir.Path())); err == nil {
 		series, err = store.LoadSeries(seriesDir.Path())
 		if err != nil {
 			return SeriesSyncResult{}, err
@@ -181,7 +181,7 @@ func SyncSeries(ctx context.Context, root fsroot.LibraryRoot, dirname string, op
 		UpdatedTrash:  updatedTrash,
 	}
 	if opts.Apply && !opts.DryRun && result.HasChanges() {
-		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", store.SeriesPath(seriesDir.Path())), 0)
+		progress.Start(ctx, "series-sync-write", fmt.Sprintf("Writing series metadata: %s", store.SeriesMetadataPath(seriesDir.Path())), 0)
 		if err := store.SaveSeries(updated); err != nil {
 			progress.Failure(ctx, "series-sync-write", "Failed writing series metadata", 0, 0)
 			return SeriesSyncResult{}, err

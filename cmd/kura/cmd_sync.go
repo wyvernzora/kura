@@ -34,7 +34,7 @@ func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 	}
 
 	var metadataSeries *metadata.Series
-	if _, err := os.Stat(store.SeriesPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir.Path())); errors.Is(err, os.ErrNotExist) {
 		resolved, _, err := cmd.resolveMetadataSeries(rt)
 		if err != nil {
 			return err
@@ -82,7 +82,7 @@ func (cmd *seriesSyncCmd) Run(rt *runContext) error {
 		}
 	}
 	progress := ui.NewProgress(rt.Stderr)
-	progress.Start("Writing series metadata: %s", store.SeriesPath(seriesDir.Path()))
+	progress.Start("Writing series metadata: %s", store.SeriesMetadataPath(seriesDir.Path()))
 	defer progress.Stop()
 	if err := store.SaveSeries(result.UpdatedSeries); err != nil {
 		progress.Fail("Failed writing series metadata")

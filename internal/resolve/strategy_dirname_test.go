@@ -49,7 +49,7 @@ func TestDirnameStrategyCorruptSeriesFile(t *testing.T) {
 	rootDir := t.TempDir()
 	seriesDir := filepath.Join(rootDir, "Bookworm")
 	mkdir(t, filepath.Join(seriesDir, ".kura"))
-	writeFile(t, store.SeriesPath(seriesDir), []byte(`{"schemaVersion":`))
+	writeFile(t, store.SeriesMetadataPath(seriesDir), []byte(`{"schemaVersion":`))
 	strategy := newTestDirnameStrategy(t, rootDir, &strategyFakeSource{})
 
 	_, err := strategy.Resolve(context.Background(), Term{Prefix: "dir", Value: "Bookworm"})
@@ -114,7 +114,7 @@ func TestDirnameStrategyMissingMetadataRefIsCorrupt(t *testing.T) {
 	rootDir := t.TempDir()
 	seriesDir := filepath.Join(rootDir, "Bookworm")
 	mkdir(t, filepath.Join(seriesDir, ".kura"))
-	writeFile(t, store.SeriesPath(seriesDir), []byte(`{"schemaVersion":1,"metadataRef":"","preferredTitle":"Bookworm","canonicalTitle":"Ascendance of a Bookworm"}`))
+	writeFile(t, store.SeriesMetadataPath(seriesDir), []byte(`{"schemaVersion":1,"metadataRef":"","preferredTitle":"Bookworm","canonicalTitle":"Ascendance of a Bookworm"}`))
 	strategy := newTestDirnameStrategy(t, rootDir, &strategyFakeSource{})
 
 	_, err := strategy.Resolve(context.Background(), Term{Prefix: "dir", Value: "Bookworm"})

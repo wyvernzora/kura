@@ -299,7 +299,7 @@ func TestSyncSeriesDryRunDoesNotApplyWhenApplyIsAlsoTrue(t *testing.T) {
 	if !result.HasChanges() {
 		t.Fatal("HasChanges = false, want true")
 	}
-	if _, err := os.Stat(store.SeriesPath(seriesDir)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir)); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("Stat series.json = %v, want not exist", err)
 	}
 }
@@ -345,7 +345,7 @@ func TestSyncSeriesApplySkipsUnchangedMetadata(t *testing.T) {
 		]
 	}`, info.Size(), info.ModTime().UTC().Format(time.RFC3339)))
 
-	metadataPath := store.SeriesPath(seriesDir)
+	metadataPath := store.SeriesMetadataPath(seriesDir)
 	originalTime := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	if err := os.Chtimes(metadataPath, originalTime, originalTime); err != nil {
 		t.Fatalf("Chtimes series.json: %v", err)
@@ -668,6 +668,9 @@ func TestReconcileAppliesStagedEpisode(t *testing.T) {
 	}
 	if len(plan.FileMoves) != 2 {
 		t.Fatalf("len(FileMoves) = %d, want media plus companion", len(plan.FileMoves))
+	}
+	if plan.SeriesPath != "Bookworm" {
+		t.Fatalf("SeriesPath = %q, want series directory name", plan.SeriesPath)
 	}
 	if err := ApplyPlan(context.Background(), plan); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
@@ -1101,7 +1104,7 @@ func TestApplyReconcileSkipsUnchangedPlan(t *testing.T) {
 			}
 		]
 	}`)
-	metadataPath := store.SeriesPath(seriesDir)
+	metadataPath := store.SeriesMetadataPath(seriesDir)
 	originalTime := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	if err := os.Chtimes(metadataPath, originalTime, originalTime); err != nil {
 		t.Fatalf("Chtimes series.json: %v", err)
@@ -1408,7 +1411,7 @@ func writeFile(t *testing.T, path string, content string) {
 
 func writeSeriesJSON(t *testing.T, seriesDir string, content string) {
 	t.Helper()
-	if err := os.WriteFile(store.SeriesPath(seriesDir), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(store.SeriesMetadataPath(seriesDir), []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile series.json: %v", err)
 	}
 }

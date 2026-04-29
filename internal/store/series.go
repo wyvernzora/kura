@@ -80,8 +80,8 @@ type CompanionFile struct {
 // callers within store can refer to it without importing domain.
 type MediaInfo = media.MediaInfo
 
-// SeriesPath returns the metadata path for a series directory.
-func SeriesPath(seriesDir string) string {
+// SeriesMetadataPath returns the metadata path for a series directory.
+func SeriesMetadataPath(seriesDir string) string {
 	return fsroot.SeriesMetadataPath(seriesDir)
 }
 

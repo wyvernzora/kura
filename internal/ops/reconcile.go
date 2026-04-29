@@ -20,11 +20,12 @@ type Plan struct {
 	Target        string       `json:"target"`
 	DryRun        bool         `json:"dryRun"`
 	FileMoves     []Move       `json:"fileMoves"`
-	SeriesDir     string       `json:"-"`
+	SeriesPath    string       `json:"-"`
 	UpdatedSeries store.Series `json:"-"`
 	UpdatedStaged store.Staged `json:"-"`
 	UpdatedTrash  store.Trash  `json:"-"`
 
+	libraryRoot     string
 	metadataChanged bool
 }
 
@@ -79,10 +80,11 @@ func PlanSeries(_ context.Context, root fsroot.LibraryRoot, dirname string) (Pla
 		Series:          seriesDir.Name(),
 		Target:          title.String(),
 		FileMoves:       fileMoves,
-		SeriesDir:       seriesDir.Path(),
+		SeriesPath:      seriesDir.Name(),
 		UpdatedSeries:   updated,
 		UpdatedStaged:   updatedStaged,
 		UpdatedTrash:    updatedTrash,
+		libraryRoot:     root.Path(),
 		metadataChanged: stagedChanged,
 	}, nil
 }
@@ -92,6 +94,7 @@ func ApplyPlan(ctx context.Context, plan Plan) error {
 		return nil
 	}
 	progress.Start(ctx, "series-reconcile", fmt.Sprintf("Reconciling %s", plan.Series), len(plan.FileMoves))
+	seriesDir := filepath.Join(plan.libraryRoot, filepath.FromSlash(plan.SeriesPath))
 	for index, move := range plan.FileMoves {
 		if move.From == move.To {
 			continue
@@ -99,15 +102,15 @@ func ApplyPlan(ctx context.Context, plan Plan) error {
 		progress.Update(ctx, "series-reconcile", fmt.Sprintf("Moving %s", move.From), index+1, len(plan.FileMoves))
 		from := move.From
 		if !filepath.IsAbs(from) {
-			from = filepath.Join(plan.SeriesDir, filepath.FromSlash(move.From))
+			from = filepath.Join(seriesDir, filepath.FromSlash(move.From))
 		}
-		to := filepath.Join(plan.SeriesDir, filepath.FromSlash(move.To))
+		to := filepath.Join(seriesDir, filepath.FromSlash(move.To))
 		if err := fsroot.SafeMoveFile(from, to); err != nil {
 			progress.Failure(ctx, "series-reconcile", fmt.Sprintf("Failed moving %s", move.From), index+1, len(plan.FileMoves))
 			return err
 		}
 	}
-	progress.Update(ctx, "series-reconcile", fmt.Sprintf("Writing series metadata: %s", store.SeriesPath(plan.SeriesDir)), len(plan.FileMoves), len(plan.FileMoves))
+	progress.Update(ctx, "series-reconcile", fmt.Sprintf("Writing series metadata: %s", store.SeriesMetadataPath(seriesDir)), len(plan.FileMoves), len(plan.FileMoves))
 	if err := store.SaveSeries(plan.UpdatedSeries); err != nil {
 		progress.Failure(ctx, "series-reconcile", "Failed writing series metadata", len(plan.FileMoves), len(plan.FileMoves))
 		return err
