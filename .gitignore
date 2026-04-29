@@ -22,6 +22,7 @@ coverage.out
 LOCAL_NOTES.md
 docs/LOCAL.md
 .local/
+scratch
 
 # Editor and OS files
 .DS_Store
