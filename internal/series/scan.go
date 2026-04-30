@@ -184,7 +184,7 @@ func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []Imp
 		}
 		fullPath := filepath.Join(seriesDir.Path(), name)
 		if entry.IsDir() {
-			season, ok := fsroot.ParseSeasonDir(name)
+			season, ok := parseSeasonDir(name)
 			if !ok {
 				skipped = append(skipped, ImportSkip{Path: filepath.ToSlash(name), Code: SkipCodeIgnoredDirectory, Reason: "directory is not a season directory"})
 				continue
@@ -198,10 +198,10 @@ func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []Imp
 			continue
 		}
 		relPath := filepath.ToSlash(name)
-		if !fsroot.RecognizedVideoFile(relPath) {
+		if !recognizedVideoFile(relPath) {
 			continue
 		}
-		season, number, ok := fsroot.InferEpisodeFromFilename(name)
+		season, number, ok := inferEpisodeFromFilename(name)
 		if !ok || season != 0 {
 			skipped = append(skipped, ImportSkip{Path: relPath, Code: SkipCodeSpecialNumberNotInferred, Reason: "could not infer special number"})
 			continue
@@ -213,7 +213,7 @@ func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []Imp
 		episodes = append(episodes, discoveredFile{
 			Ref:        ref,
 			Path:       relPath,
-			Source:     ParseMediaSource(fsroot.InferSourceFromFilename(relPath)).String(),
+			Source:     ParseMediaSource(inferSourceFromFilename(relPath)).String(),
 			Companions: matchingCompanions(seriesDir.Path(), "", name, entries),
 		})
 	}
@@ -244,10 +244,10 @@ func discoverSeasonEpisodes(seriesDir fsroot.SeriesDir, seasonDir string, season
 			return nil, nil, err
 		}
 		relPath = filepath.ToSlash(relPath)
-		if !fsroot.RecognizedVideoFile(relPath) {
+		if !recognizedVideoFile(relPath) {
 			continue
 		}
-		inferredSeason, number, ok := fsroot.InferEpisodeFromFilename(entry.Name())
+		inferredSeason, number, ok := inferEpisodeFromFilename(entry.Name())
 		if !ok {
 			skipped = append(skipped, ImportSkip{Path: relPath, Code: SkipCodeEpisodeNumberNotInferred, Reason: "could not infer episode number"})
 			continue
@@ -263,7 +263,7 @@ func discoverSeasonEpisodes(seriesDir fsroot.SeriesDir, seasonDir string, season
 		episodes = append(episodes, discoveredFile{
 			Ref:        ref,
 			Path:       relPath,
-			Source:     ParseMediaSource(fsroot.InferSourceFromFilename(relPath)).String(),
+			Source:     ParseMediaSource(inferSourceFromFilename(relPath)).String(),
 			Companions: matchingCompanions(seriesDir.Path(), seasonDir, entry.Name(), entries),
 		})
 	}
@@ -278,7 +278,7 @@ func matchingCompanions(seriesDir string, dir string, videoName string, entries 
 			continue
 		}
 		name := entry.Name()
-		if fsroot.RecognizedVideoFile(name) {
+		if recognizedVideoFile(name) {
 			continue
 		}
 		companionBase := strings.TrimSuffix(name, filepath.Ext(name))

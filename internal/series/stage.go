@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -54,7 +53,7 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 	if err != nil {
 		return StageResult{}, err
 	}
-	if !fsroot.RecognizedVideoFile(mediaPath) {
+	if !recognizedVideoFile(mediaPath) {
 		return StageResult{}, fmt.Errorf("episode path %q is not a recognized video file", mediaPath)
 	}
 	record, err := h.stagedRecord(ctx, mediaPath, in.Source, in.Companions)
@@ -82,7 +81,7 @@ func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source strin
 		return MediaRecord{}, err
 	}
 	if source == "" {
-		source = ParseMediaSource(fsroot.InferSourceFromFilename(mediaPath)).String()
+		source = ParseMediaSource(inferSourceFromFilename(mediaPath)).String()
 	}
 	record := MediaRecord{
 		Path:       mediaPath,
