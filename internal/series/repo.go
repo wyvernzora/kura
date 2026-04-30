@@ -14,6 +14,14 @@ type repo struct {
 	root fsroot.LibraryRoot
 }
 
+func ReadMetadataRef(root fsroot.LibraryRoot, ref refs.Series) (refs.Metadata, error) {
+	series, err := repo{root: root}.load(ref)
+	if err != nil {
+		return "", err
+	}
+	return series.Metadata, nil
+}
+
 func (r repo) load(ref refs.Series) (Series, error) {
 	path := fsroot.SeriesMetadataPath(r.root.Join(ref.String()))
 	data, err := os.ReadFile(path)

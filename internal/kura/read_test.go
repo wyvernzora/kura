@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/store"
+	"github.com/wyvernzora/kura/internal/index"
+	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
@@ -29,85 +30,76 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 	writeFile(t, stagedFive, "episode 5")
 	writeFile(t, stagedSix, "episode 6 bd")
 
-	writeSeriesJSON(t, seriesDir, `{
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/episode-1.mkv",
-							"source": "webrip",
-							"size": 9,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"resolution": "1920x1080"}
-						},
-						"companions": []
-					},
-					{
-						"number": 4,
-						"media": {
-							"path": "Season 1/missing-file.mkv",
-							"source": "web-dl",
-							"size": 9,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"resolution": "1280x720"}
-						},
-						"companions": []
-					},
-					{
-						"number": 6,
-						"media": {
-							"path": "Season 1/episode-6.mkv",
-							"source": "webrip",
-							"size": 9,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"resolution": "1920x1080"}
-						},
-						"companions": []
-					}
-				]
-			}
-		]
-	}`)
-	if err := os.WriteFile(filepath.Join(seriesDir, ".kura", "staged.json"), fmt.Appendf(nil, `{
-		"schemaVersion": 1,
-		"entries": [
-			{
+		"episodes": {
+			"S01E0001": {
 				"season": 1,
-				"number": 5,
-				"media": {
-					"path": %q,
-					"source": "bluray",
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/episode-1.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
 					"size": 9,
 					"mtime": "2026-04-20T03:00:00Z",
-					"mediainfo": {"resolution": "3840x2160"}
-				},
-				"companions": []
+					"companions": []
+				}
 			},
-			{
+			"S01E0002": {"season": 1, "episode": 2, "airDate": "2019-10-10"},
+			"S01E0003": {"season": 1, "episode": 3, "airDate": "2026-04-30"},
+			"S01E0004": {
 				"season": 1,
-				"number": 6,
-				"media": {
-					"path": %q,
-					"source": "bluray",
+				"episode": 4,
+				"airDate": "2019-10-24",
+				"active": {
+					"path": "Season 1/missing-file.mkv",
+					"source": "web-dl",
+					"resolution": "1280x720",
 					"size": 9,
 					"mtime": "2026-04-20T03:00:00Z",
-					"mediainfo": {"resolution": "3840x2160"}
+					"companions": []
+				}
+			},
+			"S01E0005": {
+				"season": 1,
+				"episode": 5,
+				"airDate": "2019-10-31",
+				"staged": {
+					"path": %q,
+					"source": "bluray",
+					"resolution": "3840x2160",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			},
+			"S01E0006": {
+				"season": 1,
+				"episode": 6,
+				"airDate": "2019-11-07",
+				"active": {
+					"path": "Season 1/episode-6.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
 				},
-				"companions": []
+				"staged": {
+					"path": %q,
+					"source": "bluray",
+					"resolution": "3840x2160",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
 			}
-		]
-	}`, stagedFive, stagedSix), 0o644); err != nil {
-		t.Fatalf("WriteFile staged.json: %v", err)
-	}
+		}
+	}`, stagedFive, stagedSix))
 
-	lib := newReadTestLibrary(t, rootPath, readFakeSource{series: readTestMetadataSeries()})
+	lib := newReadTestLibrary(t, rootPath)
 	series, err := lib.Get("Bookworm")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
@@ -146,68 +138,18 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 	}
 }
 
-func newReadTestLibrary(t *testing.T, rootPath string, source metadata.Source) *Library {
+func newReadTestLibrary(t *testing.T, rootPath string) *Library {
 	t.Helper()
 	root, err := fsroot.ParseLibraryRoot(rootPath)
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	index, err := store.RebuildLibraryIndex(context.Background(), root)
-	if err != nil {
-		t.Fatalf("RebuildLibraryIndex: %v", err)
+	idx := index.New(root)
+	if err := idx.Put(refs.Metadata("tvdb:370070"), refs.Series("Bookworm")); err != nil {
+		t.Fatalf("Put index: %v", err)
 	}
 	return &Library{
-		root:           root,
-		metadataSource: source,
-		index:          index,
-	}
-}
-
-type readFakeSource struct {
-	series metadata.Series
-}
-
-func (s readFakeSource) Key() string {
-	return "tvdb"
-}
-
-func (s readFakeSource) Search(context.Context, string, metadata.SearchOptions) ([]metadata.SearchResult, error) {
-	return nil, nil
-}
-
-func (s readFakeSource) GetSeries(context.Context, string) (metadata.Series, error) {
-	return s.series, nil
-}
-
-func readTestMetadataSeries() metadata.Series {
-	return metadata.Series{
-		SeriesSummary: metadata.SeriesSummary{
-			MetadataRef:    "tvdb:370070",
-			PreferredTitle: "Bookworm",
-			CanonicalTitle: "Ascendance of a Bookworm",
-		},
-		Seasons: []metadata.Season{
-			{
-				MetadataRef: "tvdb:10",
-				Number:      1,
-				Episodes: []metadata.Episode{
-					readTestMetadataEpisode(1, "2019-10-03"),
-					readTestMetadataEpisode(2, "2019-10-10"),
-					readTestMetadataEpisode(3, "2026-04-30"),
-					readTestMetadataEpisode(4, "2019-10-24"),
-					readTestMetadataEpisode(5, "2019-10-31"),
-					readTestMetadataEpisode(6, "2019-11-07"),
-				},
-			},
-		},
-	}
-}
-
-func readTestMetadataEpisode(number int, aired string) metadata.Episode {
-	return metadata.Episode{
-		MetadataRef:   domain.MetadataRef(fmt.Sprintf("tvdb:%d", 1000+number)),
-		SeasonNumber:  1,
-		EpisodeNumber: number,
-		Aired:         aired,
+		root:   root,
+		series: seriespkg.NewLibrary(root, nil, mediainfo.Inspector{}, idx),
 	}
 }

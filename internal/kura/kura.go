@@ -11,8 +11,8 @@ import (
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/metadata/tvdb"
+	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
-	"github.com/wyvernzora/kura/internal/store"
 )
 
 type Config struct {
@@ -27,7 +27,6 @@ type Library struct {
 	root           fsroot.LibraryRoot
 	metadataSource metadata.Source
 	inspector      mediainfo.Inspector
-	index          *store.LibraryIndex
 	series         *seriespkg.Library
 }
 
@@ -65,24 +64,21 @@ func New(cfg Config) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	storeIndex, err := store.LoadLibraryIndex(root)
-	if errors.Is(err, store.ErrLibraryIndexNotFound) {
-		storeIndex, err = store.RebuildLibraryIndex(context.Background(), root)
-	}
-	if err != nil {
-		return nil, err
-	}
 	seriesIndex, err := index.Load(root)
 	if errors.Is(err, index.ErrNotFound) {
-		seriesIndex = index.New(root)
+		seriesIndex, err = index.Rebuild(context.Background(), root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+			return seriespkg.ReadMetadataRef(root, ref)
+		})
 	} else if err != nil {
+		return nil, err
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &Library{
 		root:           root,
 		metadataSource: source,
 		inspector:      inspector,
-		index:          storeIndex,
 		series:         seriespkg.NewLibrary(root, source, inspector, seriesIndex),
 	}, nil
 }

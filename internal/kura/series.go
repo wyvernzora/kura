@@ -2,25 +2,20 @@ package kura
 
 import (
 	"encoding/json"
+	"time"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
-	"github.com/wyvernzora/kura/internal/store"
 )
 
 type Series struct {
 	library *Library
 	ref     SeriesRef
-	record  SeriesRecord
 	model   seriespkg.Series
-	modern  bool
-}
-
-func newSeries(library *Library, ref SeriesRef, record SeriesRecord) *Series {
-	return &Series{library: library, ref: ref, record: record}
 }
 
 func newSeriesModel(library *Library, ref SeriesRef, model seriespkg.Series) *Series {
-	return &Series{library: library, ref: ref, model: model, modern: true}
+	return &Series{library: library, ref: ref, model: model}
 }
 
 func (s *Series) Ref() SeriesRef {
@@ -28,48 +23,23 @@ func (s *Series) Ref() SeriesRef {
 }
 
 func (s *Series) MetadataRef() MetadataRef {
-	if s.modern {
-		return MetadataRef(s.model.Metadata)
-	}
-	return MetadataRef(s.record.MetadataRef)
+	return MetadataRef(s.model.Metadata)
 }
 
 func (s *Series) PreferredTitle() string {
-	if s.modern {
-		return ""
-	}
-	return s.record.PreferredTitle
+	return ""
 }
 
 func (s *Series) CanonicalTitle() string {
-	if s.modern {
-		return ""
-	}
-	return s.record.CanonicalTitle
+	return ""
 }
 
 func (s *Series) Episodes() []Episode {
-	if s.modern {
-		return modernEpisodes(s.model)
-	}
-	var episodes []Episode
-	for _, season := range s.record.Seasons {
-		for _, episode := range season.Episodes {
-			episodes = append(episodes, copyEpisode(episode))
-		}
-	}
-	if episodes == nil {
-		return []Episode{}
-	}
-	return episodes
+	return modernEpisodes(s.model)
 }
 
 func (s *Series) MarshalJSON() ([]byte, error) {
-	if s.modern {
-		return json.Marshal(s.model)
-	}
-	record := copySeriesRecord(s.record)
-	return json.Marshal(record)
+	return json.Marshal(s.model)
 }
 
 func modernEpisodes(model seriespkg.Series) []Episode {
@@ -84,8 +54,8 @@ func modernEpisodes(model seriespkg.Series) []Episode {
 				Path:   episode.Active.Path,
 				Source: episode.Active.Source,
 				Size:   episode.Active.Size,
-				MTime:  episode.Active.MTime.UTC().Format("2006-01-02T15:04:05Z07:00"),
-				MediaInfo: &store.MediaInfo{
+				MTime:  episode.Active.MTime.UTC().Format(time.RFC3339),
+				MediaInfo: &domain.MediaInfo{
 					Resolution: episode.Active.Resolution,
 					VideoCodec: episode.Active.Codec,
 				},
@@ -108,32 +78,11 @@ func modernCompanions(in []seriespkg.CompanionRecord) []CompanionFile {
 			Language: companion.Language,
 			Label:    companion.Label,
 			Size:     companion.Size,
-			MTime:    companion.MTime.UTC().Format("2006-01-02T15:04:05Z07:00"),
+			MTime:    companion.MTime.UTC().Format(time.RFC3339),
 		})
 	}
 	if out == nil {
 		return []CompanionFile{}
-	}
-	return out
-}
-
-func copySeriesRecord(in SeriesRecord) SeriesRecord {
-	out := in
-	out.Seasons = append([]store.Season(nil), in.Seasons...)
-	for seasonIndex := range out.Seasons {
-		out.Seasons[seasonIndex].Episodes = append([]store.Episode(nil), in.Seasons[seasonIndex].Episodes...)
-		for episodeIndex := range out.Seasons[seasonIndex].Episodes {
-			out.Seasons[seasonIndex].Episodes[episodeIndex] = copyEpisode(out.Seasons[seasonIndex].Episodes[episodeIndex])
-		}
-	}
-	return out
-}
-
-func copyEpisode(in Episode) Episode {
-	out := in
-	out.Companions = append([]CompanionFile(nil), in.Companions...)
-	if out.Companions == nil {
-		out.Companions = []CompanionFile{}
 	}
 	return out
 }

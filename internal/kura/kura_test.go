@@ -63,27 +63,22 @@ func TestFindAndGet(t *testing.T) {
 	writeSeriesJSON(t, filepath.Join(root, "Bookworm"), `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/Bookworm - S01E01.mkv",
-							"source": "webrip",
-							"size": 7,
-							"mtime": "2026-04-20T03:00:00Z"
-						},
-						"companions": [
-							{"path": "Season 1/Bookworm - S01E01.en.ass", "size": 3, "mtime": "2026-04-20T03:00:00Z"}
-						]
-					}
-				]
+		"episodes": {
+			"S01E0001": {
+				"season": 1,
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/Bookworm - S01E01.mkv",
+					"source": "webrip",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": [
+						{"path": "Season 1/Bookworm - S01E01.en.ass", "size": 3, "mtime": "2026-04-20T03:00:00Z"}
+					]
+				}
 			}
-		]
+		}
 	}`)
 	lib := newTestLibrary(t, root, server.URL)
 
@@ -156,8 +151,7 @@ func TestAddRejectsCollisionsAndUnsupportedSource(t *testing.T) {
 	writeSeriesJSON(t, filepath.Join(root, "Bookworm"), `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm"
+		"episodes": {}
 	}`)
 	lib = newTestLibrary(t, root, server.URL)
 	_, err = lib.Add(context.Background(), AddInput{MetadataRef: "tvdb:370070", Ref: "Other"})

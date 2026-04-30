@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestScanCommitsAndWritesHistory(t *testing.T) {
+func TestScanCommits(t *testing.T) {
 	server := newTestTVDBServer(t)
 	defer server.Close()
 
@@ -21,8 +21,9 @@ func TestScanCommitsAndWritesHistory(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Bookworm"
+		"episodes": {
+			"S01E0001": {"season": 1, "episode": 1, "airDate": "2019-10-03"}
+		}
 	}`)
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 
@@ -45,13 +46,6 @@ func TestScanCommitsAndWritesHistory(t *testing.T) {
 	if len(loaded.Episodes()) != 1 {
 		t.Fatalf("len(Episodes) = %d, want 1", len(loaded.Episodes()))
 	}
-	matches, err := filepath.Glob(filepath.Join(seriesDir, ".kura", "history", "series.*.json"))
-	if err != nil {
-		t.Fatalf("Glob history: %v", err)
-	}
-	if len(matches) != 1 {
-		t.Fatalf("history backups = %v, want one series backup", matches)
-	}
 }
 
 func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
@@ -67,20 +61,20 @@ func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {"path": "Season 1/existing.mkv", "source": "webrip", "size": 8, "mtime": "2026-04-20T03:00:00Z"},
-						"companions": []
-					}
-				]
+		"episodes": {
+			"S01E0001": {
+				"season": 1,
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/existing.mkv",
+					"source": "webrip",
+					"size": 8,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
 			}
-		]
+		}
 	}`)
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 
@@ -105,8 +99,9 @@ func TestStageCommits(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Bookworm"
+		"episodes": {
+			"S01E0001": {"season": 1, "episode": 1, "airDate": "2019-10-03"}
+		}
 	}`)
 	mediaPath := filepath.Join(t.TempDir(), "Bookworm - S01E01 (WebRip).mkv")
 	writeFile(t, mediaPath, "episode")
@@ -127,8 +122,12 @@ func TestStageCommits(t *testing.T) {
 	if !result.Applied || result.Entry.Media.Path != mediaPath {
 		t.Fatalf("Stage result = %#v, want applied staged entry", result)
 	}
-	if _, err := os.Stat(filepath.Join(seriesDir, ".kura", "staged.json")); err != nil {
-		t.Fatalf("Stat staged.json: %v", err)
+	view, err := series.Read(context.Background(), ReadInput{})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if len(view.Seasons) != 1 || len(view.Seasons[0].Episodes) != 1 || view.Seasons[0].Episodes[0].Staged == nil {
+		t.Fatalf("read view = %#v, want staged episode in series metadata", view)
 	}
 }
 
@@ -147,28 +146,24 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/old.mkv",
-							"source": "webrip",
-							"size": 7,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
-						},
-						"companions": [
-							{"path": "Season 1/old.en.ass", "size": 4, "mtime": "2026-04-20T03:00:00Z"}
-						]
-					}
-				]
+		"episodes": {
+			"S01E0001": {
+				"season": 1,
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/old.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": [
+						{"path": "Season 1/old.en.ass", "size": 4, "mtime": "2026-04-20T03:00:00Z"}
+					]
+				}
 			}
-		]
+		}
 	}`)
 
 	lib := newTestLibrary(t, root, server.URL)
@@ -188,14 +183,18 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	}
 
 	stalePlan := plan
-	writeFile(t, filepath.Join(seriesDir, ".kura", "staged.json"), `{"schemaVersion":1}`)
+	seriesMetadataPath := filepath.Join(seriesDir, ".kura", "series.json")
+	data, err := os.ReadFile(seriesMetadataPath)
+	if err != nil {
+		t.Fatalf("ReadFile series.json: %v", err)
+	}
+	if err := os.WriteFile(seriesMetadataPath, append(data, '\n'), 0o644); err != nil {
+		t.Fatalf("WriteFile series.json: %v", err)
+	}
 	_, err = series.ApplyReconcile(context.Background(), stalePlan)
 	var stale PlanStaleError
 	if !errors.As(err, &stale) {
 		t.Fatalf("Apply stale error = %v, want PlanStaleError", err)
-	}
-	if err := os.Remove(filepath.Join(seriesDir, ".kura", "staged.json")); err != nil {
-		t.Fatalf("Remove staged: %v", err)
 	}
 
 	plan, err = series.PlanReconcile(context.Background(), ReconcileInput{})

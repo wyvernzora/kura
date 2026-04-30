@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/index"
 	"github.com/wyvernzora/kura/internal/kura"
-	"github.com/wyvernzora/kura/internal/store"
+	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -169,8 +169,7 @@ func TestAddCommandRejectsRefAlreadyTracked(t *testing.T) {
 	writeSeriesJSON(t, bookwormDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm"
+		"episodes": {}
 	}`)
 
 	var stdout bytes.Buffer
@@ -272,8 +271,7 @@ func TestImportCommandRejectsAlreadyTrackedDirectory(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm"
+		"episodes": {}
 	}`)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -321,8 +319,7 @@ func TestImportCommandRejectsRefAlreadyTracked(t *testing.T) {
 	writeSeriesJSON(t, bookwormDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm"
+		"episodes": {}
 	}`)
 	if err := os.Mkdir(filepath.Join(root, "Other"), 0o755); err != nil {
 		t.Fatalf("Mkdir Other: %v", err)
@@ -471,26 +468,22 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/episode-1.mkv",
-							"source": "webrip",
-							"size": 9,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"resolution": "1920x1080"}
-						},
-						"companions": []
-					}
-				]
-			}
-		]
+		"episodes": {
+			"S01E0001": {
+				"season": 1,
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/episode-1.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			},
+			"S01E0002": {"season": 1, "episode": 2, "airDate": "2019-10-10"}
+		}
 	}`)
 
 	var stdout bytes.Buffer
@@ -507,7 +500,7 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 	for _, want := range []string{
 		"MetadataRef: tvdb:370070",
 		"Root: " + seriesDir,
-		"Title: 本好きの下剋上 / Ascendance of a Bookworm",
+		"Title: Bookworm",
 		"SEASON 1",
 		"present",
 		"missing",
@@ -534,26 +527,22 @@ func TestFindCommandPrintsJSON(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/episode-1.mkv",
-							"source": "webrip",
-							"size": 9,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"resolution": "1920x1080"}
-						},
-						"companions": []
-					}
-				]
-			}
-		]
+		"episodes": {
+			"S01E0001": {
+				"season": 1,
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/episode-1.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			},
+			"S01E0002": {"season": 1, "episode": 2, "airDate": "2019-10-10"}
+		}
 	}`)
 
 	var stdout bytes.Buffer
@@ -592,26 +581,22 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Long Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/old episode.mkv",
-							"source": "webrip",
-							"size": 7,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
-						},
-						"companions": []
-					}
-				]
+		"episodes": {
+			"S01E0001": {
+				"season": 1,
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/old episode.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
 			}
-		]
+		}
 	}`)
 
 	var stdout bytes.Buffer
@@ -645,26 +630,22 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm",
-		"seasons": [
-			{
-				"number": 1,
-				"episodes": [
-					{
-						"number": 1,
-						"media": {
-							"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
-							"source": "webrip",
-							"size": 7,
-							"mtime": "2026-04-20T03:00:00Z",
-							"mediainfo": {"videoCodec": "HEVC", "resolution": "1920x1080"}
-						},
-						"companions": []
-					}
-				]
+		"episodes": {
+			"S01E0001": {
+				"season": 1,
+				"episode": 1,
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
 			}
-		]
+		}
 	}`)
 
 	var stdout bytes.Buffer
@@ -690,8 +671,7 @@ func TestReconcileCommandReportsMissingTVDBKey(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm"
+		"episodes": {}
 	}`)
 
 	var stdout bytes.Buffer
@@ -736,7 +716,7 @@ func TestMetaSearchReportsMissingTVDBKey(t *testing.T) {
 	}
 }
 
-func TestStageCommandWritesStagedJSON(t *testing.T) {
+func TestStageCommandWritesStagedEpisode(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -749,8 +729,9 @@ func TestStageCommandWritesStagedJSON(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
-		"preferredTitle": "Bookworm",
-		"canonicalTitle": "Ascendance of a Bookworm"
+		"episodes": {
+			"S01E0001": {"season": 1, "episode": 1, "airDate": "2019-10-03"}
+		}
 	}`)
 	stageDir := t.TempDir()
 	mediaPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip).mkv")
@@ -779,16 +760,17 @@ func TestStageCommandWritesStagedJSON(t *testing.T) {
 	if got := result["series"]; got != "Bookworm" {
 		t.Fatalf("series = %v, want Bookworm", got)
 	}
-	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "staged.json"))
+	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
 	if err != nil {
-		t.Fatalf("ReadFile staged.json: %v", err)
+		t.Fatalf("ReadFile series.json: %v", err)
 	}
-	var staged map[string]any
-	if err := json.Unmarshal(data, &staged); err != nil {
-		t.Fatalf("unmarshal staged: %v", err)
+	var series map[string]any
+	if err := json.Unmarshal(data, &series); err != nil {
+		t.Fatalf("unmarshal series: %v", err)
 	}
-	entry := staged["entries"].([]any)[0].(map[string]any)
-	media := entry["media"].(map[string]any)
+	episodes := series["episodes"].(map[string]any)
+	entry := episodes["S01E0001"].(map[string]any)
+	media := entry["staged"].(map[string]any)
 	if got := media["path"]; got != mediaPath {
 		t.Fatalf("media.path = %v, want %s", got, mediaPath)
 	}
@@ -847,11 +829,11 @@ func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) s
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	index, err := store.LoadLibraryIndex(root)
+	idx, err := index.Load(root)
 	if err != nil {
-		t.Fatalf("LoadLibraryIndex: %v", err)
+		t.Fatalf("LoadIndex: %v", err)
 	}
-	path, ok, err := index.Get(domain.MetadataRef(metadataRef))
+	path, ok, err := idx.Get(refs.Metadata(metadataRef))
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

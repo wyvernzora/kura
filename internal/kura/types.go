@@ -5,13 +5,14 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
+	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/resolve"
-	"github.com/wyvernzora/kura/internal/store"
 )
 
 type (
-	SeriesRef   = domain.SeriesRef
-	MetadataRef = domain.MetadataRef
+	SeriesRef   = refs.Series
+	MetadataRef = refs.Metadata
+	EpisodeRef  = refs.Episode
 )
 
 type (
@@ -19,19 +20,37 @@ type (
 	Match      = resolve.Result
 	Evidence   = resolve.Evidence
 
-	SeriesRecord   = store.Series
-	Episode        = store.Episode
-	MediaFile      = store.MediaFile
-	CompanionFile  = store.CompanionFile
-	Staged         = store.Staged
-	StagedEpisode  = store.StagedEpisode
-	Trash          = store.Trash
-	TrashedEpisode = store.TrashedEpisode
-
 	ImportSkip = fsroot.ImportSkip
-
-	DuplicateEpisodeNumberError = store.DuplicateEpisodeNumberError
 )
+
+type Episode struct {
+	Number     int             `json:"number"`
+	Media      MediaFile       `json:"media"`
+	Companions []CompanionFile `json:"companions"`
+}
+
+type MediaFile struct {
+	Path      string            `json:"path"`
+	Source    string            `json:"source"`
+	Size      int64             `json:"size"`
+	MTime     string            `json:"mtime"`
+	MediaInfo *domain.MediaInfo `json:"mediainfo,omitempty"`
+}
+
+type CompanionFile struct {
+	Path     string `json:"path"`
+	Role     string `json:"role,omitempty"`
+	Language string `json:"language,omitempty"`
+	Label    string `json:"label,omitempty"`
+	Size     int64  `json:"size"`
+	MTime    string `json:"mtime"`
+}
+
+type StagedEpisode struct {
+	Season int `json:"season"`
+	Number int `json:"number"`
+	Episode
+}
 
 type ResolveInput struct {
 	Terms []string
