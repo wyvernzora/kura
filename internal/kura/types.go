@@ -10,7 +10,7 @@ import (
 )
 
 type (
-	SeriesRef   string
+	SeriesRef   = domain.SeriesRef
 	MetadataRef = domain.MetadataRef
 )
 
