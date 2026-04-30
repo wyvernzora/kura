@@ -1,4 +1,4 @@
-package kura
+package library
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
@@ -99,7 +98,7 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 	}`, stagedFive, stagedSix))
 
 	lib := newReadTestLibrary(t, rootPath)
-	series, err := lib.Get("Bookworm")
+	series, err := lib.Open("Bookworm")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -139,16 +138,13 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 
 func newReadTestLibrary(t *testing.T, rootPath string) *Library {
 	t.Helper()
-	root, err := librarypkg.ParseRoot(rootPath)
+	root, err := ParseRoot(rootPath)
 	if err != nil {
 		t.Fatalf("ParseRoot: %v", err)
 	}
-	idx := librarypkg.NewIndex(root)
+	idx := NewIndex(root)
 	if err := idx.Put(refs.Metadata("tvdb:370070"), refs.Series("Bookworm")); err != nil {
 		t.Fatalf("Put index: %v", err)
 	}
-	return &Library{
-		root:   root,
-		series: librarypkg.New(root, nil, mediainfo.Inspector{}, idx),
-	}
+	return New(root, nil, mediainfo.Inspector{}, idx)
 }

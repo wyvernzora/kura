@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/kura"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
@@ -693,7 +692,7 @@ func TestReconcileCommandReportsMissingTVDBKey(t *testing.T) {
 		"--json",
 		"Bookworm",
 	}, rt)
-	if !errors.Is(err, kura.ErrMissingTVDBKey) {
+	if !errors.Is(err, librarypkg.ErrMissingTVDBKey) {
 		t.Fatalf("run error = %v, want ErrMissingTVDBKey", err)
 	}
 }

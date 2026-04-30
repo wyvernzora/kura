@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/wyvernzora/kura/internal/config"
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
@@ -22,12 +22,12 @@ func buildSourceFromFlags(rt *runContext, flags *cli) (metadata.Source, error) {
 	})
 }
 
-func libraryFromFlags(rt *runContext, flags *cli) (*kura.Library, error) {
+func libraryFromFlags(rt *runContext, flags *cli) (*library.Library, error) {
 	preferredLanguages, err := config.ParsePreferredLanguages(rt.Getenv("KURA_PREFERRED_LANGUAGES"))
 	if err != nil {
 		return nil, err
 	}
-	return kura.New(kura.Config{
+	return library.Open(library.Config{
 		Root:               rt.Getenv("KURA_LIBRARY_ROOT"),
 		MediainfoCommand:   rt.Getenv("KURA_MEDIAINFO_COMMAND"),
 		TVDBKey:            rt.Getenv("KURA_TVDB_KEY"),
@@ -36,8 +36,8 @@ func libraryFromFlags(rt *runContext, flags *cli) (*kura.Library, error) {
 	})
 }
 
-func resolveMetadataRef(rt *runContext, lib *kura.Library, terms []string) (refs.Metadata, error) {
-	resolution, err := lib.Resolve(rt.Context, kura.ResolveInput{Terms: terms})
+func resolveMetadataRef(rt *runContext, lib *library.Library, terms []string) (refs.Metadata, error) {
+	resolution, err := lib.Resolve(rt.Context, terms)
 	if err != nil {
 		return "", err
 	}

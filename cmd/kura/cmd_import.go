@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/resolve"
 )
@@ -25,9 +25,9 @@ func (cmd *importCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	series, err := lib.Import(rt.Context, kura.ImportInput{
-		Ref:         refs.Series(cmd.Dirname),
-		MetadataRef: metadataRef,
+	series, err := lib.Import(rt.Context, library.ImportInput{
+		Ref:      refs.Series(cmd.Dirname),
+		Metadata: metadataRef,
 	})
 	if err != nil {
 		return err

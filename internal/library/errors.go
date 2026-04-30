@@ -1,4 +1,4 @@
-package kura
+package library
 
 import (
 	"errors"
@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	ErrRootNotFound     = errors.New("kura: library root does not exist")
-	ErrRootNotDirectory = errors.New("kura: library root is not a directory")
-	ErrMissingTVDBKey   = errors.New("kura: tvdb api key is required")
+	ErrRootNotFound     = errors.New("library: root does not exist")
+	ErrRootNotDirectory = errors.New("library: root is not a directory")
+	ErrMissingTVDBKey   = errors.New("library: tvdb api key is required")
 )
 
 var (

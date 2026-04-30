@@ -1,4 +1,4 @@
-package kura
+package library
 
 import (
 	"context"
@@ -6,12 +6,11 @@ import (
 	"os"
 	"strings"
 
-	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/metadata/tvdb"
 	"github.com/wyvernzora/kura/internal/refs"
-	seriespkg "github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/series"
 )
 
 type Config struct {
@@ -22,14 +21,7 @@ type Config struct {
 	PreferredLanguages []string
 }
 
-type Library struct {
-	root           librarypkg.Root
-	metadataSource metadata.Source
-	inspector      mediainfo.Inspector
-	series         *librarypkg.Library
-}
-
-func New(cfg Config) (*Library, error) {
+func Open(cfg Config) (*Library, error) {
 	info, err := os.Stat(cfg.Root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrRootNotFound
@@ -44,7 +36,7 @@ func New(cfg Config) (*Library, error) {
 		return nil, ErrMissingTVDBKey
 	}
 
-	root, err := librarypkg.ParseRoot(cfg.Root)
+	root, err := ParseRoot(cfg.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -63,10 +55,10 @@ func New(cfg Config) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	seriesIndex, err := librarypkg.LoadIndex(root)
-	if errors.Is(err, librarypkg.ErrNotFound) {
-		seriesIndex, err = librarypkg.RebuildIndex(context.Background(), root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
-			return seriespkg.ReadMetadataRef(root.Path(), ref)
+	index, err := LoadIndex(root)
+	if errors.Is(err, ErrNotFound) {
+		index, err = RebuildIndex(context.Background(), root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+			return series.ReadMetadataRef(root.Path(), ref)
 		})
 	} else if err != nil {
 		return nil, err
@@ -74,10 +66,5 @@ func New(cfg Config) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Library{
-		root:           root,
-		metadataSource: source,
-		inspector:      inspector,
-		series:         librarypkg.New(root, source, inspector, seriesIndex),
-	}, nil
+	return New(root, source, inspector, index), nil
 }

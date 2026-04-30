@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -25,7 +25,7 @@ func (cmd *addCmd) Run(rt *runContext) error {
 	if cmd.Dirname != "" {
 		ref = refs.Series(cmd.Dirname)
 	}
-	series, err := lib.Add(rt.Context, kura.AddInput{MetadataRef: metadataRef, Ref: ref})
+	series, err := lib.Add(rt.Context, library.AddInput{Metadata: metadataRef, Ref: ref})
 	if err != nil {
 		return err
 	}

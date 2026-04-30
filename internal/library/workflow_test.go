@@ -1,4 +1,4 @@
-package kura
+package library
 
 import (
 	"context"
@@ -31,7 +31,7 @@ func TestScanCommits(t *testing.T) {
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 
 	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
-	series, err := lib.Get("Bookworm")
+	series, err := lib.Open("Bookworm")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestScanCommits(t *testing.T) {
 	if len(result.Synced) != 1 || result.Synced[0].Status != seriespkg.ScanStatusNew {
 		t.Fatalf("Synced = %#v, want one new entry", result.Synced)
 	}
-	loaded, err := lib.Get("Bookworm")
+	loaded, err := lib.Open("Bookworm")
 	if err != nil {
 		t.Fatalf("Get after scan: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 
 	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
-	series, err := lib.Get("Bookworm")
+	series, err := lib.Open("Bookworm")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestStageCommits(t *testing.T) {
 	writeFile(t, mediaPath, "episode")
 
 	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
-	series, err := lib.Get("Bookworm")
+	series, err := lib.Open("Bookworm")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	}`)
 
 	lib := newTestLibrary(t, root, server.URL)
-	series, err := lib.Get("Bookworm")
+	series, err := lib.Open("Bookworm")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 
 func newTestLibraryWithMediaInfo(t *testing.T, root string, tvdbBaseURL string, mediainfoCommand string) *Library {
 	t.Helper()
-	lib, err := New(Config{
+	lib, err := Open(Config{
 		Root:               root,
 		MediainfoCommand:   mediainfoCommand,
 		TVDBKey:            "key",
