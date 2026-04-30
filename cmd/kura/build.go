@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/wyvernzora/kura/internal/config"
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/kura"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/ui"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
@@ -58,12 +58,12 @@ func writeSeriesSummary(rt *runContext, series *kura.Series, verb string, asJSON
 }
 
 func parseMetadataRef(seriesRef string) (string, string, error) {
-	ref := domain.MetadataRef(seriesRef)
-	if ref.Source() == "" || ref.Value() == "" {
+	ref, err := refs.ParseMetadata(seriesRef)
+	if err != nil {
 		return "", "", fmt.Errorf("invalid metadata ref %q; expected <source>:<id>", seriesRef)
 	}
-	if ref.Source() != "tvdb" {
-		return "", "", fmt.Errorf("unsupported metadata ref source %q; only tvdb:<id> is supported", ref.Source())
+	if ref.Provider() != "tvdb" {
+		return "", "", fmt.Errorf("unsupported metadata ref source %q; only tvdb:<id> is supported", ref.Provider())
 	}
-	return ref.Source(), ref.Value(), nil
+	return ref.Provider(), ref.ID(), nil
 }

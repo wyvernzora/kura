@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wyvernzora/kura/internal/domain"
+	"github.com/wyvernzora/kura/internal/refs"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -73,7 +73,7 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 		return Resolution{}, err
 	}
 
-	resultsByRef := map[domain.MetadataRef]*Result{}
+	resultsByRef := map[refs.Metadata]*Result{}
 	for _, hit := range hits {
 		result, ok := resultsByRef[hit.MetadataRef]
 		if !ok {

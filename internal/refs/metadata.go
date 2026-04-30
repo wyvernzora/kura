@@ -33,14 +33,12 @@ func (ref Metadata) String() string {
 	return string(ref)
 }
 
-// Source returns the provider component. It preserves the old domain.MetadataRef
-// method name during the package transition.
+// Source returns the provider component.
 func (ref Metadata) Source() string {
 	return ref.Provider()
 }
 
-// Value returns the provider-local identifier. It preserves the old
-// domain.MetadataRef method name during the package transition.
+// Value returns the provider-local identifier.
 func (ref Metadata) Value() string {
 	return ref.ID()
 }

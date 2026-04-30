@@ -8,8 +8,8 @@ import (
 
 var episodePattern = regexp.MustCompile(`^S([0-9]{2,})E([0-9]{4,})$`)
 
-// Episode identifies a local episode slot. Its string form is fixed-width for
-// storage so lexical ordering matches natural episode order.
+// Episode identifies one episode in the local series spine. Its string form is
+// fixed-width for storage so lexical ordering matches natural episode order.
 type Episode struct {
 	season  int
 	episode int

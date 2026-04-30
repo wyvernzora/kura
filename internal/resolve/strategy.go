@@ -3,8 +3,8 @@ package resolve
 import (
 	"context"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 // ResolveStrategy is the unit of term-resolution behavior. Strategies hold
@@ -28,7 +28,7 @@ type ResolveStrategy interface {
 // termHit is one term's contribution for one metadata candidate.
 type termHit struct {
 	Term        Term
-	MetadataRef domain.MetadataRef
+	MetadataRef refs.Metadata
 	Summary     metadata.SeriesSummary
 	Rank        int
 	MatchSource string

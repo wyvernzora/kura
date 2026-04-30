@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type strategyFakeSource struct {
@@ -48,7 +48,7 @@ func (s *strategyFakeSource) GetSeries(_ context.Context, metadataID string) (me
 
 func testSummary(ref string) metadata.SeriesSummary {
 	return metadata.SeriesSummary{
-		MetadataRef:    domain.MetadataRef(ref),
+		MetadataRef:    refs.Metadata(ref),
 		PreferredTitle: ref + " preferred",
 		CanonicalTitle: ref + " canonical",
 	}
