@@ -37,8 +37,8 @@ func TestResolverEmptyValuedTermsAreIgnored(t *testing.T) {
 	if calls := strategy.calls.Load(); calls != 1 {
 		t.Fatalf("calls = %d, want 1", calls)
 	}
-	if !result.IsResolved() {
-		t.Fatalf("IsResolved = false, results = %#v", result.Results)
+	if len(result.Results) != 1 {
+		t.Fatalf("len(Results) = %d, want 1", len(result.Results))
 	}
 }
 
@@ -111,8 +111,8 @@ func TestResolverDuplicateAuthoritativeTermCollapses(t *testing.T) {
 	if calls := strategy.calls.Load(); calls != 1 {
 		t.Fatalf("calls = %d, want 1", calls)
 	}
-	if !result.IsResolved() {
-		t.Fatalf("IsResolved = false, results = %#v", result.Results)
+	if len(result.Results) != 1 {
+		t.Fatalf("len(Results) = %d, want 1", len(result.Results))
 	}
 }
 
@@ -153,13 +153,15 @@ func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if !result.IsResolved() {
-		t.Fatalf("IsResolved = false, results = %#v", result.Results)
+	if len(result.Results) != 1 {
+		t.Fatalf("len(Results) = %d, want 1", len(result.Results))
 	}
 	if len(result.Results[0].Evidence) != 2 {
 		t.Fatalf("evidence count = %d, want 2", len(result.Results[0].Evidence))
 	}
-	if !slices.Contains(result.Results[0].Evidence, Evidence{Term: "jp", Rank: 0}) {
+	if !slices.ContainsFunc(result.Results[0].Evidence, func(e Evidence) bool {
+		return e.Term == "jp" && e.Rank == 0
+	}) {
 		t.Fatalf("evidence = %#v, want jp rank 0", result.Results[0].Evidence)
 	}
 }
@@ -178,8 +180,8 @@ func TestResolverUnresolvedDistinctRemoteRefs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if !result.IsUnresolved() {
-		t.Fatalf("IsUnresolved = false, results = %#v", result.Results)
+	if len(result.Results) <= 1 {
+		t.Fatalf("len(Results) = %d, want >1", len(result.Results))
 	}
 }
 
@@ -189,8 +191,8 @@ func TestResolverNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if !result.IsNotFound() {
-		t.Fatalf("IsNotFound = false, results = %#v", result.Results)
+	if len(result.Results) != 0 {
+		t.Fatalf("len(Results) = %d, want 0", len(result.Results))
 	}
 }
 

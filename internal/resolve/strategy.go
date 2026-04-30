@@ -31,4 +31,6 @@ type termHit struct {
 	MetadataRef domain.MetadataRef
 	Summary     metadata.SeriesSummary
 	Rank        int
+	MatchSource string
+	Annotations []string
 }

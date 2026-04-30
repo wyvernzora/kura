@@ -8,18 +8,6 @@ type Resolution struct {
 	Results []Result
 }
 
-func (r Resolution) IsResolved() bool {
-	return len(r.Results) == 1
-}
-
-func (r Resolution) IsUnresolved() bool {
-	return len(r.Results) > 1
-}
-
-func (r Resolution) IsNotFound() bool {
-	return len(r.Results) == 0
-}
-
 // Result is one metadata candidate with all evidence supporting it.
 type Result struct {
 	Summary  metadata.SeriesSummary
@@ -28,6 +16,8 @@ type Result struct {
 
 // Evidence is one term's visible contribution to a result.
 type Evidence struct {
-	Term string
-	Rank int
+	Term        string
+	Rank        int
+	MatchSource string   `json:",omitempty"`
+	Annotations []string `json:",omitempty"`
 }

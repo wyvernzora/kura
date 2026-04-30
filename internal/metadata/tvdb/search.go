@@ -20,6 +20,8 @@ type searchRecord struct {
 	ObjectID        string             `json:"objectID"`
 	TVDBID          tvdbString         `json:"tvdb_id"`
 	Name            string             `json:"name"`
+	NameTranslated  []string           `json:"name_translated"`
+	Aliases         []string           `json:"aliases"`
 	Translations    searchTranslations `json:"translations"`
 	Genres          searchGenres       `json:"genres"`
 	Type            string             `json:"type"`
@@ -51,6 +53,7 @@ func (c *client) search(ctx context.Context, query string, opts metadata.SearchO
 
 func (p *Provider) normalizeSearchResult(record searchRecord) metadata.SearchResult {
 	id := firstNonEmpty(record.TVDBID.String(), trimObjectID(record.ObjectID), trimObjectID(record.ID.String()), record.ID.String())
+	aliases := searchTitleAliases(record)
 
 	return metadata.SearchResult{
 		SeriesSummary: p.normalizeSeriesSummary(seriesSummaryInput{
@@ -66,7 +69,33 @@ func (p *Provider) normalizeSearchResult(record searchRecord) metadata.SearchRes
 		}),
 		Score:       record.Score,
 		MatchSource: "query",
+		Aliases:     aliases,
 	}
+}
+
+func searchTitleAliases(record searchRecord) []string {
+	values := make([]string, 0, 1+len(record.NameTranslated)+len(record.Aliases)+len(record.Translations.Values))
+	values = append(values, record.Name)
+	values = append(values, record.NameTranslated...)
+	values = append(values, record.Aliases...)
+	for _, candidate := range searchTitleCandidates(record) {
+		values = append(values, candidate.Value)
+	}
+
+	aliases := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, raw := range values {
+		value := normalizeTitle(raw)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		aliases = append(aliases, value)
+	}
+	return aliases
 }
 
 func searchTitleCandidates(record searchRecord) []titleCandidate {

@@ -3,6 +3,7 @@ package resolve
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/wyvernzora/kura/internal/metadata"
 )
@@ -20,7 +21,7 @@ func (s *textSearchStrategy) Name() string {
 }
 
 func (s *textSearchStrategy) Match(t Term) bool {
-	return t.Prefix == ""
+	return true
 }
 
 func (s *textSearchStrategy) Authoritative() bool {
@@ -28,7 +29,8 @@ func (s *textSearchStrategy) Authoritative() bool {
 }
 
 func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
-	results, err := s.source.Search(ctx, t.Value, metadata.SearchOptions{Type: metadata.MediaTypeSeries})
+	query := t.String()
+	results, err := s.source.Search(ctx, query, metadata.SearchOptions{Type: metadata.MediaTypeSeries})
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
 			return nil, nil
@@ -42,7 +44,36 @@ func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]termHit, er
 			MetadataRef: result.MetadataRef,
 			Summary:     result.SeriesSummary,
 			Rank:        i,
+			MatchSource: result.MatchSource,
+			Annotations: matchAnnotations(query, result),
 		})
 	}
 	return hits, nil
+}
+
+func matchAnnotations(term string, result metadata.SearchResult) []string {
+	term = strings.ToLower(strings.TrimSpace(term))
+	if term == "" {
+		return nil
+	}
+	for _, title := range matchTitles(result) {
+		title = strings.ToLower(strings.TrimSpace(title))
+		if title == "" {
+			continue
+		}
+		if term == title {
+			return []string{"full_match"}
+		}
+	}
+	for _, title := range matchTitles(result) {
+		title = strings.ToLower(strings.TrimSpace(title))
+		if title != "" && strings.Contains(title, term) {
+			return []string{"partial_match"}
+		}
+	}
+	return nil
+}
+
+func matchTitles(result metadata.SearchResult) []string {
+	return result.Aliases
 }

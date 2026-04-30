@@ -18,7 +18,6 @@ var (
 	ErrTooManyTerms     = resolve.ErrTooManyTerms
 	ErrConflictingTerms = resolve.ErrConflictingTerms
 	ErrNoStrategyMatch  = resolve.ErrNoStrategyMatch
-	ErrStaleMetadataRef = resolve.ErrStaleMetadataRef
 )
 
 type MetadataRefNotIndexedError struct {

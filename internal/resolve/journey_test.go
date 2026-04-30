@@ -3,10 +3,8 @@ package resolve
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
@@ -20,8 +18,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if !resolution.IsResolved() {
-			t.Fatalf("IsResolved = false, results = %#v", resolution.Results)
+		if len(resolution.Results) != 1 {
+			t.Fatalf("len(Results) = %d, want 1", len(resolution.Results))
 		}
 	})
 
@@ -38,8 +36,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if !resolution.IsUnresolved() {
-			t.Fatalf("IsUnresolved = false, results = %#v", resolution.Results)
+		if len(resolution.Results) <= 1 {
+			t.Fatalf("len(Results) = %d, want >1", len(resolution.Results))
 		}
 	})
 
@@ -62,8 +60,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if !resolution.IsResolved() {
-			t.Fatalf("IsResolved = false, results = %#v", resolution.Results)
+		if len(resolution.Results) != 1 {
+			t.Fatalf("len(Results) = %d, want 1", len(resolution.Results))
 		}
 		if got := len(resolution.Results[0].Evidence); got != 2 {
 			t.Fatalf("evidence count = %d, want 2", got)
@@ -77,27 +75,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if !resolution.IsResolved() {
-			t.Fatalf("IsResolved = false, results = %#v", resolution.Results)
-		}
-	})
-
-	t.Run("dirname term resolves tracked dir", func(t *testing.T) {
-		rootDir := t.TempDir()
-		writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tvdb:370070")
-		root, err := fsroot.ParseLibraryRoot(rootDir)
-		if err != nil {
-			t.Fatalf("ParseLibraryRoot: %v", err)
-		}
-		source := &strategyFakeSource{series: map[string]metadata.Series{"370070": testMetadataSeries("tvdb:370070")}}
-		resolver := New(NewDirnameStrategy(root, source), NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
-
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
-		if err != nil {
-			t.Fatalf("Resolve: %v", err)
-		}
-		if !resolution.IsResolved() {
-			t.Fatalf("IsResolved = false, results = %#v", resolution.Results)
+		if len(resolution.Results) != 1 {
+			t.Fatalf("len(Results) = %d, want 1", len(resolution.Results))
 		}
 	})
 
@@ -108,8 +87,8 @@ func TestResolverJourneys(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if !resolution.IsNotFound() {
-			t.Fatalf("IsNotFound = false, results = %#v", resolution.Results)
+		if len(resolution.Results) != 0 {
+			t.Fatalf("len(Results) = %d, want 0", len(resolution.Results))
 		}
 	})
 
@@ -122,36 +101,21 @@ func TestResolverJourneys(t *testing.T) {
 		}
 	})
 
-	t.Run("stale dirname ref errors", func(t *testing.T) {
-		rootDir := t.TempDir()
-		writeTrackedSeries(t, filepath.Join(rootDir, "Bookworm"), "tvdb:99999")
-		root, err := fsroot.ParseLibraryRoot(rootDir)
-		if err != nil {
-			t.Fatalf("ParseLibraryRoot: %v", err)
+	t.Run("dir-prefixed term is text search", func(t *testing.T) {
+		source := &strategyFakeSource{
+			searchResultsByQuery: map[string][]metadata.SearchResult{
+				"dir:Bookworm": {
+					{SeriesSummary: testSummary("tvdb:370070")},
+				},
+			},
 		}
-		source := &strategyFakeSource{seriesErr: metadata.ErrNotFound}
-		resolver := New(NewDirnameStrategy(root, source))
-		_, err = resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
-		if !errors.Is(err, ErrStaleMetadataRef) {
-			t.Fatalf("error = %v, want ErrStaleMetadataRef", err)
-		}
-	})
-
-	t.Run("untracked dirname not found", func(t *testing.T) {
-		rootDir := t.TempDir()
-		mkdir(t, filepath.Join(rootDir, "Bookworm"))
-		root, err := fsroot.ParseLibraryRoot(rootDir)
-		if err != nil {
-			t.Fatalf("ParseLibraryRoot: %v", err)
-		}
-		source := &strategyFakeSource{}
-		resolver := New(NewDirnameStrategy(root, source))
+		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
 		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
-		if !resolution.IsNotFound() {
-			t.Fatalf("IsNotFound = false, results = %#v", resolution.Results)
+		if len(resolution.Results) != 1 {
+			t.Fatalf("len(Results) = %d, want 1", len(resolution.Results))
 		}
 	})
 

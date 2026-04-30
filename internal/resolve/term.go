@@ -34,6 +34,9 @@ func ParseTerm(raw string) Term {
 		return Term{}
 	}
 	if match := prefixPattern.FindStringSubmatch(trimmed); match != nil {
+		if match[1] == "dir" {
+			return Term{Value: trimmed}
+		}
 		return Term{Prefix: match[1], Value: match[2]}
 	}
 	return Term{Value: trimmed}

@@ -1,17 +1,15 @@
 package main
 
 import (
-	"errors"
 	"slices"
 	"testing"
 )
 
 func TestImportCmdResolveTerms(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     importCmd
-		want    []string
-		wantErr error
+		name string
+		cmd  importCmd
+		want []string
 	}{
 		{
 			name: "dirname only",
@@ -49,17 +47,17 @@ func TestImportCmdResolveTerms(t *testing.T) {
 			want: []string{"tvdb:370070", "tvdb:999999"},
 		},
 		{
-			name:    "dir term",
-			cmd:     importCmd{Dirname: "whatever", Terms: []string{"dir:tracked"}},
-			wantErr: errImportDirTermUnsupported,
+			name: "dir term treated as text",
+			cmd:  importCmd{Dirname: "whatever", Terms: []string{"dir:tracked"}},
+			want: []string{"whatever", "dir:tracked"},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got, err := test.cmd.resolveTerms()
-			if !errors.Is(err, test.wantErr) {
-				t.Fatalf("resolveTerms error = %v, want %v", err, test.wantErr)
+			if err != nil {
+				t.Fatalf("resolveTerms error = %v", err)
 			}
 			if !slices.Equal(got, test.want) {
 				t.Fatalf("resolveTerms = %#v, want %#v", got, test.want)

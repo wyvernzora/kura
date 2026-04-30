@@ -1,13 +1,9 @@
 package main
 
 import (
-	"errors"
-
 	"github.com/wyvernzora/kura/internal/kura"
 	"github.com/wyvernzora/kura/internal/resolve"
 )
-
-var errImportDirTermUnsupported = errors.New("kura import: dir: resolver terms are not supported")
 
 type importCmd struct {
 	Dirname string   `arg:"" required:"" help:"Existing directory below KURA_LIBRARY_ROOT."`
@@ -40,7 +36,6 @@ func (cmd *importCmd) Run(rt *runContext) error {
 
 func (cmd *importCmd) resolveTerms() ([]string, error) {
 	tvdbTerms := 0
-	otherPrefixedTerms := 0
 	nonEmptyTerms := 0
 	var tvdbTerm string
 
@@ -52,20 +47,16 @@ func (cmd *importCmd) resolveTerms() ([]string, error) {
 		nonEmptyTerms++
 		switch term.Prefix {
 		case "":
-		case "dir":
-			return nil, errImportDirTermUnsupported
 		case "tvdb":
 			tvdbTerms++
 			tvdbTerm = raw
-		default:
-			otherPrefixedTerms++
 		}
 	}
 
 	if tvdbTerms == 1 && nonEmptyTerms == 1 {
 		return []string{tvdbTerm}, nil
 	}
-	if nonEmptyTerms > 0 && (tvdbTerms > 0 || otherPrefixedTerms > 0) {
+	if nonEmptyTerms > 0 && tvdbTerms > 0 {
 		return cmd.Terms, nil
 	}
 

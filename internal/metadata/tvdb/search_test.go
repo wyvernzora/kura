@@ -3,6 +3,7 @@ package tvdb
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -41,6 +42,11 @@ func TestSearchNormalizesSeriesResults(t *testing.T) {
 	}
 	if got.MatchSource != "query" {
 		t.Fatalf("MatchSource = %q, want query", got.MatchSource)
+	}
+	for _, want := range []string{"Ascendance of a Bookworm", "本好きの下剋上", "Honzuki no Gekokujou"} {
+		if !slices.Contains(got.Aliases, want) {
+			t.Fatalf("Aliases = %#v, want %s", got.Aliases, want)
+		}
 	}
 	if got.CanonicalTitle != "Ascendance of a Bookworm" {
 		t.Fatalf("CanonicalTitle = %q", got.CanonicalTitle)

@@ -13,7 +13,7 @@ func TestParseTerm(t *testing.T) {
 	}{
 		{name: "text", raw: "本好きの下剋上", want: Term{Value: "本好きの下剋上"}},
 		{name: "metadata ref", raw: "tvdb:370070", want: Term{Prefix: "tvdb", Value: "370070"}},
-		{name: "dirname", raw: "dir:foo", want: Term{Prefix: "dir", Value: "foo"}},
+		{name: "dirname is text", raw: "dir:foo", want: Term{Value: "dir:foo"}},
 		{name: "uppercase prefix", raw: "DIR:foo", want: Term{Value: "DIR:foo"}},
 		{name: "trim text", raw: "  X-Men  ", want: Term{Value: "X-Men"}},
 		{name: "spaces in value", raw: "tvdb:foo bar", want: Term{Prefix: "tvdb", Value: "foo bar"}},

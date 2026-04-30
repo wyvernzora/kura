@@ -81,8 +81,10 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 			resultsByRef[hit.MetadataRef] = result
 		}
 		result.Evidence = append(result.Evidence, Evidence{
-			Term: hit.Term.String(),
-			Rank: hit.Rank,
+			Term:        hit.Term.String(),
+			Rank:        hit.Rank,
+			MatchSource: hit.MatchSource,
+			Annotations: slices.Clone(hit.Annotations),
 		})
 	}
 

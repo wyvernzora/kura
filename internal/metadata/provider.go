@@ -59,6 +59,9 @@ type SearchResult struct {
 	// MatchSource identifies the search response field that matched the query,
 	// for example "title".
 	MatchSource string
+
+	// Aliases are source-provided alternate titles usable for resolver evidence.
+	Aliases []string
 }
 
 // SeriesSummary contains series-level metadata shared by search results and

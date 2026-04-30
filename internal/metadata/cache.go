@@ -127,6 +127,7 @@ func cloneSearchResults(in []SearchResult) []SearchResult {
 	for i := range in {
 		out[i] = in[i]
 		out[i].SeriesSummary = cloneSeriesSummary(in[i].SeriesSummary)
+		out[i].Aliases = cloneStrings(in[i].Aliases)
 	}
 	return out
 }

@@ -3,6 +3,7 @@ package resolve
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -21,7 +22,10 @@ func TestTextSearchStrategyResolveEmpty(t *testing.T) {
 
 func TestTextSearchStrategyResolveOne(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{
-		searchResults: []metadata.SearchResult{{SeriesSummary: testSummary("tvdb:1")}},
+		searchResults: []metadata.SearchResult{{
+			SeriesSummary: testSummary("tvdb:1"),
+			MatchSource:   "title",
+		}},
 	})
 	hits, err := strategy.Resolve(context.Background(), Term{Value: "query"})
 	if err != nil {
@@ -32,6 +36,38 @@ func TestTextSearchStrategyResolveOne(t *testing.T) {
 	}
 	if hits[0].Rank != 0 || hits[0].MetadataRef != "tvdb:1" {
 		t.Fatalf("hit = %#v, want rank 0 tvdb:1", hits[0])
+	}
+	if hits[0].MatchSource != "title" {
+		t.Fatalf("MatchSource = %q, want title", hits[0].MatchSource)
+	}
+}
+
+func TestTextSearchStrategyAddsMatchAnnotations(t *testing.T) {
+	strategy := NewTextSearchStrategy(&strategyFakeSource{
+		searchResults: []metadata.SearchResult{{
+			SeriesSummary: metadata.SeriesSummary{
+				MetadataRef:    "tvdb:1",
+				PreferredTitle: "Ascendance of a Bookworm",
+				CanonicalTitle: "本好きの下剋上",
+			},
+			Aliases: []string{"Ascendance of a Bookworm", "本好きの下剋上", "Honzuki no Gekokujou"},
+		}},
+	})
+
+	full, err := strategy.Resolve(context.Background(), Term{Value: "本好きの下剋上"})
+	if err != nil {
+		t.Fatalf("Resolve full: %v", err)
+	}
+	if len(full) != 1 || !slices.Equal(full[0].Annotations, []string{"full_match"}) {
+		t.Fatalf("full annotations = %#v, want full_match", full)
+	}
+
+	partial, err := strategy.Resolve(context.Background(), Term{Value: "bookworm"})
+	if err != nil {
+		t.Fatalf("Resolve partial: %v", err)
+	}
+	if len(partial) != 1 || !slices.Equal(partial[0].Annotations, []string{"partial_match"}) {
+		t.Fatalf("partial annotations = %#v, want partial_match", partial)
 	}
 }
 
@@ -78,8 +114,8 @@ func TestTextSearchStrategyProperties(t *testing.T) {
 	if !strategy.Match(Term{Value: "query"}) {
 		t.Fatal("Match text = false, want true")
 	}
-	if strategy.Match(Term{Prefix: "tvdb", Value: "1"}) {
-		t.Fatal("Match prefixed = true, want false")
+	if !strategy.Match(Term{Prefix: "dir", Value: "Bookworm"}) {
+		t.Fatal("Match prefixed = false, want true")
 	}
 	if strategy.Authoritative() {
 		t.Fatal("Authoritative = true, want false")
