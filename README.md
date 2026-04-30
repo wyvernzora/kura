@@ -16,30 +16,31 @@ The intended shape is deliberately lean:
 Kura currently has a small CLI for managing existing Plex-style anime series
 directories:
 
-- `kura sync <dir>` scans a series directory, initializes Kura metadata when
-  needed, records importable episode media, and reports skipped files or
-  ignored directories.
+- `kura scan <series>` scans a tracked series directory, records importable
+  episode media into `.kura/series.json`, and reports skipped files or ignored
+  directories.
 - `kura stage <dir> [opts] <absolute-path>` admits an explicitly selected
-  external episode file into `.kura/staged.json`. Use `--replace` when the
-  staged file is intended to replace an active or already-staged episode.
+  external episode file into the target episode's staged record in
+  `.kura/series.json`. Use `--replace` when the staged file is intended to
+  replace an active or already-staged episode.
 - `kura reconcile <dir>` applies Kura's planned filesystem layout, moves staged
   files into the series, and moves replaced active files into `.kura/trash/`.
 - `kura meta ...` exposes the current metadata helper commands.
 
-Trash metadata is retained as an inventory of replaced files. Reconcile moves
-trashed media under `.kura/trash/<id>/` and keeps the corresponding
-`.kura/trash.json` entries.
+Trash metadata is retained beside each replaced file. Reconcile moves trashed
+media under `.kura/trash/<id>/` and writes the corresponding
+`.kura/trash/<id>/meta.json`.
 
 The normal local flow is:
 
 ```sh
-kura sync <series-dir>
+kura scan <series-dir>
 kura stage <series-dir> --season 1 --number 3 --replace /media/anime/inbox/example.mkv
 kura reconcile <series-dir>
 ```
 
-`sync` can also bootstrap an empty show directory when metadata resolution
-succeeds or an explicit metadata ref is supplied.
+Use `kura import` or `kura add` to create the tracked `series.json` spine before
+scanning.
 
 ## Requirements
 

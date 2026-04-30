@@ -161,7 +161,7 @@ Under 300 lines is a good ceiling. Over 500 and you are fighting your own config
 
 - **Language:** Go (1.26.2 or newer).
 - **Main command entrypoint:** `cmd/kura`.
-- **Workflow logic:** `internal/ops`. Persistent models stay dumb; behavior lives in ops.
+- **Workflow logic:** `internal/series`, with CLI-facing orchestration in `internal/kura`.
 - **Container:** Docker, single-binary image.
 
 ### Commands
@@ -175,14 +175,15 @@ docker build -t kura .
 docker run --rm kura
 ```
 
-Prefer single-package or single-test runs during iteration (`go test ./internal/ops/...`, `go test -run TestX ./...`). Full suite is for the final verification pass.
+Prefer single-package or single-test runs during iteration (`go test ./internal/series/...`, `go test -run TestX ./...`). Full suite is for the final verification pass.
 
 ### Library layout (on disk)
 
 - Kura targets existing Plex-style anime series libraries and preserves their structure during bootstrap.
+- Library index: `<library>/.kura/index.tsv` (never inside a series directory).
 - Per-series Kura metadata: `<series>/.kura/series.json` (never bare `.series.json`).
-- Staged external media entries: `<series>/.kura/staged.json`.
-- Trash inventory: `<series>/.kura/trash.json`. Trashed media: `<series>/.kura/trash/<trash_id>/`.
+- Staged external media entries live inside `series.json` episode records, not in `staged.json`.
+- Trash metadata lives beside trashed media at `<series>/.kura/trash/<trash_id>/meta.json`, not in `trash.json`.
 - Active tracked media must not live under `.kura/`. Kura-managed trash media is the explicit exception.
 - Regular seasons: `Season <N>/`.
 - Season 0 specials are treated as root-level series files in the target layout. Legacy `Season 0/` folders may exist and must be tolerated during bootstrap.
@@ -205,11 +206,11 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 
 ### Current workflows
 
-- `kura sync <dir>` — scan a series directory, initialize metadata when needed, record recognized episode media, refresh changed facts for same-path episodes, and report skipped files/directories.
-- `kura sync --replace <dir>` — required when a discovered file replaces an existing active season/episode at a different media path. Replaced active records move to trash metadata.
-- `kura stage <dir> [opts] <absolute-media-path>` — record an explicit external media file in `.kura/staged.json`. Active or staged season/episode collisions require `--replace`.
-- `kura reconcile <dir>` — move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, update metadata, and remove empty staged metadata. Does not rename the series root; uses the current directory name for generated media filenames.
-- If sync or reconcile has no changes, the CLI must not ask to apply anything.
+- `kura scan <series>` — scan a tracked series directory, record recognized episode media into `series.json`, refresh changed facts for same-path episodes, keep empty spine episodes, and report skipped files/directories.
+- `kura scan --replace <series>` — required when a discovered file replaces an existing active season/episode at a different media path.
+- `kura stage <series> [opts] <absolute-media-path>` — record an explicit external media file inside the target episode's `series.json` staged record. Active or staged season/episode collisions require `--replace`.
+- `kura reconcile <series>` — move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
+- If scan or reconcile has no changes, the CLI must not ask to apply anything.
 - Kura does not currently scan a central inbox. `kura stage` accepts explicitly referenced absolute media paths from any inbox or download directory.
 
 ### Documentation
