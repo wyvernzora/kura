@@ -5,20 +5,19 @@ import (
 	"path/filepath"
 
 	"github.com/google/renameio/v2"
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
 )
 
 type repo struct {
-	root fsroot.LibraryRoot
+	root string
 }
 
-func Save(root fsroot.LibraryRoot, ref refs.Series, series Series) error {
+func Save(root string, ref refs.Series, series Series) error {
 	return repo{root: root}.save(ref, series)
 }
 
-func ReadMetadataRef(root fsroot.LibraryRoot, ref refs.Series) (refs.Metadata, error) {
+func ReadMetadataRef(root string, ref refs.Series) (refs.Metadata, error) {
 	series, err := repo{root: root}.load(ref)
 	if err != nil {
 		return "", err
@@ -27,7 +26,7 @@ func ReadMetadataRef(root fsroot.LibraryRoot, ref refs.Series) (refs.Metadata, e
 }
 
 func (r repo) load(ref refs.Series) (Series, error) {
-	path := wire.SeriesMetadataPath(r.root.Join(ref.String()))
+	path := wire.SeriesMetadataPath(filepath.Join(r.root, filepath.FromSlash(ref.String())))
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Series{}, err
@@ -48,7 +47,7 @@ func (r repo) save(ref refs.Series, series Series) error {
 	if err != nil {
 		return err
 	}
-	seriesDir := r.root.Join(ref.String())
+	seriesDir := filepath.Join(r.root, filepath.FromSlash(ref.String()))
 	metaDir := filepath.Join(seriesDir, wire.KuraDir)
 	if err := os.MkdirAll(metaDir, 0o755); err != nil {
 		return err

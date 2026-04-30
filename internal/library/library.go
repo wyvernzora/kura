@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -16,7 +15,7 @@ import (
 )
 
 type Library struct {
-	root    fsroot.LibraryRoot
+	root    Root
 	source  metadata.Source
 	inspect mediainfo.Inspector
 	index   *Index
@@ -33,7 +32,7 @@ type ImportInput struct {
 	Ref      refs.Series
 }
 
-func New(root fsroot.LibraryRoot, source metadata.Source, inspector mediainfo.Inspector, idx *Index) *Library {
+func New(root Root, source metadata.Source, inspector mediainfo.Inspector, idx *Index) *Library {
 	return &Library{
 		root:    root,
 		source:  source,
@@ -43,8 +42,8 @@ func New(root fsroot.LibraryRoot, source metadata.Source, inspector mediainfo.In
 	}
 }
 
-func (l *Library) LibraryRoot() fsroot.LibraryRoot {
-	return l.root
+func (l *Library) LibraryRoot() string {
+	return l.root.Path()
 }
 
 func (l *Library) MetadataSource() metadata.Source {
@@ -94,7 +93,7 @@ func (l *Library) Add(ctx context.Context, in AddInput) (series.Handle, error) {
 	if err != nil {
 		return series.Handle{}, err
 	}
-	if err := series.Save(l.root, ref, model); err != nil {
+	if err := series.Save(l.root.Path(), ref, model); err != nil {
 		return series.Handle{}, err
 	}
 	if err := l.index.Put(metadataRef, ref); err != nil {
@@ -118,7 +117,7 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 	if err != nil {
 		return series.Handle{}, err
 	}
-	seriesDir, err := l.root.SeriesDir(ref.String())
+	seriesDir, err := series.ParseSeriesDir(l.root.Join(ref.String()))
 	if errors.Is(err, os.ErrNotExist) {
 		return series.Handle{}, series.SeriesNotFoundError{Ref: ref}
 	}
@@ -137,7 +136,7 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 	if err != nil {
 		return series.Handle{}, err
 	}
-	if err := series.Save(l.root, ref, model); err != nil {
+	if err := series.Save(l.root.Path(), ref, model); err != nil {
 		return series.Handle{}, err
 	}
 	if err := l.index.Put(metadataRef, ref); err != nil {

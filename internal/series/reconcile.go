@@ -148,7 +148,7 @@ func (h Handle) ApplyReconcile(plan ReconcilePlan) (ReconcileResult, error) {
 }
 
 func (h Handle) snapshot() (string, error) {
-	path := wire.SeriesMetadataPath(h.root().Join(h.ref.String()))
+	path := wire.SeriesMetadataPath(filepath.Join(h.root(), filepath.FromSlash(h.ref.String())))
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err

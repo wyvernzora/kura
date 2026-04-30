@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -139,9 +138,9 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 
 func newReadTestLibrary(t *testing.T, rootPath string) *Library {
 	t.Helper()
-	root, err := fsroot.ParseLibraryRoot(rootPath)
+	root, err := librarypkg.ParseRoot(rootPath)
 	if err != nil {
-		t.Fatalf("ParseLibraryRoot: %v", err)
+		t.Fatalf("ParseRoot: %v", err)
 	}
 	idx := librarypkg.NewIndex(root)
 	if err := idx.Put(refs.Metadata("tvdb:370070"), refs.Series("Bookworm")); err != nil {

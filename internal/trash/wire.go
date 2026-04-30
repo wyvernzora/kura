@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/renameio/v2"
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -43,7 +42,7 @@ type companionWire struct {
 	MTime    string `json:"mtime"`
 }
 
-func Write(root fsroot.LibraryRoot, ref refs.Series, meta Meta) error {
+func Write(root string, ref refs.Series, meta Meta) error {
 	data, err := json.MarshalIndent(toWire(meta), "", "  ")
 	if err != nil {
 		return err
@@ -56,8 +55,8 @@ func Write(root fsroot.LibraryRoot, ref refs.Series, meta Meta) error {
 	return renameio.WriteFile(MetaPath(root, ref, meta.ID), data, 0o644)
 }
 
-func List(root fsroot.LibraryRoot, ref refs.Series) ([]Meta, error) {
-	dir := filepath.Join(root.Join(ref.String()), ".kura", DirName)
+func List(root string, ref refs.Series) ([]Meta, error) {
+	dir := filepath.Join(root, filepath.FromSlash(ref.String()), ".kura", DirName)
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return []Meta{}, nil

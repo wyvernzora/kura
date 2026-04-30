@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/kura"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -825,9 +824,9 @@ func testRunContextWithLibraryRootAndMediaInfo(stdout, stderr *bytes.Buffer, lib
 
 func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) string {
 	t.Helper()
-	root, err := fsroot.ParseLibraryRoot(rootPath)
+	root, err := librarypkg.ParseRoot(rootPath)
 	if err != nil {
-		t.Fatalf("ParseLibraryRoot: %v", err)
+		t.Fatalf("ParseRoot: %v", err)
 	}
 	idx, err := librarypkg.LoadIndex(root)
 	if err != nil {

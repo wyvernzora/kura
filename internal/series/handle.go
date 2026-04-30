@@ -5,13 +5,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type Dependencies interface {
-	LibraryRoot() fsroot.LibraryRoot
+	LibraryRoot() string
 	MetadataSource() metadata.Source
 	MediaInspector() Inspector
 	Now() time.Time
@@ -47,7 +46,7 @@ func (h Handle) Load() (Series, error) {
 	return h.repo().load(h.ref)
 }
 
-func (h Handle) root() fsroot.LibraryRoot {
+func (h Handle) root() string {
 	return h.deps.LibraryRoot()
 }
 

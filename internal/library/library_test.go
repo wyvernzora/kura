@@ -5,14 +5,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
 func TestLibraryAddWritesFullSpine(t *testing.T) {
-	root, err := fsroot.ParseLibraryRoot(t.TempDir())
+	root, err := ParseRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +33,7 @@ func TestLibraryAddWritesFullSpine(t *testing.T) {
 }
 
 func TestLibraryImportRequiresExistingUntrackedDir(t *testing.T) {
-	root, err := fsroot.ParseLibraryRoot(t.TempDir())
+	root, err := ParseRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

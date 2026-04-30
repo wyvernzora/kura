@@ -12,7 +12,6 @@ import (
 	"sort"
 
 	"github.com/google/renameio/v2"
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -38,18 +37,18 @@ func (e DuplicateRefError) Error() string {
 }
 
 type Index struct {
-	root fsroot.LibraryRoot
+	root Root
 	refs map[refs.Metadata]refs.Series
 }
 
-func NewIndex(root fsroot.LibraryRoot) *Index {
+func NewIndex(root Root) *Index {
 	return &Index{
 		root: root,
 		refs: map[refs.Metadata]refs.Series{},
 	}
 }
 
-func LoadIndex(root fsroot.LibraryRoot) (*Index, error) {
+func LoadIndex(root Root) (*Index, error) {
 	path := IndexMetadataPath(root.Path())
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -87,7 +86,7 @@ func LoadIndex(root fsroot.LibraryRoot) (*Index, error) {
 	return index, nil
 }
 
-func RebuildIndex(ctx context.Context, root fsroot.LibraryRoot, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
+func RebuildIndex(ctx context.Context, root Root, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
 	dir, err := os.Open(root.Path())
 	if err != nil {
 		return nil, err

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
@@ -21,7 +20,7 @@ func (s *Series) Read(ctx context.Context, in ReadInput) (SeriesRead, error) {
 }
 
 func (s *Series) readModern(in ReadInput) (SeriesRead, error) {
-	seriesDir, err := s.library.root.SeriesDir(string(s.ref))
+	seriesDir, err := seriespkg.ParseSeriesDir(s.library.root.Join(string(s.ref)))
 	if err != nil {
 		return SeriesRead{}, err
 	}
@@ -48,7 +47,7 @@ func (s *Series) readModern(in ReadInput) (SeriesRead, error) {
 	return out, nil
 }
 
-func modernSeasonReads(seriesDir fsroot.SeriesDir, model seriespkg.Series, now time.Time) []SeasonRead {
+func modernSeasonReads(seriesDir seriespkg.SeriesDir, model seriespkg.Series, now time.Time) []SeasonRead {
 	seasons := map[int][]EpisodeRead{}
 	for ref, episode := range model.Episodes {
 		read := EpisodeRead{
@@ -81,7 +80,7 @@ func modernSeasonReads(seriesDir fsroot.SeriesDir, model seriespkg.Series, now t
 	return out
 }
 
-func modernEpisodeStatus(seriesDir fsroot.SeriesDir, episode seriespkg.Episode, now time.Time) EpisodeStatus {
+func modernEpisodeStatus(seriesDir seriespkg.SeriesDir, episode seriespkg.Episode, now time.Time) EpisodeStatus {
 	if episode.Active != nil && modernMediaUnavailable(seriesDir, *episode.Active, false) {
 		return EpisodeStatusUnavailable
 	}
@@ -121,7 +120,7 @@ func displayResolution(raw string) string {
 	return resolution.Display()
 }
 
-func modernMediaUnavailable(seriesDir fsroot.SeriesDir, media seriespkg.MediaRecord, absolute bool) bool {
+func modernMediaUnavailable(seriesDir seriespkg.SeriesDir, media seriespkg.MediaRecord, absolute bool) bool {
 	path := media.Path
 	if !absolute {
 		joined, err := seriesDir.JoinRel(media.Path)

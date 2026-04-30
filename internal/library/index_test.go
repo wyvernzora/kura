@@ -3,12 +3,11 @@ package library
 import (
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
 func TestIndexSaveLoad(t *testing.T) {
-	root, err := fsroot.ParseLibraryRoot(t.TempDir())
+	root, err := ParseRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +32,7 @@ func TestIndexSaveLoad(t *testing.T) {
 }
 
 func TestIndexRejectsDuplicateMetadataRef(t *testing.T) {
-	root, err := fsroot.ParseLibraryRoot(t.TempDir())
+	root, err := ParseRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

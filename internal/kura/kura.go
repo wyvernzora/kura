@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -24,7 +23,7 @@ type Config struct {
 }
 
 type Library struct {
-	root           fsroot.LibraryRoot
+	root           librarypkg.Root
 	metadataSource metadata.Source
 	inspector      mediainfo.Inspector
 	series         *librarypkg.Library
@@ -45,7 +44,7 @@ func New(cfg Config) (*Library, error) {
 		return nil, ErrMissingTVDBKey
 	}
 
-	root, err := fsroot.ParseLibraryRoot(cfg.Root)
+	root, err := librarypkg.ParseRoot(cfg.Root)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +66,7 @@ func New(cfg Config) (*Library, error) {
 	seriesIndex, err := librarypkg.LoadIndex(root)
 	if errors.Is(err, librarypkg.ErrNotFound) {
 		seriesIndex, err = librarypkg.RebuildIndex(context.Background(), root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
-			return seriespkg.ReadMetadataRef(root, ref)
+			return seriespkg.ReadMetadataRef(root.Path(), ref)
 		})
 	} else if err != nil {
 		return nil, err

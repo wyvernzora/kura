@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
@@ -169,7 +168,7 @@ type discoveredFile struct {
 	Companions []string
 }
 
-func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []ImportSkip, error) {
+func discoverSeriesEpisodes(seriesDir SeriesDir) ([]discoveredFile, []ImportSkip, error) {
 	entries, err := os.ReadDir(seriesDir.Path())
 	if err != nil {
 		return nil, nil, err
@@ -221,7 +220,7 @@ func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []Imp
 	return episodes, skipped, nil
 }
 
-func discoverSeasonEpisodes(seriesDir fsroot.SeriesDir, seasonDir string, season int) ([]discoveredFile, []ImportSkip, error) {
+func discoverSeasonEpisodes(seriesDir SeriesDir, seasonDir string, season int) ([]discoveredFile, []ImportSkip, error) {
 	entries, err := os.ReadDir(seasonDir)
 	if err != nil {
 		return nil, nil, err
@@ -311,7 +310,7 @@ func sortDiscoveredEpisodes(episodes []discoveredFile) {
 	})
 }
 
-func (h Handle) unchanged(seriesDir fsroot.SeriesDir, active MediaRecord, file discoveredFile) (bool, error) {
+func (h Handle) unchanged(seriesDir SeriesDir, active MediaRecord, file discoveredFile) (bool, error) {
 	facts, err := h.files().stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(file.Path)))
 	if err != nil {
 		return false, err
@@ -342,7 +341,7 @@ func (h Handle) unchanged(seriesDir fsroot.SeriesDir, active MediaRecord, file d
 	return true, nil
 }
 
-func (h Handle) mediaRecord(ctx context.Context, seriesDir fsroot.SeriesDir, file discoveredFile) (MediaRecord, error) {
+func (h Handle) mediaRecord(ctx context.Context, seriesDir SeriesDir, file discoveredFile) (MediaRecord, error) {
 	absolutePath := filepath.Join(seriesDir.Path(), filepath.FromSlash(file.Path))
 	info, err := h.inspector().Inspect(ctx, absolutePath)
 	if err != nil {
