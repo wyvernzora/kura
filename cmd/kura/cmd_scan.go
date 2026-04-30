@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"github.com/wyvernzora/kura/internal/kura"
-	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -27,10 +26,7 @@ func (cmd *scanCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	result, err := series.Scan(
-		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
-		kura.ScanInput{Replace: cmd.Replace},
-	)
+	result, err := series.Scan(rt.Context, kura.ScanInput{Replace: cmd.Replace})
 	if err != nil {
 		return err
 	}

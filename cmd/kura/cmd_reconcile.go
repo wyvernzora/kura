@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"github.com/wyvernzora/kura/internal/kura"
-	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -50,9 +49,6 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 			return nil
 		}
 	}
-	_, err = series.ApplyReconcile(
-		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
-		plan,
-	)
+	_, err = series.ApplyReconcile(rt.Context, plan)
 	return err
 }

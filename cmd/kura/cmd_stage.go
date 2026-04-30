@@ -5,8 +5,6 @@ import (
 	"errors"
 
 	"github.com/wyvernzora/kura/internal/kura"
-	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/ui"
 )
 
 type stageCmd struct {
@@ -44,17 +42,14 @@ func (cmd *stageCmd) Run(rt *runContext) error {
 		return err
 	}
 
-	result, err := series.Stage(
-		progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr)),
-		kura.StageInput{
-			Season:     season,
-			Episode:    cmd.Number,
-			Source:     cmd.Source,
-			Companions: cmd.Companions,
-			MediaPath:  cmd.Path,
-			Replace:    cmd.Replace,
-		},
-	)
+	result, err := series.Stage(rt.Context, kura.StageInput{
+		Season:     season,
+		Episode:    cmd.Number,
+		Source:     cmd.Source,
+		Companions: cmd.Companions,
+		MediaPath:  cmd.Path,
+		Replace:    cmd.Replace,
+	})
 	if err != nil {
 		return err
 	}
