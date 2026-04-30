@@ -140,7 +140,7 @@ func RebuildLibraryIndex(ctx context.Context, root fsroot.LibraryRoot) (*Library
 
 func (i *LibraryIndex) Get(ref domain.MetadataRef) (domain.SeriesPath, bool, error) {
 	if ref == "" {
-		return domain.SeriesPath{}, false, errors.New("library index: metadata ref is required")
+		return "", false, errors.New("library index: metadata ref is required")
 	}
 	path, ok := i.refs[ref]
 	return path, ok, nil
