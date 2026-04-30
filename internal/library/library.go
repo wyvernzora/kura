@@ -1,4 +1,4 @@
-package series
+package library
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series"
 )
 
 type Library struct {
@@ -20,8 +21,6 @@ type Library struct {
 	source  metadata.Source
 	inspect mediainfo.Inspector
 	index   *index.Index
-	repo    repo
-	files   files
 	now     func() time.Time
 }
 
@@ -35,131 +34,133 @@ type ImportInput struct {
 	Ref      refs.Series
 }
 
-func NewLibrary(root fsroot.LibraryRoot, source metadata.Source, inspector mediainfo.Inspector, idx *index.Index) *Library {
+func New(root fsroot.LibraryRoot, source metadata.Source, inspector mediainfo.Inspector, idx *index.Index) *Library {
 	return &Library{
 		root:    root,
 		source:  source,
 		inspect: inspector,
 		index:   idx,
-		repo:    repo{root: root},
-		files:   files{root: root},
 		now:     time.Now,
 	}
 }
 
-func (l *Library) Add(ctx context.Context, in AddInput) (Handle, error) {
+func (l *Library) LibraryRoot() fsroot.LibraryRoot {
+	return l.root
+}
+
+func (l *Library) MetadataSource() metadata.Source {
+	return l.source
+}
+
+func (l *Library) MediaInspector() mediainfo.Inspector {
+	return l.inspect
+}
+
+func (l *Library) Now() time.Time {
+	return l.now()
+}
+
+func (l *Library) Add(ctx context.Context, in AddInput) (series.Handle, error) {
 	metadataSeries, metadataRef, err := l.fetchMetadata(ctx, in.Metadata)
 	if err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	ref := in.Ref
 	if ref.IsZero() {
 		title, err := domain.ParseFileTitle(metadataSeries.PreferredTitle)
 		if err != nil {
-			return Handle{}, err
+			return series.Handle{}, err
 		}
 		ref, err = refs.ParseSeries(title.String())
 		if err != nil {
-			return Handle{}, err
+			return series.Handle{}, err
 		}
 	}
 	if _, err := refs.ParseSeries(ref.String()); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	target := l.root.Join(ref.String())
 	if _, err := os.Stat(target); err == nil {
-		return Handle{}, SeriesAlreadyExistsError{Ref: ref}
+		return series.Handle{}, series.SeriesAlreadyExistsError{Ref: ref}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	if err := l.checkMetadataAvailable(metadataRef, ref); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	if err := os.MkdirAll(target, 0o755); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
-	series, err := buildSeries(metadataRef, metadataSeries, l.now())
+	model, err := series.NewFromMetadata(metadataRef, metadataSeries)
 	if err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
-	if err := l.repo.save(ref, series); err != nil {
-		return Handle{}, err
+	if err := series.Save(l.root, ref, model); err != nil {
+		return series.Handle{}, err
 	}
 	if err := l.index.Put(metadataRef, ref); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	if err := l.index.Save(); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
-	return Handle{lib: l, ref: ref}, nil
+	return series.NewHandle(l, ref)
 }
 
-func (l *Library) Import(ctx context.Context, in ImportInput) (Handle, error) {
+func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, error) {
 	if in.Ref.IsZero() {
-		return Handle{}, errors.New("series: series ref is required")
+		return series.Handle{}, errors.New("series: series ref is required")
 	}
 	ref, err := refs.ParseSeries(in.Ref.String())
 	if err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	metadataSeries, metadataRef, err := l.fetchMetadata(ctx, in.Metadata)
 	if err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
-	seriesDir, err := l.files.seriesDir(ref)
+	seriesDir, err := l.root.SeriesDir(ref.String())
 	if errors.Is(err, os.ErrNotExist) {
-		return Handle{}, SeriesNotFoundError{Ref: ref}
+		return series.Handle{}, series.SeriesNotFoundError{Ref: ref}
 	}
 	if err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	if _, err := os.Stat(fsroot.SeriesMetadataPath(seriesDir.Path())); err == nil {
-		return Handle{}, SeriesAlreadyTrackedError{Ref: ref}
+		return series.Handle{}, series.SeriesAlreadyTrackedError{Ref: ref}
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	if err := l.checkMetadataAvailable(metadataRef, ref); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
-	series, err := buildSeries(metadataRef, metadataSeries, l.now())
+	model, err := series.NewFromMetadata(metadataRef, metadataSeries)
 	if err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
-	if err := l.repo.save(ref, series); err != nil {
-		return Handle{}, err
+	if err := series.Save(l.root, ref, model); err != nil {
+		return series.Handle{}, err
 	}
 	if err := l.index.Put(metadataRef, ref); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	if err := l.index.Save(); err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
-	return Handle{lib: l, ref: ref}, nil
+	return series.NewHandle(l, ref)
 }
 
-func (l *Library) Open(ref refs.Series) (Handle, error) {
-	if _, err := l.files.seriesDir(ref); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return Handle{}, SeriesNotFoundError{Ref: ref}
-		}
-		return Handle{}, err
-	}
-	if _, err := l.repo.load(ref); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return Handle{}, SeriesNotTrackedError{Ref: ref}
-		}
-		return Handle{}, err
-	}
-	return Handle{lib: l, ref: ref}, nil
+func (l *Library) Open(ref refs.Series) (series.Handle, error) {
+	return series.NewHandle(l, ref)
 }
 
-func (l *Library) Find(ref refs.Metadata) (Handle, error) {
+func (l *Library) Find(ref refs.Metadata) (series.Handle, error) {
 	seriesRef, ok, err := l.index.Get(ref)
 	if err != nil {
-		return Handle{}, err
+		return series.Handle{}, err
 	}
 	if !ok {
-		return Handle{}, MetadataRefNotIndexedError{Ref: ref}
+		return series.Handle{}, series.MetadataRefNotIndexedError{Ref: ref}
 	}
 	return l.Open(seriesRef)
 }
@@ -169,7 +170,7 @@ func (l *Library) fetchMetadata(ctx context.Context, ref refs.Metadata) (metadat
 		return metadata.Series{}, "", fmt.Errorf("invalid metadata ref %q; expected <provider>:<id>", ref)
 	}
 	if ref.Provider() != l.source.Key() {
-		return metadata.Series{}, "", UnsupportedMetadataSourceError{Source: ref.Provider()}
+		return metadata.Series{}, "", series.UnsupportedMetadataSourceError{Source: ref.Provider()}
 	}
 	series, err := l.source.GetSeries(ctx, ref.ID())
 	if err != nil {
@@ -184,27 +185,7 @@ func (l *Library) checkMetadataAvailable(metadataRef refs.Metadata, next refs.Se
 		return err
 	}
 	if ok && existing != next {
-		return MetadataRefConflictError{Ref: metadataRef, Existing: existing, Next: next}
+		return series.MetadataRefConflictError{Ref: metadataRef, Existing: existing, Next: next}
 	}
 	return nil
-}
-
-func buildSeries(ref refs.Metadata, metadataSeries metadata.Series, scannedAt time.Time) (Series, error) {
-	out := Series{
-		Metadata:    ref,
-		LastScanned: scannedAt.UTC(),
-		Episodes:    map[refs.Episode]Episode{},
-	}
-	var spine []SpineEpisode
-	for _, season := range metadataSeries.Seasons {
-		for _, episode := range season.Episodes {
-			episodeRef, err := refs.NewEpisode(episode.SeasonNumber, episode.EpisodeNumber)
-			if err != nil {
-				return Series{}, err
-			}
-			spine = append(spine, SpineEpisode{Ref: episodeRef, AirDate: episode.Aired})
-		}
-	}
-	editor{series: &out}.refreshSpine(spine)
-	return out, nil
 }

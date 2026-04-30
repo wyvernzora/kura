@@ -1,4 +1,4 @@
-package series
+package library
 
 import (
 	"context"
@@ -17,7 +17,7 @@ func TestLibraryAddWritesFullSpine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := NewLibrary(root, fakeSource{}, mediainfo.Inspector{}, index.New(root))
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, index.New(root))
 	handle, err := lib.Add(context.Background(), AddInput{Metadata: refs.Metadata("tvdb:370070"), Ref: refs.Series("Bookworm")})
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +39,7 @@ func TestLibraryImportRequiresExistingUntrackedDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := NewLibrary(root, fakeSource{}, mediainfo.Inspector{}, index.New(root))
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, index.New(root))
 	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: refs.Series("Missing")}); err == nil {
 		t.Fatal("expected missing series error")
 	}

@@ -10,9 +10,9 @@ import (
 
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/index"
+	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/refs"
-	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
@@ -150,6 +150,6 @@ func newReadTestLibrary(t *testing.T, rootPath string) *Library {
 	}
 	return &Library{
 		root:   root,
-		series: seriespkg.NewLibrary(root, nil, mediainfo.Inspector{}, idx),
+		series: librarypkg.New(root, nil, mediainfo.Inspector{}, idx),
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -80,4 +81,24 @@ func (s Series) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(encoded)
+}
+
+func NewFromMetadata(ref refs.Metadata, metadataSeries metadata.Series) (Series, error) {
+	out := Series{
+		Metadata:    ref,
+		LastScanned: time.Now().UTC(),
+		Episodes:    map[refs.Episode]Episode{},
+	}
+	var spine []SpineEpisode
+	for _, season := range metadataSeries.Seasons {
+		for _, episode := range season.Episodes {
+			episodeRef, err := refs.NewEpisode(episode.SeasonNumber, episode.EpisodeNumber)
+			if err != nil {
+				return Series{}, err
+			}
+			spine = append(spine, SpineEpisode{Ref: episodeRef, AirDate: episode.Aired})
+		}
+	}
+	editor{series: &out}.refreshSpine(spine)
+	return out, nil
 }

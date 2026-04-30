@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
+	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
-	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func (l *Library) Import(ctx context.Context, in ImportInput) (*Series, error) {
@@ -23,7 +23,7 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (*Series, error) {
 	if err != nil {
 		return nil, err
 	}
-	handle, err := l.series.Import(ctx, seriespkg.ImportInput{Metadata: metadataRef, Ref: ref})
+	handle, err := l.series.Import(ctx, librarypkg.ImportInput{Metadata: metadataRef, Ref: ref})
 	if err != nil {
 		return nil, normalizeSeriesLibraryError(err)
 	}

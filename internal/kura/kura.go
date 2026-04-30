@@ -8,6 +8,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/index"
+	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/metadata/tvdb"
@@ -27,7 +28,7 @@ type Library struct {
 	root           fsroot.LibraryRoot
 	metadataSource metadata.Source
 	inspector      mediainfo.Inspector
-	series         *seriespkg.Library
+	series         *librarypkg.Library
 }
 
 func New(cfg Config) (*Library, error) {
@@ -79,6 +80,6 @@ func New(cfg Config) (*Library, error) {
 		root:           root,
 		metadataSource: source,
 		inspector:      inspector,
-		series:         seriespkg.NewLibrary(root, source, inspector, seriesIndex),
+		series:         librarypkg.New(root, source, inspector, seriesIndex),
 	}, nil
 }

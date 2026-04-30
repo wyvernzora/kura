@@ -65,7 +65,7 @@ func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
 	if err != nil {
 		return ScanResult{}, err
 	}
-	metadataSeries, err := h.lib.source.GetSeries(ctx, series.Metadata.ID())
+	metadataSeries, err := h.source().GetSeries(ctx, series.Metadata.ID())
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -76,11 +76,11 @@ func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
 	editor := editor{series: &series}
 	editor.refreshSpine(spine)
 
-	discovered, skipped, err := h.lib.files.discover(h.ref)
+	discovered, skipped, err := h.files().discover(h.ref)
 	if err != nil {
 		return ScanResult{}, err
 	}
-	seriesDir, err := h.lib.files.seriesDir(h.ref)
+	seriesDir, err := h.files().seriesDir(h.ref)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -125,8 +125,8 @@ func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
 			Companions: append([]string(nil), file.Companions...),
 		})
 	}
-	series.LastScanned = h.lib.now().UTC()
-	if err := h.lib.repo.save(h.ref, series); err != nil {
+	series.LastScanned = h.now().UTC()
+	if err := h.repo().save(h.ref, series); err != nil {
 		return ScanResult{}, err
 	}
 	return result, nil
@@ -147,7 +147,7 @@ func spineFromMetadata(seasons []metadata.Season) ([]SpineEpisode, error) {
 }
 
 func (h Handle) unchanged(seriesDir fsroot.SeriesDir, active MediaRecord, file discoveredFile) (bool, error) {
-	facts, err := h.lib.files.stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(file.Path)))
+	facts, err := h.files().stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(file.Path)))
 	if err != nil {
 		return false, err
 	}
@@ -166,7 +166,7 @@ func (h Handle) unchanged(seriesDir fsroot.SeriesDir, active MediaRecord, file d
 		if !ok {
 			return false, nil
 		}
-		facts, err := h.lib.files.stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(path)))
+		facts, err := h.files().stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(path)))
 		if err != nil {
 			return false, nil
 		}
@@ -179,11 +179,11 @@ func (h Handle) unchanged(seriesDir fsroot.SeriesDir, active MediaRecord, file d
 
 func (h Handle) mediaRecord(ctx context.Context, seriesDir fsroot.SeriesDir, file discoveredFile) (MediaRecord, error) {
 	absolutePath := filepath.Join(seriesDir.Path(), filepath.FromSlash(file.Path))
-	info, err := h.lib.inspect.Inspect(ctx, absolutePath)
+	info, err := h.inspector().Inspect(ctx, absolutePath)
 	if err != nil {
 		return MediaRecord{}, err
 	}
-	facts, err := h.lib.files.stat(absolutePath)
+	facts, err := h.files().stat(absolutePath)
 	if err != nil {
 		return MediaRecord{}, err
 	}
@@ -197,7 +197,7 @@ func (h Handle) mediaRecord(ctx context.Context, seriesDir fsroot.SeriesDir, fil
 		Companions: []CompanionRecord{},
 	}
 	for _, companionPath := range file.Companions {
-		facts, err := h.lib.files.stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(companionPath)))
+		facts, err := h.files().stat(filepath.Join(seriesDir.Path(), filepath.FromSlash(companionPath)))
 		if err != nil {
 			return MediaRecord{}, err
 		}

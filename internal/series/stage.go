@@ -67,18 +67,18 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 	if err := editor.setStaged(in.Episode, record); err != nil {
 		return StageResult{}, err
 	}
-	if err := h.lib.repo.save(h.ref, series); err != nil {
+	if err := h.repo().save(h.ref, series); err != nil {
 		return StageResult{}, err
 	}
 	return StageResult{Series: h.ref, Replaced: replaced, Episode: in.Episode, Record: record}, nil
 }
 
 func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source string, companions []string) (MediaRecord, error) {
-	info, err := h.lib.inspect.Inspect(ctx, mediaPath)
+	info, err := h.inspector().Inspect(ctx, mediaPath)
 	if err != nil {
 		return MediaRecord{}, err
 	}
-	facts, err := h.lib.files.stat(mediaPath)
+	facts, err := h.files().stat(mediaPath)
 	if err != nil {
 		return MediaRecord{}, err
 	}
@@ -99,7 +99,7 @@ func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source strin
 		if err != nil {
 			return MediaRecord{}, err
 		}
-		facts, err := h.lib.files.stat(path)
+		facts, err := h.files().stat(path)
 		if err != nil {
 			return MediaRecord{}, err
 		}

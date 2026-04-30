@@ -119,7 +119,7 @@ func (h Handle) ApplyReconcile(plan ReconcilePlan) (ReconcileResult, error) {
 	if !plan.HasChanges() {
 		return ReconcileResult{Series: h.ref}, nil
 	}
-	seriesDir, err := h.lib.files.seriesDir(h.ref)
+	seriesDir, err := h.files().seriesDir(h.ref)
 	if err != nil {
 		return ReconcileResult{}, err
 	}
@@ -133,7 +133,7 @@ func (h Handle) ApplyReconcile(plan ReconcilePlan) (ReconcileResult, error) {
 			from = filepath.Join(seriesDir.Path(), filepath.FromSlash(move.From))
 		}
 		to := filepath.Join(seriesDir.Path(), filepath.FromSlash(move.To))
-		if err := h.lib.files.move(from, to); err != nil {
+		if err := h.files().move(from, to); err != nil {
 			return ReconcileResult{}, err
 		}
 	}
@@ -141,14 +141,14 @@ func (h Handle) ApplyReconcile(plan ReconcilePlan) (ReconcileResult, error) {
 	if err != nil {
 		return ReconcileResult{}, err
 	}
-	if err := h.lib.repo.save(h.ref, updated); err != nil {
+	if err := h.repo().save(h.ref, updated); err != nil {
 		return ReconcileResult{}, err
 	}
 	return ReconcileResult{Series: h.ref, AppliedMoves: len(moves)}, nil
 }
 
 func (h Handle) snapshot() (string, error) {
-	path := fsroot.SeriesMetadataPath(h.lib.root.Join(h.ref.String()))
+	path := fsroot.SeriesMetadataPath(h.root().Join(h.ref.String()))
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -188,7 +188,7 @@ func (h Handle) planChanges(series Series) ([]Change, error) {
 }
 
 func (h Handle) stagedChange(episodeRef refs.Episode, episode Episode) (Change, error) {
-	target, err := h.lib.files.canonicalPath(h.ref, episodeRef, *episode.Staged)
+	target, err := h.files().canonicalPath(h.ref, episodeRef, *episode.Staged)
 	if err != nil {
 		return Change{}, err
 	}
@@ -214,7 +214,7 @@ func (h Handle) stagedChange(episodeRef refs.Episode, episode Episode) (Change, 
 }
 
 func (h Handle) moveChange(episodeRef refs.Episode, active MediaRecord) (Change, bool, error) {
-	target, err := h.lib.files.canonicalPath(h.ref, episodeRef, active)
+	target, err := h.files().canonicalPath(h.ref, episodeRef, active)
 	if err != nil {
 		return Change{}, false, err
 	}
@@ -233,7 +233,7 @@ func (h Handle) moveChange(episodeRef refs.Episode, active MediaRecord) (Change,
 }
 
 func (h Handle) validateMoves(changes []Change) error {
-	seriesDir, err := h.lib.files.seriesDir(h.ref)
+	seriesDir, err := h.files().seriesDir(h.ref)
 	if err != nil {
 		return err
 	}
@@ -328,7 +328,7 @@ func (h Handle) writeTrash(episode refs.Episode, record MediaRecord, replaced Re
 			record.Companions[index].Path = replaced.Companions[index].To
 		}
 	}
-	return trash.Write(h.lib.root, h.ref, trash.Meta{
+	return trash.Write(h.root(), h.ref, trash.Meta{
 		ID:        id,
 		Episode:   episode,
 		TrashedAt: time.Now().UTC(),

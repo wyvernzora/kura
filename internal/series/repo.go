@@ -14,6 +14,10 @@ type repo struct {
 	root fsroot.LibraryRoot
 }
 
+func Save(root fsroot.LibraryRoot, ref refs.Series, series Series) error {
+	return repo{root: root}.save(ref, series)
+}
+
 func ReadMetadataRef(root fsroot.LibraryRoot, ref refs.Series) (refs.Metadata, error) {
 	series, err := repo{root: root}.load(ref)
 	if err != nil {
