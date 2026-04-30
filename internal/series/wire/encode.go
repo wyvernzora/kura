@@ -4,17 +4,17 @@ import (
 	"encoding/json"
 )
 
-func Encode(series Series) ([]byte, error) {
+func Encode(series SeriesV1) ([]byte, error) {
 	series.SchemaVersion = CurrentSchemaVersion
 	if series.Episodes == nil {
-		series.Episodes = map[string]Episode{}
+		series.Episodes = map[string]EpisodeV1{}
 	}
 	for key, episode := range series.Episodes {
 		if episode.Active != nil && episode.Active.Companions == nil {
-			episode.Active.Companions = []CompanionRecord{}
+			episode.Active.Companions = []CompanionRecordV1{}
 		}
 		if episode.Staged != nil && episode.Staged.Companions == nil {
-			episode.Staged.Companions = []CompanionRecord{}
+			episode.Staged.Companions = []CompanionRecordV1{}
 		}
 		series.Episodes[key] = episode
 	}
