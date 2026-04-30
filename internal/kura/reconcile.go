@@ -27,8 +27,7 @@ func (s *Series) ApplyReconcile(_ context.Context, plan ReconcilePlan) (Reconcil
 	}
 	result, err := handle.ApplyReconcile(reconcilePlanToSeries(plan))
 	if err != nil {
-		var stale seriespkg.PlanStaleError
-		if errors.As(err, &stale) {
+		if stale, ok := errors.AsType[seriespkg.PlanStaleError](err); ok {
 			return ReconcileResult{}, PlanStaleError{Series: SeriesRef(stale.Series)}
 		}
 		return ReconcileResult{}, normalizeSeriesLibraryError(err)

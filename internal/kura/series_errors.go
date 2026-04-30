@@ -7,36 +7,29 @@ import (
 )
 
 func normalizeSeriesLibraryError(err error) error {
-	var notIndexed seriespkg.MetadataRefNotIndexedError
-	if errors.As(err, &notIndexed) {
+	if notIndexed, ok := errors.AsType[seriespkg.MetadataRefNotIndexedError](err); ok {
 		return MetadataRefNotIndexedError{Ref: MetadataRef(notIndexed.Ref)}
 	}
-	var exists seriespkg.SeriesAlreadyExistsError
-	if errors.As(err, &exists) {
+	if exists, ok := errors.AsType[seriespkg.SeriesAlreadyExistsError](err); ok {
 		return SeriesAlreadyExistsError{Ref: SeriesRef(exists.Ref)}
 	}
-	var notFound seriespkg.SeriesNotFoundError
-	if errors.As(err, &notFound) {
+	if notFound, ok := errors.AsType[seriespkg.SeriesNotFoundError](err); ok {
 		return SeriesNotFoundError{Ref: SeriesRef(notFound.Ref)}
 	}
-	var notTracked seriespkg.SeriesNotTrackedError
-	if errors.As(err, &notTracked) {
+	if notTracked, ok := errors.AsType[seriespkg.SeriesNotTrackedError](err); ok {
 		return SeriesNotTrackedError{Ref: SeriesRef(notTracked.Ref)}
 	}
-	var alreadyTracked seriespkg.SeriesAlreadyTrackedError
-	if errors.As(err, &alreadyTracked) {
+	if alreadyTracked, ok := errors.AsType[seriespkg.SeriesAlreadyTrackedError](err); ok {
 		return SeriesAlreadyTrackedError{Ref: SeriesRef(alreadyTracked.Ref)}
 	}
-	var conflict seriespkg.MetadataRefConflictError
-	if errors.As(err, &conflict) {
+	if conflict, ok := errors.AsType[seriespkg.MetadataRefConflictError](err); ok {
 		return MetadataRefConflictError{
 			Ref:      MetadataRef(conflict.Ref),
 			Existing: SeriesRef(conflict.Existing),
 			Next:     SeriesRef(conflict.Next),
 		}
 	}
-	var unsupported seriespkg.UnsupportedMetadataSourceError
-	if errors.As(err, &unsupported) {
+	if unsupported, ok := errors.AsType[seriespkg.UnsupportedMetadataSourceError](err); ok {
 		return UnsupportedMetadataSourceError{Source: unsupported.Source}
 	}
 	return err

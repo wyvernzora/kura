@@ -152,11 +152,3 @@ func isPendingEpisode(aired string, now time.Time) bool {
 	}
 	return airedDate.After(today)
 }
-
-func copyIntPtr(in *int) *int {
-	if in == nil {
-		return nil
-	}
-	out := *in
-	return &out
-}
