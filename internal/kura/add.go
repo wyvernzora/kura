@@ -4,64 +4,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/ops"
-	"github.com/wyvernzora/kura/internal/store"
+	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func (l *Library) Add(ctx context.Context, in AddInput) (*Series, error) {
 	if in.MetadataRef == "" {
 		return nil, errors.New("kura: metadata ref is required")
 	}
-	meta, parsedRef, err := l.fetchMetadataSeries(ctx, in.MetadataRef)
+	metadataRef, err := refs.ParseMetadata(in.MetadataRef.String())
 	if err != nil {
 		return nil, err
 	}
-
-	ref := in.Ref
-	if ref == "" {
-		title, err := domain.ParseFileTitle(meta.PreferredTitle)
-		if err != nil {
-			return nil, err
-		}
-		ref = SeriesRef(title.String())
+	handle, err := l.series.Add(ctx, seriespkg.AddInput{Metadata: metadataRef, Ref: refs.Series(in.Ref)})
+	if err != nil {
+		return nil, normalizeSeriesLibraryError(err)
 	}
-	seriesPath, err := domain.ParseSeriesPath(string(ref))
+	model, err := handle.Load()
 	if err != nil {
 		return nil, err
 	}
-	ref = SeriesRef(seriesPath.String())
-	target := l.root.Join(string(ref))
-	if _, err := os.Stat(target); err == nil {
-		return nil, SeriesAlreadyExistsError{Ref: ref}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	if err := l.checkMetadataRefAvailable(parsedRef, ref); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(target, 0o755); err != nil {
-		return nil, err
-	}
-	seriesDir, err := l.root.SeriesDir(string(ref))
-	if err != nil {
-		return nil, err
-	}
-	result, err := ops.InitSeries(ops.InitSeriesOptions{SeriesDir: seriesDir, Metadata: meta})
-	if err != nil {
-		return nil, normalizeInitMetadataError(err, parsedRef)
-	}
-	if err := store.SaveSeries(result.Series); err != nil {
-		return nil, err
-	}
-	// staged.json and trash.json stay lazy-created; their zero state is
-	// equivalent to absence and SaveStaged/SaveTrash remove empty documents.
-	if err := l.saveIndexRecord(result.Series, ref); err != nil {
-		return nil, err
-	}
-	return newSeries(l, ref, result.Series), nil
+	return newSeriesModel(l, SeriesRef(handle.Ref()), model), nil
 }
 
 func normalizeInitMetadataError(err error, ref domain.MetadataRef) error {

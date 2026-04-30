@@ -1,6 +1,7 @@
 package series
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/refs"
@@ -71,4 +72,12 @@ func cloneMediaRecord(in MediaRecord) MediaRecord {
 		out.Companions = []CompanionRecord{}
 	}
 	return out
+}
+
+func (s Series) MarshalJSON() ([]byte, error) {
+	encoded, err := toWire(s)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(encoded)
 }

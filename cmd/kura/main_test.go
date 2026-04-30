@@ -97,8 +97,12 @@ func TestAddCommandCreatesDirAndWritesMetadata(t *testing.T) {
 	if got := series["metadataRef"]; got != "tvdb:370070" {
 		t.Fatalf("metadataRef = %v, want tvdb:370070", got)
 	}
-	if got := series["preferredTitle"]; got != "本好きの下剋上" {
-		t.Fatalf("preferredTitle = %v, want 本好きの下剋上", got)
+	if _, ok := series["preferredTitle"]; ok {
+		t.Fatal("preferredTitle present; provider display titles should not be persisted")
+	}
+	episodes, ok := series["episodes"].(map[string]any)
+	if !ok || len(episodes) == 0 {
+		t.Fatalf("episodes = %#v, want persisted spine", series["episodes"])
 	}
 	if got := libraryIndexPathForRef(t, root, "tvdb:370070"); got != "本好きの下剋上" {
 		t.Fatalf("index path = %q, want 本好きの下剋上", got)
@@ -374,15 +378,16 @@ func TestScanCommandSyncsTrackedSeries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scan: %v\nstderr:\n%s", err, stderr.String())
 	}
-	series, err := store.LoadSeries(filepath.Join(root, "Bookworm"))
+	series, err := loadSeriesDocument(t, filepath.Join(root, "Bookworm"))
 	if err != nil {
-		t.Fatalf("LoadSeries: %v", err)
+		t.Fatalf("load series document: %v", err)
 	}
-	if _, ok := series.LookupEpisode(1, 1); !ok {
-		t.Fatal("LookupEpisode(1, 1) = false")
+	episodes := series["episodes"].(map[string]any)
+	if _, ok := episodes["S01E0001"]; !ok {
+		t.Fatal("episode S01E0001 missing")
 	}
-	if _, ok := series.LookupEpisode(1, 2); !ok {
-		t.Fatal("LookupEpisode(1, 2) = false")
+	if _, ok := episodes["S01E0002"]; !ok {
+		t.Fatal("episode S01E0002 missing")
 	}
 }
 
@@ -442,12 +447,13 @@ func TestScanCommandUsesIndexToFindDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scan: %v\nstderr:\n%s", err, stderr.String())
 	}
-	series, err := store.LoadSeries(filepath.Join(root, "Some Custom Name"))
+	series, err := loadSeriesDocument(t, filepath.Join(root, "Some Custom Name"))
 	if err != nil {
-		t.Fatalf("LoadSeries: %v", err)
+		t.Fatalf("load series document: %v", err)
 	}
-	if _, ok := series.LookupEpisode(1, 1); !ok {
-		t.Fatal("LookupEpisode(1, 1) = false")
+	episodes := series["episodes"].(map[string]any)
+	if _, ok := episodes["S01E0001"]; !ok {
+		t.Fatal("episode S01E0001 missing")
 	}
 }
 
@@ -1020,4 +1026,17 @@ func writeSeriesJSON(t *testing.T, seriesDir string, content string) {
 	if err := os.WriteFile(filepath.Join(seriesDir, ".kura", "series.json"), []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile series.json: %v", err)
 	}
+}
+
+func loadSeriesDocument(t *testing.T, seriesDir string) (map[string]any, error) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
+	if err != nil {
+		return nil, err
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
 }

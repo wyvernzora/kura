@@ -7,10 +7,44 @@ import (
 
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/ops"
+	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/store"
 )
 
 func (s *Series) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
+	if s.modern {
+		handle, err := s.library.series.Open(refs.Series(s.ref))
+		if err != nil {
+			return ScanResult{}, normalizeSeriesLibraryError(err)
+		}
+		result, err := handle.Scan(ctx, seriespkg.ScanInput{Replace: in.Replace})
+		if err != nil {
+			return ScanResult{}, normalizeSeriesWorkflowError(s.ref, err)
+		}
+		out := ScanResult{
+			Series:  s.ref,
+			Synced:  make([]ScannedEpisode, 0, len(result.Synced)),
+			Skipped: result.Skipped,
+		}
+		for _, entry := range result.Synced {
+			out.Synced = append(out.Synced, ScannedEpisode{
+				Status:     ScanStatus(entry.Status),
+				Season:     entry.Season,
+				Special:    entry.Special,
+				Number:     entry.Number,
+				Source:     entry.Source,
+				Resolution: entry.Resolution,
+				Path:       entry.Path,
+				Companions: append([]string(nil), entry.Companions...),
+			})
+		}
+		model, err := handle.Load()
+		if err == nil {
+			s.model = model
+		}
+		return out, nil
+	}
 	result, err := ops.SyncSeries(ctx, s.library.root, string(s.ref), ops.SeriesSyncOptions{
 		MetadataResolver: s.metadataResolver(),
 		Inspector:        s.library.inspector,
@@ -53,6 +87,26 @@ func (s *Series) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
 		s.record = result.UpdatedSeries
 	}
 	return out, nil
+}
+
+func normalizeSeriesWorkflowError(ref SeriesRef, err error) error {
+	exists, ok := errors.AsType[seriespkg.EpisodeAlreadyExistsError](err)
+	if ok {
+		return EpisodeAlreadyTrackedError{
+			Series:  ref,
+			Season:  exists.Season,
+			Episode: exists.Episode,
+		}
+	}
+	missing, ok := errors.AsType[seriespkg.MetadataMissingEpisodeError](err)
+	if ok {
+		return MetadataMissingEpisodeError{
+			Series:  ref,
+			Season:  missing.Season,
+			Episode: missing.Episode,
+		}
+	}
+	return normalizeSeriesLibraryError(err)
 }
 
 func (s *Series) metadataResolver() ops.MetadataSeriesResolver {

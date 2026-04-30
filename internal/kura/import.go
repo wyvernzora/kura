@@ -3,11 +3,9 @@ package kura
 import (
 	"context"
 	"errors"
-	"os"
 
-	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/ops"
-	"github.com/wyvernzora/kura/internal/store"
+	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func (l *Library) Import(ctx context.Context, in ImportInput) (*Series, error) {
@@ -17,39 +15,21 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (*Series, error) {
 	if in.MetadataRef == "" {
 		return nil, errors.New("kura: metadata ref is required")
 	}
-	if _, err := domain.ParseSeriesPath(string(in.Ref)); err != nil {
-		return nil, err
-	}
-	meta, parsedRef, err := l.fetchMetadataSeries(ctx, in.MetadataRef)
+	ref, err := refs.ParseSeries(in.Ref.String())
 	if err != nil {
 		return nil, err
 	}
-	seriesDir, err := l.root.SeriesDir(string(in.Ref))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, SeriesNotFoundError{Ref: in.Ref}
-	}
+	metadataRef, err := refs.ParseMetadata(in.MetadataRef.String())
 	if err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(store.SeriesMetadataPath(seriesDir.Path())); err == nil {
-		return nil, SeriesAlreadyTrackedError{Ref: in.Ref}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	if err := l.checkMetadataRefAvailable(parsedRef, in.Ref); err != nil {
-		return nil, err
-	}
-	result, err := ops.InitSeries(ops.InitSeriesOptions{SeriesDir: seriesDir, Metadata: meta})
+	handle, err := l.series.Import(ctx, seriespkg.ImportInput{Metadata: metadataRef, Ref: ref})
 	if err != nil {
-		return nil, normalizeInitMetadataError(err, parsedRef)
+		return nil, normalizeSeriesLibraryError(err)
 	}
-	if err := store.SaveSeries(result.Series); err != nil {
+	model, err := handle.Load()
+	if err != nil {
 		return nil, err
 	}
-	// staged.json and trash.json stay lazy-created; their zero state is
-	// equivalent to absence and SaveStaged/SaveTrash remove empty documents.
-	if err := l.saveIndexRecord(result.Series, in.Ref); err != nil {
-		return nil, err
-	}
-	return newSeries(l, in.Ref, result.Series), nil
+	return newSeriesModel(l, SeriesRef(handle.Ref()), model), nil
 }
