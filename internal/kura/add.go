@@ -6,23 +6,20 @@ import (
 
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series"
 )
 
-func (l *Library) Add(ctx context.Context, in AddInput) (*Series, error) {
+func (l *Library) Add(ctx context.Context, in AddInput) (series.Handle, error) {
 	if in.MetadataRef == "" {
-		return nil, errors.New("kura: metadata ref is required")
+		return series.Handle{}, errors.New("kura: metadata ref is required")
 	}
 	metadataRef, err := refs.ParseMetadata(in.MetadataRef.String())
 	if err != nil {
-		return nil, err
+		return series.Handle{}, err
 	}
-	handle, err := l.series.Add(ctx, librarypkg.AddInput{Metadata: metadataRef, Ref: refs.Series(in.Ref)})
+	handle, err := l.series.Add(ctx, librarypkg.AddInput{Metadata: metadataRef, Ref: in.Ref})
 	if err != nil {
-		return nil, normalizeSeriesLibraryError(err)
+		return series.Handle{}, err
 	}
-	model, err := handle.Load()
-	if err != nil {
-		return nil, err
-	}
-	return newSeriesModel(l, SeriesRef(handle.Ref()), model), nil
+	return handle, nil
 }

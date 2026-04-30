@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -22,11 +22,11 @@ func (cmd *scanCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	series, err := lib.Find(metadataRef)
+	handle, err := lib.Find(metadataRef)
 	if err != nil {
 		return err
 	}
-	result, err := series.Scan(rt.Context, kura.ScanInput{Replace: cmd.Replace})
+	result, err := handle.Scan(rt.Context, series.ScanInput{Replace: cmd.Replace})
 	if err != nil {
 		return err
 	}

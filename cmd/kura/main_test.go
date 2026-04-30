@@ -14,6 +14,7 @@ import (
 	"github.com/wyvernzora/kura/internal/kura"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -179,7 +180,7 @@ func TestAddCommandRejectsRefAlreadyTracked(t *testing.T) {
 		"--dirname", "Other",
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	var duplicate kura.MetadataRefConflictError
+	var duplicate seriespkg.MetadataRefConflictError
 	if !errors.As(err, &duplicate) {
 		t.Fatalf("error = %v, want MetadataRefConflictError", err)
 	}
@@ -332,7 +333,7 @@ func TestImportCommandRejectsRefAlreadyTracked(t *testing.T) {
 		"Other",
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	var duplicate kura.MetadataRefConflictError
+	var duplicate seriespkg.MetadataRefConflictError
 	if !errors.As(err, &duplicate) {
 		t.Fatalf("error = %v, want MetadataRefConflictError", err)
 	}
@@ -402,7 +403,7 @@ func TestScanCommandFailsWhenRefNotTracked(t *testing.T) {
 	if err == nil {
 		t.Fatal("run returned nil error, want missing tracked series error")
 	}
-	var notIndexed kura.MetadataRefNotIndexedError
+	var notIndexed seriespkg.MetadataRefNotIndexedError
 	if !errors.As(err, &notIndexed) {
 		t.Fatalf("error = %v, want MetadataRefNotIndexedError", err)
 	}

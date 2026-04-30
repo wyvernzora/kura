@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -19,11 +19,11 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	series, err := lib.Get(kura.SeriesRef(cmd.Series))
+	handle, err := lib.Get(refs.Series(cmd.Series))
 	if err != nil {
 		return err
 	}
-	plan, err := series.PlanReconcile(rt.Context, kura.ReconcileInput{})
+	plan, err := handle.PlanReconcile()
 	if err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 		if err := encoder.Encode(plan); err != nil {
 			return err
 		}
-	} else if err := ui.WriteKuraReconcilePlan(rt.Stdout, plan); err != nil {
+	} else if err := ui.WriteReconcilePlan(rt.Stdout, plan); err != nil {
 		return err
 	}
 	if cmd.DryRun || !plan.HasChanges() {
@@ -49,6 +49,6 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 			return nil
 		}
 	}
-	_, err = series.ApplyReconcile(rt.Context, plan)
+	_, err = handle.ApplyReconcile(plan)
 	return err
 }

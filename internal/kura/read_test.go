@@ -11,6 +11,7 @@ import (
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
@@ -102,7 +103,7 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	view, err := series.Read(context.Background(), ReadInput{
+	view, err := series.Read(context.Background(), seriespkg.ReadInput{
 		Now: time.Date(2026, 4, 29, 12, 0, 0, 0, time.UTC),
 	})
 	if err != nil {
@@ -112,13 +113,13 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 	if len(episodes) != 6 {
 		t.Fatalf("len(Episodes) = %d, want 6", len(episodes))
 	}
-	wantStatuses := []EpisodeStatus{
-		EpisodeStatusPresent,
-		EpisodeStatusMissing,
-		EpisodeStatusPending,
-		EpisodeStatusUnavailable,
-		EpisodeStatusStaged,
-		EpisodeStatusStaged,
+	wantStatuses := []seriespkg.EpisodeStatus{
+		seriespkg.EpisodeStatusPresent,
+		seriespkg.EpisodeStatusMissing,
+		seriespkg.EpisodeStatusPending,
+		seriespkg.EpisodeStatusUnavailable,
+		seriespkg.EpisodeStatusStaged,
+		seriespkg.EpisodeStatusStaged,
 	}
 	for index, want := range wantStatuses {
 		if episodes[index].Status != want {

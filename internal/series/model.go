@@ -23,22 +23,22 @@ type Episode struct {
 }
 
 type MediaRecord struct {
-	Path       string
-	Source     string
-	Resolution string
-	Codec      string
-	Size       int64
-	MTime      time.Time
-	Companions []CompanionRecord
+	Path       string            `json:"path"`
+	Source     string            `json:"source"`
+	Resolution string            `json:"resolution,omitempty"`
+	Codec      string            `json:"codec,omitempty"`
+	Size       int64             `json:"size"`
+	MTime      time.Time         `json:"mtime"`
+	Companions []CompanionRecord `json:"companions"`
 }
 
 type CompanionRecord struct {
-	Path     string
-	Role     string
-	Language string
-	Label    string
-	Size     int64
-	MTime    time.Time
+	Path     string    `json:"path"`
+	Role     string    `json:"role,omitempty"`
+	Language string    `json:"language,omitempty"`
+	Label    string    `json:"label,omitempty"`
+	Size     int64     `json:"size"`
+	MTime    time.Time `json:"mtime"`
 }
 
 func (s Series) Clone() Series {

@@ -6,7 +6,7 @@ import (
 	"github.com/wyvernzora/kura/internal/resolve"
 )
 
-func (l *Library) Resolve(ctx context.Context, in ResolveInput) (Resolution, error) {
+func (l *Library) Resolve(ctx context.Context, in ResolveInput) (resolve.Resolution, error) {
 	resolver := resolve.New(
 		resolve.NewMetadataIDStrategy(l.metadataSource),
 		resolve.NewTextSearchStrategy(l.metadataSource),

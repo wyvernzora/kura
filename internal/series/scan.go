@@ -19,9 +19,9 @@ type ScanInput struct {
 }
 
 type ScanResult struct {
-	Series  refs.Series
-	Synced  []ScannedEpisode
-	Skipped []ImportSkip
+	Series  refs.Series      `json:"series"`
+	Synced  []ScannedEpisode `json:"synced"`
+	Skipped []ImportSkip     `json:"skipped"`
 }
 
 type ImportSkip struct {
@@ -38,14 +38,14 @@ const (
 )
 
 type ScannedEpisode struct {
-	Status     ScanStatus
-	Season     int
-	Special    bool
-	Number     int
-	Source     string
-	Resolution string
-	Path       string
-	Companions []string
+	Status     ScanStatus `json:"status"`
+	Season     int        `json:"season,omitempty"`
+	Special    bool       `json:"special,omitempty"`
+	Number     int        `json:"number"`
+	Source     string     `json:"source"`
+	Resolution string     `json:"resolution,omitempty"`
+	Path       string     `json:"path"`
+	Companions []string   `json:"companions"`
 }
 
 type ScanStatus string

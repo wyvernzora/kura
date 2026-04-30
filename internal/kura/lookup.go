@@ -2,28 +2,21 @@ package kura
 
 import (
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series"
 )
 
-func (l *Library) Find(ref MetadataRef) (*Series, error) {
-	handle, err := l.series.Find(refs.Metadata(ref))
+func (l *Library) Find(ref refs.Metadata) (series.Handle, error) {
+	handle, err := l.series.Find(ref)
 	if err != nil {
-		return nil, normalizeSeriesLibraryError(err)
+		return series.Handle{}, err
 	}
-	model, err := handle.Load()
-	if err != nil {
-		return nil, err
-	}
-	return newSeriesModel(l, SeriesRef(handle.Ref()), model), nil
+	return handle, nil
 }
 
-func (l *Library) Get(ref SeriesRef) (*Series, error) {
-	handle, err := l.series.Open(refs.Series(ref))
+func (l *Library) Get(ref refs.Series) (series.Handle, error) {
+	handle, err := l.series.Open(ref)
 	if err != nil {
-		return nil, normalizeSeriesLibraryError(err)
+		return series.Handle{}, err
 	}
-	model, err := handle.Load()
-	if err != nil {
-		return nil, err
-	}
-	return newSeriesModel(l, SeriesRef(handle.Ref()), model), nil
+	return handle, nil
 }

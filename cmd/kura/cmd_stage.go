@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series"
 )
 
 type stageCmd struct {
@@ -37,14 +38,17 @@ func (cmd *stageCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	series, err := lib.Get(kura.SeriesRef(cmd.Series))
+	handle, err := lib.Get(refs.Series(cmd.Series))
 	if err != nil {
 		return err
 	}
 
-	result, err := series.Stage(rt.Context, kura.StageInput{
-		Season:     season,
-		Episode:    cmd.Number,
+	episode, err := refs.NewEpisode(season, cmd.Number)
+	if err != nil {
+		return err
+	}
+	result, err := handle.Stage(rt.Context, series.StageInput{
+		Episode:    episode,
 		Source:     cmd.Source,
 		Companions: cmd.Companions,
 		MediaPath:  cmd.Path,

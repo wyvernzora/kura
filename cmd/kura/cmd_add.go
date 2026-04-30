@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type addCmd struct {
@@ -20,9 +21,9 @@ func (cmd *addCmd) Run(rt *runContext) error {
 		return err
 	}
 
-	ref := kura.SeriesRef("")
+	ref := refs.Series("")
 	if cmd.Dirname != "" {
-		ref = kura.SeriesRef(cmd.Dirname)
+		ref = refs.Series(cmd.Dirname)
 	}
 	series, err := lib.Add(rt.Context, kura.AddInput{MetadataRef: metadataRef, Ref: ref})
 	if err != nil {

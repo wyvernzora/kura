@@ -9,11 +9,11 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
-func WriteSeriesRead(w io.Writer, result kura.SeriesRead) error {
+func WriteSeriesRead(w io.Writer, result series.ReadResult) error {
 	if _, err := fmt.Fprintf(w, "MetadataRef: %s\n", result.MetadataRef); err != nil {
 		return err
 	}
@@ -42,7 +42,7 @@ func WriteSeriesRead(w io.Writer, result kura.SeriesRead) error {
 	return nil
 }
 
-func writeEpisodeReadTable(w io.Writer, episodes []kura.EpisodeRead) error {
+func writeEpisodeReadTable(w io.Writer, episodes []series.EpisodeRead) error {
 	style := shouldStyle(w)
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"NUMBER", "STATUS", "SOURCE", "RESOLUTION", "FILE"})
@@ -56,8 +56,8 @@ func writeEpisodeReadTable(w io.Writer, episodes []kura.EpisodeRead) error {
 	})
 	for _, episode := range episodes {
 		if episode.Active != nil && episode.Staged != nil {
-			tw.AppendRow(readEpisodeRow(episode.Number, kura.EpisodeStatusPresent, episode.Active, style, true))
-			tw.AppendRow(readEpisodeRow(episode.Number, kura.EpisodeStatusStaged, episode.Staged, style, false))
+			tw.AppendRow(readEpisodeRow(episode.Number, series.EpisodeStatusPresent, episode.Active, style, true))
+			tw.AppendRow(readEpisodeRow(episode.Number, series.EpisodeStatusStaged, episode.Staged, style, false))
 			continue
 		}
 		tw.AppendRow(readEpisodeRow(episode.Number, episode.Status, firstEpisodeMedia(episode), style, false))
@@ -65,7 +65,7 @@ func writeEpisodeReadTable(w io.Writer, episodes []kura.EpisodeRead) error {
 	return writeStyledTable(w, tw, nil)
 }
 
-func readEpisodeRow(number int, status kura.EpisodeStatus, media *kura.EpisodeMedia, style bool, retired bool) table.Row {
+func readEpisodeRow(number int, status series.EpisodeStatus, media *series.EpisodeMedia, style bool, retired bool) table.Row {
 	statusCell := string(status)
 	source := ""
 	resolution := ""
@@ -97,7 +97,7 @@ func readEpisodeRow(number int, status kura.EpisodeStatus, media *kura.EpisodeMe
 	return row
 }
 
-func firstEpisodeMedia(episode kura.EpisodeRead) *kura.EpisodeMedia {
+func firstEpisodeMedia(episode series.EpisodeRead) *series.EpisodeMedia {
 	if episode.Staged != nil {
 		return episode.Staged
 	}
@@ -111,21 +111,21 @@ func retireCell(value string) string {
 	return chalk.Dim.TextStyle(chalk.Strikethrough.TextStyle(value))
 }
 
-func styleEpisodeStatus(status kura.EpisodeStatus, style bool) string {
+func styleEpisodeStatus(status series.EpisodeStatus, style bool) string {
 	value := string(status)
 	if !style {
 		return value
 	}
 	switch status {
-	case kura.EpisodeStatusMissing:
+	case series.EpisodeStatusMissing:
 		return orange(value)
-	case kura.EpisodeStatusUnavailable:
+	case series.EpisodeStatusUnavailable:
 		return chalk.Bold.TextStyle(chalk.Red.Color(value))
-	case kura.EpisodeStatusPresent:
+	case series.EpisodeStatusPresent:
 		return chalk.Green.Color(value)
-	case kura.EpisodeStatusPending:
+	case series.EpisodeStatusPending:
 		return chalk.Dim.TextStyle(gray(value))
-	case kura.EpisodeStatusStaged:
+	case series.EpisodeStatusStaged:
 		return chalk.Yellow.Color(value)
 	default:
 		return value
@@ -176,7 +176,7 @@ func gray(value string) string {
 	return "\x1b[90m" + value + "\x1b[39m"
 }
 
-func WriteScanResult(w io.Writer, result kura.ScanResult) error {
+func WriteScanResult(w io.Writer, result series.ScanResult) error {
 	entries := make([]scanTableEntry, 0, len(result.Synced))
 	for _, entry := range result.Synced {
 		entries = append(entries, scanTableEntry{
@@ -202,7 +202,7 @@ type scanTableEntry struct {
 	Companions []string
 }
 
-func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []kura.ImportSkip) error {
+func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.ImportSkip) error {
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"STATUS", "SEASON", "EPISODE", "SOURCE", "RESOLUTION", "FILE"})
 	tw.SetStyle(borderlessTableStyle())
@@ -254,15 +254,15 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []kura.Import
 	return writeStyledTable(w, skippedTable, nil)
 }
 
-func WriteKuraReconcilePlan(w io.Writer, plan kura.ReconcilePlan) error {
-	var moves []kura.FileMove
+func WriteReconcilePlan(w io.Writer, plan series.ReconcilePlan) error {
+	var moves []series.FileMove
 	for _, change := range plan.Changes {
 		moves = append(moves, change.Moves()...)
 	}
 	return writeReconcileMoves(w, moves)
 }
 
-func writeReconcileMoves(w io.Writer, moves []kura.FileMove) error {
+func writeReconcileMoves(w io.Writer, moves []series.FileMove) error {
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"KIND", "FROM", "TO"})
 	tw.SetStyle(borderlessTableStyle())

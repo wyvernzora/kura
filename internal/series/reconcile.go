@@ -2,6 +2,7 @@ package series
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -17,10 +18,10 @@ import (
 )
 
 type ReconcilePlan struct {
-	Series    refs.Series
-	FileTitle string
-	Snapshot  string
-	Changes   []Change
+	Series    refs.Series `json:"series"`
+	FileTitle string      `json:"fileTitle"`
+	Snapshot  string      `json:"snapshot"`
+	Changes   []Change    `json:"changes"`
 }
 
 func (p ReconcilePlan) HasChanges() bool {
@@ -28,18 +29,18 @@ func (p ReconcilePlan) HasChanges() bool {
 }
 
 type FileMove struct {
-	From string
-	To   string
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 type Change struct {
-	Kind    ChangeKind
-	Episode refs.Episode
+	Kind    ChangeKind   `json:"kind"`
+	Episode refs.Episode `json:"-"`
 	FileMove
-	Source     string
-	Resolution string
-	Companions []FileMove
-	Replaced   *Replaced
+	Source     string     `json:"source,omitempty"`
+	Resolution string     `json:"resolution,omitempty"`
+	Companions []FileMove `json:"companions,omitempty"`
+	Replaced   *Replaced  `json:"replaced,omitempty"`
 }
 
 func (c Change) Moves() []FileMove {
@@ -63,14 +64,14 @@ const (
 
 type Replaced struct {
 	FileMove
-	Source     string
-	Resolution string
-	Companions []FileMove
+	Source     string     `json:"source,omitempty"`
+	Resolution string     `json:"resolution,omitempty"`
+	Companions []FileMove `json:"companions,omitempty"`
 }
 
 type ReconcileResult struct {
-	Series       refs.Series
-	AppliedMoves int
+	Series       refs.Series `json:"series"`
+	AppliedMoves int         `json:"appliedMoves"`
 }
 
 type PlanStaleError struct {
@@ -79,6 +80,29 @@ type PlanStaleError struct {
 
 func (err PlanStaleError) Error() string {
 	return fmt.Sprintf("series: reconcile plan for %s is stale", err.Series)
+}
+
+func (c Change) MarshalJSON() ([]byte, error) {
+	type changeJSON struct {
+		Kind    ChangeKind `json:"kind"`
+		Season  int        `json:"season"`
+		Episode int        `json:"episode"`
+		FileMove
+		Source     string     `json:"source,omitempty"`
+		Resolution string     `json:"resolution,omitempty"`
+		Companions []FileMove `json:"companions,omitempty"`
+		Replaced   *Replaced  `json:"replaced,omitempty"`
+	}
+	return json.Marshal(changeJSON{
+		Kind:       c.Kind,
+		Season:     c.Episode.Season(),
+		Episode:    c.Episode.Episode(),
+		FileMove:   c.FileMove,
+		Source:     c.Source,
+		Resolution: c.Resolution,
+		Companions: c.Companions,
+		Replaced:   c.Replaced,
+	})
 }
 
 func (h Handle) PlanReconcile() (ReconcilePlan, error) {

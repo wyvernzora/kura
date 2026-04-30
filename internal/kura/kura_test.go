@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func TestNewValidatesConfig(t *testing.T) {
@@ -83,19 +85,19 @@ func TestFindAndGet(t *testing.T) {
 	lib := newTestLibrary(t, root, server.URL)
 
 	_, err := lib.Find("tvdb:999999")
-	var notIndexed MetadataRefNotIndexedError
+	var notIndexed seriespkg.MetadataRefNotIndexedError
 	if !errors.As(err, &notIndexed) {
 		t.Fatalf("Find missing error = %v, want MetadataRefNotIndexedError", err)
 	}
 
 	_, err = lib.Get("Missing")
-	var notFound SeriesNotFoundError
+	var notFound seriespkg.SeriesNotFoundError
 	if !errors.As(err, &notFound) {
 		t.Fatalf("Get missing error = %v, want SeriesNotFoundError", err)
 	}
 
 	_, err = lib.Get("Untracked")
-	var notTracked SeriesNotTrackedError
+	var notTracked seriespkg.SeriesNotTrackedError
 	if !errors.As(err, &notTracked) {
 		t.Fatalf("Get untracked error = %v, want SeriesNotTrackedError", err)
 	}
@@ -104,13 +106,15 @@ func TestFindAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Find tracked: %v", err)
 	}
-	if series.Ref() != "Bookworm" || series.MetadataRef() != "tvdb:370070" {
-		t.Fatalf("series refs = %q/%q, want Bookworm/tvdb:370070", series.Ref(), series.MetadataRef())
+	if series.Ref() != "Bookworm" {
+		t.Fatalf("series ref = %q, want Bookworm", series.Ref())
 	}
-	episodes := series.Episodes()
-	episodes[0].Companions[0].Path = "mutated"
-	if got := series.Episodes()[0].Companions[0].Path; got == "mutated" {
-		t.Fatal("Episodes returned mutable companion slice")
+	model, err := series.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if model.Metadata != "tvdb:370070" {
+		t.Fatalf("metadata = %q, want tvdb:370070", model.Metadata)
 	}
 }
 
@@ -142,7 +146,7 @@ func TestAddRejectsCollisionsAndUnsupportedSource(t *testing.T) {
 	}
 	lib := newTestLibrary(t, root, server.URL)
 	_, err := lib.Add(context.Background(), AddInput{MetadataRef: "tvdb:370070", Ref: "Bookworm"})
-	var exists SeriesAlreadyExistsError
+	var exists seriespkg.SeriesAlreadyExistsError
 	if !errors.As(err, &exists) {
 		t.Fatalf("Add existing dir error = %v, want SeriesAlreadyExistsError", err)
 	}
@@ -155,13 +159,13 @@ func TestAddRejectsCollisionsAndUnsupportedSource(t *testing.T) {
 	}`)
 	lib = newTestLibrary(t, root, server.URL)
 	_, err = lib.Add(context.Background(), AddInput{MetadataRef: "tvdb:370070", Ref: "Other"})
-	var conflict MetadataRefConflictError
+	var conflict seriespkg.MetadataRefConflictError
 	if !errors.As(err, &conflict) {
 		t.Fatalf("Add conflict error = %v, want MetadataRefConflictError", err)
 	}
 
 	_, err = lib.Add(context.Background(), AddInput{MetadataRef: "imdb:tt123", Ref: "Other"})
-	var unsupported UnsupportedMetadataSourceError
+	var unsupported seriespkg.UnsupportedMetadataSourceError
 	if !errors.As(err, &unsupported) {
 		t.Fatalf("Add unsupported error = %v, want UnsupportedMetadataSourceError", err)
 	}
@@ -180,18 +184,22 @@ func TestImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Import: %v", err)
 	}
-	if series.MetadataRef() != "tvdb:370070" {
-		t.Fatalf("MetadataRef = %q, want tvdb:370070", series.MetadataRef())
+	model, err := series.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if model.Metadata != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %q, want tvdb:370070", model.Metadata)
 	}
 
 	_, err = lib.Import(context.Background(), ImportInput{Ref: "Missing", MetadataRef: "tvdb:370070"})
-	var notFound SeriesNotFoundError
+	var notFound seriespkg.SeriesNotFoundError
 	if !errors.As(err, &notFound) {
 		t.Fatalf("Import missing error = %v, want SeriesNotFoundError", err)
 	}
 
 	_, err = lib.Import(context.Background(), ImportInput{Ref: "Bookworm", MetadataRef: "tvdb:370070"})
-	var tracked SeriesAlreadyTrackedError
+	var tracked seriespkg.SeriesAlreadyTrackedError
 	if !errors.As(err, &tracked) {
 		t.Fatalf("Import tracked error = %v, want SeriesAlreadyTrackedError", err)
 	}

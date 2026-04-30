@@ -8,6 +8,7 @@ import (
 	"github.com/wyvernzora/kura/internal/kura"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
@@ -35,7 +36,7 @@ func libraryFromFlags(rt *runContext, flags *cli) (*kura.Library, error) {
 	})
 }
 
-func resolveMetadataRef(rt *runContext, lib *kura.Library, terms []string) (kura.MetadataRef, error) {
+func resolveMetadataRef(rt *runContext, lib *kura.Library, terms []string) (refs.Metadata, error) {
 	resolution, err := lib.Resolve(rt.Context, kura.ResolveInput{Terms: terms})
 	if err != nil {
 		return "", err
@@ -44,16 +45,20 @@ func resolveMetadataRef(rt *runContext, lib *kura.Library, terms []string) (kura
 	if err != nil {
 		return "", err
 	}
-	return kura.MetadataRef(picked.Summary.MetadataRef), nil
+	return refs.Metadata(picked.Summary.MetadataRef), nil
 }
 
-func writeSeriesSummary(rt *runContext, series *kura.Series, verb string, asJSON bool) error {
+func writeSeriesSummary(rt *runContext, handle series.Handle, verb string, asJSON bool) error {
+	model, err := handle.Load()
+	if err != nil {
+		return err
+	}
 	if asJSON {
 		encoder := json.NewEncoder(rt.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(series)
+		return encoder.Encode(model)
 	}
-	_, err := fmt.Fprintf(rt.Stdout, "%s %s (%s)\n", verb, series.Ref(), series.MetadataRef())
+	_, err = fmt.Fprintf(rt.Stdout, "%s %s (%s)\n", verb, handle.Ref(), model.Metadata)
 	return err
 }
 

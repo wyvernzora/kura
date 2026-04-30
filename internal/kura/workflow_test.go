@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func TestScanCommits(t *testing.T) {
@@ -32,19 +35,23 @@ func TestScanCommits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	result, err := series.Scan(context.Background(), ScanInput{})
+	result, err := series.Scan(context.Background(), seriespkg.ScanInput{})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
-	if len(result.Synced) != 1 || result.Synced[0].Status != ScanStatusNew {
+	if len(result.Synced) != 1 || result.Synced[0].Status != seriespkg.ScanStatusNew {
 		t.Fatalf("Synced = %#v, want one new entry", result.Synced)
 	}
 	loaded, err := lib.Get("Bookworm")
 	if err != nil {
 		t.Fatalf("Get after scan: %v", err)
 	}
-	if len(loaded.Episodes()) != 1 {
-		t.Fatalf("len(Episodes) = %d, want 1", len(loaded.Episodes()))
+	model, err := loaded.Load()
+	if err != nil {
+		t.Fatalf("Load after scan: %v", err)
+	}
+	if len(model.Episodes) != 1 {
+		t.Fatalf("len(Episodes) = %d, want 1", len(model.Episodes))
 	}
 }
 
@@ -83,8 +90,8 @@ func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	_, err = series.Scan(context.Background(), ScanInput{})
-	var tracked EpisodeAlreadyTrackedError
+	_, err = series.Scan(context.Background(), seriespkg.ScanInput{})
+	var tracked seriespkg.EpisodeAlreadyExistsError
 	if !errors.As(err, &tracked) {
 		t.Fatalf("Scan error = %v, want EpisodeAlreadyTrackedError", err)
 	}
@@ -111,18 +118,21 @@ func TestStageCommits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	result, err := series.Stage(context.Background(), StageInput{
-		Season:    1,
-		Episode:   1,
+	episode, err := refs.NewEpisode(1, 1)
+	if err != nil {
+		t.Fatalf("NewEpisode: %v", err)
+	}
+	result, err := series.Stage(context.Background(), seriespkg.StageInput{
+		Episode:   episode,
 		MediaPath: mediaPath,
 	})
 	if err != nil {
 		t.Fatalf("Stage: %v", err)
 	}
-	if !result.Applied || result.Entry.Media.Path != mediaPath {
+	if !result.Applied || result.Record.Path != mediaPath {
 		t.Fatalf("Stage result = %#v, want applied staged entry", result)
 	}
-	view, err := series.Read(context.Background(), ReadInput{})
+	view, err := series.Read(context.Background(), seriespkg.ReadInput{})
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -171,11 +181,11 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	plan, err := series.PlanReconcile(context.Background(), ReconcileInput{})
+	plan, err := series.PlanReconcile()
 	if err != nil {
 		t.Fatalf("PlanReconcile: %v", err)
 	}
-	if !plan.HasChanges() || len(plan.Changes) != 1 || plan.Changes[0].Kind != ChangeMove {
+	if !plan.HasChanges() || len(plan.Changes) != 1 || plan.Changes[0].Kind != seriespkg.ChangeMove {
 		t.Fatalf("plan changes = %#v, want one move", plan.Changes)
 	}
 	if len(plan.Changes[0].Companions) != 1 {
@@ -191,17 +201,17 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	if err := os.WriteFile(seriesMetadataPath, append(data, '\n'), 0o644); err != nil {
 		t.Fatalf("WriteFile series.json: %v", err)
 	}
-	_, err = series.ApplyReconcile(context.Background(), stalePlan)
-	var stale PlanStaleError
+	_, err = series.ApplyReconcile(stalePlan)
+	var stale seriespkg.PlanStaleError
 	if !errors.As(err, &stale) {
 		t.Fatalf("Apply stale error = %v, want PlanStaleError", err)
 	}
 
-	plan, err = series.PlanReconcile(context.Background(), ReconcileInput{})
+	plan, err = series.PlanReconcile()
 	if err != nil {
 		t.Fatalf("PlanReconcile fresh: %v", err)
 	}
-	result, err := series.ApplyReconcile(context.Background(), plan)
+	result, err := series.ApplyReconcile(plan)
 	if err != nil {
 		t.Fatalf("ApplyReconcile: %v", err)
 	}

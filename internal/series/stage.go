@@ -19,10 +19,13 @@ type StageInput struct {
 }
 
 type StageResult struct {
-	Series   refs.Series
-	Replaced bool
-	Episode  refs.Episode
-	Record   MediaRecord
+	Series   refs.Series  `json:"series"`
+	Applied  bool         `json:"applied"`
+	Replaced bool         `json:"replaced"`
+	Season   int          `json:"season"`
+	Number   int          `json:"number"`
+	Episode  refs.Episode `json:"-"`
+	Record   MediaRecord  `json:"record"`
 }
 
 type StagedEpisodeAlreadyExistsError struct {
@@ -68,7 +71,15 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 	if err := h.repo().save(h.ref, series); err != nil {
 		return StageResult{}, err
 	}
-	return StageResult{Series: h.ref, Replaced: replaced, Episode: in.Episode, Record: record}, nil
+	return StageResult{
+		Series:   h.ref,
+		Applied:  true,
+		Replaced: replaced,
+		Season:   in.Episode.Season(),
+		Number:   in.Episode.Episode(),
+		Episode:  in.Episode,
+		Record:   record,
+	}, nil
 }
 
 func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source string, companions []string) (MediaRecord, error) {

@@ -5,22 +5,22 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/kura"
+	"github.com/wyvernzora/kura/internal/series"
 )
 
 func TestFindTableRendersStagedOverAsSeparateRows(t *testing.T) {
 	var out bytes.Buffer
-	err := writeEpisodeReadTable(&out, []kura.EpisodeRead{
+	err := writeEpisodeReadTable(&out, []series.EpisodeRead{
 		{
 			Season: 1,
 			Number: 1,
-			Status: kura.EpisodeStatusStaged,
-			Active: &kura.EpisodeMedia{
+			Status: series.EpisodeStatusStaged,
+			Active: &series.EpisodeMedia{
 				Source:     "WebRip",
 				Resolution: "1080p",
 				File:       "Season 1/old.mkv",
 			},
-			Staged: &kura.EpisodeMedia{
+			Staged: &series.EpisodeMedia{
 				Source:     "BDRip",
 				Resolution: "4K",
 				File:       "/inbox/new.mkv",
@@ -49,14 +49,14 @@ func TestFindTableRendersStagedOverAsSeparateRows(t *testing.T) {
 func TestFindTableStylesEpisodeStatus(t *testing.T) {
 	cases := []struct {
 		name   string
-		status kura.EpisodeStatus
+		status series.EpisodeStatus
 		want   string
 	}{
-		{"missing", kura.EpisodeStatusMissing, "\x1b[38;5;208mmissing\x1b[39m"},
-		{"unavailable", kura.EpisodeStatusUnavailable, "\x1b[1m\x1b[31munavailable\x1b[39m\x1b[22m"},
-		{"present", kura.EpisodeStatusPresent, "\x1b[32mpresent\x1b[39m"},
-		{"pending", kura.EpisodeStatusPending, "\x1b[2m\x1b[90mpending\x1b[39m\x1b[22m"},
-		{"staged", kura.EpisodeStatusStaged, "\x1b[33mstaged\x1b[39m"},
+		{"missing", series.EpisodeStatusMissing, "\x1b[38;5;208mmissing\x1b[39m"},
+		{"unavailable", series.EpisodeStatusUnavailable, "\x1b[1m\x1b[31munavailable\x1b[39m\x1b[22m"},
+		{"present", series.EpisodeStatusPresent, "\x1b[32mpresent\x1b[39m"},
+		{"pending", series.EpisodeStatusPending, "\x1b[2m\x1b[90mpending\x1b[39m\x1b[22m"},
+		{"staged", series.EpisodeStatusStaged, "\x1b[33mstaged\x1b[39m"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
