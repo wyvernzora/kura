@@ -106,6 +106,14 @@ func normalizeSeriesWorkflowError(ref SeriesRef, err error) error {
 			Episode: missing.Episode,
 		}
 	}
+	staged, ok := errors.AsType[seriespkg.StagedEpisodeAlreadyExistsError](err)
+	if ok {
+		return StagedEpisodeAlreadyExistsError{
+			Series:  ref,
+			Season:  staged.Season,
+			Episode: staged.Episode,
+		}
+	}
 	return normalizeSeriesLibraryError(err)
 }
 
