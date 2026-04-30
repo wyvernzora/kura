@@ -40,10 +40,6 @@ func (d SeriesDir) Name() string {
 	return filepath.Base(d.path)
 }
 
-func (d SeriesDir) MetadataPath() string {
-	return SeriesMetadataPath(d.path)
-}
-
 func (d SeriesDir) CleanRelPath(path string) (string, error) {
 	return CleanSeriesRelPath(path)
 }

@@ -1,4 +1,4 @@
-package index
+package library
 
 import (
 	"testing"
@@ -12,14 +12,14 @@ func TestIndexSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idx := New(root)
+	idx := NewIndex(root)
 	if err := idx.Put(refs.Metadata("tvdb:370070"), refs.Series("Honzuki")); err != nil {
 		t.Fatal(err)
 	}
 	if err := idx.Save(); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := Load(root)
+	loaded, err := LoadIndex(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestIndexRejectsDuplicateMetadataRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	idx := New(root)
+	idx := NewIndex(root)
 	if err := idx.Put(refs.Metadata("tvdb:370070"), refs.Series("A")); err != nil {
 		t.Fatal(err)
 	}

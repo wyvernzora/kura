@@ -27,7 +27,7 @@ func ReadMetadataRef(root fsroot.LibraryRoot, ref refs.Series) (refs.Metadata, e
 }
 
 func (r repo) load(ref refs.Series) (Series, error) {
-	path := fsroot.SeriesMetadataPath(r.root.Join(ref.String()))
+	path := wire.SeriesMetadataPath(r.root.Join(ref.String()))
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Series{}, err
@@ -49,9 +49,9 @@ func (r repo) save(ref refs.Series, series Series) error {
 		return err
 	}
 	seriesDir := r.root.Join(ref.String())
-	metaDir := filepath.Join(seriesDir, fsroot.KuraDir)
+	metaDir := filepath.Join(seriesDir, wire.KuraDir)
 	if err := os.MkdirAll(metaDir, 0o755); err != nil {
 		return err
 	}
-	return renameio.WriteFile(fsroot.SeriesMetadataPath(seriesDir), data, 0o644)
+	return renameio.WriteFile(wire.SeriesMetadataPath(seriesDir), data, 0o644)
 }

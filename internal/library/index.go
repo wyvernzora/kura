@@ -1,4 +1,4 @@
-package index
+package library
 
 import (
 	"bytes"
@@ -18,6 +18,15 @@ import (
 
 var ErrNotFound = errors.New("library index: not found")
 
+const (
+	KuraDir       = ".kura"
+	IndexFileName = "index.tsv"
+)
+
+func IndexMetadataPath(libraryRoot string) string {
+	return filepath.Join(libraryRoot, KuraDir, IndexFileName)
+}
+
 type DuplicateRefError struct {
 	Ref      refs.Metadata
 	Existing refs.Series
@@ -33,15 +42,15 @@ type Index struct {
 	refs map[refs.Metadata]refs.Series
 }
 
-func New(root fsroot.LibraryRoot) *Index {
+func NewIndex(root fsroot.LibraryRoot) *Index {
 	return &Index{
 		root: root,
 		refs: map[refs.Metadata]refs.Series{},
 	}
 }
 
-func Load(root fsroot.LibraryRoot) (*Index, error) {
-	path := fsroot.IndexMetadataPath(root.Path())
+func LoadIndex(root fsroot.LibraryRoot) (*Index, error) {
+	path := IndexMetadataPath(root.Path())
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrNotFound
@@ -51,7 +60,7 @@ func Load(root fsroot.LibraryRoot) (*Index, error) {
 	}
 	defer file.Close()
 
-	index := New(root)
+	index := NewIndex(root)
 	reader := csv.NewReader(file)
 	reader.Comma = '\t'
 	reader.FieldsPerRecord = 2
@@ -78,21 +87,21 @@ func Load(root fsroot.LibraryRoot) (*Index, error) {
 	return index, nil
 }
 
-func Rebuild(ctx context.Context, root fsroot.LibraryRoot, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
+func RebuildIndex(ctx context.Context, root fsroot.LibraryRoot, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
 	dir, err := os.Open(root.Path())
 	if err != nil {
 		return nil, err
 	}
 	defer dir.Close()
 
-	index := New(root)
+	index := NewIndex(root)
 	for {
 		entries, err := dir.ReadDir(64)
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 		for _, entry := range entries {
-			if !entry.IsDir() || entry.Name() == fsroot.KuraDir {
+			if !entry.IsDir() || entry.Name() == KuraDir {
 				continue
 			}
 			seriesRef, err := refs.ParseSeries(entry.Name())
@@ -141,7 +150,7 @@ func (i *Index) Put(metadataRef refs.Metadata, seriesRef refs.Series) error {
 }
 
 func (i *Index) Save() error {
-	if err := os.MkdirAll(filepath.Join(i.root.Path(), fsroot.KuraDir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(i.root.Path(), KuraDir), 0o755); err != nil {
 		return err
 	}
 	keys := make([]string, 0, len(i.refs))
@@ -162,5 +171,5 @@ func (i *Index) Save() error {
 	if err := writer.Error(); err != nil {
 		return err
 	}
-	return renameio.WriteFile(fsroot.IndexMetadataPath(i.root.Path()), data.Bytes(), 0o644)
+	return renameio.WriteFile(IndexMetadataPath(i.root.Path()), data.Bytes(), 0o644)
 }

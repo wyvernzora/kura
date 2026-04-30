@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const kuraDir = ".kura"
+
 func containsPath(root string, path string) bool {
 	root = filepath.Clean(root)
 	path = filepath.Clean(path)
@@ -23,7 +25,7 @@ func CleanSeriesRelPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if slices.Contains(strings.Split(clean, "/"), KuraDir) {
+	if slices.Contains(strings.Split(clean, "/"), kuraDir) {
 		return "", fmt.Errorf("path %q cannot point inside .kura", path)
 	}
 	return clean, nil

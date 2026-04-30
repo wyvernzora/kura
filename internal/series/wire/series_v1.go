@@ -1,6 +1,17 @@
 package wire
 
+import "path/filepath"
+
 const CurrentSchemaVersion = 1
+
+const (
+	KuraDir        = ".kura"
+	SeriesFileName = "series.json"
+)
+
+func SeriesMetadataPath(seriesDir string) string {
+	return filepath.Join(seriesDir, KuraDir, SeriesFileName)
+}
 
 type SeriesV1 struct {
 	SchemaVersion int                  `json:"schemaVersion"`

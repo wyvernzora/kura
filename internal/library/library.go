@@ -8,18 +8,18 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/index"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/series/wire"
 )
 
 type Library struct {
 	root    fsroot.LibraryRoot
 	source  metadata.Source
 	inspect mediainfo.Inspector
-	index   *index.Index
+	index   *Index
 	now     func() time.Time
 }
 
@@ -33,7 +33,7 @@ type ImportInput struct {
 	Ref      refs.Series
 }
 
-func New(root fsroot.LibraryRoot, source metadata.Source, inspector mediainfo.Inspector, idx *index.Index) *Library {
+func New(root fsroot.LibraryRoot, source metadata.Source, inspector mediainfo.Inspector, idx *Index) *Library {
 	return &Library{
 		root:    root,
 		source:  source,
@@ -125,7 +125,7 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 	if err != nil {
 		return series.Handle{}, err
 	}
-	if _, err := os.Stat(fsroot.SeriesMetadataPath(seriesDir.Path())); err == nil {
+	if _, err := os.Stat(wire.SeriesMetadataPath(seriesDir.Path())); err == nil {
 		return series.Handle{}, series.SeriesAlreadyTrackedError{Ref: ref}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return series.Handle{}, err

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/index"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -65,9 +64,9 @@ func New(cfg Config) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	seriesIndex, err := index.Load(root)
-	if errors.Is(err, index.ErrNotFound) {
-		seriesIndex, err = index.Rebuild(context.Background(), root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+	seriesIndex, err := librarypkg.LoadIndex(root)
+	if errors.Is(err, librarypkg.ErrNotFound) {
+		seriesIndex, err = librarypkg.RebuildIndex(context.Background(), root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
 			return seriespkg.ReadMetadataRef(root, ref)
 		})
 	} else if err != nil {

@@ -9,9 +9,10 @@ import (
 )
 
 const MetaFileName = "meta.json"
+const DirName = "trash"
 
 func EventDir(root fsroot.LibraryRoot, ref refs.Series, id ulid.ULID) string {
-	return filepath.Join(root.Join(ref.String()), fsroot.KuraDir, fsroot.KuraTrashDir, id.String())
+	return filepath.Join(root.Join(ref.String()), ".kura", DirName, id.String())
 }
 
 func MetaPath(root fsroot.LibraryRoot, ref refs.Series, id ulid.ULID) string {

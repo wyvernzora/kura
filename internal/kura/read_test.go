@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/index"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -144,7 +143,7 @@ func newReadTestLibrary(t *testing.T, rootPath string) *Library {
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	idx := index.New(root)
+	idx := librarypkg.NewIndex(root)
 	if err := idx.Put(refs.Metadata("tvdb:370070"), refs.Series("Bookworm")); err != nil {
 		t.Fatalf("Put index: %v", err)
 	}

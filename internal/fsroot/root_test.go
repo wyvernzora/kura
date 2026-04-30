@@ -24,9 +24,6 @@ func TestLibraryRootAndSeriesDir(t *testing.T) {
 	if seriesDir.Path() != seriesPath {
 		t.Fatalf("Path = %q, want %q", seriesDir.Path(), seriesPath)
 	}
-	if seriesDir.MetadataPath() != filepath.Join(seriesPath, ".kura", "series.json") {
-		t.Fatalf("MetadataPath = %q", seriesDir.MetadataPath())
-	}
 	if !root.Contains(filepath.Join(seriesPath, "episode.mkv")) {
 		t.Fatal("root does not contain child path")
 	}

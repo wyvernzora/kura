@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/index"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -17,7 +16,7 @@ func TestLibraryAddWritesFullSpine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := New(root, fakeSource{}, mediainfo.Inspector{}, index.New(root))
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
 	handle, err := lib.Add(context.Background(), AddInput{Metadata: refs.Metadata("tvdb:370070"), Ref: refs.Series("Bookworm")})
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +38,7 @@ func TestLibraryImportRequiresExistingUntrackedDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := New(root, fakeSource{}, mediainfo.Inspector{}, index.New(root))
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
 	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: refs.Series("Missing")}); err == nil {
 		t.Fatal("expected missing series error")
 	}

@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/fsroot"
-	"github.com/wyvernzora/kura/internal/index"
 	"github.com/wyvernzora/kura/internal/kura"
+	librarypkg "github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/ui"
 )
@@ -829,7 +829,7 @@ func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) s
 	if err != nil {
 		t.Fatalf("ParseLibraryRoot: %v", err)
 	}
-	idx, err := index.Load(root)
+	idx, err := librarypkg.LoadIndex(root)
 	if err != nil {
 		t.Fatalf("LoadIndex: %v", err)
 	}

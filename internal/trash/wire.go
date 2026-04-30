@@ -57,7 +57,7 @@ func Write(root fsroot.LibraryRoot, ref refs.Series, meta Meta) error {
 }
 
 func List(root fsroot.LibraryRoot, ref refs.Series) ([]Meta, error) {
-	dir := filepath.Join(root.Join(ref.String()), fsroot.KuraDir, fsroot.KuraTrashDir)
+	dir := filepath.Join(root.Join(ref.String()), ".kura", DirName)
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return []Meta{}, nil

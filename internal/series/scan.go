@@ -12,6 +12,7 @@ import (
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series/wire"
 )
 
 type ScanInput struct {
@@ -178,7 +179,7 @@ func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []Imp
 	var skipped []ImportSkip
 	for _, entry := range entries {
 		name := entry.Name()
-		if name == fsroot.KuraDir {
+		if name == wire.KuraDir {
 			continue
 		}
 		fullPath := filepath.Join(seriesDir.Path(), name)
