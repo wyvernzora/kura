@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/wyvernzora/kura/internal/domain"
@@ -25,9 +26,9 @@ func InitSeries(opts InitSeriesOptions) (InitSeriesResult, error) {
 		return InitSeriesResult{}, err
 	}
 	series.MetadataRef = opts.Metadata.MetadataRef
-	ref, err := domain.ParseMetadataRef(opts.Metadata.MetadataRef)
-	if err != nil {
-		return InitSeriesResult{}, err
+	ref := domain.MetadataRef(opts.Metadata.MetadataRef)
+	if ref.Source() == "" || ref.Value() == "" {
+		return InitSeriesResult{}, errors.New("library: metadata ref is required")
 	}
 	if ref.Source() != "tvdb" {
 		return InitSeriesResult{}, fmt.Errorf("library: unsupported metadata ref source %q", ref.Source())

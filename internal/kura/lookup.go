@@ -4,16 +4,11 @@ import (
 	"errors"
 	"os"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/store"
 )
 
 func (l *Library) Find(ref MetadataRef) (*Series, error) {
-	parsed, err := domain.ParseMetadataRef(string(ref))
-	if err != nil {
-		return nil, err
-	}
-	path, ok, err := l.index.Get(parsed)
+	path, ok, err := l.index.Get(ref)
 	if err != nil {
 		return nil, err
 	}

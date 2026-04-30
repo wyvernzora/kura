@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"golang.org/x/text/unicode/norm"
 )
@@ -13,14 +14,14 @@ type titleCandidate struct {
 	Value    string
 }
 
-func providerRef(id string) string {
+func providerRef(id string) domain.MetadataRef {
 	if id == "" {
 		return ""
 	}
-	return providerKey + ":" + id
+	return domain.MetadataRef(providerKey + ":" + id)
 }
 
-func providerIntRef(id int) string {
+func providerIntRef(id int) domain.MetadataRef {
 	if id <= 0 {
 		return ""
 	}
@@ -28,7 +29,7 @@ func providerIntRef(id int) string {
 }
 
 type seriesSummaryInput struct {
-	ref              string
+	ref              domain.MetadataRef
 	canonicalTitle   string
 	originalLanguage string
 	originalCountry  string

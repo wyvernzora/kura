@@ -845,11 +845,7 @@ func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) s
 	if err != nil {
 		t.Fatalf("LoadLibraryIndex: %v", err)
 	}
-	ref, err := domain.ParseMetadataRef(metadataRef)
-	if err != nil {
-		t.Fatalf("ParseMetadataRef: %v", err)
-	}
-	path, ok, err := index.Get(ref)
+	path, ok, err := index.Get(domain.MetadataRef(metadataRef))
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

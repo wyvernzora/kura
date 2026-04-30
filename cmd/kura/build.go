@@ -58,12 +58,12 @@ func writeSeriesSummary(rt *runContext, series *kura.Series, verb string, asJSON
 }
 
 func parseMetadataRef(seriesRef string) (string, string, error) {
-	ref, err := domain.ParseMetadataRef(seriesRef)
-	if err != nil {
-		return "", "", err
+	ref := domain.MetadataRef(seriesRef)
+	if ref.Source() == "" || ref.Value() == "" {
+		return "", "", fmt.Errorf("invalid metadata ref %q; expected <source>:<id>", seriesRef)
 	}
 	if ref.Source() != "tvdb" {
 		return "", "", fmt.Errorf("unsupported metadata ref source %q; only tvdb:<id> is supported", ref.Source())
 	}
-	return ref.Source(), ref.ID(), nil
+	return ref.Source(), ref.Value(), nil
 }

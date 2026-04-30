@@ -3,6 +3,7 @@ package resolve
 import (
 	"context"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
@@ -27,7 +28,7 @@ type ResolveStrategy interface {
 // termHit is one term's contribution for one metadata candidate.
 type termHit struct {
 	Term        Term
-	MetadataRef string
+	MetadataRef domain.MetadataRef
 	Summary     metadata.SeriesSummary
 	Rank        int
 }

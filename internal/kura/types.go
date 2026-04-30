@@ -3,6 +3,7 @@ package kura
 import (
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/resolve"
 	"github.com/wyvernzora/kura/internal/store"
@@ -10,7 +11,7 @@ import (
 
 type (
 	SeriesRef   string
-	MetadataRef string
+	MetadataRef = domain.MetadataRef
 )
 
 type (
@@ -81,13 +82,13 @@ type SeriesRead struct {
 }
 
 type SeasonRead struct {
-	MetadataRef string        `json:"metadataRef,omitempty"`
+	MetadataRef MetadataRef   `json:"metadataRef,omitempty"`
 	Number      int           `json:"number"`
 	Episodes    []EpisodeRead `json:"episodes"`
 }
 
 type EpisodeRead struct {
-	MetadataRef    string        `json:"metadataRef,omitempty"`
+	MetadataRef    MetadataRef   `json:"metadataRef,omitempty"`
 	Season         int           `json:"season"`
 	Number         int           `json:"number"`
 	AbsoluteNumber *int          `json:"absoluteNumber,omitempty"`

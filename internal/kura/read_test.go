@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/store"
@@ -74,7 +75,7 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 			}
 		]
 	}`)
-	if err := os.WriteFile(filepath.Join(seriesDir, ".kura", "staged.json"), []byte(fmt.Sprintf(`{
+	if err := os.WriteFile(filepath.Join(seriesDir, ".kura", "staged.json"), fmt.Appendf(nil, `{
 		"schemaVersion": 1,
 		"entries": [
 			{
@@ -102,7 +103,7 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 				"companions": []
 			}
 		]
-	}`, stagedFive, stagedSix)), 0o644); err != nil {
+	}`, stagedFive, stagedSix), 0o644); err != nil {
 		t.Fatalf("WriteFile staged.json: %v", err)
 	}
 
@@ -204,7 +205,7 @@ func readTestMetadataSeries() metadata.Series {
 
 func readTestMetadataEpisode(number int, aired string) metadata.Episode {
 	return metadata.Episode{
-		MetadataRef:   fmt.Sprintf("tvdb:%d", 1000+number),
+		MetadataRef:   domain.MetadataRef(fmt.Sprintf("tvdb:%d", 1000+number)),
 		SeasonNumber:  1,
 		EpisodeNumber: number,
 		Aired:         aired,

@@ -75,11 +75,7 @@ func TestRebuildLibraryIndexStreamsTrackedSeriesAndIgnoresUninitialized(t *testi
 		t.Fatalf("RebuildLibraryIndex: %v", err)
 	}
 
-	ref, err := domain.ParseMetadataRef("tvdb:370070")
-	if err != nil {
-		t.Fatalf("ParseMetadataRef: %v", err)
-	}
-	path, ok, err := index.Get(ref)
+	path, ok, err := index.Get(domain.MetadataRef("tvdb:370070"))
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -145,7 +141,7 @@ func testIndexSeries(t *testing.T, root fsroot.LibraryRoot, name string, ref str
 	if err != nil {
 		t.Fatalf("NewSeries %s: %v", name, err)
 	}
-	series.MetadataRef = ref
+	series.MetadataRef = domain.MetadataRef(ref)
 	series.PreferredTitle = name
 	series.CanonicalTitle = name
 	return *series

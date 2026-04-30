@@ -49,18 +49,18 @@ func (s *dirnameStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error
 		}
 		return nil, fmt.Errorf("%w: %s: %v", ErrCorruptSeriesFile, dir.Path(), err)
 	}
-	ref, err := domain.ParseMetadataRef(series.MetadataRef)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s: %v", ErrCorruptSeriesFile, dir.Path(), err)
+	ref := domain.MetadataRef(series.MetadataRef)
+	if ref.Source() == "" || ref.Value() == "" {
+		return nil, fmt.Errorf("%w: %s: metadata ref is required", ErrCorruptSeriesFile, dir.Path())
 	}
 	if ref.Source() != s.source.Key() {
 		return nil, fmt.Errorf("%w: %s: metadata ref source %q does not match configured source %q", ErrCorruptSeriesFile, dir.Path(), ref.Source(), s.source.Key())
 	}
 
-	metadataSeries, err := s.source.GetSeries(ctx, ref.ID())
+	metadataSeries, err := s.source.GetSeries(ctx, ref.Value())
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
-			return nil, fmt.Errorf("%w: %s", ErrStaleMetadataRef, ref)
+			return nil, fmt.Errorf("%w: %s", ErrStaleMetadataRef, series.MetadataRef)
 		}
 		return nil, err
 	}

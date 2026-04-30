@@ -8,6 +8,8 @@ package metadata
 import (
 	"context"
 	"errors"
+
+	"github.com/wyvernzora/kura/internal/domain"
 )
 
 // Source retrieves series, season, and episode metadata from an external
@@ -63,7 +65,7 @@ type SearchResult struct {
 // full series views.
 type SeriesSummary struct {
 	// MetadataRef is this series' opaque metadata reference, such as "tvdb:12345".
-	MetadataRef string
+	MetadataRef domain.MetadataRef
 
 	// PreferredTitle is Kura's selected official title after source normalization and
 	// language preference handling.
@@ -104,7 +106,7 @@ var (
 // Season contains external metadata for one season.
 type Season struct {
 	// MetadataRef is this season's opaque metadata reference.
-	MetadataRef string
+	MetadataRef domain.MetadataRef
 
 	Number int
 
@@ -114,7 +116,7 @@ type Season struct {
 // Episode contains external metadata for one episode.
 type Episode struct {
 	// MetadataRef is this episode's opaque metadata reference.
-	MetadataRef string
+	MetadataRef domain.MetadataRef
 
 	SeasonNumber   int
 	EpisodeNumber  int

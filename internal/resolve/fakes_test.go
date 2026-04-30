@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
@@ -47,7 +48,7 @@ func (s *strategyFakeSource) GetSeries(_ context.Context, metadataID string) (me
 
 func testSummary(ref string) metadata.SeriesSummary {
 	return metadata.SeriesSummary{
-		MetadataRef:    ref,
+		MetadataRef:    domain.MetadataRef(ref),
 		PreferredTitle: ref + " preferred",
 		CanonicalTitle: ref + " canonical",
 	}

@@ -32,7 +32,7 @@ func FormatSeriesCandidate(result metadata.SeriesSummary) string {
 		parts = append(parts, strconv.Itoa(result.Year))
 	}
 	if result.MetadataRef != "" {
-		parts = append(parts, result.MetadataRef)
+		parts = append(parts, result.MetadataRef.String())
 	}
 	return strings.Join(parts, " | ")
 }

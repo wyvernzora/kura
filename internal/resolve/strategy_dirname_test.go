@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/store"
@@ -152,7 +153,7 @@ func writeTrackedSeries(t *testing.T, seriesDir string, metadataRef string) {
 	if err != nil {
 		t.Fatalf("NewSeries: %v", err)
 	}
-	series.MetadataRef = metadataRef
+	series.MetadataRef = domain.MetadataRef(metadataRef)
 	series.PreferredTitle = "Bookworm"
 	series.CanonicalTitle = "Ascendance of a Bookworm"
 	if err := store.SaveSeries(*series); err != nil {

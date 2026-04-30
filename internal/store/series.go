@@ -20,13 +20,13 @@ const SeriesSchemaVersion = 1
 // titles and air dates, belongs in metadata read views and is intentionally not
 // persisted here.
 type Series struct {
-	SchemaVersion  int      `json:"schemaVersion"`
-	MetadataRef    string   `json:"metadataRef"`
-	PreferredTitle string   `json:"preferredTitle"`
-	CanonicalTitle string   `json:"canonicalTitle"`
-	LastScanned    string   `json:"lastScanned,omitempty"`
-	Notes          string   `json:"notes,omitempty"`
-	Seasons        []Season `json:"seasons,omitempty"`
+	SchemaVersion  int               `json:"schemaVersion"`
+	MetadataRef    media.MetadataRef `json:"metadataRef"`
+	PreferredTitle string            `json:"preferredTitle"`
+	CanonicalTitle string            `json:"canonicalTitle"`
+	LastScanned    string            `json:"lastScanned,omitempty"`
+	Notes          string            `json:"notes,omitempty"`
+	Seasons        []Season          `json:"seasons,omitempty"`
 
 	dirname string
 }

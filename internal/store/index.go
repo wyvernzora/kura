@@ -36,13 +36,13 @@ func (e DuplicateLibraryIndexRefError) Error() string {
 // LibraryIndex maps metadata refs to direct child series directories.
 type LibraryIndex struct {
 	root fsroot.LibraryRoot
-	refs map[string]domain.SeriesPath
+	refs map[domain.MetadataRef]domain.SeriesPath
 }
 
 func NewLibraryIndex(root fsroot.LibraryRoot) *LibraryIndex {
 	return &LibraryIndex{
 		root: root,
-		refs: map[string]domain.SeriesPath{},
+		refs: map[domain.MetadataRef]domain.SeriesPath{},
 	}
 }
 
@@ -70,10 +70,7 @@ func LoadLibraryIndex(root fsroot.LibraryRoot) (*LibraryIndex, error) {
 		if err != nil {
 			return nil, fmt.Errorf("library index: read %s: %w", path, err)
 		}
-		ref, err := domain.ParseMetadataRef(record[0])
-		if err != nil {
-			return nil, fmt.Errorf("library index: read %s: %w", path, err)
-		}
+		ref := domain.MetadataRef(record[0])
 		seriesPath, err := domain.ParseSeriesPath(record[1])
 		if err != nil {
 			return nil, fmt.Errorf("library index: read %s: %w", path, err)
@@ -142,10 +139,10 @@ func RebuildLibraryIndex(ctx context.Context, root fsroot.LibraryRoot) (*Library
 }
 
 func (i *LibraryIndex) Get(ref domain.MetadataRef) (domain.SeriesPath, bool, error) {
-	if ref.IsZero() {
+	if ref == "" {
 		return domain.SeriesPath{}, false, errors.New("library index: metadata ref is required")
 	}
-	path, ok := i.refs[ref.String()]
+	path, ok := i.refs[ref]
 	return path, ok, nil
 }
 
@@ -153,20 +150,18 @@ func (i *LibraryIndex) Put(series Series, path domain.SeriesPath) error {
 	if path.IsZero() {
 		return errors.New("library index: series path is required")
 	}
-	ref, err := domain.ParseMetadataRef(series.MetadataRef)
-	if err != nil {
-		return err
-	}
-	return i.putRef(ref, path)
+	return i.putRef(domain.MetadataRef(series.MetadataRef), path)
 }
 
 func (i *LibraryIndex) putRef(ref domain.MetadataRef, path domain.SeriesPath) error {
-	key := ref.String()
-	existing, exists := i.refs[key]
+	if ref == "" {
+		return errors.New("library index: metadata ref is required")
+	}
+	existing, exists := i.refs[ref]
 	if exists && existing.String() != path.String() {
 		return DuplicateLibraryIndexRefError{Ref: ref, Existing: existing, Next: path}
 	}
-	i.refs[key] = path
+	i.refs[ref] = path
 	return nil
 }
 
@@ -176,7 +171,7 @@ func (i *LibraryIndex) Save() error {
 	}
 	var refs []string
 	for ref := range i.refs {
-		refs = append(refs, ref)
+		refs = append(refs, ref.String())
 	}
 	sort.Strings(refs)
 
@@ -184,7 +179,7 @@ func (i *LibraryIndex) Save() error {
 	writer := csv.NewWriter(&data)
 	writer.Comma = '\t'
 	for _, ref := range refs {
-		if err := writer.Write([]string{ref, i.refs[ref].String()}); err != nil {
+		if err := writer.Write([]string{ref, i.refs[domain.MetadataRef(ref)].String()}); err != nil {
 			return err
 		}
 	}

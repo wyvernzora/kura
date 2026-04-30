@@ -250,7 +250,7 @@ func TestResolverSortOrder(t *testing.T) {
 	}
 	var refs []string
 	for _, candidate := range result.Results {
-		refs = append(refs, candidate.Summary.MetadataRef)
+		refs = append(refs, candidate.Summary.MetadataRef.String())
 	}
 	want := []string{"tvdb:3", "tvdb:2", "tvdb:1", "tvdb:4"}
 	if !slices.Equal(refs, want) {
