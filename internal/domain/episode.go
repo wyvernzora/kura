@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 // EpisodeNumber is a positive episode number.
@@ -52,4 +54,9 @@ func (r EpisodeRef) Episode() EpisodeNumber {
 
 func (r EpisodeRef) Marker() string {
 	return r.season.MarkerPart() + r.episode.MarkerPart()
+}
+
+func (r EpisodeRef) StorageRef() refs.Episode {
+	ref, _ := refs.NewEpisode(r.season.Int(), r.episode.Int())
+	return ref
 }

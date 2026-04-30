@@ -1,0 +1,59 @@
+package refs
+
+import "testing"
+
+func TestMetadata(t *testing.T) {
+	ref, err := ParseMetadata("tvdb:370070")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref.Provider() != "tvdb" || ref.ID() != "370070" || ref.String() != "tvdb:370070" {
+		t.Fatalf("unexpected metadata ref: %#v", ref)
+	}
+}
+
+func TestSeries(t *testing.T) {
+	ref, err := ParseSeries("Honzuki")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref.String() != "Honzuki" {
+		t.Fatalf("unexpected series ref %q", ref)
+	}
+	if _, err := ParseSeries("../Honzuki"); err == nil {
+		t.Fatal("expected escaping series ref error")
+	}
+}
+
+func TestEpisode(t *testing.T) {
+	ref, err := NewEpisode(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ref.String() != "S01E0001" {
+		t.Fatalf("storage ref = %q", ref.String())
+	}
+	if ref.Marker() != "S01E01" {
+		t.Fatalf("marker = %q", ref.Marker())
+	}
+	parsed, err := ParseEpisode("S01E0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed != ref {
+		t.Fatalf("parsed %#v, want %#v", parsed, ref)
+	}
+}
+
+func TestParseSelectorTreatsDirAsText(t *testing.T) {
+	selector := ParseSelector([]string{"dir:Honzuki", "tvdb:370070"})
+	if len(selector.Terms) != 2 {
+		t.Fatalf("terms = %d", len(selector.Terms))
+	}
+	if selector.Terms[0].Prefix != "" || selector.Terms[0].Value != "dir:Honzuki" {
+		t.Fatalf("unexpected dir term: %#v", selector.Terms[0])
+	}
+	if selector.Terms[1].Prefix != "tvdb" || selector.Terms[1].Value != "370070" {
+		t.Fatalf("unexpected tvdb term: %#v", selector.Terms[1])
+	}
+}

@@ -1,8 +1,6 @@
 package domain
 
-// SeriesRef identifies a tracked series by its library-root child directory.
-type SeriesRef string
+import "github.com/wyvernzora/kura/internal/refs"
 
-func (ref SeriesRef) String() string {
-	return string(ref)
-}
+// SeriesRef identifies a tracked series by its library-root child directory.
+type SeriesRef = refs.Series

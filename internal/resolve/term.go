@@ -1,56 +1,21 @@
 package resolve
 
-import (
-	"regexp"
-	"strings"
-)
+import "github.com/wyvernzora/kura/internal/refs"
 
 // Term is a parsed user-supplied token split into an optional lowercase
 // prefix and a non-empty value. Strategy matching decides how to interpret it.
-type Term struct {
-	Prefix string
-	Value  string
-}
-
-func (t Term) String() string {
-	if t.Prefix == "" {
-		return t.Value
-	}
-	return t.Prefix + ":" + t.Value
-}
+type Term = refs.Term
 
 // Query is a collection of search terms.
-type Query struct {
-	Terms []Term
-}
-
-var prefixPattern = regexp.MustCompile(`^([a-z0-9]+):(.+)$`)
+type Query = refs.Selector
 
 // ParseTerm splits raw into a prefixed term when it has a lowercase
 // alphanumeric prefix, otherwise treating it as free-form text.
 func ParseTerm(raw string) Term {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return Term{}
-	}
-	if match := prefixPattern.FindStringSubmatch(trimmed); match != nil {
-		if match[1] == "dir" {
-			return Term{Value: trimmed}
-		}
-		return Term{Prefix: match[1], Value: match[2]}
-	}
-	return Term{Value: trimmed}
+	return refs.ParseTerm(raw)
 }
 
 // ParseQuery parses raw tokens into terms, skipping empty entries.
 func ParseQuery(raw []string) Query {
-	terms := make([]Term, 0, len(raw))
-	for _, value := range raw {
-		term := ParseTerm(value)
-		if term == (Term{}) {
-			continue
-		}
-		terms = append(terms, term)
-	}
-	return Query{Terms: terms}
+	return refs.ParseSelector(raw)
 }
