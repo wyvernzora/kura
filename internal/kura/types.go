@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain"
-	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/resolve"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 type (
@@ -20,7 +20,7 @@ type (
 	Match      = resolve.Result
 	Evidence   = resolve.Evidence
 
-	ImportSkip = fsroot.ImportSkip
+	ImportSkip = seriespkg.ImportSkip
 )
 
 type Episode struct {

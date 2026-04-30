@@ -15,13 +15,6 @@ type files struct {
 	root fsroot.LibraryRoot
 }
 
-type discoveredFile struct {
-	Ref        refs.Episode
-	Path       string
-	Source     string
-	Companions []string
-}
-
 type fileFacts struct {
 	Size  int64
 	MTime time.Time
@@ -29,31 +22,6 @@ type fileFacts struct {
 
 func (f files) seriesDir(ref refs.Series) (fsroot.SeriesDir, error) {
 	return f.root.SeriesDir(ref.String())
-}
-
-func (f files) discover(ref refs.Series) ([]discoveredFile, []fsroot.ImportSkip, error) {
-	dir, err := f.seriesDir(ref)
-	if err != nil {
-		return nil, nil, err
-	}
-	discovered, skipped, err := fsroot.DiscoverSeriesEpisodes(dir)
-	if err != nil {
-		return nil, nil, err
-	}
-	out := make([]discoveredFile, 0, len(discovered))
-	for _, entry := range discovered {
-		episodeRef, err := refs.NewEpisode(entry.Season, entry.Number)
-		if err != nil {
-			return nil, nil, err
-		}
-		out = append(out, discoveredFile{
-			Ref:        episodeRef,
-			Path:       entry.Path,
-			Source:     entry.Source,
-			Companions: append([]string(nil), entry.Companions...),
-		})
-	}
-	return out, skipped, nil
 }
 
 func (f files) stat(path string) (fileFacts, error) {

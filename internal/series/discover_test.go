@@ -1,9 +1,11 @@
-package fsroot
+package series
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/wyvernzora/kura/internal/fsroot"
 )
 
 func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
@@ -15,13 +17,13 @@ func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := fsroot.ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
+	episodes, skipped, err := discoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
+		t.Fatalf("discoverSeriesEpisodes: %v", err)
 	}
 	if len(skipped) != 0 {
 		t.Fatalf("skipped = %#v, want none", skipped)
@@ -29,8 +31,8 @@ func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
 	if len(episodes) != 1 {
 		t.Fatalf("len(episodes) = %d, want 1", len(episodes))
 	}
-	if episodes[0].Season != 1 || episodes[0].Number != 12 {
-		t.Fatalf("episode = S%dE%d, want S1E12", episodes[0].Season, episodes[0].Number)
+	if episodes[0].Ref.Season() != 1 || episodes[0].Ref.Episode() != 12 {
+		t.Fatalf("episode = %s, want S1E12", episodes[0].Ref)
 	}
 }
 
@@ -43,13 +45,13 @@ func TestDiscoverSeasonEpisodesRejectsFallbackSeasonMismatch(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[Conclave-Mendoi]_Mobile_Suit_Gundam_00_S2_-_01v2_[1280x720_H.264_AAC][4863FBE8].mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := fsroot.ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
+	episodes, skipped, err := discoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
+		t.Fatalf("discoverSeriesEpisodes: %v", err)
 	}
 	if len(episodes) != 0 {
 		t.Fatalf("episodes = %#v, want none", episodes)
@@ -67,13 +69,13 @@ func TestDiscoverSeriesRootRejectsImplicitFallbackSeason(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seriesDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := fsroot.ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
+	episodes, skipped, err := discoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
+		t.Fatalf("discoverSeriesEpisodes: %v", err)
 	}
 	if len(episodes) != 0 {
 		t.Fatalf("episodes = %#v, want none", episodes)
@@ -94,13 +96,13 @@ func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 		t.Fatalf("MkdirAll Extra: %v", err)
 	}
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := fsroot.ParseSeriesDir(seriesDir)
 	if err != nil {
 		t.Fatalf("ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
+	episodes, skipped, err := discoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
+		t.Fatalf("discoverSeriesEpisodes: %v", err)
 	}
 	if len(episodes) != 0 {
 		t.Fatalf("episodes = %#v, want none", episodes)

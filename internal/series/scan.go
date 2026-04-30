@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
@@ -19,8 +22,21 @@ type ScanInput struct {
 type ScanResult struct {
 	Series  refs.Series
 	Synced  []ScannedEpisode
-	Skipped []fsroot.ImportSkip
+	Skipped []ImportSkip
 }
+
+type ImportSkip struct {
+	Path   string `json:"path"`
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
+}
+
+const (
+	SkipCodeSpecialNumberNotInferred = "special_number_not_inferred"
+	SkipCodeEpisodeNumberNotInferred = "episode_number_not_inferred"
+	SkipCodeSeasonMismatch           = "season_mismatch"
+	SkipCodeIgnoredDirectory         = "ignored_directory"
+)
 
 type ScannedEpisode struct {
 	Status     ScanStatus
@@ -76,11 +92,11 @@ func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
 	editor := editor{series: &series}
 	editor.refreshSpine(spine)
 
-	discovered, skipped, err := h.files().discover(h.ref)
+	seriesDir, err := h.files().seriesDir(h.ref)
 	if err != nil {
 		return ScanResult{}, err
 	}
-	seriesDir, err := h.files().seriesDir(h.ref)
+	discovered, skipped, err := discoverSeriesEpisodes(seriesDir)
 	if err != nil {
 		return ScanResult{}, err
 	}
@@ -144,6 +160,155 @@ func spineFromMetadata(seasons []metadata.Season) ([]SpineEpisode, error) {
 		}
 	}
 	return spine, nil
+}
+
+type discoveredFile struct {
+	Ref        refs.Episode
+	Path       string
+	Source     string
+	Companions []string
+}
+
+func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []ImportSkip, error) {
+	entries, err := os.ReadDir(seriesDir.Path())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var episodes []discoveredFile
+	var skipped []ImportSkip
+	for _, entry := range entries {
+		name := entry.Name()
+		if name == fsroot.KuraDir {
+			continue
+		}
+		fullPath := filepath.Join(seriesDir.Path(), name)
+		if entry.IsDir() {
+			season, ok := fsroot.ParseSeasonDir(name)
+			if !ok {
+				skipped = append(skipped, ImportSkip{Path: filepath.ToSlash(name), Code: SkipCodeIgnoredDirectory, Reason: "directory is not a season directory"})
+				continue
+			}
+			discovered, seasonSkipped, err := discoverSeasonEpisodes(seriesDir, fullPath, season)
+			if err != nil {
+				return nil, nil, err
+			}
+			episodes = append(episodes, discovered...)
+			skipped = append(skipped, seasonSkipped...)
+			continue
+		}
+		relPath := filepath.ToSlash(name)
+		if !fsroot.RecognizedVideoFile(relPath) {
+			continue
+		}
+		season, number, ok := fsroot.InferEpisodeFromFilename(name)
+		if !ok || season != 0 {
+			skipped = append(skipped, ImportSkip{Path: relPath, Code: SkipCodeSpecialNumberNotInferred, Reason: "could not infer special number"})
+			continue
+		}
+		ref, err := refs.NewEpisode(0, number)
+		if err != nil {
+			return nil, nil, err
+		}
+		episodes = append(episodes, discoveredFile{
+			Ref:        ref,
+			Path:       relPath,
+			Source:     fsroot.InferSourceFromFilename(relPath).String(),
+			Companions: matchingCompanions(seriesDir.Path(), "", name, entries),
+		})
+	}
+	sortDiscoveredEpisodes(episodes)
+	return episodes, skipped, nil
+}
+
+func discoverSeasonEpisodes(seriesDir fsroot.SeriesDir, seasonDir string, season int) ([]discoveredFile, []ImportSkip, error) {
+	entries, err := os.ReadDir(seasonDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	var episodes []discoveredFile
+	var skipped []ImportSkip
+	for _, entry := range entries {
+		if entry.IsDir() {
+			fullPath := filepath.Join(seasonDir, entry.Name())
+			relPath, err := filepath.Rel(seriesDir.Path(), fullPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			skipped = append(skipped, ImportSkip{Path: filepath.ToSlash(relPath), Code: SkipCodeIgnoredDirectory, Reason: "season subdirectory is not scanned"})
+			continue
+		}
+		fullPath := filepath.Join(seasonDir, entry.Name())
+		relPath, err := filepath.Rel(seriesDir.Path(), fullPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		relPath = filepath.ToSlash(relPath)
+		if !fsroot.RecognizedVideoFile(relPath) {
+			continue
+		}
+		inferredSeason, number, ok := fsroot.InferEpisodeFromFilename(entry.Name())
+		if !ok {
+			skipped = append(skipped, ImportSkip{Path: relPath, Code: SkipCodeEpisodeNumberNotInferred, Reason: "could not infer episode number"})
+			continue
+		}
+		if inferredSeason > 0 && inferredSeason != season {
+			skipped = append(skipped, ImportSkip{Path: relPath, Code: SkipCodeSeasonMismatch, Reason: "filename season does not match directory season"})
+			continue
+		}
+		ref, err := refs.NewEpisode(season, number)
+		if err != nil {
+			return nil, nil, err
+		}
+		episodes = append(episodes, discoveredFile{
+			Ref:        ref,
+			Path:       relPath,
+			Source:     fsroot.InferSourceFromFilename(relPath).String(),
+			Companions: matchingCompanions(seriesDir.Path(), seasonDir, entry.Name(), entries),
+		})
+	}
+	return episodes, skipped, nil
+}
+
+func matchingCompanions(seriesDir string, dir string, videoName string, entries []os.DirEntry) []string {
+	videoBase := strings.TrimSuffix(videoName, filepath.Ext(videoName))
+	var companions []string
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() == videoName {
+			continue
+		}
+		name := entry.Name()
+		if fsroot.RecognizedVideoFile(name) {
+			continue
+		}
+		companionBase := strings.TrimSuffix(name, filepath.Ext(name))
+		if companionBase != videoBase && !strings.HasPrefix(name, videoBase+".") {
+			continue
+		}
+		fullPath := filepath.Join(dir, name)
+		if dir == "" {
+			fullPath = filepath.Join(seriesDir, name)
+		}
+		relPath, err := filepath.Rel(seriesDir, fullPath)
+		if err != nil {
+			continue
+		}
+		companions = append(companions, filepath.ToSlash(relPath))
+	}
+	sort.Strings(companions)
+	return companions
+}
+
+func sortDiscoveredEpisodes(episodes []discoveredFile) {
+	sort.Slice(episodes, func(i, j int) bool {
+		if episodes[i].Ref.Season() != episodes[j].Ref.Season() {
+			return episodes[i].Ref.Season() < episodes[j].Ref.Season()
+		}
+		if episodes[i].Ref.Episode() != episodes[j].Ref.Episode() {
+			return episodes[i].Ref.Episode() < episodes[j].Ref.Episode()
+		}
+		return episodes[i].Path < episodes[j].Path
+	})
 }
 
 func (h Handle) unchanged(seriesDir fsroot.SeriesDir, active MediaRecord, file discoveredFile) (bool, error) {
