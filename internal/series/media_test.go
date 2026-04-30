@@ -1,7 +1,9 @@
-package domain
+package series
 
 import (
 	"testing"
+
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 func TestFileTitleNormalizesAndCompares(t *testing.T) {
@@ -14,24 +16,6 @@ func TestFileTitleNormalizesAndCompares(t *testing.T) {
 	}
 	if _, err := ParseFileTitle("Bad/Title"); err == nil {
 		t.Fatal("ParseFileTitle returned nil error, want separator rejection")
-	}
-}
-
-func TestEpisodeRefMarker(t *testing.T) {
-	season, err := RegularSeason(2)
-	if err != nil {
-		t.Fatalf("RegularSeason: %v", err)
-	}
-	episode, err := NewEpisodeNumber(3)
-	if err != nil {
-		t.Fatalf("NewEpisodeNumber: %v", err)
-	}
-	if got := NewEpisodeRef(season, episode).Marker(); got != "S02E03" {
-		t.Fatalf("Marker = %q, want S02E03", got)
-	}
-
-	if got := SpecialsSeason().MarkerPart(); got != "S00" {
-		t.Fatalf("special marker = %q, want S00", got)
 	}
 }
 
@@ -88,10 +72,9 @@ func TestBuildMediaFilename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseFileTitle: %v", err)
 	}
-	season, _ := RegularSeason(1)
-	episode, _ := NewEpisodeNumber(1)
+	episode, _ := refs.NewEpisode(1, 1)
 	resolution, _ := ParseResolution("1920x1080")
-	filename := BuildMediaFilename(title, NewEpisodeRef(season, episode), MediaFilenameFacts{
+	filename := BuildMediaFilename(title, episode, MediaFilenameFacts{
 		Source:     ParseMediaSource("webrip"),
 		Resolution: resolution,
 	}, ".mkv")

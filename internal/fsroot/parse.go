@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/nssteinbrenner/anitogo"
-	"github.com/wyvernzora/kura/internal/domain"
 )
 
 type ParsedEpisodeRef struct {
@@ -59,17 +58,17 @@ func RecognizedVideoFile(path string) bool {
 	}, extension)
 }
 
-func InferSourceFromFilename(path string) domain.MediaSource {
+func InferSourceFromFilename(path string) string {
 	name := filepath.ToSlash(path)
 	matches := mediaFactsPattern.FindStringSubmatch(name)
 	if len(matches) != 2 {
-		return domain.MediaSourceUnknown
+		return "unknown"
 	}
 	fields := strings.Fields(matches[1])
 	if len(fields) == 0 {
-		return domain.MediaSourceUnknown
+		return "unknown"
 	}
-	return domain.ParseMediaSource(fields[0])
+	return fields[0]
 }
 
 func InferEpisodeFromFilename(name string) (int, int, bool) {

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 )
@@ -83,11 +82,11 @@ func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source strin
 		return MediaRecord{}, err
 	}
 	if source == "" {
-		source = fsroot.InferSourceFromFilename(mediaPath).String()
+		source = ParseMediaSource(fsroot.InferSourceFromFilename(mediaPath)).String()
 	}
 	record := MediaRecord{
 		Path:       mediaPath,
-		Source:     domain.ParseMediaSource(source).String(),
+		Source:     ParseMediaSource(source).String(),
 		Resolution: info.Resolution,
 		Codec:      info.VideoCodec,
 		Size:       facts.Size,

@@ -3,7 +3,6 @@ package kura
 import (
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/resolve"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
@@ -30,11 +29,11 @@ type Episode struct {
 }
 
 type MediaFile struct {
-	Path      string            `json:"path"`
-	Source    string            `json:"source"`
-	Size      int64             `json:"size"`
-	MTime     string            `json:"mtime"`
-	MediaInfo *domain.MediaInfo `json:"mediainfo,omitempty"`
+	Path      string               `json:"path"`
+	Source    string               `json:"source"`
+	Size      int64                `json:"size"`
+	MTime     string               `json:"mtime"`
+	MediaInfo *seriespkg.MediaInfo `json:"mediainfo,omitempty"`
 }
 
 type CompanionFile struct {

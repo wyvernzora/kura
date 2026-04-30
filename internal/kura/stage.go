@@ -5,27 +5,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
 func (s *Series) Stage(ctx context.Context, in StageInput) (StageResult, error) {
-	season, err := domain.NewSeasonNumber(in.Season)
+	episodeRef, err := refs.NewEpisode(in.Season, in.Episode)
 	if err != nil {
 		return StageResult{}, err
 	}
-	episode, err := domain.NewEpisodeNumber(in.Episode)
-	if err != nil {
-		return StageResult{}, err
-	}
-	source := domain.MediaSource("")
+	source := seriespkg.MediaSource("")
 	if strings.TrimSpace(in.Source) != "" {
-		source = domain.ParseMediaSource(in.Source)
-	}
-	episodeRef, err := refs.NewEpisode(season.Int(), episode.Int())
-	if err != nil {
-		return StageResult{}, err
+		source = seriespkg.ParseMediaSource(in.Source)
 	}
 	handle, err := s.library.series.Open(refs.Series(s.ref))
 	if err != nil {
@@ -64,7 +55,7 @@ func stagedEpisodeFromModern(ref refs.Episode, record seriespkg.MediaRecord) Sta
 				Source: record.Source,
 				Size:   record.Size,
 				MTime:  record.MTime.UTC().Format(time.RFC3339),
-				MediaInfo: &domain.MediaInfo{
+				MediaInfo: &seriespkg.MediaInfo{
 					Resolution: record.Resolution,
 					VideoCodec: record.Codec,
 				},

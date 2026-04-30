@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
@@ -103,7 +102,7 @@ func modernEpisodeStatus(seriesDir fsroot.SeriesDir, episode seriespkg.Episode, 
 
 func modernEpisodeMedia(record seriespkg.MediaRecord) EpisodeMedia {
 	return EpisodeMedia{
-		Source:     domain.ParseMediaSource(record.Source).Display(),
+		Source:     seriespkg.ParseMediaSource(record.Source).Display(),
 		Resolution: displayResolution(record.Resolution),
 		File:       record.Path,
 		Companions: modernCompanions(record.Companions),
@@ -115,7 +114,7 @@ func displayResolution(raw string) string {
 	if raw == "" {
 		return ""
 	}
-	resolution, err := domain.ParseResolution(raw)
+	resolution, err := seriespkg.ParseResolution(raw)
 	if err != nil || !resolution.Known() {
 		return raw
 	}

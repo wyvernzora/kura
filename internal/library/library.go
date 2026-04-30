@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/index"
 	"github.com/wyvernzora/kura/internal/mediainfo"
@@ -52,7 +51,7 @@ func (l *Library) MetadataSource() metadata.Source {
 	return l.source
 }
 
-func (l *Library) MediaInspector() mediainfo.Inspector {
+func (l *Library) MediaInspector() series.Inspector {
 	return l.inspect
 }
 
@@ -67,7 +66,7 @@ func (l *Library) Add(ctx context.Context, in AddInput) (series.Handle, error) {
 	}
 	ref := in.Ref
 	if ref.IsZero() {
-		title, err := domain.ParseFileTitle(metadataSeries.PreferredTitle)
+		title, err := series.ParseFileTitle(metadataSeries.PreferredTitle)
 		if err != nil {
 			return series.Handle{}, err
 		}

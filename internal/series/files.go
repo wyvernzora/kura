@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/refs"
 )
@@ -36,22 +35,14 @@ func (f files) stat(path string) (fileFacts, error) {
 }
 
 func (f files) canonicalPath(ref refs.Series, episode refs.Episode, media MediaRecord) (string, error) {
-	title := domain.CleanFileTitle(ref.String())
-	season, err := domain.NewSeasonNumber(episode.Season())
-	if err != nil {
-		return "", err
-	}
-	number, err := domain.NewEpisodeNumber(episode.Episode())
-	if err != nil {
-		return "", err
-	}
-	facts := domain.MediaFilenameFacts{Source: domain.ParseMediaSource(media.Source)}
+	title := CleanFileTitle(ref.String())
+	facts := MediaFilenameFacts{Source: ParseMediaSource(media.Source)}
 	if media.Resolution != "" {
-		if resolution, err := domain.ParseResolution(media.Resolution); err == nil {
+		if resolution, err := ParseResolution(media.Resolution); err == nil {
 			facts.Resolution = resolution
 		}
 	}
-	filename := domain.BuildMediaFilename(title, domain.NewEpisodeRef(season, number), facts, filepath.Ext(media.Path)).String()
+	filename := BuildMediaFilename(title, episode, facts, filepath.Ext(media.Path)).String()
 	if episode.Season() == 0 {
 		return filename, nil
 	}

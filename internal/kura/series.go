@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
 
@@ -55,7 +54,7 @@ func modernEpisodes(model seriespkg.Series) []Episode {
 				Source: episode.Active.Source,
 				Size:   episode.Active.Size,
 				MTime:  episode.Active.MTime.UTC().Format(time.RFC3339),
-				MediaInfo: &domain.MediaInfo{
+				MediaInfo: &seriespkg.MediaInfo{
 					Resolution: episode.Active.Resolution,
 					VideoCodec: episode.Active.Codec,
 				},

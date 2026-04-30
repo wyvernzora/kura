@@ -161,7 +161,8 @@ Under 300 lines is a good ceiling. Over 500 and you are fighting your own config
 
 - **Language:** Go (1.26.2 or newer).
 - **Main command entrypoint:** `cmd/kura`.
-- **Workflow logic:** `internal/series`, with CLI-facing orchestration in `internal/kura`.
+- **Library orchestration:** `internal/library` owns root/index/open/find/add/import.
+- **Series workflow logic:** `internal/series` owns per-series scan/stage/reconcile/read behavior.
 - **Container:** Docker, single-binary image.
 
 ### Commands
@@ -187,7 +188,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - Active tracked media must not live under `.kura/`. Kura-managed trash media is the explicit exception.
 - Regular seasons: `Season <N>/`.
 - Season 0 specials are treated as root-level series files in the target layout. Legacy `Season 0/` folders may exist and must be tolerated during bootstrap.
-- BD/DVD extras: `Season <N>/Extra/`, no required internal structure. Sync reports these as skipped and does not manage their contents.
+- BD/DVD extras: `Season <N>/Extra/`, no required internal structure. Scan reports these as skipped and does not manage their contents.
 - Target episode naming: `<title> - S02E03 (WebRip 1080p).mkv`.
 - Generated filenames use the current series directory name as `<title>`. `series.json` does not store a `filesystemTitle`.
 - Resolution shorthand when possible (`4K`, `1440p`, `1080p`, `720p`, `480p`); raw resolution is the fallback.

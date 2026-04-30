@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -135,7 +134,7 @@ func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
 			Season:     file.Ref.Season(),
 			Special:    file.Ref.Season() == 0,
 			Number:     file.Ref.Episode(),
-			Source:     domain.ParseMediaSource(record.Source).Display(),
+			Source:     ParseMediaSource(record.Source).Display(),
 			Resolution: record.Resolution,
 			Path:       record.Path,
 			Companions: append([]string(nil), file.Companions...),
@@ -213,7 +212,7 @@ func discoverSeriesEpisodes(seriesDir fsroot.SeriesDir) ([]discoveredFile, []Imp
 		episodes = append(episodes, discoveredFile{
 			Ref:        ref,
 			Path:       relPath,
-			Source:     fsroot.InferSourceFromFilename(relPath).String(),
+			Source:     ParseMediaSource(fsroot.InferSourceFromFilename(relPath)).String(),
 			Companions: matchingCompanions(seriesDir.Path(), "", name, entries),
 		})
 	}
@@ -263,7 +262,7 @@ func discoverSeasonEpisodes(seriesDir fsroot.SeriesDir, seasonDir string, season
 		episodes = append(episodes, discoveredFile{
 			Ref:        ref,
 			Path:       relPath,
-			Source:     fsroot.InferSourceFromFilename(relPath).String(),
+			Source:     ParseMediaSource(fsroot.InferSourceFromFilename(relPath)).String(),
 			Companions: matchingCompanions(seriesDir.Path(), seasonDir, entry.Name(), entries),
 		})
 	}
@@ -354,7 +353,7 @@ func (h Handle) mediaRecord(ctx context.Context, seriesDir fsroot.SeriesDir, fil
 	}
 	record := MediaRecord{
 		Path:       file.Path,
-		Source:     domain.ParseMediaSource(file.Source).String(),
+		Source:     ParseMediaSource(file.Source).String(),
 		Resolution: info.Resolution,
 		Codec:      info.VideoCodec,
 		Size:       facts.Size,
@@ -381,7 +380,7 @@ func statusExisting(file discoveredFile, active MediaRecord) ScannedEpisode {
 		Season:     file.Ref.Season(),
 		Special:    file.Ref.Season() == 0,
 		Number:     file.Ref.Episode(),
-		Source:     domain.ParseMediaSource(active.Source).Display(),
+		Source:     ParseMediaSource(active.Source).Display(),
 		Resolution: active.Resolution,
 		Path:       active.Path,
 		Companions: append([]string(nil), file.Companions...),
