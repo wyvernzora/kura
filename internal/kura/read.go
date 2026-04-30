@@ -4,18 +4,24 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain"
 	"github.com/wyvernzora/kura/internal/fsroot"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/store"
 )
 
 const metadataDateLayout = "2006-01-02"
 
 func (s *Series) Read(ctx context.Context, in ReadInput) (SeriesRead, error) {
+	if s.modern {
+		return s.readModern(in)
+	}
 	seriesDir, err := s.library.root.SeriesDir(string(s.ref))
 	if err != nil {
 		return SeriesRead{}, err
@@ -50,6 +56,122 @@ func (s *Series) Read(ctx context.Context, in ReadInput) (SeriesRead, error) {
 		out.Seasons = append(out.Seasons, readSeason(seriesDir, season, activeBySlot, stagedBySlot, now))
 	}
 	return out, nil
+}
+
+func (s *Series) readModern(in ReadInput) (SeriesRead, error) {
+	seriesDir, err := s.library.root.SeriesDir(string(s.ref))
+	if err != nil {
+		return SeriesRead{}, err
+	}
+	model := s.model
+	if s.library.series != nil {
+		if handle, err := s.library.series.Open(refs.Series(s.ref)); err == nil {
+			if loaded, err := handle.Load(); err == nil {
+				model = loaded
+				s.model = loaded
+			}
+		}
+	}
+	now := in.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	out := SeriesRead{
+		MetadataRef:    MetadataRef(model.Metadata),
+		Ref:            s.ref,
+		Root:           seriesDir.Path(),
+		PreferredTitle: s.ref.String(),
+		Seasons:        modernSeasonReads(seriesDir, model, now),
+	}
+	return out, nil
+}
+
+func modernSeasonReads(seriesDir fsroot.SeriesDir, model seriespkg.Series, now time.Time) []SeasonRead {
+	seasons := map[int][]EpisodeRead{}
+	for ref, episode := range model.Episodes {
+		read := EpisodeRead{
+			Season: ref.Season(),
+			Number: ref.Episode(),
+			Aired:  episode.AirDate,
+			Status: modernEpisodeStatus(seriesDir, episode, now),
+		}
+		if episode.Active != nil {
+			media := modernEpisodeMedia(*episode.Active)
+			read.Active = &media
+		}
+		if episode.Staged != nil {
+			media := modernEpisodeMedia(*episode.Staged)
+			read.Staged = &media
+		}
+		seasons[ref.Season()] = append(seasons[ref.Season()], read)
+	}
+	numbers := make([]int, 0, len(seasons))
+	for number := range seasons {
+		numbers = append(numbers, number)
+	}
+	sort.Ints(numbers)
+	out := make([]SeasonRead, 0, len(numbers))
+	for _, number := range numbers {
+		episodes := seasons[number]
+		sort.Slice(episodes, func(i, j int) bool { return episodes[i].Number < episodes[j].Number })
+		out = append(out, SeasonRead{Number: number, Episodes: episodes})
+	}
+	return out
+}
+
+func modernEpisodeStatus(seriesDir fsroot.SeriesDir, episode seriespkg.Episode, now time.Time) EpisodeStatus {
+	if episode.Active != nil && modernMediaUnavailable(seriesDir, *episode.Active, false) {
+		return EpisodeStatusUnavailable
+	}
+	if episode.Staged != nil && modernMediaUnavailable(seriesDir, *episode.Staged, true) {
+		return EpisodeStatusUnavailable
+	}
+	if episode.Staged != nil {
+		return EpisodeStatusStaged
+	}
+	if episode.Active != nil {
+		return EpisodeStatusPresent
+	}
+	if isPendingEpisode(episode.AirDate, now) {
+		return EpisodeStatusPending
+	}
+	return EpisodeStatusMissing
+}
+
+func modernEpisodeMedia(record seriespkg.MediaRecord) EpisodeMedia {
+	return EpisodeMedia{
+		Source:     domain.ParseMediaSource(record.Source).Display(),
+		Resolution: displayResolution(record.Resolution),
+		File:       record.Path,
+		Companions: modernCompanions(record.Companions),
+	}
+}
+
+func displayResolution(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	resolution, err := domain.ParseResolution(raw)
+	if err != nil || !resolution.Known() {
+		return raw
+	}
+	return resolution.Display()
+}
+
+func modernMediaUnavailable(seriesDir fsroot.SeriesDir, media seriespkg.MediaRecord, absolute bool) bool {
+	path := media.Path
+	if !absolute {
+		joined, err := seriesDir.JoinRel(media.Path)
+		if err != nil {
+			return true
+		}
+		path = joined
+	} else if !filepath.IsAbs(path) {
+		return true
+	}
+	info, err := os.Stat(path)
+	return err != nil || info.IsDir()
 }
 
 func readSeason(seriesDir fsroot.SeriesDir, season metadata.Season, activeBySlot map[string]store.Episode, stagedBySlot map[string]store.StagedEpisode, now time.Time) SeasonRead {
