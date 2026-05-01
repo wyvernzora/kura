@@ -97,9 +97,9 @@ func readEpisodeRow(number int, status series.EpisodeStatus, media *series.Episo
 		}
 		return row
 	}
-	row[1] = styleEpisodeStatus(status, true)
-	row[2] = styleMediaSource(source, true)
-	row[3] = styleMediaResolution(resolution, true)
+	row[1] = renderStatus(string(status), true)
+	row[2] = renderMediaSource(source, true)
+	row[3] = renderMediaResolution(resolution, true)
 	return row
 }
 
@@ -115,73 +115,6 @@ func retireCell(value string) string {
 		return ""
 	}
 	return chalk.Dim.TextStyle(chalk.Strikethrough.TextStyle(value))
-}
-
-func styleEpisodeStatus(status series.EpisodeStatus, style bool) string {
-	value := string(status)
-	if !style {
-		return value
-	}
-	switch status {
-	case series.EpisodeStatusMissing:
-		return orange(value)
-	case series.EpisodeStatusUnavailable:
-		return chalk.Bold.TextStyle(chalk.Red.Color(value))
-	case series.EpisodeStatusPresent:
-		return chalk.Green.Color(value)
-	case series.EpisodeStatusPending:
-		return chalk.Dim.TextStyle(gray(value))
-	case series.EpisodeStatusStaged:
-		return chalk.Yellow.Color(value)
-	case series.EpisodeStatusStagedReplacement:
-		return chalk.Yellow.Color(value)
-	default:
-		return value
-	}
-}
-
-func styleMediaSource(source string, style bool) string {
-	if !style {
-		return source
-	}
-	switch strings.ToLower(strings.TrimSpace(source)) {
-	case "bdrip", "bluray", "blu-ray":
-		return chalk.Green.Color(source)
-	case "web-dl", "webdl", "web-rip", "webrip":
-		return chalk.Yellow.Color(source)
-	case "tv", "hdtv", "tvrip", "tv-rip":
-		return orange(source)
-	case "unknown":
-		return chalk.Red.Color(source)
-	default:
-		return source
-	}
-}
-
-func styleMediaResolution(resolution string, style bool) string {
-	if !style {
-		return resolution
-	}
-	switch strings.ToLower(strings.TrimSpace(resolution)) {
-	case "4k":
-		return chalk.Blue.Color(resolution)
-	case "1080p":
-		return chalk.Green.Color(resolution)
-	case "720p":
-		return chalk.Red.Color(resolution)
-	case "":
-		return resolution
-	default:
-		return orange(resolution)
-	}
-}
-
-func orange(value string) string {
-	return "\x1b[38;5;208m" + value + "\x1b[39m"
-}
-
-func gray(value string) string {
-	return "\x1b[90m" + value + "\x1b[39m"
 }
 
 func WriteScanResult(w io.Writer, result series.ScanResult) error {
@@ -215,7 +148,7 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.Impo
 		}
 	} else {
 		tw := table.NewWriter()
-		tw.AppendHeader(table.Row{"STATUS", "SEASON", "EPISODE", "SOURCE", "RESOLUTION", "FILE"})
+		tw.AppendHeader(table.Row{"EPISODE", "STATUS", "SOURCE", "RESOLUTION", "FILE"})
 		tw.SetStyle(borderlessTableStyle())
 		tw.SetColumnConfigs([]table.ColumnConfig{
 			{Number: 1},
@@ -223,15 +156,13 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.Impo
 			{Number: 3},
 			{Number: 4},
 			{Number: 5},
-			{Number: 6},
 		})
 		for _, entry := range entries {
 			tw.AppendRow(table.Row{
-				entry.Status,
-				strconv.Itoa(entry.Episode.Season()),
-				strconv.Itoa(entry.Episode.Episode()),
-				entry.Source,
-				entry.Resolution,
+				entry.Episode.Marker(),
+				renderStatus(entry.Status, tty),
+				renderMediaSource(entry.Source, tty),
+				renderMediaResolution(entry.Resolution, tty),
 				entry.Path,
 			})
 			for index, companion := range entry.Companions {
@@ -239,7 +170,7 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.Impo
 				if index == len(entry.Companions)-1 {
 					prefix = "    ┗ "
 				}
-				tw.AppendRow(table.Row{"", "", "", "", "", prefix + companion})
+				tw.AppendRow(table.Row{"", "", "", "", prefix + companion})
 			}
 		}
 		if err := writeStyledTable(w, tw, func(line string) bool {
