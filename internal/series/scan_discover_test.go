@@ -3,6 +3,7 @@ package series
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -116,6 +117,41 @@ func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 		if want[skip.Path] != skip.Code {
 			t.Fatalf("skip = %#v, want ignored directory", skip)
 		}
+	}
+}
+
+func TestDiscoverSeriesEpisodesFindsCompanions(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"))
+	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).en.ass"))
+	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).nfo"))
+	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E02 (WebRip 1080p).mkv"))
+
+	dir, err := ParseSeriesDir(seriesDir)
+	if err != nil {
+		t.Fatalf("ParseSeriesDir: %v", err)
+	}
+	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	if err != nil {
+		t.Fatalf("discoverSeriesEpisodes: %v", err)
+	}
+	if len(skipped) != 0 {
+		t.Fatalf("skipped = %#v, want none", skipped)
+	}
+	if len(episodes) != 2 {
+		t.Fatalf("len(episodes) = %d, want 2", len(episodes))
+	}
+	want := []string{
+		"Season 1/Bookworm - S01E01 (WebRip 1080p).en.ass",
+		"Season 1/Bookworm - S01E01 (WebRip 1080p).nfo",
+	}
+	if !slices.Equal(episodes[0].Companions, want) {
+		t.Fatalf("companions = %#v, want %#v", episodes[0].Companions, want)
 	}
 }
 
