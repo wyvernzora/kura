@@ -49,6 +49,10 @@ func (ref Episode) Episode() int {
 	return ref.episode
 }
 
+func (ref Episode) IsSpecial() bool {
+	return ref.season == 0
+}
+
 func (ref Episode) String() string {
 	return fmt.Sprintf("S%02dE%04d", ref.season, ref.episode)
 }
