@@ -2,6 +2,7 @@ package series
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,11 +21,12 @@ type ReadInput struct {
 type EpisodeStatus string
 
 const (
-	EpisodeStatusPending     EpisodeStatus = "pending"
-	EpisodeStatusMissing     EpisodeStatus = "missing"
-	EpisodeStatusPresent     EpisodeStatus = "present"
-	EpisodeStatusStaged      EpisodeStatus = "staged"
-	EpisodeStatusUnavailable EpisodeStatus = "unavailable"
+	EpisodeStatusPending           EpisodeStatus = "pending"
+	EpisodeStatusMissing           EpisodeStatus = "missing"
+	EpisodeStatusPresent           EpisodeStatus = "present"
+	EpisodeStatusStaged            EpisodeStatus = "staged"
+	EpisodeStatusStagedReplacement EpisodeStatus = "staged_replacement"
+	EpisodeStatusUnavailable       EpisodeStatus = "unavailable"
 )
 
 func (h Handle) Read(ctx context.Context, in ReadInput) (Series, error) {
@@ -45,6 +47,7 @@ func (h Handle) Read(ctx context.Context, in ReadInput) (Series, error) {
 		MetadataRef:    model.Metadata,
 		Ref:            h.ref,
 		Root:           seriesDir.Path(),
+		LastScanned:    formatOptionalTime(model.LastScanned),
 		PreferredTitle: textnorm.NFC(h.ref.String()),
 		Seasons:        seasonViews(seriesDir, model, now),
 	}, nil
@@ -54,9 +57,10 @@ func seasonViews(seriesDir SeriesDir, model seriesState, now time.Time) []Season
 	seasons := map[int][]Episode{}
 	for ref, episode := range model.Episodes {
 		view := Episode{
-			Episode: ref,
-			Aired:   episode.AirDate,
-			Status:  episodeStatus(seriesDir, episode, now),
+			Episode:         ref,
+			Aired:           episode.AirDate,
+			Status:          episodeStatus(seriesDir, episode, now),
+			Inconsistencies: episodeFilesystemIssues(seriesDir, episode),
 		}
 		if episode.Active != nil {
 			media := episodeMedia(*episode.Active)
@@ -83,10 +87,10 @@ func seasonViews(seriesDir SeriesDir, model seriesState, now time.Time) []Season
 }
 
 func episodeStatus(seriesDir SeriesDir, episode episodeState, now time.Time) EpisodeStatus {
-	if episode.Active != nil && mediaUnavailable(seriesDir, *episode.Active, false) {
-		return EpisodeStatusUnavailable
+	if episode.Active != nil && episode.Staged != nil {
+		return EpisodeStatusStagedReplacement
 	}
-	if episode.Staged != nil && mediaUnavailable(seriesDir, *episode.Staged, true) {
+	if episode.Active != nil && len(pathFilesystemIssue(seriesDir, "active", "media", episode.Active.Path, false)) > 0 {
 		return EpisodeStatusUnavailable
 	}
 	if episode.Staged != nil {
@@ -99,6 +103,13 @@ func episodeStatus(seriesDir SeriesDir, episode episodeState, now time.Time) Epi
 		return EpisodeStatusPending
 	}
 	return EpisodeStatusMissing
+}
+
+func formatOptionalTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func episodeMedia(record MediaRecord) EpisodeMedia {
@@ -122,19 +133,73 @@ func displayResolution(raw string) string {
 	return resolution.Display()
 }
 
-func mediaUnavailable(seriesDir SeriesDir, media MediaRecord, absolute bool) bool {
-	path := media.Path
+func episodeFilesystemIssues(seriesDir SeriesDir, episode episodeState) []FilesystemIssue {
+	var issues []FilesystemIssue
+	if episode.Active != nil {
+		issues = append(issues, recordFilesystemIssues(seriesDir, "active", *episode.Active, false)...)
+	}
+	if episode.Staged != nil {
+		issues = append(issues, recordFilesystemIssues(seriesDir, "staged", *episode.Staged, true)...)
+	}
+	return issues
+}
+
+func recordFilesystemIssues(seriesDir SeriesDir, recordName string, media MediaRecord, absolute bool) []FilesystemIssue {
+	var issues []FilesystemIssue
+	issues = append(issues, pathFilesystemIssue(seriesDir, recordName, "media", media.Path, absolute)...)
+	for _, companion := range media.Companions {
+		issues = append(issues, pathFilesystemIssue(seriesDir, recordName, "companion", companion.Path, absolute)...)
+	}
+	return issues
+}
+
+func pathFilesystemIssue(seriesDir SeriesDir, recordName string, kind string, rawPath string, absolute bool) []FilesystemIssue {
+	path := rawPath
 	if !absolute {
-		joined, err := seriesDir.JoinRel(media.Path)
+		joined, err := seriesDir.JoinRel(rawPath)
 		if err != nil {
-			return true
+			return []FilesystemIssue{{
+				Record: recordName,
+				Path:   rawPath,
+				Code:   recordName + "_" + kind + "_invalid_path",
+				Reason: err.Error(),
+			}}
 		}
 		path = joined
 	} else if !filepath.IsAbs(path) {
-		return true
+		return []FilesystemIssue{{
+			Record: recordName,
+			Path:   rawPath,
+			Code:   recordName + "_" + kind + "_invalid_path",
+			Reason: "path must be absolute",
+		}}
 	}
 	info, err := os.Stat(path)
-	return err != nil || info.IsDir()
+	if errors.Is(err, os.ErrNotExist) {
+		return []FilesystemIssue{{
+			Record: recordName,
+			Path:   rawPath,
+			Code:   recordName + "_" + kind + "_missing",
+			Reason: "path does not exist",
+		}}
+	}
+	if err != nil {
+		return []FilesystemIssue{{
+			Record: recordName,
+			Path:   rawPath,
+			Code:   recordName + "_" + kind + "_stat_error",
+			Reason: err.Error(),
+		}}
+	}
+	if info.IsDir() {
+		return []FilesystemIssue{{
+			Record: recordName,
+			Path:   rawPath,
+			Code:   recordName + "_" + kind + "_not_file",
+			Reason: "path is a directory",
+		}}
+	}
+	return nil
 }
 
 func companionFiles(in []CompanionRecord) []CompanionFile {

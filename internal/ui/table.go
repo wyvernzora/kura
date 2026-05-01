@@ -21,6 +21,11 @@ func WriteSeriesRead(w io.Writer, result series.Series) error {
 	if _, err := fmt.Fprintf(w, "Root: %s\n", result.Root); err != nil {
 		return err
 	}
+	if result.LastScanned != "" {
+		if _, err := fmt.Fprintf(w, "LastScanned: %s\n", result.LastScanned); err != nil {
+			return err
+		}
+	}
 	title := result.PreferredTitle.String()
 	if result.CanonicalTitle != nil && !result.CanonicalTitle.IsZero() && *result.CanonicalTitle != result.PreferredTitle {
 		title += " / " + result.CanonicalTitle.String()
@@ -127,6 +132,8 @@ func styleEpisodeStatus(status series.EpisodeStatus, style bool) string {
 	case series.EpisodeStatusPending:
 		return chalk.Dim.TextStyle(gray(value))
 	case series.EpisodeStatusStaged:
+		return chalk.Yellow.Color(value)
+	case series.EpisodeStatusStagedReplacement:
 		return chalk.Yellow.Color(value)
 	default:
 		return value

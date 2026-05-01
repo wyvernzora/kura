@@ -9,6 +9,7 @@ import (
 type importCmd struct {
 	Dirname string   `arg:"" required:"" help:"Existing directory below KURA_LIBRARY_ROOT."`
 	JSON    bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
+	Force   bool     `name:"force" help:"Replace existing .kura/series.json while preserving other .kura contents."`
 	Terms   []string `arg:"" optional:"" help:"Additional resolver terms. Plain text or metadata refs such as tvdb:370070."`
 }
 
@@ -32,6 +33,7 @@ func (cmd *importCmd) Run(rt *runContext) error {
 	series, err := lib.Import(rt.Context, library.ImportInput{
 		Ref:      ref,
 		Metadata: metadataRef,
+		Force:    cmd.Force,
 	})
 	if err != nil {
 		return err

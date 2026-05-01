@@ -14,6 +14,7 @@ type Series struct {
 	MetadataRef    refs.Metadata       `json:"metadataRef"`
 	Ref            refs.Series         `json:"ref"`
 	Root           string              `json:"root"`
+	LastScanned    string              `json:"lastScanned,omitempty"`
 	PreferredTitle textnorm.NFCString  `json:"preferredTitle"`
 	CanonicalTitle *textnorm.NFCString `json:"canonicalTitle,omitempty"`
 	Seasons        []Season            `json:"seasons"`
@@ -26,13 +27,14 @@ type Season struct {
 }
 
 type Episode struct {
-	MetadataRef    refs.Metadata `json:"metadataRef,omitempty"`
-	Episode        refs.Episode  `json:"episode"`
-	AbsoluteNumber *int          `json:"absoluteNumber,omitempty"`
-	Aired          string        `json:"aired,omitempty"`
-	Status         EpisodeStatus `json:"status"`
-	Active         *EpisodeMedia `json:"active,omitempty"`
-	Staged         *EpisodeMedia `json:"staged,omitempty"`
+	MetadataRef     refs.Metadata     `json:"metadataRef,omitempty"`
+	Episode         refs.Episode      `json:"episode"`
+	AbsoluteNumber  *int              `json:"absoluteNumber,omitempty"`
+	Aired           string            `json:"aired,omitempty"`
+	Status          EpisodeStatus     `json:"status"`
+	Active          *EpisodeMedia     `json:"active,omitempty"`
+	Staged          *EpisodeMedia     `json:"staged,omitempty"`
+	Inconsistencies []FilesystemIssue `json:"inconsistencies,omitempty"`
 }
 
 type EpisodeMedia struct {
@@ -49,6 +51,13 @@ type CompanionFile struct {
 	Label    string `json:"label,omitempty"`
 	Size     int64  `json:"size"`
 	MTime    string `json:"mtime"`
+}
+
+type FilesystemIssue struct {
+	Record string `json:"record"`
+	Path   string `json:"path"`
+	Code   string `json:"code"`
+	Reason string `json:"reason"`
 }
 
 type seriesState struct {

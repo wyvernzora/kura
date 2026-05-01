@@ -288,6 +288,62 @@ func TestImportCommandRejectsAlreadyTrackedDirectory(t *testing.T) {
 	}
 }
 
+func TestImportCommandForceReplacesSeriesJSONAndPreservesKuraSiblings(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:999999",
+		"episodes": {}
+	}`)
+	trashMeta := filepath.Join(seriesDir, ".kura", "trash", "old", "meta.json")
+	logFile := filepath.Join(seriesDir, ".kura", "logs", "old.jsonl")
+	if err := os.MkdirAll(filepath.Dir(trashMeta), 0o755); err != nil {
+		t.Fatalf("MkdirAll trash: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(logFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll logs: %v", err)
+	}
+	writeFile(t, trashMeta, "{}")
+	writeFile(t, logFile, "{}\n")
+	writeLibraryIndex(t, root, map[string]string{"tvdb:999999": "Bookworm"})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"import",
+		"--force",
+		"--tvdb-base-url", server.URL,
+		"Bookworm",
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	doc, err := loadSeriesDocument(t, seriesDir)
+	if err != nil {
+		t.Fatalf("load series document: %v", err)
+	}
+	if got := doc["metadataRef"]; got != "tvdb:370070" {
+		t.Fatalf("metadataRef = %v, want tvdb:370070", got)
+	}
+	if _, err := os.Stat(trashMeta); err != nil {
+		t.Fatalf("trash meta was not preserved: %v", err)
+	}
+	if _, err := os.Stat(logFile); err != nil {
+		t.Fatalf("log file was not preserved: %v", err)
+	}
+	if libraryIndexHasRef(t, root, "tvdb:999999") {
+		t.Fatal("old index ref tvdb:999999 still exists")
+	}
+	if got := libraryIndexPathForRef(t, root, "tvdb:370070"); got != "Bookworm" {
+		t.Fatalf("index path = %q, want Bookworm", got)
+	}
+}
+
 func TestImportCommandRejectsMissingDirectory(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
@@ -453,7 +509,7 @@ func TestScanCommandUsesIndexToFindDirectory(t *testing.T) {
 	}
 }
 
-func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
+func TestShowCommandPrintsTrackedSeriesTable(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -467,6 +523,7 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
+		"lastScanned": "2026-04-20T03:00:00Z",
 		"episodes": {
 			"S01E0001": {
 				"airDate": "2019-10-03",
@@ -486,7 +543,7 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"find",
+		"show",
 		"--tvdb-base-url", server.URL,
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
@@ -497,6 +554,7 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 	for _, want := range []string{
 		"MetadataRef: tvdb:370070",
 		"Root: " + seriesDir,
+		"LastScanned: 2026-04-20T03:00:00Z",
 		"Title: Bookworm",
 		"SEASON 1",
 		"present",
@@ -511,7 +569,7 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 	}
 }
 
-func TestFindCommandPrintsJSON(t *testing.T) {
+func TestShowCommandPrintsJSON(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -524,6 +582,7 @@ func TestFindCommandPrintsJSON(t *testing.T) {
 	writeSeriesJSON(t, seriesDir, `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
+		"lastScanned": "2026-04-20T03:00:00Z",
 		"episodes": {
 			"S01E0001": {
 				"airDate": "2019-10-03",
@@ -543,7 +602,7 @@ func TestFindCommandPrintsJSON(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"find",
+		"show",
 		"--json",
 		"--tvdb-base-url", server.URL,
 		"tvdb:370070",
@@ -555,6 +614,9 @@ func TestFindCommandPrintsJSON(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
+	if got := result["lastScanned"]; got != "2026-04-20T03:00:00Z" {
+		t.Fatalf("lastScanned = %v, want 2026-04-20T03:00:00Z", got)
+	}
 	seasons := result["seasons"].([]any)
 	episodes := seasons[0].(map[string]any)["episodes"].([]any)
 	if got := episodes[0].(map[string]any)["status"]; got != "present" {
@@ -562,6 +624,15 @@ func TestFindCommandPrintsJSON(t *testing.T) {
 	}
 	if got := episodes[1].(map[string]any)["status"]; got != "missing" {
 		t.Fatalf("episode 2 status = %v, want missing", got)
+	}
+}
+
+func TestFindCommandIsRemoved(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{"find", "tvdb:370070"}, testRunContext(&stdout, &stderr))
+	if err == nil {
+		t.Fatal("find command succeeded, want removed command error")
 	}
 }
 
@@ -832,6 +903,44 @@ func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) s
 		t.Fatalf("Get(%s) = false", metadataRef)
 	}
 	return path.String()
+}
+
+func libraryIndexHasRef(t *testing.T, rootPath string, metadataRef string) bool {
+	t.Helper()
+	root, err := librarypkg.ParseRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseRoot: %v", err)
+	}
+	idx, err := librarypkg.LoadIndex(root)
+	if err != nil {
+		t.Fatalf("LoadIndex: %v", err)
+	}
+	_, ok, err := idx.Get(refs.Metadata(metadataRef))
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	return ok
+}
+
+func writeLibraryIndex(t *testing.T, rootPath string, entries map[string]string) {
+	t.Helper()
+	root, err := librarypkg.ParseRoot(rootPath)
+	if err != nil {
+		t.Fatalf("ParseRoot: %v", err)
+	}
+	idx := librarypkg.NewIndex(root)
+	for metadataRef, seriesRef := range entries {
+		ref, err := refs.ParseSeries(seriesRef)
+		if err != nil {
+			t.Fatalf("ParseSeries: %v", err)
+		}
+		if err := idx.Put(refs.Metadata(metadataRef), ref); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+	}
+	if err := idx.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
 }
 
 func newCLITestServer(t *testing.T) *httptest.Server {

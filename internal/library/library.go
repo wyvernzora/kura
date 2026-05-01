@@ -30,6 +30,7 @@ type AddInput struct {
 type ImportInput struct {
 	Metadata refs.Metadata
 	Ref      refs.Series
+	Force    bool
 }
 
 func New(root Root, source metadata.Source, inspector mediainfo.Inspector, idx *Index) *Library {
@@ -120,13 +121,22 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 	if err != nil {
 		return series.Handle{}, err
 	}
-	if _, err := os.Stat(wire.SeriesMetadataPath(seriesDir.Path())); err == nil {
-		return series.Handle{}, series.SeriesAlreadyTrackedError{Ref: ref}
+	metadataPath := wire.SeriesMetadataPath(seriesDir.Path())
+	if _, err := os.Stat(metadataPath); err == nil {
+		if !in.Force {
+			return series.Handle{}, series.SeriesAlreadyTrackedError{Ref: ref}
+		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return series.Handle{}, err
 	}
 	if err := l.checkMetadataAvailable(metadataRef, ref); err != nil {
 		return series.Handle{}, err
+	}
+	if in.Force {
+		l.index.Remove(ref)
+		if err := os.Remove(metadataPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return series.Handle{}, err
+		}
 	}
 	if err := series.Initialize(l.root.Path(), ref, metadataRef, metadataSeries); err != nil {
 		return series.Handle{}, err

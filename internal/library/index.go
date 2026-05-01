@@ -148,6 +148,14 @@ func (i *Index) Put(metadataRef refs.Metadata, seriesRef refs.Series) error {
 	return nil
 }
 
+func (i *Index) Remove(seriesRef refs.Series) {
+	for metadataRef, existing := range i.refs {
+		if existing == seriesRef {
+			delete(i.refs, metadataRef)
+		}
+	}
+}
+
 func (i *Index) Save() error {
 	if err := os.MkdirAll(filepath.Join(i.root.Path(), KuraDir), 0o755); err != nil {
 		return err

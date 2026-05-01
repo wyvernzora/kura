@@ -9,7 +9,7 @@ import (
 	"github.com/wyvernzora/kura/internal/series"
 )
 
-func TestFindTableRendersStagedOverAsSeparateRows(t *testing.T) {
+func TestShowTableRendersStagedOverAsSeparateRows(t *testing.T) {
 	var out bytes.Buffer
 	episode, err := refs.NewEpisode(1, 1)
 	if err != nil {
@@ -50,7 +50,7 @@ func TestFindTableRendersStagedOverAsSeparateRows(t *testing.T) {
 	}
 }
 
-func TestFindTableStylesEpisodeStatus(t *testing.T) {
+func TestShowTableStylesEpisodeStatus(t *testing.T) {
 	cases := []struct {
 		name   string
 		status series.EpisodeStatus
@@ -61,6 +61,7 @@ func TestFindTableStylesEpisodeStatus(t *testing.T) {
 		{"present", series.EpisodeStatusPresent, "\x1b[32mpresent\x1b[39m"},
 		{"pending", series.EpisodeStatusPending, "\x1b[2m\x1b[90mpending\x1b[39m\x1b[22m"},
 		{"staged", series.EpisodeStatusStaged, "\x1b[33mstaged\x1b[39m"},
+		{"staged replacement", series.EpisodeStatusStagedReplacement, "\x1b[33mstaged_replacement\x1b[39m"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -74,7 +75,7 @@ func TestFindTableStylesEpisodeStatus(t *testing.T) {
 	}
 }
 
-func TestFindTableStylesMediaSource(t *testing.T) {
+func TestShowTableStylesMediaSource(t *testing.T) {
 	cases := []struct {
 		source string
 		ansi   string
@@ -98,7 +99,7 @@ func TestFindTableStylesMediaSource(t *testing.T) {
 	}
 }
 
-func TestFindTableStylesMediaResolution(t *testing.T) {
+func TestShowTableStylesMediaResolution(t *testing.T) {
 	cases := []struct {
 		resolution string
 		ansi       string

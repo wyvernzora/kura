@@ -85,6 +85,25 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 					"mtime": "2026-04-20T03:00:00Z",
 					"companions": []
 				}
+			},
+			"S01E0007": {
+				"airDate": "2019-11-14",
+				"active": {
+					"path": "Season 1/episode-6.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				},
+				"staged": {
+					"path": "/missing/staged-episode-7.mkv",
+					"source": "bluray",
+					"resolution": "3840x2160",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
 			}
 		}
 	}`, stagedFive, stagedSix))
@@ -101,8 +120,8 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 		t.Fatalf("Read: %v", err)
 	}
 	episodes := view.Seasons[0].Episodes
-	if len(episodes) != 6 {
-		t.Fatalf("len(Episodes) = %d, want 6", len(episodes))
+	if len(episodes) != 7 {
+		t.Fatalf("len(Episodes) = %d, want 7", len(episodes))
 	}
 	wantStatuses := []seriespkg.EpisodeStatus{
 		seriespkg.EpisodeStatusPresent,
@@ -110,7 +129,8 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 		seriespkg.EpisodeStatusPending,
 		seriespkg.EpisodeStatusUnavailable,
 		seriespkg.EpisodeStatusStaged,
-		seriespkg.EpisodeStatusStaged,
+		seriespkg.EpisodeStatusStagedReplacement,
+		seriespkg.EpisodeStatusStagedReplacement,
 	}
 	for index, want := range wantStatuses {
 		if episodes[index].Status != want {
@@ -125,6 +145,12 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 	}
 	if episodes[5].Active == nil || episodes[5].Staged == nil {
 		t.Fatalf("episode 6 active/staged = %#v/%#v, want both", episodes[5].Active, episodes[5].Staged)
+	}
+	if len(episodes[3].Inconsistencies) != 1 || episodes[3].Inconsistencies[0].Code != "active_media_missing" {
+		t.Fatalf("episode 4 inconsistencies = %#v, want active media missing", episodes[3].Inconsistencies)
+	}
+	if len(episodes[6].Inconsistencies) != 1 || episodes[6].Inconsistencies[0].Code != "staged_media_missing" {
+		t.Fatalf("episode 7 inconsistencies = %#v, want staged media missing", episodes[6].Inconsistencies)
 	}
 }
 

@@ -51,6 +51,65 @@ func TestLibraryImportRequiresExistingUntrackedDir(t *testing.T) {
 	}
 }
 
+func TestLibraryImportForceReplacesSeriesJSONAndPreservesKuraSiblings(t *testing.T) {
+	root, err := ParseRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := mustSeries(t, "Bookworm")
+	seriesDir := root.Join("Bookworm")
+	if err := os.MkdirAll(root.Join("Bookworm", ".kura", "trash", "old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root.Join("Bookworm", ".kura", "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root.Join("Bookworm", ".kura", "series.json"), []byte(`{"schemaVersion":1,"metadataRef":"tvdb:999999","episodes":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root.Join("Bookworm", ".kura", "trash", "old", "meta.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(root.Join("Bookworm", ".kura", "logs", "old.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	idx := NewIndex(root)
+	if err := idx.Put(refs.Metadata("tvdb:999999"), ref); err != nil {
+		t.Fatal(err)
+	}
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, idx)
+	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: ref, Force: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(root.Join("Bookworm", ".kura", "trash", "old", "meta.json")); err != nil {
+		t.Fatalf("trash meta was not preserved: %v", err)
+	}
+	if _, err := os.Stat(root.Join("Bookworm", ".kura", "logs", "old.jsonl")); err != nil {
+		t.Fatalf("log was not preserved: %v", err)
+	}
+	if _, ok, err := idx.Get(refs.Metadata("tvdb:999999")); err != nil || ok {
+		t.Fatalf("old index ref = _, %v, %v; want absent", ok, err)
+	}
+	if got, ok, err := idx.Get(refs.Metadata("tvdb:370070")); err != nil || !ok || got != ref {
+		t.Fatalf("new index ref = %q, %v, %v; want %q, true, nil", got, ok, err, ref)
+	}
+	handle, err := lib.Find(refs.Metadata("tvdb:370070"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := handle.Read(context.Background(), seriespkg.ReadInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.MetadataRef != refs.Metadata("tvdb:370070") || len(view.Seasons[0].Episodes) != 2 {
+		t.Fatalf("view = %#v, want fresh imported metadata", view)
+	}
+	if _, err := os.Stat(seriesDir); err != nil {
+		t.Fatal(err)
+	}
+}
+
 type fakeSource struct{}
 
 func (fakeSource) Key() string { return "tvdb" }

@@ -7,12 +7,12 @@ import (
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
-type findCmd struct {
+type showCmd struct {
 	JSON  bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Terms []string `arg:"" required:"" help:"Resolver terms. Plain text or metadata refs such as tvdb:370070."`
 }
 
-func (cmd *findCmd) Run(rt *runContext) error {
+func (cmd *showCmd) Run(rt *runContext) error {
 	lib, err := libraryFromFlags(rt, rt.flags)
 	if err != nil {
 		return err
