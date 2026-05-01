@@ -3,12 +3,14 @@ package library
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
 )
@@ -41,7 +43,6 @@ type ListInput struct {
 }
 
 func List(ctx context.Context, in ListInput) ([]ListEntry, error) {
-	_ = ctx
 	info, err := os.Stat(in.Root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrRootNotFound
@@ -56,16 +57,20 @@ func List(ctx context.Context, in ListInput) ([]ListEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	progress.Start(ctx, "list", "Listing library contents", 0)
 	dir, err := os.Open(root.Path())
 	if err != nil {
+		progress.Failure(ctx, "list", "Failed to list library contents", 0, 0)
 		return nil, err
 	}
 	defer dir.Close()
 
 	var entries []ListEntry
+	scanned := 0
 	for {
 		dirEntries, err := dir.ReadDir(64)
 		if err != nil && !errors.Is(err, io.EOF) {
+			progress.Failure(ctx, "list", "Failed to list library contents", scanned, 0)
 			return nil, err
 		}
 		for _, dirEntry := range dirEntries {
@@ -73,6 +78,8 @@ func List(ctx context.Context, in ListInput) ([]ListEntry, error) {
 			if !dirEntry.IsDir() || strings.HasPrefix(name, ".") {
 				continue
 			}
+			scanned++
+			progress.Update(ctx, "list", fmt.Sprintf("Listing %s", name), scanned, 0)
 			entries = append(entries, listOne(root, name, in.Now))
 		}
 		if errors.Is(err, io.EOF) {
@@ -82,6 +89,7 @@ func List(ctx context.Context, in ListInput) ([]ListEntry, error) {
 	sort.Slice(entries, func(i, j int) bool {
 		return entries[i].Root < entries[j].Root
 	})
+	progress.Success(ctx, "list", fmt.Sprintf("Listed library contents (%d series)", len(entries)), scanned)
 	return entries, nil
 }
 
