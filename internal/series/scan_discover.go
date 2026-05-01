@@ -71,8 +71,22 @@ func skipDiscoveryDir(relPath string, name string) (error, string) {
 		}
 		return fs.SkipDir, "directory is not a season directory"
 	default:
+		if relPathDepth(relPath) == 2 && isSeasonExtraDir(relPath, name) {
+			return fs.SkipDir, ""
+		}
 		return fs.SkipDir, "season subdirectory is not scanned"
 	}
+}
+
+func isSeasonExtraDir(relPath string, name string) bool {
+	seasonDir, _, ok := strings.Cut(relPath, "/")
+	if !ok {
+		return false
+	}
+	if _, ok := parseSeasonDir(seasonDir); !ok {
+		return false
+	}
+	return strings.EqualFold(name, "Extra")
 }
 
 func discoveredEpisode(seriesDir SeriesDir, relPath string, name string) (discoveredFile, *ImportSkip, error) {

@@ -87,12 +87,8 @@ func TestDiscoverSeriesRootRejectsImplicitFallbackSeason(t *testing.T) {
 func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Frieren")
-	seasonDir := filepath.Join(seriesDir, "Season 1")
 	if err := os.MkdirAll(filepath.Join(seriesDir, "Downloads"), 0o755); err != nil {
 		t.Fatalf("MkdirAll Downloads: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Join(seasonDir, "Extra"), 0o755); err != nil {
-		t.Fatalf("MkdirAll Extra: %v", err)
 	}
 
 	dir, err := ParseSeriesDir(seriesDir)
@@ -107,8 +103,7 @@ func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 		t.Fatalf("episodes = %#v, want none", episodes)
 	}
 	want := map[string]string{
-		"Downloads":      SkipCodeIgnoredDirectory,
-		"Season 1/Extra": SkipCodeIgnoredDirectory,
+		"Downloads": SkipCodeIgnoredDirectory,
 	}
 	if len(skipped) != len(want) {
 		t.Fatalf("skipped = %#v, want ignored directories", skipped)
@@ -117,6 +112,31 @@ func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 		if want[skip.Path] != skip.Code {
 			t.Fatalf("skip = %#v, want ignored directory", skip)
 		}
+	}
+}
+
+func TestDiscoverSeriesEpisodesIgnoresSeasonExtraDirectory(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Frieren")
+	extraDir := filepath.Join(seriesDir, "Season 1", "Extra")
+	if err := os.MkdirAll(extraDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll Extra: %v", err)
+	}
+	writeScanTestFile(t, filepath.Join(extraDir, "interview.mkv"))
+
+	dir, err := ParseSeriesDir(seriesDir)
+	if err != nil {
+		t.Fatalf("ParseSeriesDir: %v", err)
+	}
+	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	if err != nil {
+		t.Fatalf("discoverSeriesEpisodes: %v", err)
+	}
+	if len(episodes) != 0 {
+		t.Fatalf("episodes = %#v, want none", episodes)
+	}
+	if len(skipped) != 0 {
+		t.Fatalf("skipped = %#v, want none", skipped)
 	}
 }
 
