@@ -1219,7 +1219,85 @@ func TestResetCommandClearsStagedEpisode(t *testing.T) {
 	}
 }
 
-func TestResetCommandRequiresEpisode(t *testing.T) {
+func TestResetCommandClearsAllStagedEpisodes(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	firstPath := filepath.Join(t.TempDir(), "Bookworm - S01E01 (WebRip).mkv")
+	secondPath := filepath.Join(t.TempDir(), "Bookworm - S01E02 (WebRip).mkv")
+	writeFile(t, firstPath, "episode 1")
+	writeFile(t, secondPath, "episode 2")
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"staged": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			},
+			"S01E0002": {
+				"airDate": "2019-10-10",
+				"staged": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 8,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, firstPath, secondPath))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"reset",
+		"--all",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
+	}
+	if got := result["applied"]; got != true {
+		t.Fatalf("applied = %v, want true", got)
+	}
+	records := result["records"].([]any)
+	if len(records) != 2 {
+		t.Fatalf("len(records) = %d, want 2", len(records))
+	}
+	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
+	if err != nil {
+		t.Fatalf("ReadFile series.json: %v", err)
+	}
+	var series map[string]any
+	if err := json.Unmarshal(data, &series); err != nil {
+		t.Fatalf("unmarshal series: %v", err)
+	}
+	for key, entry := range series["episodes"].(map[string]any) {
+		if _, ok := entry.(map[string]any)["staged"]; ok {
+			t.Fatalf("%s staged entry = %#v, want removed", key, entry)
+		}
+	}
+}
+
+func TestResetCommandRequiresEpisodeOrAll(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
@@ -1227,7 +1305,21 @@ func TestResetCommandRequiresEpisode(t *testing.T) {
 		"tvdb:370070",
 	}, testRunContext(&stdout, &stderr))
 	if err == nil {
-		t.Fatal("run returned nil, want missing --episode error")
+		t.Fatal("run returned nil, want missing --episode or --all error")
+	}
+}
+
+func TestResetCommandRejectsEpisodeAndAll(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"reset",
+		"--episode", "S01E01",
+		"--all",
+		"tvdb:370070",
+	}, testRunContext(&stdout, &stderr))
+	if err == nil {
+		t.Fatal("run returned nil, want mutually exclusive reset mode error")
 	}
 }
 

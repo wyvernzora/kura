@@ -3,17 +3,25 @@ package series
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type ResetInput struct {
 	Episode refs.Episode
+	All     bool
 }
 
 type ResetResult struct {
-	Series  refs.Series  `json:"series"`
-	Applied bool         `json:"applied"`
+	Series  refs.Series   `json:"series"`
+	Applied bool          `json:"applied"`
+	Episode *refs.Episode `json:"episode,omitempty"`
+	Record  *MediaRecord  `json:"record,omitempty"`
+	Records []ResetRecord `json:"records,omitempty"`
+}
+
+type ResetRecord struct {
 	Episode refs.Episode `json:"episode"`
 	Record  MediaRecord  `json:"record"`
 }
@@ -31,6 +39,9 @@ func (h Handle) Reset(ctx context.Context, in ResetInput) (ResetResult, error) {
 	model, err := h.load()
 	if err != nil {
 		return ResetResult{}, err
+	}
+	if in.All {
+		return h.resetAll(model)
 	}
 	episode, ok := model.Episodes[in.Episode]
 	if !ok {
@@ -50,7 +61,38 @@ func (h Handle) Reset(ctx context.Context, in ResetInput) (ResetResult, error) {
 	return ResetResult{
 		Series:  h.ref,
 		Applied: true,
-		Episode: in.Episode,
-		Record:  record,
+		Episode: &in.Episode,
+		Record:  &record,
+	}, nil
+}
+
+func (h Handle) resetAll(model seriesState) (ResetResult, error) {
+	refsWithStaged := make([]refs.Episode, 0, len(model.Episodes))
+	for ref, episode := range model.Episodes {
+		if episode.Staged != nil {
+			refsWithStaged = append(refsWithStaged, ref)
+		}
+	}
+	sort.Slice(refsWithStaged, func(i, j int) bool {
+		return refsWithStaged[i].String() < refsWithStaged[j].String()
+	})
+	records := make([]ResetRecord, 0, len(refsWithStaged))
+	editor := editor{series: &model}
+	for _, ref := range refsWithStaged {
+		record := cloneMediaRecord(*model.Episodes[ref].Staged)
+		if err := editor.clearStaged(ref); err != nil {
+			return ResetResult{}, err
+		}
+		records = append(records, ResetRecord{Episode: ref, Record: record})
+	}
+	if len(records) > 0 {
+		if err := h.repo().save(h.ref, model); err != nil {
+			return ResetResult{}, err
+		}
+	}
+	return ResetResult{
+		Series:  h.ref,
+		Applied: len(records) > 0,
+		Records: records,
 	}, nil
 }

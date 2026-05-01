@@ -25,7 +25,8 @@ directories:
   Use `--replace` when the staged file is intended to replace an active or
   already-staged episode.
 - `kura reset --episode <marker> <selector>` removes the staged record for one
-  episode without touching the staged file on disk.
+  episode without touching the staged file on disk. `kura reset --all <selector>`
+  removes every staged record for the series.
 - `kura reconcile <dir>` applies Kura's planned filesystem layout, moves staged
   files into the series, and moves replaced active files into `.kura/trash/`.
 - `kura reindex` rebuilds `.kura/index.tsv` from per-series metadata.
