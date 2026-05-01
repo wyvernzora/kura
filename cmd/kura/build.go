@@ -33,6 +33,7 @@ func libraryFromFlags(rt *runContext, flags *cli) (*library.Library, error) {
 		TVDBKey:            rt.Getenv("KURA_TVDB_KEY"),
 		TVDBBaseURL:        flags.TVDBBaseURL,
 		PreferredLanguages: preferredLanguages.Tags(),
+		Context:            rt.Context,
 	})
 }
 

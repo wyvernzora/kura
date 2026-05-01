@@ -7,6 +7,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/textnorm"
@@ -107,6 +108,33 @@ func TestLibraryImportForceReplacesSeriesJSONAndPreservesKuraSiblings(t *testing
 	}
 	if _, err := os.Stat(seriesDir); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLibraryImportReportsProgress(t *testing.T) {
+	root, err := ParseRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(root.Join("Bookworm"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var events []progress.Event
+	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
+		events = append(events, event)
+	})
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
+	if _, err := lib.Import(ctx, ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: mustSeries(t, "Bookworm")}); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) < 3 {
+		t.Fatalf("events = %#v, want start/update/success", events)
+	}
+	if events[0].Status != progress.StartStatus || events[0].Stage != "import" {
+		t.Fatalf("first event = %#v, want import start", events[0])
+	}
+	if events[len(events)-1].Status != progress.SuccessStatus || events[len(events)-1].Stage != "import" {
+		t.Fatalf("last event = %#v, want import success", events[len(events)-1])
 	}
 }
 

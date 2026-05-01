@@ -14,6 +14,7 @@ import (
 )
 
 type Config struct {
+	Context            context.Context
 	Root               string
 	MediainfoCommand   string
 	TVDBKey            string
@@ -22,6 +23,10 @@ type Config struct {
 }
 
 func Open(cfg Config) (*Library, error) {
+	ctx := cfg.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	info, err := os.Stat(cfg.Root)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrRootNotFound
@@ -57,7 +62,7 @@ func Open(cfg Config) (*Library, error) {
 	}
 	index, err := LoadIndex(root)
 	if errors.Is(err, ErrNotFound) {
-		index, err = RebuildIndex(context.Background(), root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+		index, err = RebuildIndex(ctx, root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
 			return series.ReadMetadataRef(root.Path(), ref)
 		})
 	} else if err != nil {

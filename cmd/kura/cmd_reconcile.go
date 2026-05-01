@@ -53,6 +53,6 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 			return nil
 		}
 	}
-	_, err = handle.ApplyReconcile(plan)
+	_, err = handle.ApplyReconcile(rt.Context, plan)
 	return err
 }

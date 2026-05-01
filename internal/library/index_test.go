@@ -1,8 +1,11 @@
 package library
 
 import (
+	"context"
+	"os"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -81,5 +84,34 @@ func TestIndexRemove(t *testing.T) {
 	}
 	if got, ok, err := idx.Get(refs.Metadata("tvdb:111111")); err != nil || !ok || got != other {
 		t.Fatalf("Get other = %q, %v, %v; want %q, true, nil", got, ok, err, other)
+	}
+}
+
+func TestRebuildIndexReportsProgress(t *testing.T) {
+	root, err := ParseRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(root.Join("Bookworm"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var events []progress.Event
+	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
+		events = append(events, event)
+	})
+	_, err = RebuildIndex(ctx, root, func(context.Context, refs.Series) (refs.Metadata, error) {
+		return refs.Metadata("tvdb:370070"), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) < 3 {
+		t.Fatalf("events = %#v, want start/update/success", events)
+	}
+	if events[0].Status != progress.StartStatus || events[0].Stage != "reindex" {
+		t.Fatalf("first event = %#v, want reindex start", events[0])
+	}
+	if events[len(events)-1].Status != progress.SuccessStatus || events[len(events)-1].Stage != "reindex" {
+		t.Fatalf("last event = %#v, want reindex success", events[len(events)-1])
 	}
 }

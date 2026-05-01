@@ -1,6 +1,11 @@
 package series
 
-import "context"
+import (
+	"context"
+	"fmt"
+
+	"github.com/wyvernzora/kura/internal/progress"
+)
 
 type scanner struct {
 	handle    Handle
@@ -22,19 +27,30 @@ func newScanner(handle Handle, ctx context.Context, input ScanInput) *scanner {
 }
 
 func (s *scanner) scan() error {
+	progress.Start(s.ctx, "scan", fmt.Sprintf("Scanning %s", s.handle.ref), 0)
 	if err := s.load(); err != nil {
+		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 0, 0)
 		return err
 	}
+	progress.Update(s.ctx, "scan", fmt.Sprintf("Discovering files in %s", s.handle.ref), 1, 0)
 	discovered, skipped, err := discoverSeriesEpisodes(s.seriesDir)
 	if err != nil {
+		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 1, 0)
 		return err
 	}
 	s.result.Skipped = skipped
+	progress.Update(s.ctx, "scan", fmt.Sprintf("Inspecting %d files", len(discovered)), 2, 0)
 	if err := s.apply(discovered); err != nil {
+		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 2, 0)
 		return err
 	}
 	s.model.LastScanned = s.handle.now().UTC()
-	return s.handle.repo().save(s.handle.ref, s.model)
+	if err := s.handle.repo().save(s.handle.ref, s.model); err != nil {
+		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 3, 0)
+		return err
+	}
+	progress.Success(s.ctx, "scan", fmt.Sprintf("Scanned %s", s.handle.ref), len(discovered))
+	return nil
 }
 
 func (s *scanner) load() error {
@@ -42,6 +58,7 @@ func (s *scanner) load() error {
 	if err != nil {
 		return err
 	}
+	progress.Update(s.ctx, "scan", fmt.Sprintf("Fetching metadata for %s", s.handle.ref), 0, 0)
 	metadataSeries, err := s.handle.source().GetSeries(s.ctx, model.Metadata.ID())
 	if err != nil {
 		return err

@@ -7,7 +7,9 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/resolve"
+	"github.com/wyvernzora/kura/internal/ui"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
@@ -15,6 +17,7 @@ import (
 // run() can enrich Context after flag parsing. After run() returns from
 // parser.Parse, Context carries:
 //   - stdio.Stdio          (always; via stdio.With)
+//   - progress.Reporter    (always; disabled automatically for non-terminals)
 //   - lazy metadata.Source (via metadata.WithSource)
 //   - lazy *resolve.Resolver (via resolve.WithResolver)
 //
@@ -64,6 +67,7 @@ func run(args []string, rt runContext) error {
 	}
 
 	rt.Context = stdio.With(rt.Context, stdio.New(rt.Stdin, rt.Stdout, rt.Stderr))
+	rt.Context = progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr))
 	rt.Context = metadata.WithSource(rt.Context, func() (metadata.Source, error) {
 		return buildSourceFromFlags(&rt, flags)
 	})

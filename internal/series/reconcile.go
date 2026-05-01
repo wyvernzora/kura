@@ -1,6 +1,7 @@
 package series
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
 	"github.com/wyvernzora/kura/internal/textnorm"
@@ -128,45 +130,56 @@ func (h Handle) PlanReconcile() (ReconcilePlan, error) {
 	}, nil
 }
 
-func (h Handle) ApplyReconcile(plan ReconcilePlan) (ReconcileResult, error) {
+func (h Handle) ApplyReconcile(ctx context.Context, plan ReconcilePlan) (ReconcileResult, error) {
+	progress.Start(ctx, "reconcile", fmt.Sprintf("Applying reconcile for %s", h.ref), 0)
 	if plan.Series != h.ref {
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), 0, 0)
 		return ReconcileResult{}, PlanStaleError{Series: plan.Series}
 	}
 	snapshot, err := h.snapshot()
 	if err != nil {
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), 0, 0)
 		return ReconcileResult{}, err
 	}
 	if snapshot != plan.Snapshot {
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), 0, 0)
 		return ReconcileResult{}, PlanStaleError{Series: plan.Series}
 	}
 	if !plan.HasChanges() {
+		progress.Success(ctx, "reconcile", fmt.Sprintf("Reconciled %s", h.ref), 0)
 		return ReconcileResult{Series: h.ref}, nil
 	}
 	seriesDir, err := h.files().seriesDir(h.ref)
 	if err != nil {
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), 0, 0)
 		return ReconcileResult{}, err
 	}
 	var moves []FileMove
 	for _, change := range plan.Changes {
 		moves = append(moves, change.Moves()...)
 	}
-	for _, move := range moves {
+	for index, move := range moves {
+		progress.Update(ctx, "reconcile", fmt.Sprintf("Moving %s", filepath.Base(move.To)), index+1, len(moves))
 		from := move.From
 		if !filepath.IsAbs(from) {
 			from = filepath.Join(seriesDir.Path(), filepath.FromSlash(move.From))
 		}
 		to := filepath.Join(seriesDir.Path(), filepath.FromSlash(move.To))
 		if err := h.files().move(from, to); err != nil {
+			progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), index+1, len(moves))
 			return ReconcileResult{}, err
 		}
 	}
 	updated, err := h.applyPlanState(plan)
 	if err != nil {
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), len(moves), len(moves))
 		return ReconcileResult{}, err
 	}
 	if err := h.repo().save(h.ref, updated); err != nil {
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), len(moves), len(moves))
 		return ReconcileResult{}, err
 	}
+	progress.Success(ctx, "reconcile", fmt.Sprintf("Reconciled %s", h.ref), len(moves))
 	return ReconcileResult{Series: h.ref, AppliedMoves: len(moves)}, nil
 }
 

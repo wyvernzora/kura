@@ -197,7 +197,7 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	if err := os.WriteFile(seriesMetadataPath, append(data, '\n'), 0o644); err != nil {
 		t.Fatalf("WriteFile series.json: %v", err)
 	}
-	_, err = series.ApplyReconcile(stalePlan)
+	_, err = series.ApplyReconcile(context.Background(), stalePlan)
 	var stale seriespkg.PlanStaleError
 	if !errors.As(err, &stale) {
 		t.Fatalf("Apply stale error = %v, want PlanStaleError", err)
@@ -207,7 +207,7 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanReconcile fresh: %v", err)
 	}
-	result, err := series.ApplyReconcile(plan)
+	result, err := series.ApplyReconcile(context.Background(), plan)
 	if err != nil {
 		t.Fatalf("ApplyReconcile: %v", err)
 	}

@@ -12,6 +12,7 @@ import (
 	"sort"
 
 	"github.com/google/renameio/v2"
+	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -87,16 +88,20 @@ func LoadIndex(root Root) (*Index, error) {
 }
 
 func RebuildIndex(ctx context.Context, root Root, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
+	progress.Start(ctx, "reindex", "Rebuilding library index", 0)
 	dir, err := os.Open(root.Path())
 	if err != nil {
+		progress.Failure(ctx, "reindex", "Failed to rebuild library index", 0, 0)
 		return nil, err
 	}
 	defer dir.Close()
 
 	index := NewIndex(root)
+	scanned := 0
 	for {
 		entries, err := dir.ReadDir(64)
 		if err != nil && !errors.Is(err, io.EOF) {
+			progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
 			return nil, err
 		}
 		for _, entry := range entries {
@@ -105,16 +110,21 @@ func RebuildIndex(ctx context.Context, root Root, read func(context.Context, ref
 			}
 			seriesRef, err := refs.ParseSeries(entry.Name())
 			if err != nil {
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
 				return nil, err
 			}
+			scanned++
+			progress.Update(ctx, "reindex", fmt.Sprintf("Indexing %s", seriesRef), scanned, 0)
 			metadataRef, err := read(ctx, seriesRef)
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
 			if err != nil {
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
 				return nil, err
 			}
 			if err := index.Put(metadataRef, seriesRef); err != nil {
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
 				return nil, err
 			}
 		}
@@ -122,6 +132,7 @@ func RebuildIndex(ctx context.Context, root Root, read func(context.Context, ref
 			break
 		}
 	}
+	progress.Success(ctx, "reindex", fmt.Sprintf("Rebuilt library index (%d series)", len(index.refs)), scanned)
 	return index, nil
 }
 
