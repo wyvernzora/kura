@@ -19,10 +19,11 @@ directories:
 - `kura scan <series>` scans a tracked series directory, records importable
   episode media into `.kura/series.json`, and reports skipped files or ignored
   directories.
-- `kura stage <dir> [opts] <absolute-path>` admits an explicitly selected
-  external episode file into the target episode's staged record in
-  `.kura/series.json`. Use `--replace` when the staged file is intended to
-  replace an active or already-staged episode.
+- `kura stage --episode <marker> <selector> <path>` admits an explicitly
+  selected episode file into the target episode's staged record in
+  `.kura/series.json`. Relative paths resolve from the selected series root.
+  Use `--replace` when the staged file is intended to replace an active or
+  already-staged episode.
 - `kura reconcile <dir>` applies Kura's planned filesystem layout, moves staged
   files into the series, and moves replaced active files into `.kura/trash/`.
 - `kura meta ...` exposes the current metadata helper commands.
@@ -35,7 +36,7 @@ The normal local flow is:
 
 ```sh
 kura scan <series-dir>
-kura stage <series-dir> --season 1 --number 3 --replace /media/anime/inbox/example.mkv
+kura stage --episode S01E03 <selector> --replace /media/anime/inbox/example.mkv
 kura reconcile <series-dir>
 ```
 

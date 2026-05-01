@@ -3,59 +3,59 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strconv"
 
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
 )
 
 type stageCmd struct {
-	Season     int      `help:"Season number."`
-	Special    bool     `help:"Stage as a special."`
-	Number     int      `help:"Episode number." required:""`
+	Episode    string   `name:"episode" help:"Episode marker or ref, e.g. S01E03 or S01E0003." required:""`
 	Source     string   `help:"Media source. Defaults to filename source or unknown."`
-	Companions []string `name:"companion" help:"Absolute companion file path."`
+	Companions []string `name:"companion" help:"Companion file path. Relative paths resolve from the series root."`
 	Replace    bool     `name:"replace" help:"Stage over an active episode or replace an existing staged entry for the same season and episode."`
-	Series     string   `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
-	Path       string   `arg:"" help:"Absolute media file path to stage."`
+	Args       []string `arg:"" required:"" help:"Selector terms followed by the media file path to stage."`
 }
 
 func (cmd *stageCmd) Run(rt *runContext) error {
-	if cmd.Special && cmd.Season != 0 {
-		return errors.New("--season and --special are mutually exclusive")
+	terms, mediaPath, err := splitStageArgs(cmd.Args)
+	if err != nil {
+		return err
 	}
-	if !cmd.Special && cmd.Season < 1 {
-		return errors.New("--season is required unless --special is set")
-	}
-
-	season := 0
-	if !cmd.Special {
-		season = cmd.Season
-	}
-	if cmd.Number < 1 {
-		return errors.New("--number must be greater than zero")
+	episode, err := parseStageEpisode(cmd.Episode)
+	if err != nil {
+		return err
 	}
 	lib, err := libraryFromFlags(rt, rt.flags)
 	if err != nil {
 		return err
 	}
-	ref, err := refs.ParseSeries(cmd.Series)
+	metadataRef, err := resolveMetadataRef(rt, lib, terms)
 	if err != nil {
 		return err
 	}
-	handle, err := lib.Open(ref)
+	handle, err := lib.Find(metadataRef)
 	if err != nil {
 		return err
+	}
+	view, err := handle.Read(rt.Context, series.ReadInput{})
+	if err != nil {
+		return err
+	}
+	mediaPath = pathFromSeriesRoot(view.Root, mediaPath)
+	companions := make([]string, 0, len(cmd.Companions))
+	for _, companion := range cmd.Companions {
+		companions = append(companions, pathFromSeriesRoot(view.Root, companion))
 	}
 
-	episode, err := refs.NewEpisode(season, cmd.Number)
-	if err != nil {
-		return err
-	}
 	result, err := handle.Stage(rt.Context, series.StageInput{
 		Episode:    episode,
 		Source:     cmd.Source,
-		Companions: cmd.Companions,
-		MediaPath:  cmd.Path,
+		Companions: companions,
+		MediaPath:  mediaPath,
 		Replace:    cmd.Replace,
 	})
 	if err != nil {
@@ -65,4 +65,40 @@ func (cmd *stageCmd) Run(rt *runContext) error {
 	encoder := json.NewEncoder(rt.Stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
+}
+
+func splitStageArgs(args []string) ([]string, string, error) {
+	if len(args) < 2 {
+		return nil, "", errors.New("stage requires at least one selector term and a media path")
+	}
+	return args[:len(args)-1], args[len(args)-1], nil
+}
+
+var stageEpisodePattern = regexp.MustCompile(`^S([0-9]{2,})E([0-9]{2,})$`)
+
+func parseStageEpisode(value string) (refs.Episode, error) {
+	ref, err := refs.ParseEpisode(value)
+	if err == nil {
+		return ref, nil
+	}
+	match := stageEpisodePattern.FindStringSubmatch(value)
+	if match == nil {
+		return refs.Episode{}, fmt.Errorf("invalid episode %q; expected marker S01E03 or episode ref S01E0003", value)
+	}
+	season, err := strconv.Atoi(match[1])
+	if err != nil {
+		return refs.Episode{}, err
+	}
+	episode, err := strconv.Atoi(match[2])
+	if err != nil {
+		return refs.Episode{}, err
+	}
+	return refs.NewEpisode(season, episode)
+}
+
+func pathFromSeriesRoot(seriesRoot string, path string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	return filepath.Join(seriesRoot, filepath.FromSlash(path))
 }

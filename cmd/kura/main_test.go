@@ -795,9 +795,14 @@ func TestStageCommandWritesStagedEpisode(t *testing.T) {
 			"S01E0001": {"airDate": "2019-10-03"}
 		}
 	}`)
-	stageDir := t.TempDir()
-	mediaPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip).mkv")
-	companionPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip).en.ass")
+	stageDir := filepath.Join(seriesDir, "incoming")
+	if err := os.MkdirAll(stageDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll incoming: %v", err)
+	}
+	mediaRelPath := filepath.ToSlash(filepath.Join("incoming", "Bookworm - S01E01 (WebRip).mkv"))
+	companionRelPath := filepath.ToSlash(filepath.Join("incoming", "Bookworm - S01E01 (WebRip).en.ass"))
+	mediaPath := filepath.Join(seriesDir, filepath.FromSlash(mediaRelPath))
+	companionPath := filepath.Join(seriesDir, filepath.FromSlash(companionRelPath))
 	writeFile(t, mediaPath, "episode")
 	writeFile(t, companionPath, "subtitle")
 
@@ -805,12 +810,11 @@ func TestStageCommandWritesStagedEpisode(t *testing.T) {
 	var stderr bytes.Buffer
 	err := run([]string{
 		"stage",
-		"--season", "1",
-		"--number", "1",
+		"--episode", "S01E01",
 		"--tvdb-base-url", server.URL,
-		"--companion", companionPath,
-		"Bookworm",
-		mediaPath,
+		"--companion", companionRelPath,
+		"tvdb:370070",
+		mediaRelPath,
 	}, testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand))
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
@@ -835,6 +839,28 @@ func TestStageCommandWritesStagedEpisode(t *testing.T) {
 	media := entry["staged"].(map[string]any)
 	if got := media["path"]; got != mediaPath {
 		t.Fatalf("media.path = %v, want %s", got, mediaPath)
+	}
+	companions := media["companions"].([]any)
+	companion := companions[0].(map[string]any)
+	if got := companion["path"]; got != companionPath {
+		t.Fatalf("companion.path = %v, want %s", got, companionPath)
+	}
+}
+
+func TestParseStageEpisodeAcceptsMarkerAndStorageRef(t *testing.T) {
+	cases := map[string]string{
+		"S01E01":   "S01E0001",
+		"S01E0001": "S01E0001",
+		"S00E06":   "S00E0006",
+	}
+	for input, want := range cases {
+		got, err := parseStageEpisode(input)
+		if err != nil {
+			t.Fatalf("parseStageEpisode(%q): %v", input, err)
+		}
+		if got.String() != want {
+			t.Fatalf("parseStageEpisode(%q) = %s, want %s", input, got, want)
+		}
 	}
 }
 
