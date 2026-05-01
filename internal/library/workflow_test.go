@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 )
@@ -201,6 +203,57 @@ func TestScanReportsUnchangedUpdatedAndRemoved(t *testing.T) {
 	for _, episode := range view.Seasons[0].Episodes {
 		if episode.Episode == removedRef && episode.Active != nil {
 			t.Fatalf("removed episode active = %#v, want nil", episode.Active)
+		}
+	}
+}
+
+func TestScanReportsProgressForEachInspectedFile(t *testing.T) {
+	server := newTestTVDBServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {"airDate": "2019-10-03"},
+			"S01E0002": {"airDate": "2019-10-10"}
+		}
+	}`)
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode 1")
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E02 (WebRip 1080p).mkv"), "episode 2")
+
+	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
+	series, err := lib.Open(mustSeries(t, "Bookworm"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	var events []progress.Event
+	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
+		if event.Stage == "scan" && event.Status == progress.UpdateStatus {
+			events = append(events, event)
+		}
+	})
+	if _, err := series.Scan(ctx, seriespkg.ScanInput{}); err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	var inspecting []progress.Event
+	for _, event := range events {
+		if strings.HasPrefix(event.Message, "Inspecting Bookworm - S01E") {
+			inspecting = append(inspecting, event)
+		}
+	}
+	if len(inspecting) != 2 {
+		t.Fatalf("inspecting events = %#v, want two per-file events", inspecting)
+	}
+	for index, event := range inspecting {
+		if event.Current != index+1 || event.Total != 2 {
+			t.Fatalf("event %d = %#v, want current %d total 2", index, event, index+1)
 		}
 	}
 }

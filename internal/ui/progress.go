@@ -31,17 +31,25 @@ func NewProgress(stderr io.Writer) *Progress {
 func NewProgressReporter(stderr io.Writer) progress.Reporter {
 	spinnerProgress := NewProgress(stderr)
 	return func(_ context.Context, event progress.Event) {
+		message := progressMessage(event)
 		switch event.Status {
 		case progress.StartStatus:
-			spinnerProgress.Start("%s", event.Message)
+			spinnerProgress.Start("%s", message)
 		case progress.UpdateStatus:
-			spinnerProgress.Update("%s", event.Message)
+			spinnerProgress.Update("%s", message)
 		case progress.SuccessStatus:
-			spinnerProgress.Succeed("%s", event.Message)
+			spinnerProgress.Succeed("%s", message)
 		case progress.FailureStatus:
-			spinnerProgress.Fail("%s", event.Message)
+			spinnerProgress.Fail("%s", message)
 		}
 	}
+}
+
+func progressMessage(event progress.Event) string {
+	if event.Total <= 0 || event.Current <= 0 {
+		return event.Message
+	}
+	return fmt.Sprintf("[%d/%d] %s", event.Current, event.Total, event.Message)
 }
 
 func (p *Progress) Start(format string, args ...any) {

@@ -3,6 +3,7 @@ package series
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/wyvernzora/kura/internal/progress"
 )
@@ -76,4 +77,8 @@ func (s *scanner) load() error {
 	s.editor.refreshSpine(spine)
 	s.seriesDir = seriesDir
 	return nil
+}
+
+func (s *scanner) reportInspecting(file discoveredFile, current int, total int) {
+	progress.Update(s.ctx, "scan", fmt.Sprintf("Inspecting %s", filepath.Base(file.Path)), current, total)
 }

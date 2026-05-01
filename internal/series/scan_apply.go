@@ -12,7 +12,8 @@ func (s *scanner) apply(discovered []discoveredFile) error {
 	if err := s.removeMissingActive(discovered); err != nil {
 		return err
 	}
-	for _, file := range discovered {
+	for index, file := range discovered {
+		s.reportInspecting(file, index+1, len(discovered))
 		if err := s.applyFile(file); err != nil {
 			return err
 		}
