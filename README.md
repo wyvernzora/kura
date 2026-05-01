@@ -28,6 +28,7 @@ directories:
   episode without touching the staged file on disk.
 - `kura reconcile <dir>` applies Kura's planned filesystem layout, moves staged
   files into the series, and moves replaced active files into `.kura/trash/`.
+- `kura reindex` rebuilds `.kura/index.tsv` from per-series metadata.
 - `kura meta ...` exposes the current metadata helper commands.
 
 Trash metadata is retained beside each replaced file. Reconcile moves trashed

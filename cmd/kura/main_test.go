@@ -891,6 +891,54 @@ func TestListCommandRejectsInvalidStatusFilter(t *testing.T) {
 	}
 }
 
+func TestReindexCommandRebuildsLibraryIndex(t *testing.T) {
+	root := t.TempDir()
+	writeSeriesJSON(t, filepath.Join(root, "Bookworm"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"episodes": {}
+	}`)
+	writeSeriesJSON(t, filepath.Join(root, "Other"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:111111",
+		"preferredTitle": "Other",
+		"canonicalTitle": "Other",
+		"episodes": {}
+	}`)
+	writeLibraryIndex(t, root, map[string]string{
+		"tvdb:999999": "Bookworm",
+	})
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := runContext{
+		Stdin:  bytes.NewBuffer(nil),
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Getenv: func(key string) string {
+			if key == "KURA_LIBRARY_ROOT" {
+				return root
+			}
+			return ""
+		},
+	}
+	err := run([]string{"reindex"}, rt)
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if libraryIndexHasRef(t, root, "tvdb:999999") {
+		t.Fatal("stale index ref tvdb:999999 still exists")
+	}
+	if got := libraryIndexPathForRef(t, root, "tvdb:370070"); got != "Bookworm" {
+		t.Fatalf("Bookworm index path = %q, want Bookworm", got)
+	}
+	if got := libraryIndexPathForRef(t, root, "tvdb:111111"); got != "Other" {
+		t.Fatalf("Other index path = %q, want Other", got)
+	}
+}
+
 func TestFindCommandIsRemoved(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

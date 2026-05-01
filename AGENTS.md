@@ -203,7 +203,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - Prefer clear CLI/MCP surfaces over background magic.
 - Preserve a small, automation-friendly core before adding optional layers.
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
-- `KURA_LIBRARY_ROOT` scopes series selectors. Current selectors resolve direct child directories below it; fuzzy and metadata-ref selectors require future library-wide indexing.
+- `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.tsv`; run `kura reindex` to rebuild it from per-series metadata.
 
 ### Current workflows
 
