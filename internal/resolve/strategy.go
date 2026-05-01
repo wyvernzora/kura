@@ -13,8 +13,9 @@ type ResolveStrategy interface {
 	// Name reports a stable identifier for telemetry.
 	Name() string
 
-	// Match reports whether this strategy handles the given term.
-	Match(term Term) bool
+	// Match reports whether this strategy handles the given term. If stop is
+	// true, later strategies are not considered for this term.
+	Match(term Term) (matched bool, stop bool)
 
 	// Authoritative reports whether matching terms must be sole query terms,
 	// modulo same-value duplicates.

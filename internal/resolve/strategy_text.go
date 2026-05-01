@@ -21,8 +21,8 @@ func (s *textSearchStrategy) Name() string {
 	return "text_search"
 }
 
-func (s *textSearchStrategy) Match(t Term) bool {
-	return true
+func (s *textSearchStrategy) Match(t Term) (bool, bool) {
+	return true, false
 }
 
 func (s *textSearchStrategy) Authoritative() bool {

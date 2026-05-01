@@ -19,8 +19,11 @@ func (s *metadataIDStrategy) Name() string {
 	return "metadata_id"
 }
 
-func (s *metadataIDStrategy) Match(t Term) bool {
-	return t.Prefix == s.source.Key()
+func (s *metadataIDStrategy) Match(t Term) (bool, bool) {
+	if t.Prefix == s.source.Key() {
+		return true, true
+	}
+	return false, false
 }
 
 func (s *metadataIDStrategy) Authoritative() bool {

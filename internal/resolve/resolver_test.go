@@ -73,11 +73,80 @@ func TestResolverTooManyTerms(t *testing.T) {
 	}
 }
 
-func TestResolverNoStrategyMatch(t *testing.T) {
+func TestResolverNoStrategyMatchWithoutFallback(t *testing.T) {
 	resolver := New(fakeStrategy{})
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Prefix: "unknown", Value: n("1")}}})
 	if !errors.Is(err, ErrNoStrategyMatch) {
 		t.Fatalf("error = %v, want ErrNoStrategyMatch", err)
+	}
+}
+
+func TestResolverRunsMultipleMatchingStrategiesForSameTerm(t *testing.T) {
+	first := &countingStrategy{fakeStrategy: fakeStrategy{
+		name:  "first",
+		match: true,
+		hits: []termHit{{
+			Term:        Term{Value: n("Bookworm")},
+			MetadataRef: "tvdb:1",
+			Summary:     testSummary("tvdb:1"),
+			MatchSource: "first",
+		}},
+	}}
+	second := &countingStrategy{fakeStrategy: fakeStrategy{
+		name:  "second",
+		match: true,
+		hits: []termHit{{
+			Term:        Term{Value: n("Bookworm")},
+			MetadataRef: "tvdb:2",
+			Summary:     testSummary("tvdb:2"),
+			MatchSource: "second",
+		}},
+	}}
+	resolver := New(first, second)
+
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("Bookworm")}}})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if first.calls.Load() != 1 || second.calls.Load() != 1 {
+		t.Fatalf("calls = (%d, %d), want (1, 1)", first.calls.Load(), second.calls.Load())
+	}
+	if len(result.Results) != 2 {
+		t.Fatalf("len(Results) = %d, want 2", len(result.Results))
+	}
+}
+
+func TestResolverStopsMatchingAfterStoppingStrategy(t *testing.T) {
+	first := &countingStrategy{fakeStrategy: fakeStrategy{
+		name:  "first",
+		match: true,
+		stop:  true,
+		hits: []termHit{{
+			Term:        Term{Prefix: "tvdb", Value: n("1")},
+			MetadataRef: "tvdb:1",
+			Summary:     testSummary("tvdb:1"),
+		}},
+	}}
+	second := &countingStrategy{fakeStrategy: fakeStrategy{
+		name:  "second",
+		match: true,
+		hits: []termHit{{
+			Term:        Term{Prefix: "tvdb", Value: n("1")},
+			MetadataRef: "tvdb:2",
+			Summary:     testSummary("tvdb:2"),
+		}},
+	}}
+	resolver := New(first, second)
+
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Prefix: "tvdb", Value: n("1")}}})
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if first.calls.Load() != 1 || second.calls.Load() != 0 {
+		t.Fatalf("calls = (%d, %d), want (1, 0)", first.calls.Load(), second.calls.Load())
+	}
+	if len(result.Results) != 1 || result.Results[0].Summary.MetadataRef != "tvdb:1" {
+		t.Fatalf("results = %#v, want only tvdb:1", result.Results)
 	}
 }
 
@@ -265,6 +334,7 @@ func TestResolverSortOrder(t *testing.T) {
 type fakeStrategy struct {
 	name             string
 	match            bool
+	stop             bool
 	matchPrefix      string
 	matchEmptyPrefix bool
 	authoritative    bool
@@ -281,14 +351,15 @@ func (s fakeStrategy) Name() string {
 	return "fake"
 }
 
-func (s fakeStrategy) Match(term Term) bool {
+func (s fakeStrategy) Match(term Term) (bool, bool) {
 	if s.match {
-		return true
+		return true, s.stop
 	}
 	if s.matchEmptyPrefix && term.Prefix == "" {
-		return true
+		return true, s.stop
 	}
-	return s.matchPrefix != "" && term.Prefix == s.matchPrefix
+	matched := s.matchPrefix != "" && term.Prefix == s.matchPrefix
+	return matched, matched && s.stop
 }
 
 func (s fakeStrategy) Authoritative() bool {

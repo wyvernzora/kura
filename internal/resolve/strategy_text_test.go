@@ -116,11 +116,19 @@ func TestTextSearchStrategyNotFound(t *testing.T) {
 
 func TestTextSearchStrategyProperties(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{})
-	if !strategy.Match(Term{Value: n("query")}) {
+	matched, stop := strategy.Match(Term{Value: n("query")})
+	if !matched {
 		t.Fatal("Match text = false, want true")
 	}
-	if !strategy.Match(Term{Prefix: "dir", Value: n("Bookworm")}) {
+	if stop {
+		t.Fatal("Match text stop = true, want false")
+	}
+	matched, stop = strategy.Match(Term{Prefix: "unknown", Value: n("Bookworm")})
+	if !matched {
 		t.Fatal("Match prefixed = false, want true")
+	}
+	if stop {
+		t.Fatal("Match prefixed stop = true, want false")
 	}
 	if strategy.Authoritative() {
 		t.Fatal("Authoritative = true, want false")

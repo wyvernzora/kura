@@ -10,11 +10,19 @@ import (
 
 func TestMetadataIDStrategyProperties(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{key: "tvdb"})
-	if !strategy.Match(Term{Prefix: "tvdb", Value: n("1")}) {
+	matched, stop := strategy.Match(Term{Prefix: "tvdb", Value: n("1")})
+	if !matched {
 		t.Fatal("Match tvdb = false, want true")
 	}
-	if strategy.Match(Term{Prefix: "tmdb", Value: n("1")}) {
+	if !stop {
+		t.Fatal("Match tvdb stop = false, want true")
+	}
+	matched, stop = strategy.Match(Term{Prefix: "tmdb", Value: n("1")})
+	if matched {
 		t.Fatal("Match tmdb = true, want false")
+	}
+	if stop {
+		t.Fatal("Match tmdb stop = true, want false")
 	}
 	if !strategy.Authoritative() {
 		t.Fatal("Authoritative = false, want true")

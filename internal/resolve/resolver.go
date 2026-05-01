@@ -43,11 +43,11 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 
 	matched := make([]matchedTerm, 0, len(terms))
 	for _, term := range terms {
-		strategy, ok := r.matchStrategy(term)
-		if !ok {
+		termMatches := r.matchStrategies(term)
+		if len(termMatches) == 0 {
 			return Resolution{}, fmt.Errorf("%w: %q", ErrNoStrategyMatch, term.String())
 		}
-		matched = append(matched, matchedTerm{term: term, strategy: strategy})
+		matched = append(matched, termMatches...)
 	}
 	if err := validateCombinations(matched); err != nil {
 		return Resolution{}, err
@@ -107,13 +107,18 @@ func nonEmptyTerms(terms []Term) []Term {
 	return out
 }
 
-func (r *Resolver) matchStrategy(term Term) (ResolveStrategy, bool) {
+func (r *Resolver) matchStrategies(term Term) []matchedTerm {
+	var matched []matchedTerm
 	for _, strategy := range r.strategies {
-		if strategy.Match(term) {
-			return strategy, true
+		ok, stop := strategy.Match(term)
+		if ok {
+			matched = append(matched, matchedTerm{term: term, strategy: strategy})
+		}
+		if stop {
+			break
 		}
 	}
-	return nil, false
+	return matched
 }
 
 func validateCombinations(matched []matchedTerm) error {
@@ -132,13 +137,18 @@ func validateCombinations(matched []matchedTerm) error {
 }
 
 func dedupeMatched(matched []matchedTerm) []matchedTerm {
-	seen := map[Term]struct{}{}
+	type key struct {
+		term     Term
+		strategy string
+	}
+	seen := map[key]struct{}{}
 	out := make([]matchedTerm, 0, len(matched))
 	for _, entry := range matched {
-		if _, ok := seen[entry.term]; ok {
+		key := key{term: entry.term, strategy: entry.strategy.Name()}
+		if _, ok := seen[key]; ok {
 			continue
 		}
-		seen[entry.term] = struct{}{}
+		seen[key] = struct{}{}
 		out = append(out, entry)
 	}
 	return out
