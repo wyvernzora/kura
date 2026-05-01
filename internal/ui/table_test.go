@@ -48,6 +48,14 @@ func TestShowTableRendersStagedOverAsSeparateRows(t *testing.T) {
 			t.Fatalf("rendered table = %q, want %q", rendered, want)
 		}
 	}
+	for _, want := range []string{"EPISODE", "STATUS", "SOURCE", "RESOLUTION", "FILE", "S01E01"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered table = %q, want %q", rendered, want)
+		}
+	}
+	if strings.Contains(rendered, "NUMBER") {
+		t.Fatalf("rendered table = %q, want no NUMBER column", rendered)
+	}
 }
 
 func TestScanTablePrintsTTYEmptyMessage(t *testing.T) {

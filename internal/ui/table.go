@@ -51,7 +51,7 @@ func WriteSeriesRead(w io.Writer, result series.Series) error {
 func writeEpisodeReadTable(w io.Writer, episodes []series.Episode) error {
 	style := shouldStyle(w)
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"NUMBER", "STATUS", "SOURCE", "RESOLUTION", "FILE"})
+	tw.AppendHeader(table.Row{"EPISODE", "STATUS", "SOURCE", "RESOLUTION", "FILE"})
 	tw.SetStyle(borderlessTableStyle())
 	tw.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1},
@@ -62,16 +62,16 @@ func writeEpisodeReadTable(w io.Writer, episodes []series.Episode) error {
 	})
 	for _, episode := range episodes {
 		if episode.Active != nil && episode.Staged != nil {
-			tw.AppendRow(readEpisodeRow(episode.Episode.Episode(), series.EpisodeStatusPresent, episode.Active, style, true))
-			tw.AppendRow(readEpisodeRow(episode.Episode.Episode(), series.EpisodeStatusStaged, episode.Staged, style, false))
+			tw.AppendRow(readEpisodeRow(episode.Episode, series.EpisodeStatusPresent, episode.Active, style, true))
+			tw.AppendRow(readEpisodeRow(episode.Episode, series.EpisodeStatusStaged, episode.Staged, style, false))
 			continue
 		}
-		tw.AppendRow(readEpisodeRow(episode.Episode.Episode(), episode.Status, firstEpisodeMedia(episode), style, false))
+		tw.AppendRow(readEpisodeRow(episode.Episode, episode.Status, firstEpisodeMedia(episode), style, false))
 	}
 	return writeStyledTable(w, tw, nil)
 }
 
-func readEpisodeRow(number int, status series.EpisodeStatus, media *series.EpisodeMedia, style bool, retired bool) table.Row {
+func readEpisodeRow(episode refs.Episode, status series.EpisodeStatus, media *series.EpisodeMedia, style bool, retired bool) table.Row {
 	statusCell := string(status)
 	source := ""
 	resolution := ""
@@ -82,7 +82,7 @@ func readEpisodeRow(number int, status series.EpisodeStatus, media *series.Episo
 		file = media.File
 	}
 	row := table.Row{
-		strconv.Itoa(number),
+		episode.Marker(),
 		statusCell,
 		source,
 		resolution,
