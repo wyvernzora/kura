@@ -62,13 +62,33 @@ func writeEpisodeReadTable(w io.Writer, episodes []series.Episode) error {
 	})
 	for _, episode := range episodes {
 		if episode.Active != nil && episode.Staged != nil {
-			tw.AppendRow(readEpisodeRow(episode.Episode, series.EpisodeStatusPresent, episode.Active, style, true))
-			tw.AppendRow(readEpisodeRow(episode.Episode, series.EpisodeStatusStaged, episode.Staged, style, false))
+			appendEpisodeRows(tw, episode.Episode, series.EpisodeStatusPresent, episode.Active, style, true)
+			appendEpisodeRows(tw, episode.Episode, series.EpisodeStatusStaged, episode.Staged, style, false)
 			continue
 		}
-		tw.AppendRow(readEpisodeRow(episode.Episode, episode.Status, firstEpisodeMedia(episode), style, false))
+		appendEpisodeRows(tw, episode.Episode, episode.Status, firstEpisodeMedia(episode), style, false)
 	}
 	return writeStyledTable(w, tw, nil)
+}
+
+func appendEpisodeRows(tw table.Writer, episode refs.Episode, status series.EpisodeStatus, media *series.EpisodeMedia, style bool, retired bool) {
+	tw.AppendRow(readEpisodeRow(episode, status, media, style, retired))
+	if media == nil {
+		return
+	}
+	for index, companion := range media.Companions {
+		prefix := "    ┣ "
+		if index == len(media.Companions)-1 {
+			prefix = "    ┗ "
+		}
+		row := table.Row{"", "", "", "", prefix + companion.Path}
+		if style && retired {
+			for index := range row {
+				row[index] = retireCell(row[index].(string))
+			}
+		}
+		tw.AppendRow(row)
+	}
 }
 
 func readEpisodeRow(episode refs.Episode, status series.EpisodeStatus, media *series.EpisodeMedia, style bool, retired bool) table.Row {

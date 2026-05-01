@@ -23,11 +23,18 @@ func TestShowTableRendersStagedOverAsSeparateRows(t *testing.T) {
 				Source:     "WebRip",
 				Resolution: "1080p",
 				File:       "Season 1/old.mkv",
+				Companions: []series.CompanionFile{
+					{Path: "Season 1/old.en.ass"},
+					{Path: "Season 1/old.ja.ass"},
+				},
 			},
 			Staged: &series.EpisodeMedia{
 				Source:     "BDRip",
 				Resolution: "4K",
 				File:       "/inbox/new.mkv",
+				Companions: []series.CompanionFile{
+					{Path: "/inbox/new.en.ass"},
+				},
 			},
 		},
 	})
@@ -43,7 +50,13 @@ func TestShowTableRendersStagedOverAsSeparateRows(t *testing.T) {
 	if activeIndex < 0 || stagedIndex < 0 || activeIndex > stagedIndex {
 		t.Fatalf("rendered table = %q, want present row before staged row", rendered)
 	}
-	for _, want := range []string{"Season 1/old.mkv", "/inbox/new.mkv"} {
+	for _, want := range []string{
+		"Season 1/old.mkv",
+		"    ┣ Season 1/old.en.ass",
+		"    ┗ Season 1/old.ja.ass",
+		"/inbox/new.mkv",
+		"    ┗ /inbox/new.en.ass",
+	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered table = %q, want %q", rendered, want)
 		}
@@ -55,6 +68,43 @@ func TestShowTableRendersStagedOverAsSeparateRows(t *testing.T) {
 	}
 	if strings.Contains(rendered, "NUMBER") {
 		t.Fatalf("rendered table = %q, want no NUMBER column", rendered)
+	}
+}
+
+func TestShowTableRendersCompanionRows(t *testing.T) {
+	var out bytes.Buffer
+	episode, err := refs.NewEpisode(1, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = writeEpisodeReadTable(&out, []series.Episode{
+		{
+			Episode: episode,
+			Status:  series.EpisodeStatusPresent,
+			Active: &series.EpisodeMedia{
+				Source:     "WebRip",
+				Resolution: "1080p",
+				File:       "Season 1/episode.mkv",
+				Companions: []series.CompanionFile{
+					{Path: "Season 1/episode.en.ass"},
+					{Path: "Season 1/episode.ja.ass"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("writeEpisodeReadTable: %v", err)
+	}
+	rendered := out.String()
+	for _, want := range []string{
+		"S01E02",
+		"Season 1/episode.mkv",
+		"    ┣ Season 1/episode.en.ass",
+		"    ┗ Season 1/episode.ja.ass",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered table = %q, want %q", rendered, want)
+		}
 	}
 }
 
