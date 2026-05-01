@@ -11,7 +11,7 @@ import (
 	"unicode"
 
 	"github.com/wyvernzora/kura/internal/refs"
-	"golang.org/x/text/unicode/norm"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type Inspector interface {
@@ -205,7 +205,7 @@ func ParseFileTitle(title string) (FileTitle, error) {
 }
 
 func CleanFileTitle(title string) FileTitle {
-	return FileTitle(norm.NFC.String(strings.TrimSpace(title)))
+	return FileTitle(textnorm.NFC(title))
 }
 
 func (t FileTitle) String() string {

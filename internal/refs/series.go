@@ -6,17 +6,18 @@ import (
 	"strings"
 	"unicode"
 
-	"golang.org/x/text/unicode/norm"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 // Series identifies a tracked series by directory name.
 type Series string
 
 func ParseSeries(value string) (Series, error) {
-	value = norm.NFC.String(strings.TrimSpace(value))
-	if value == "" {
+	normalized := textnorm.NFC(value)
+	if normalized.IsZero() {
 		return "", errors.New("series name is required")
 	}
+	value = normalized.String()
 	if value == "." || value == ".." || value == ".kura" {
 		return "", fmt.Errorf("invalid series name %q", value)
 	}
