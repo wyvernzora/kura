@@ -127,7 +127,7 @@ func RebuildIndex(ctx context.Context, root Root, read func(context.Context, ref
 
 func (i *Index) Get(ref refs.Metadata) (refs.Series, bool, error) {
 	if ref == "" {
-		return "", false, errors.New("library index: metadata ref is required")
+		return refs.Series{}, false, errors.New("library index: metadata ref is required")
 	}
 	seriesRef, ok := i.refs[ref]
 	return seriesRef, ok, nil

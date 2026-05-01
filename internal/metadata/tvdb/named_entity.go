@@ -2,11 +2,10 @@ package tvdb
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
-	"golang.org/x/text/unicode/norm"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type titleCandidate struct {
@@ -56,11 +55,11 @@ func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) metadata.Ser
 	}
 }
 
-func (p *Provider) selectTitle(canonicalTitle, originalLanguage string, titles []titleCandidate) string {
-	byLanguage := make(map[string]string, len(titles))
+func (p *Provider) selectTitle(canonicalTitle textnorm.NFCString, originalLanguage string, titles []titleCandidate) textnorm.NFCString {
+	byLanguage := make(map[string]textnorm.NFCString, len(titles))
 	for _, title := range titles {
 		value := normalizeTitle(title.Value)
-		if value == "" {
+		if value.IsZero() {
 			continue
 		}
 		language := normalizeLanguage(title.Language)
@@ -74,7 +73,7 @@ func (p *Provider) selectTitle(canonicalTitle, originalLanguage string, titles [
 	}
 
 	canonicalLanguage := normalizeLanguage(originalLanguage)
-	if canonicalTitle != "" && canonicalLanguage != "" {
+	if !canonicalTitle.IsZero() && canonicalLanguage != "" {
 		if _, ok := byLanguage[canonicalLanguage]; !ok {
 			byLanguage[canonicalLanguage] = canonicalTitle
 		}
@@ -82,14 +81,14 @@ func (p *Provider) selectTitle(canonicalTitle, originalLanguage string, titles [
 
 	for _, language := range p.preferredLanguages {
 		value := byLanguage[language]
-		if value != "" {
+		if !value.IsZero() {
 			return value
 		}
 	}
 
-	return normalizeTitle(canonicalTitle)
+	return normalizeTitle(canonicalTitle.String())
 }
 
-func normalizeTitle(title string) string {
-	return norm.NFC.String(strings.TrimSpace(title))
+func normalizeTitle(title string) textnorm.NFCString {
+	return textnorm.NFC(title)
 }

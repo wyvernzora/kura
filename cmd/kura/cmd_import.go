@@ -25,8 +25,12 @@ func (cmd *importCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
+	ref, err := refs.ParseSeries(cmd.Dirname)
+	if err != nil {
+		return err
+	}
 	series, err := lib.Import(rt.Context, library.ImportInput{
-		Ref:      refs.Series(cmd.Dirname),
+		Ref:      ref,
 		Metadata: metadataRef,
 	})
 	if err != nil {

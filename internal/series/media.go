@@ -191,29 +191,31 @@ func (s MediaSource) Rank() int {
 	}
 }
 
-type FileTitle string
+type FileTitle struct {
+	value textnorm.NFCString
+}
 
 func ParseFileTitle(title string) (FileTitle, error) {
 	clean := CleanFileTitle(title)
 	if clean.IsZero() {
-		return "", errors.New("library: filesystem title is required")
+		return FileTitle{}, errors.New("library: filesystem title is required")
 	}
-	if invalidFileTitle(string(clean)) {
-		return "", fmt.Errorf("library: invalid filesystem title %q", title)
+	if invalidFileTitle(clean.String()) {
+		return FileTitle{}, fmt.Errorf("library: invalid filesystem title %q", title)
 	}
 	return clean, nil
 }
 
 func CleanFileTitle(title string) FileTitle {
-	return FileTitle(textnorm.NFC(title))
+	return FileTitle{value: textnorm.NFC(title)}
 }
 
 func (t FileTitle) String() string {
-	return string(t)
+	return t.value.String()
 }
 
 func (t FileTitle) IsZero() bool {
-	return strings.TrimSpace(string(t)) == ""
+	return t.value.IsZero()
 }
 
 func (t FileTitle) EqualName(name string) bool {

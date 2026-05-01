@@ -12,9 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/text/unicode/norm"
-
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 const (
@@ -67,9 +66,8 @@ func (p *Provider) Key() string {
 }
 
 // Search returns lightweight TVDB series candidates for a title query.
-func (p *Provider) Search(ctx context.Context, query string, opts metadata.SearchOptions) ([]metadata.SearchResult, error) {
-	query = norm.NFC.String(strings.TrimSpace(query))
-	if query == "" {
+func (p *Provider) Search(ctx context.Context, query textnorm.NFCString, opts metadata.SearchOptions) ([]metadata.SearchResult, error) {
+	if query.IsZero() {
 		return nil, errors.New("tvdb: empty search query")
 	}
 	if opts.Type != "" && opts.Type != metadata.MediaTypeSeries {
@@ -78,7 +76,7 @@ func (p *Provider) Search(ctx context.Context, query string, opts metadata.Searc
 		return nil, nil
 	}
 
-	records, err := p.client.search(ctx, query, opts)
+	records, err := p.client.search(ctx, query.String(), opts)
 	if err != nil {
 		return nil, err
 	}

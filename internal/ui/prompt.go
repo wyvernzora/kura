@@ -23,9 +23,9 @@ func Confirm(stdin io.Reader, stderr io.Writer, prompt string) (bool, error) {
 }
 
 func FormatSeriesCandidate(result metadata.SeriesSummary) string {
-	title := result.PreferredTitle
+	title := result.PreferredTitle.String()
 	if title == "" {
-		title = result.CanonicalTitle
+		title = result.CanonicalTitle.String()
 	}
 	parts := []string{title}
 	if result.Year > 0 {

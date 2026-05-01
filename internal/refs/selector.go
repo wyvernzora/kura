@@ -3,20 +3,22 @@ package refs
 import (
 	"regexp"
 	"strings"
+
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 // Term is a parsed selector token split into an optional lowercase prefix and
 // a non-empty value. Resolution decides how to interpret it.
 type Term struct {
 	Prefix string
-	Value  string
+	Value  textnorm.NFCString
 }
 
 func (t Term) String() string {
 	if t.Prefix == "" {
-		return t.Value
+		return t.Value.String()
 	}
-	return t.Prefix + ":" + t.Value
+	return t.Prefix + ":" + t.Value.String()
 }
 
 // Selector is a collection of terms used to identify a series.
@@ -33,11 +35,11 @@ func ParseTerm(raw string) Term {
 	}
 	if match := prefixPattern.FindStringSubmatch(trimmed); match != nil {
 		if match[1] == "dir" {
-			return Term{Value: trimmed}
+			return Term{Value: textnorm.NFC(trimmed)}
 		}
-		return Term{Prefix: match[1], Value: match[2]}
+		return Term{Prefix: match[1], Value: textnorm.NFC(match[2])}
 	}
-	return Term{Value: trimmed}
+	return Term{Value: textnorm.NFC(trimmed)}
 }
 
 func ParseSelector(raw []string) Selector {

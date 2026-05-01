@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
@@ -29,10 +30,10 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 	if series.MetadataRef != "tvdb:370070" {
 		t.Fatalf("MetadataRef = %q, want tvdb:370070", series.MetadataRef)
 	}
-	if series.CanonicalTitle != "Ascendance of a Bookworm" {
+	if series.CanonicalTitle.String() != "Ascendance of a Bookworm" {
 		t.Fatalf("CanonicalTitle = %q", series.CanonicalTitle)
 	}
-	if series.PreferredTitle != "本好きの下剋上" {
+	if series.PreferredTitle.String() != "本好きの下剋上" {
 		t.Fatalf("PreferredTitle = %q, want ja title", series.PreferredTitle)
 	}
 	if series.OriginalLanguage != "ja" {
@@ -79,11 +80,11 @@ func TestSelectTitleUsesCanonicalAsOriginalLanguageFallback(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	title := p.selectTitle("日本語タイトル", "jpn", []titleCandidate{
+	title := p.selectTitle(textnorm.NFC("日本語タイトル"), "jpn", []titleCandidate{
 		{Language: "eng", Value: "English Title"},
 	})
 
-	if title != "日本語タイトル" {
+	if title.String() != "日本語タイトル" {
 		t.Fatalf("title = %q, want canonical ja fallback", title)
 	}
 }
@@ -97,12 +98,12 @@ func TestSelectTitlePrefersExplicitOriginalLanguageTranslation(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	title := p.selectTitle("Provider Canonical", "jpn", []titleCandidate{
+	title := p.selectTitle(textnorm.NFC("Provider Canonical"), "jpn", []titleCandidate{
 		{Language: "jpn", Value: "日本語タイトル"},
 		{Language: "eng", Value: "English Title"},
 	})
 
-	if title != "日本語タイトル" {
+	if title.String() != "日本語タイトル" {
 		t.Fatalf("title = %q, want explicit ja translation", title)
 	}
 }
@@ -116,11 +117,11 @@ func TestSelectTitleFallsBackToNextPreferredLanguage(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	title := p.selectTitle("Provider Canonical", "eng", []titleCandidate{
+	title := p.selectTitle(textnorm.NFC("Provider Canonical"), "eng", []titleCandidate{
 		{Language: "eng", Value: "English Title"},
 	})
 
-	if title != "English Title" {
+	if title.String() != "English Title" {
 		t.Fatalf("title = %q, want en translation", title)
 	}
 }
@@ -148,10 +149,10 @@ func TestNormalizeSeriesSummaryNormalizesProviderTitlesToNFC(t *testing.T) {
 	})
 
 	want := "本好きの下剋上 司書になるためには手段を選んでいられません"
-	if summary.PreferredTitle != want {
+	if summary.PreferredTitle.String() != want {
 		t.Fatalf("PreferredTitle = %q, want %q", summary.PreferredTitle, want)
 	}
-	if summary.CanonicalTitle != want {
+	if summary.CanonicalTitle.String() != want {
 		t.Fatalf("CanonicalTitle = %q, want %q", summary.CanonicalTitle, want)
 	}
 }

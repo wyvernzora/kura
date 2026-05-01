@@ -6,6 +6,8 @@ import (
 	"slices"
 	"sync/atomic"
 	"testing"
+
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestResolverEmptyQuery(t *testing.T) {
@@ -28,8 +30,8 @@ func TestResolverEmptyValuedTermsAreIgnored(t *testing.T) {
 
 	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
 		{},
-		{Value: "   "},
-		{Value: "Bookworm"},
+		{Value: n("   ")},
+		{Value: n("Bookworm")},
 	}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -49,7 +51,7 @@ func TestResolverAllEmptyValuedTermsAreEmptyQuery(t *testing.T) {
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
 		{},
 		{Prefix: "tvdb"},
-		{Value: "   "},
+		{Value: n("   ")},
 	}})
 	if !errors.Is(err, ErrEmptyQuery) {
 		t.Fatalf("error = %v, want ErrEmptyQuery", err)
@@ -63,7 +65,7 @@ func TestResolverTooManyTerms(t *testing.T) {
 	resolver := New(fakeStrategy{match: true})
 	query := Query{Terms: make([]Term, MaxTerms+1)}
 	for i := range query.Terms {
-		query.Terms[i] = Term{Value: "term"}
+		query.Terms[i] = Term{Value: n("term")}
 	}
 	_, err := resolver.Resolve(context.Background(), query)
 	if !errors.Is(err, ErrTooManyTerms) {
@@ -73,7 +75,7 @@ func TestResolverTooManyTerms(t *testing.T) {
 
 func TestResolverNoStrategyMatch(t *testing.T) {
 	resolver := New(fakeStrategy{})
-	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Prefix: "unknown", Value: "1"}}})
+	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Prefix: "unknown", Value: n("1")}}})
 	if !errors.Is(err, ErrNoStrategyMatch) {
 		t.Fatalf("error = %v, want ErrNoStrategyMatch", err)
 	}
@@ -82,8 +84,8 @@ func TestResolverNoStrategyMatch(t *testing.T) {
 func TestResolverConflictingAuthoritativeTerms(t *testing.T) {
 	resolver := New(fakeStrategy{match: true, authoritative: true})
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "tvdb", Value: "1"},
-		{Prefix: "tvdb", Value: "2"},
+		{Prefix: "tvdb", Value: n("1")},
+		{Prefix: "tvdb", Value: n("2")},
 	}})
 	if !errors.Is(err, ErrConflictingTerms) {
 		t.Fatalf("error = %v, want ErrConflictingTerms", err)
@@ -102,8 +104,8 @@ func TestResolverDuplicateAuthoritativeTermCollapses(t *testing.T) {
 	resolver := New(strategy)
 
 	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "tvdb", Value: "1"},
-		{Prefix: "tvdb", Value: "1"},
+		{Prefix: "tvdb", Value: n("1")},
+		{Prefix: "tvdb", Value: n("1")},
 	}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -122,8 +124,8 @@ func TestResolverAuthoritativeAndNonAuthoritativeConflict(t *testing.T) {
 		fakeStrategy{matchPrefix: "", matchEmptyPrefix: true},
 	)
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "tvdb", Value: "1"},
-		{Value: "Bookworm"},
+		{Prefix: "tvdb", Value: n("1")},
+		{Value: n("Bookworm")},
 	}})
 	if !errors.Is(err, ErrConflictingTerms) {
 		t.Fatalf("error = %v, want ErrConflictingTerms", err)
@@ -134,14 +136,14 @@ func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
 		hitsForTerm: map[Term][]termHit{
-			{Value: "jp"}: {{
-				Term:        Term{Value: "jp"},
+			{Value: n("jp")}: {{
+				Term:        Term{Value: n("jp")},
 				MetadataRef: "tvdb:1",
 				Summary:     testSummary("tvdb:1"),
 				Rank:        0,
 			}},
-			{Value: "en"}: {{
-				Term:        Term{Value: "en"},
+			{Value: n("en")}: {{
+				Term:        Term{Value: n("en")},
 				MetadataRef: "tvdb:1",
 				Summary:     testSummary("tvdb:1"),
 				Rank:        1,
@@ -149,7 +151,7 @@ func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 		},
 	})
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: "jp"}, {Value: "en"}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("jp")}, {Value: n("en")}}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -176,7 +178,7 @@ func TestResolverUnresolvedDistinctRemoteRefs(t *testing.T) {
 		},
 	})
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: "query"}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("query")}}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -187,7 +189,7 @@ func TestResolverUnresolvedDistinctRemoteRefs(t *testing.T) {
 
 func TestResolverNotFound(t *testing.T) {
 	resolver := New(fakeStrategy{match: true})
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: "missing"}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("missing")}}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -218,8 +220,8 @@ func TestResolverPropagatesErrorAndCancelsSiblings(t *testing.T) {
 	resolver := New(blocking, failing)
 
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "wait", Value: "1"},
-		{Prefix: "fail", Value: "2"},
+		{Prefix: "wait", Value: n("1")},
+		{Prefix: "fail", Value: n("2")},
 	}})
 	if err == nil {
 		t.Fatal("Resolve error = nil, want propagated error")
@@ -231,22 +233,22 @@ func TestResolverSortOrder(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
 		hitsForTerm: map[Term][]termHit{
-			{Value: "a"}: {
+			{Value: n("a")}: {
 				{MetadataRef: "tvdb:1", Summary: testSummary("tvdb:1"), Rank: 0},
 				{MetadataRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 1},
 				{MetadataRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 0},
 			},
-			{Value: "b"}: {
+			{Value: n("b")}: {
 				{MetadataRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 3},
 				{MetadataRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 1},
 			},
-			{Value: "c"}: {
+			{Value: n("c")}: {
 				{MetadataRef: "tvdb:4", Summary: testSummary("tvdb:4"), Rank: 0},
 			},
 		},
 	})
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: "a"}, {Value: "b"}, {Value: "c"}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("a")}, {Value: n("b")}, {Value: n("c")}}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -314,4 +316,8 @@ type countingStrategy struct {
 func (s *countingStrategy) Resolve(ctx context.Context, term Term) ([]termHit, error) {
 	s.calls.Add(1)
 	return s.fakeStrategy.Resolve(ctx, term)
+}
+
+func n(value string) textnorm.NFCString {
+	return textnorm.NFC(value)
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type strategyFakeSource struct {
@@ -25,11 +26,11 @@ func (s *strategyFakeSource) Key() string {
 	return "tvdb"
 }
 
-func (s *strategyFakeSource) Search(_ context.Context, query string, _ metadata.SearchOptions) ([]metadata.SearchResult, error) {
+func (s *strategyFakeSource) Search(_ context.Context, query textnorm.NFCString, _ metadata.SearchOptions) ([]metadata.SearchResult, error) {
 	if s.searchErr != nil {
 		return nil, s.searchErr
 	}
-	if results, ok := s.searchResultsByQuery[query]; ok {
+	if results, ok := s.searchResultsByQuery[query.String()]; ok {
 		return slices.Clone(results), nil
 	}
 	return slices.Clone(s.searchResults), nil
@@ -49,8 +50,8 @@ func (s *strategyFakeSource) GetSeries(_ context.Context, metadataID string) (me
 func testSummary(ref string) metadata.SeriesSummary {
 	return metadata.SeriesSummary{
 		MetadataRef:    refs.Metadata(ref),
-		PreferredTitle: ref + " preferred",
-		CanonicalTitle: ref + " canonical",
+		PreferredTitle: textnorm.NFC(ref + " preferred"),
+		CanonicalTitle: textnorm.NFC(ref + " canonical"),
 	}
 }
 

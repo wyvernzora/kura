@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestSearchNormalizesSeriesResults(t *testing.T) {
@@ -22,7 +23,7 @@ func TestSearchNormalizesSeriesResults(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	results, err := p.Search(context.Background(), "honzuki", metadata.SearchOptions{
+	results, err := p.Search(context.Background(), textnorm.NFC("honzuki"), metadata.SearchOptions{
 		Limit: 5,
 		Year:  2019,
 	})
@@ -44,14 +45,14 @@ func TestSearchNormalizesSeriesResults(t *testing.T) {
 		t.Fatalf("MatchSource = %q, want query", got.MatchSource)
 	}
 	for _, want := range []string{"Ascendance of a Bookworm", "本好きの下剋上", "Honzuki no Gekokujou"} {
-		if !slices.Contains(got.Aliases, want) {
+		if !slices.Contains(got.Aliases, normalizeTitle(want)) {
 			t.Fatalf("Aliases = %#v, want %s", got.Aliases, want)
 		}
 	}
-	if got.CanonicalTitle != "Ascendance of a Bookworm" {
+	if got.CanonicalTitle.String() != "Ascendance of a Bookworm" {
 		t.Fatalf("CanonicalTitle = %q", got.CanonicalTitle)
 	}
-	if got.PreferredTitle != "本好きの下剋上" {
+	if got.PreferredTitle.String() != "本好きの下剋上" {
 		t.Fatalf("PreferredTitle = %q, want 本好きの下剋上", got.PreferredTitle)
 	}
 	if got.Year != 2019 {
@@ -86,14 +87,14 @@ func TestSearchUsesCanonicalTitleWhenNoPreferredLanguages(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	results, err := p.Search(context.Background(), "honzuki", metadata.SearchOptions{})
+	results, err := p.Search(context.Background(), textnorm.NFC("honzuki"), metadata.SearchOptions{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
 	if len(results) != 1 {
 		t.Fatalf("len(results) = %d, want 1", len(results))
 	}
-	if results[0].PreferredTitle != "Ascendance of a Bookworm" {
+	if results[0].PreferredTitle.String() != "Ascendance of a Bookworm" {
 		t.Fatalf("PreferredTitle = %q, want canonical title", results[0].PreferredTitle)
 	}
 }
@@ -120,7 +121,7 @@ func TestSearchNormalizesQueryToNFC(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	_, err = p.Search(context.Background(), "転生したらドラゴンの卵だった", metadata.SearchOptions{})
+	_, err = p.Search(context.Background(), textnorm.NFC("転生したらドラゴンの卵だった"), metadata.SearchOptions{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

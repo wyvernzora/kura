@@ -14,14 +14,15 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
+	"github.com/wyvernzora/kura/internal/textnorm"
 	"github.com/wyvernzora/kura/internal/trash"
 )
 
 type ReconcilePlan struct {
-	Series    refs.Series `json:"series"`
-	FileTitle string      `json:"fileTitle"`
-	Snapshot  string      `json:"snapshot"`
-	Changes   []Change    `json:"changes"`
+	Series    refs.Series        `json:"series"`
+	FileTitle textnorm.NFCString `json:"fileTitle"`
+	Snapshot  string             `json:"snapshot"`
+	Changes   []Change           `json:"changes"`
 }
 
 func (p ReconcilePlan) HasChanges() bool {
@@ -123,7 +124,7 @@ func (h Handle) PlanReconcile() (ReconcilePlan, error) {
 	}
 	return ReconcilePlan{
 		Series:    h.ref,
-		FileTitle: h.ref.String(),
+		FileTitle: textnorm.NFC(h.ref.String()),
 		Snapshot:  snapshot,
 		Changes:   changes,
 	}, nil

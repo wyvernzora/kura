@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru/v2/expirable"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 // CacheOptions configures NewCachedSource.
@@ -63,7 +64,7 @@ func (p *cachedSource) Key() string {
 	return p.next.Key()
 }
 
-func (p *cachedSource) Search(ctx context.Context, query string, opts SearchOptions) ([]SearchResult, error) {
+func (p *cachedSource) Search(ctx context.Context, query textnorm.NFCString, opts SearchOptions) ([]SearchResult, error) {
 	key, err := cacheKey(p.next.Key(), "search", query, opts)
 	if err != nil {
 		return nil, err
@@ -127,7 +128,7 @@ func cloneSearchResults(in []SearchResult) []SearchResult {
 	for i := range in {
 		out[i] = in[i]
 		out[i].SeriesSummary = cloneSeriesSummary(in[i].SeriesSummary)
-		out[i].Aliases = cloneStrings(in[i].Aliases)
+		out[i].Aliases = cloneNFCStrings(in[i].Aliases)
 	}
 	return out
 }
@@ -187,4 +188,11 @@ func cloneStrings(in []string) []string {
 		return []string{}
 	}
 	return append([]string(nil), in...)
+}
+
+func cloneNFCStrings(in []textnorm.NFCString) []textnorm.NFCString {
+	if len(in) == 0 {
+		return []textnorm.NFCString{}
+	}
+	return append([]textnorm.NFCString(nil), in...)
 }

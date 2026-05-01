@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type searchResponse struct {
@@ -73,7 +74,7 @@ func (p *Provider) normalizeSearchResult(record searchRecord) metadata.SearchRes
 	}
 }
 
-func searchTitleAliases(record searchRecord) []string {
+func searchTitleAliases(record searchRecord) []textnorm.NFCString {
 	values := make([]string, 0, 1+len(record.NameTranslated)+len(record.Aliases)+len(record.Translations.Values))
 	values = append(values, record.Name)
 	values = append(values, record.NameTranslated...)
@@ -82,17 +83,18 @@ func searchTitleAliases(record searchRecord) []string {
 		values = append(values, candidate.Value)
 	}
 
-	aliases := make([]string, 0, len(values))
+	aliases := make([]textnorm.NFCString, 0, len(values))
 	seen := map[string]struct{}{}
 	for _, raw := range values {
 		value := normalizeTitle(raw)
-		if value == "" {
+		if value.IsZero() {
 			continue
 		}
-		if _, ok := seen[value]; ok {
+		key := value.String()
+		if _, ok := seen[key]; ok {
 			continue
 		}
-		seen[value] = struct{}{}
+		seen[key] = struct{}{}
 		aliases = append(aliases, value)
 	}
 	return aliases

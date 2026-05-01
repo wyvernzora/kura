@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestCachedSourceCachesAndClonesSearchResults(t *testing.T) {
@@ -11,8 +13,8 @@ func TestCachedSourceCachesAndClonesSearchResults(t *testing.T) {
 		searchResults: []SearchResult{{
 			SeriesSummary: SeriesSummary{
 				MetadataRef:    "fake:1",
-				PreferredTitle: "Original",
-				CanonicalTitle: "Original",
+				PreferredTitle: textnorm.NFC("Original"),
+				CanonicalTitle: textnorm.NFC("Original"),
 				Genres:         []string{"Fantasy"},
 			},
 		}},
@@ -25,21 +27,21 @@ func TestCachedSourceCachesAndClonesSearchResults(t *testing.T) {
 		t.Fatalf("NewCachedSource: %v", err)
 	}
 
-	first, err := cached.Search(context.Background(), "query", SearchOptions{})
+	first, err := cached.Search(context.Background(), textnorm.NFC("query"), SearchOptions{})
 	if err != nil {
 		t.Fatalf("first Search: %v", err)
 	}
-	first[0].PreferredTitle = "Mutated"
+	first[0].PreferredTitle = textnorm.NFC("Mutated")
 	first[0].Genres[0] = "Mutated"
 
-	second, err := cached.Search(context.Background(), "query", SearchOptions{})
+	second, err := cached.Search(context.Background(), textnorm.NFC("query"), SearchOptions{})
 	if err != nil {
 		t.Fatalf("second Search: %v", err)
 	}
 	if fake.searchCalls != 1 {
 		t.Fatalf("search calls = %d, want 1", fake.searchCalls)
 	}
-	if got := second[0].PreferredTitle; got != "Original" {
+	if got := second[0].PreferredTitle; got.String() != "Original" {
 		t.Fatalf("cached title = %q, want Original", got)
 	}
 	if got := second[0].Genres[0]; got != "Fantasy" {
@@ -105,7 +107,7 @@ func (p *fakeSource) Key() string {
 	return "fake"
 }
 
-func (p *fakeSource) Search(context.Context, string, SearchOptions) ([]SearchResult, error) {
+func (p *fakeSource) Search(context.Context, textnorm.NFCString, SearchOptions) ([]SearchResult, error) {
 	p.searchCalls++
 	return p.searchResults, nil
 }

@@ -19,7 +19,11 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	handle, err := lib.Open(refs.Series(cmd.Series))
+	ref, err := refs.ParseSeries(cmd.Series)
+	if err != nil {
+		return err
+	}
+	handle, err := lib.Open(ref)
 	if err != nil {
 		return err
 	}

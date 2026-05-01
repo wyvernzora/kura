@@ -10,7 +10,10 @@ import (
 
 func TestWriteList(t *testing.T) {
 	root := t.TempDir()
-	seriesRef := refs.Series("Honzuki")
+	seriesRef, err := refs.ParseSeries("Honzuki")
+	if err != nil {
+		t.Fatal(err)
+	}
 	episodeRef, _ := refs.NewEpisode(1, 1)
 	id := ulid.Make()
 	now := time.Date(2024, 3, 15, 10, 0, 0, 0, time.UTC)

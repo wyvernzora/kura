@@ -21,9 +21,12 @@ func (cmd *addCmd) Run(rt *runContext) error {
 		return err
 	}
 
-	ref := refs.Series("")
+	var ref refs.Series
 	if cmd.Dirname != "" {
-		ref = refs.Series(cmd.Dirname)
+		ref, err = refs.ParseSeries(cmd.Dirname)
+		if err != nil {
+			return err
+		}
 	}
 	series, err := lib.Add(rt.Context, library.AddInput{Metadata: metadataRef, Ref: ref})
 	if err != nil {

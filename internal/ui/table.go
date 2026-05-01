@@ -20,9 +20,9 @@ func WriteSeriesRead(w io.Writer, result series.ReadResult) error {
 	if _, err := fmt.Fprintf(w, "Root: %s\n", result.Root); err != nil {
 		return err
 	}
-	title := result.PreferredTitle
-	if result.CanonicalTitle != "" && result.CanonicalTitle != result.PreferredTitle {
-		title += " / " + result.CanonicalTitle
+	title := result.PreferredTitle.String()
+	if result.CanonicalTitle != nil && !result.CanonicalTitle.IsZero() && *result.CanonicalTitle != result.PreferredTitle {
+		title += " / " + result.CanonicalTitle.String()
 	}
 	if _, err := fmt.Fprintf(w, "Title: %s\n", title); err != nil {
 		return err

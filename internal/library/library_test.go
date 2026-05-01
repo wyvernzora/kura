@@ -8,6 +8,7 @@ import (
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestLibraryAddWritesFullSpine(t *testing.T) {
@@ -16,7 +17,7 @@ func TestLibraryAddWritesFullSpine(t *testing.T) {
 		t.Fatal(err)
 	}
 	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
-	handle, err := lib.Add(context.Background(), AddInput{Metadata: refs.Metadata("tvdb:370070"), Ref: refs.Series("Bookworm")})
+	handle, err := lib.Add(context.Background(), AddInput{Metadata: refs.Metadata("tvdb:370070"), Ref: mustSeries(t, "Bookworm")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,13 +39,13 @@ func TestLibraryImportRequiresExistingUntrackedDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
-	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: refs.Series("Missing")}); err == nil {
+	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: mustSeries(t, "Missing")}); err == nil {
 		t.Fatal("expected missing series error")
 	}
 	if err := os.Mkdir(root.Join("Bookworm"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: refs.Series("Bookworm")}); err != nil {
+	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: mustSeries(t, "Bookworm")}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -53,7 +54,7 @@ type fakeSource struct{}
 
 func (fakeSource) Key() string { return "tvdb" }
 
-func (fakeSource) Search(context.Context, string, metadata.SearchOptions) ([]metadata.SearchResult, error) {
+func (fakeSource) Search(context.Context, textnorm.NFCString, metadata.SearchOptions) ([]metadata.SearchResult, error) {
 	return nil, nil
 }
 
@@ -61,7 +62,7 @@ func (fakeSource) GetSeries(context.Context, string) (metadata.Series, error) {
 	return metadata.Series{
 		SeriesSummary: metadata.SeriesSummary{
 			MetadataRef:    refs.Metadata("tvdb:370070"),
-			PreferredTitle: "Bookworm",
+			PreferredTitle: textnorm.NFC("Bookworm"),
 		},
 		Seasons: []metadata.Season{
 			{

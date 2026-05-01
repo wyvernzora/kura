@@ -98,7 +98,7 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 	}`, stagedFive, stagedSix))
 
 	lib := newReadTestLibrary(t, rootPath)
-	series, err := lib.Open("Bookworm")
+	series, err := lib.Open(mustSeries(t, "Bookworm"))
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -143,7 +143,7 @@ func newReadTestLibrary(t *testing.T, rootPath string) *Library {
 		t.Fatalf("ParseRoot: %v", err)
 	}
 	idx := NewIndex(root)
-	if err := idx.Put(refs.Metadata("tvdb:370070"), refs.Series("Bookworm")); err != nil {
+	if err := idx.Put(refs.Metadata("tvdb:370070"), mustSeries(t, "Bookworm")); err != nil {
 		t.Fatalf("Put index: %v", err)
 	}
 	return New(root, nil, mediainfo.Inspector{}, idx)

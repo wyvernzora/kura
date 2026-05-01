@@ -65,7 +65,7 @@ func (l *Library) Add(ctx context.Context, in AddInput) (series.Handle, error) {
 	}
 	ref := in.Ref
 	if ref.IsZero() {
-		title, err := series.ParseFileTitle(metadataSeries.PreferredTitle)
+		title, err := series.ParseFileTitle(metadataSeries.PreferredTitle.String())
 		if err != nil {
 			return series.Handle{}, err
 		}

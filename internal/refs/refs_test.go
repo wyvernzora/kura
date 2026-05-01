@@ -60,10 +60,10 @@ func TestParseSelectorTreatsDirAsText(t *testing.T) {
 	if len(selector.Terms) != 2 {
 		t.Fatalf("terms = %d", len(selector.Terms))
 	}
-	if selector.Terms[0].Prefix != "" || selector.Terms[0].Value != "dir:Honzuki" {
+	if selector.Terms[0].Prefix != "" || selector.Terms[0].Value.String() != "dir:Honzuki" {
 		t.Fatalf("unexpected dir term: %#v", selector.Terms[0])
 	}
-	if selector.Terms[1].Prefix != "tvdb" || selector.Terms[1].Value != "370070" {
+	if selector.Terms[1].Prefix != "tvdb" || selector.Terms[1].Value.String() != "370070" {
 		t.Fatalf("unexpected tvdb term: %#v", selector.Terms[1])
 	}
 }

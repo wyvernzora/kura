@@ -28,7 +28,7 @@ func (s *metadataIDStrategy) Authoritative() bool {
 }
 
 func (s *metadataIDStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
-	series, err := s.source.GetSeries(ctx, t.Value)
+	series, err := s.source.GetSeries(ctx, t.Value.String())
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
 			return nil, nil

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 const metadataDateLayout = "2006-01-02"
@@ -18,12 +19,12 @@ type ReadInput struct {
 }
 
 type ReadResult struct {
-	MetadataRef    refs.Metadata `json:"metadataRef"`
-	Ref            refs.Series   `json:"ref"`
-	Root           string        `json:"root"`
-	PreferredTitle string        `json:"preferredTitle"`
-	CanonicalTitle string        `json:"canonicalTitle,omitempty"`
-	Seasons        []SeasonRead  `json:"seasons"`
+	MetadataRef    refs.Metadata       `json:"metadataRef"`
+	Ref            refs.Series         `json:"ref"`
+	Root           string              `json:"root"`
+	PreferredTitle textnorm.NFCString  `json:"preferredTitle"`
+	CanonicalTitle *textnorm.NFCString `json:"canonicalTitle,omitempty"`
+	Seasons        []SeasonRead        `json:"seasons"`
 }
 
 type SeasonRead struct {
@@ -87,7 +88,7 @@ func (h Handle) Read(ctx context.Context, in ReadInput) (ReadResult, error) {
 		MetadataRef:    model.Metadata,
 		Ref:            h.ref,
 		Root:           seriesDir.Path(),
-		PreferredTitle: h.ref.String(),
+		PreferredTitle: textnorm.NFC(h.ref.String()),
 		Seasons:        seasonReads(seriesDir, model, now),
 	}, nil
 }

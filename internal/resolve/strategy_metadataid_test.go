@@ -10,10 +10,10 @@ import (
 
 func TestMetadataIDStrategyProperties(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{key: "tvdb"})
-	if !strategy.Match(Term{Prefix: "tvdb", Value: "1"}) {
+	if !strategy.Match(Term{Prefix: "tvdb", Value: n("1")}) {
 		t.Fatal("Match tvdb = false, want true")
 	}
-	if strategy.Match(Term{Prefix: "tmdb", Value: "1"}) {
+	if strategy.Match(Term{Prefix: "tmdb", Value: n("1")}) {
 		t.Fatal("Match tmdb = true, want false")
 	}
 	if !strategy.Authoritative() {
@@ -23,7 +23,7 @@ func TestMetadataIDStrategyProperties(t *testing.T) {
 
 func TestMetadataIDStrategyNotFound(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrNotFound})
-	hits, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: "1"})
+	hits, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: n("1")})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestMetadataIDStrategyNotFound(t *testing.T) {
 
 func TestMetadataIDStrategyPropagatesError(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrUnavailable})
-	_, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: "1"})
+	_, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: n("1")})
 	if !errors.Is(err, metadata.ErrUnavailable) {
 		t.Fatalf("error = %v, want ErrUnavailable", err)
 	}
@@ -44,7 +44,7 @@ func TestMetadataIDStrategyResolveSeries(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{
 		series: map[string]metadata.Series{"1": testMetadataSeries("tvdb:1")},
 	})
-	hits, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: "1"})
+	hits, err := strategy.Resolve(context.Background(), Term{Prefix: "tvdb", Value: n("1")})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

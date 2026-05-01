@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type textSearchStrategy struct {
@@ -29,7 +30,7 @@ func (s *textSearchStrategy) Authoritative() bool {
 }
 
 func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
-	query := t.String()
+	query := textnorm.NFC(t.String())
 	results, err := s.source.Search(ctx, query, metadata.SearchOptions{Type: metadata.MediaTypeSeries})
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
@@ -45,7 +46,7 @@ func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]termHit, er
 			Summary:     result.SeriesSummary,
 			Rank:        i,
 			MatchSource: result.MatchSource,
-			Annotations: matchAnnotations(query, result),
+			Annotations: matchAnnotations(query.String(), result),
 		})
 	}
 	return hits, nil
@@ -57,7 +58,7 @@ func matchAnnotations(term string, result metadata.SearchResult) []string {
 		return nil
 	}
 	for _, title := range matchTitles(result) {
-		title = strings.ToLower(strings.TrimSpace(title))
+		title := strings.ToLower(strings.TrimSpace(title.String()))
 		if title == "" {
 			continue
 		}
@@ -66,7 +67,7 @@ func matchAnnotations(term string, result metadata.SearchResult) []string {
 		}
 	}
 	for _, title := range matchTitles(result) {
-		title = strings.ToLower(strings.TrimSpace(title))
+		title := strings.ToLower(strings.TrimSpace(title.String()))
 		if title != "" && strings.Contains(title, term) {
 			return []string{"partial_match"}
 		}
@@ -74,6 +75,6 @@ func matchAnnotations(term string, result metadata.SearchResult) []string {
 	return nil
 }
 
-func matchTitles(result metadata.SearchResult) []string {
+func matchTitles(result metadata.SearchResult) []textnorm.NFCString {
 	return result.Aliases
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 // Source retrieves series, season, and episode metadata from an external
@@ -19,7 +20,7 @@ type Source interface {
 	Key() string
 
 	// Search returns lightweight candidate matches for a title query.
-	Search(ctx context.Context, query string, opts SearchOptions) ([]SearchResult, error)
+	Search(ctx context.Context, query textnorm.NFCString, opts SearchOptions) ([]SearchResult, error)
 
 	// GetSeries returns the complete metadata view Kura needs for a series.
 	//
@@ -61,7 +62,7 @@ type SearchResult struct {
 	MatchSource string
 
 	// Aliases are source-provided alternate titles usable for resolver evidence.
-	Aliases []string
+	Aliases []textnorm.NFCString
 }
 
 // SeriesSummary contains series-level metadata shared by search results and
@@ -72,10 +73,10 @@ type SeriesSummary struct {
 
 	// PreferredTitle is Kura's selected official title after source normalization and
 	// language preference handling.
-	PreferredTitle string
+	PreferredTitle textnorm.NFCString
 
 	// CanonicalTitle is the source's canonical title for the series.
-	CanonicalTitle string
+	CanonicalTitle textnorm.NFCString
 
 	Type   MediaType
 	Status SeriesStatus

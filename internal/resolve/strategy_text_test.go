@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestTextSearchStrategyResolveEmpty(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: "missing"})
+	hits, err := strategy.Resolve(context.Background(), Term{Value: n("missing")})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -27,7 +28,7 @@ func TestTextSearchStrategyResolveOne(t *testing.T) {
 			MatchSource:   "title",
 		}},
 	})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: "query"})
+	hits, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -47,14 +48,18 @@ func TestTextSearchStrategyAddsMatchAnnotations(t *testing.T) {
 		searchResults: []metadata.SearchResult{{
 			SeriesSummary: metadata.SeriesSummary{
 				MetadataRef:    "tvdb:1",
-				PreferredTitle: "Ascendance of a Bookworm",
-				CanonicalTitle: "本好きの下剋上",
+				PreferredTitle: textnorm.NFC("Ascendance of a Bookworm"),
+				CanonicalTitle: textnorm.NFC("本好きの下剋上"),
 			},
-			Aliases: []string{"Ascendance of a Bookworm", "本好きの下剋上", "Honzuki no Gekokujou"},
+			Aliases: []textnorm.NFCString{
+				textnorm.NFC("Ascendance of a Bookworm"),
+				textnorm.NFC("本好きの下剋上"),
+				textnorm.NFC("Honzuki no Gekokujou"),
+			},
 		}},
 	})
 
-	full, err := strategy.Resolve(context.Background(), Term{Value: "本好きの下剋上"})
+	full, err := strategy.Resolve(context.Background(), Term{Value: n("本好きの下剋上")})
 	if err != nil {
 		t.Fatalf("Resolve full: %v", err)
 	}
@@ -62,7 +67,7 @@ func TestTextSearchStrategyAddsMatchAnnotations(t *testing.T) {
 		t.Fatalf("full annotations = %#v, want full_match", full)
 	}
 
-	partial, err := strategy.Resolve(context.Background(), Term{Value: "bookworm"})
+	partial, err := strategy.Resolve(context.Background(), Term{Value: n("bookworm")})
 	if err != nil {
 		t.Fatalf("Resolve partial: %v", err)
 	}
@@ -79,7 +84,7 @@ func TestTextSearchStrategyResolveRanks(t *testing.T) {
 			{SeriesSummary: testSummary("tvdb:3")},
 		},
 	})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: "query"})
+	hits, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -92,7 +97,7 @@ func TestTextSearchStrategyResolveRanks(t *testing.T) {
 
 func TestTextSearchStrategyPropagatesError(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: metadata.ErrUnauthorized})
-	_, err := strategy.Resolve(context.Background(), Term{Value: "query"})
+	_, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
 	if !errors.Is(err, metadata.ErrUnauthorized) {
 		t.Fatalf("error = %v, want ErrUnauthorized", err)
 	}
@@ -100,7 +105,7 @@ func TestTextSearchStrategyPropagatesError(t *testing.T) {
 
 func TestTextSearchStrategyNotFound(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: metadata.ErrNotFound})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: "query"})
+	hits, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -111,10 +116,10 @@ func TestTextSearchStrategyNotFound(t *testing.T) {
 
 func TestTextSearchStrategyProperties(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{})
-	if !strategy.Match(Term{Value: "query"}) {
+	if !strategy.Match(Term{Value: n("query")}) {
 		t.Fatal("Match text = false, want true")
 	}
-	if !strategy.Match(Term{Prefix: "dir", Value: "Bookworm"}) {
+	if !strategy.Match(Term{Prefix: "dir", Value: n("Bookworm")}) {
 		t.Fatal("Match prefixed = false, want true")
 	}
 	if strategy.Authoritative() {
