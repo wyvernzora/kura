@@ -44,10 +44,11 @@ type ScannedEpisode struct {
 type ScanStatus string
 
 const (
-	ScanStatusNew      ScanStatus = "new"
-	ScanStatusReplaced ScanStatus = "replaced"
-	ScanStatusUpdated  ScanStatus = "updated"
-	ScanStatusExisting ScanStatus = "existing"
+	ScanStatusAdded     ScanStatus = "added"
+	ScanStatusReplaced  ScanStatus = "replaced"
+	ScanStatusUpdated   ScanStatus = "updated"
+	ScanStatusUnchanged ScanStatus = "unchanged"
+	ScanStatusRemoved   ScanStatus = "removed"
 )
 
 type EpisodeAlreadyExistsError struct {

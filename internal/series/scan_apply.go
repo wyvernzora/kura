@@ -1,8 +1,17 @@
 package series
 
-import "path/filepath"
+import (
+	"os"
+	"path/filepath"
+	"sort"
+
+	"github.com/wyvernzora/kura/internal/refs"
+)
 
 func (s *scanner) apply(discovered []discoveredFile) error {
+	if err := s.removeMissingActive(discovered); err != nil {
+		return err
+	}
 	for _, file := range discovered {
 		if err := s.applyFile(file); err != nil {
 			return err
@@ -16,7 +25,7 @@ func (s *scanner) applyFile(file discoveredFile) error {
 	if !ok {
 		return MetadataMissingEpisodeError{Episode: file.Ref}
 	}
-	status := ScanStatusNew
+	status := ScanStatusAdded
 	if episode.Active != nil {
 		if episode.Active.Path != file.Path {
 			if !s.input.Replace {
@@ -120,11 +129,67 @@ func scannedEpisode(status ScanStatus, file discoveredFile, record MediaRecord) 
 
 func existingScannedEpisode(file discoveredFile, active MediaRecord) ScannedEpisode {
 	return ScannedEpisode{
-		Status:     ScanStatusExisting,
+		Status:     ScanStatusUnchanged,
 		Episode:    file.Ref,
 		Source:     ParseMediaSource(active.Source).Display(),
 		Resolution: active.Resolution,
 		Path:       active.Path,
 		Companions: append([]string(nil), file.Companions...),
 	}
+}
+
+func (s *scanner) removeMissingActive(discovered []discoveredFile) error {
+	discoveredPaths := map[string]struct{}{}
+	for _, file := range discovered {
+		discoveredPaths[file.Path] = struct{}{}
+	}
+	refsWithActive := make([]refs.Episode, 0, len(s.model.Episodes))
+	for ref, episode := range s.model.Episodes {
+		if episode.Active != nil {
+			refsWithActive = append(refsWithActive, ref)
+		}
+	}
+	sort.Slice(refsWithActive, func(i, j int) bool {
+		if refsWithActive[i].Season() != refsWithActive[j].Season() {
+			return refsWithActive[i].Season() < refsWithActive[j].Season()
+		}
+		return refsWithActive[i].Episode() < refsWithActive[j].Episode()
+	})
+	for _, ref := range refsWithActive {
+		episode := s.model.Episodes[ref]
+		if _, ok := discoveredPaths[episode.Active.Path]; ok {
+			continue
+		}
+		path := filepath.Join(s.seriesDir.Path(), filepath.FromSlash(episode.Active.Path))
+		if _, err := s.handle.files().stat(path); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		record := cloneMediaRecord(*episode.Active)
+		if err := s.editor.clearActive(ref); err != nil {
+			return err
+		}
+		s.result.Synced = append(s.result.Synced, removedScannedEpisode(ref, record))
+	}
+	return nil
+}
+
+func removedScannedEpisode(ref refs.Episode, record MediaRecord) ScannedEpisode {
+	return ScannedEpisode{
+		Status:     ScanStatusRemoved,
+		Episode:    ref,
+		Source:     ParseMediaSource(record.Source).Display(),
+		Resolution: record.Resolution,
+		Path:       record.Path,
+		Companions: companionPaths(record.Companions),
+	}
+}
+
+func companionPaths(records []CompanionRecord) []string {
+	out := make([]string, 0, len(records))
+	for _, record := range records {
+		out = append(out, record.Path)
+	}
+	return out
 }

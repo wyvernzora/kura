@@ -23,12 +23,14 @@ func renderStatus(status string, style bool) string {
 		return chalk.Dim.TextStyle(gray(value))
 	case string(series.EpisodeStatusStaged), string(series.EpisodeStatusStagedReplacement):
 		return chalk.Yellow.Color(value)
-	case string(series.ScanStatusNew):
+	case string(series.ScanStatusAdded):
 		return chalk.Green.Color(value)
-	case string(series.ScanStatusExisting):
+	case string(series.ScanStatusUnchanged):
 		return chalk.Dim.TextStyle(gray(value))
 	case string(series.ScanStatusUpdated), string(series.ScanStatusReplaced):
 		return chalk.Yellow.Color(value)
+	case string(series.ScanStatusRemoved):
+		return chalk.Bold.TextStyle(chalk.Red.Color(value))
 	default:
 		return value
 	}

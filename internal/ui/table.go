@@ -174,7 +174,7 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.Impo
 			}
 		}
 		if err := writeStyledTable(w, tw, func(line string) bool {
-			return strings.Contains(line, "┣ ") || strings.Contains(line, "┗ ") || strings.HasPrefix(strings.TrimSpace(line), "existing")
+			return strings.Contains(line, "┣ ") || strings.Contains(line, "┗ ") || strings.HasPrefix(strings.TrimSpace(line), "unchanged")
 		}); err != nil {
 			return err
 		}

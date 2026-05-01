@@ -85,7 +85,7 @@ func TestScanTableRendersEpisodeMarkerAndMediaFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := writeScanTable(&out, []scanTableEntry{{
-		Status:     string(series.ScanStatusNew),
+		Status:     string(series.ScanStatusAdded),
 		Episode:    episode,
 		Source:     "webrip",
 		Resolution: "1920x1080",
@@ -94,7 +94,7 @@ func TestScanTableRendersEpisodeMarkerAndMediaFacts(t *testing.T) {
 		t.Fatalf("writeScanTable: %v", err)
 	}
 	rendered := out.String()
-	for _, want := range []string{"EPISODE", "STATUS", "SOURCE", "RESOLUTION", "FILE", "S02E03", "new", "WebRip", "1080p", "Season 2/episode.mkv"} {
+	for _, want := range []string{"EPISODE", "STATUS", "SOURCE", "RESOLUTION", "FILE", "S02E03", "added", "WebRip", "1080p", "Season 2/episode.mkv"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered table = %q, want %q", rendered, want)
 		}
@@ -113,7 +113,7 @@ func TestScanTableStylesTTYMediaFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := writeScanTable(&out, []scanTableEntry{{
-		Status:     string(series.ScanStatusNew),
+		Status:     string(series.ScanStatusAdded),
 		Episode:    episode,
 		Source:     "webrip",
 		Resolution: "1920x1080",
@@ -123,7 +123,7 @@ func TestScanTableStylesTTYMediaFacts(t *testing.T) {
 	}
 	rendered := out.String()
 	for _, want := range []string{
-		"\x1b[32mnew\x1b[39m",
+		"\x1b[32madded\x1b[39m",
 		"\x1b[33mWebRip\x1b[39m",
 		"\x1b[32m1080p\x1b[39m",
 	} {
@@ -173,10 +173,11 @@ func TestRenderStatus(t *testing.T) {
 		{"pending", string(series.EpisodeStatusPending), "\x1b[2m\x1b[90mpending\x1b[39m\x1b[22m"},
 		{"staged", string(series.EpisodeStatusStaged), "\x1b[33mstaged\x1b[39m"},
 		{"staged replacement", string(series.EpisodeStatusStagedReplacement), "\x1b[33mstaged_replacement\x1b[39m"},
-		{"new", string(series.ScanStatusNew), "\x1b[32mnew\x1b[39m"},
-		{"existing", string(series.ScanStatusExisting), "\x1b[2m\x1b[90mexisting\x1b[39m\x1b[22m"},
+		{"added", string(series.ScanStatusAdded), "\x1b[32madded\x1b[39m"},
+		{"unchanged", string(series.ScanStatusUnchanged), "\x1b[2m\x1b[90munchanged\x1b[39m\x1b[22m"},
 		{"updated", string(series.ScanStatusUpdated), "\x1b[33mupdated\x1b[39m"},
 		{"replaced", string(series.ScanStatusReplaced), "\x1b[33mreplaced\x1b[39m"},
+		{"removed", string(series.ScanStatusRemoved), "\x1b[1m\x1b[31mremoved\x1b[39m\x1b[22m"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

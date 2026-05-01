@@ -3,9 +3,11 @@ package library
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
@@ -39,8 +41,8 @@ func TestScanCommits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
-	if len(result.Synced) != 1 || result.Synced[0].Status != seriespkg.ScanStatusNew {
-		t.Fatalf("Synced = %#v, want one new entry", result.Synced)
+	if len(result.Synced) != 1 || result.Synced[0].Status != seriespkg.ScanStatusAdded {
+		t.Fatalf("Synced = %#v, want one added entry", result.Synced)
 	}
 	loaded, err := lib.Open(mustSeries(t, "Bookworm"))
 	if err != nil {
@@ -81,6 +83,7 @@ func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
 			}
 		}
 	}`)
+	writeFile(t, filepath.Join(seasonDir, "existing.mkv"), "existing")
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
 
 	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
@@ -92,6 +95,113 @@ func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
 	var tracked seriespkg.EpisodeAlreadyExistsError
 	if !errors.As(err, &tracked) {
 		t.Fatalf("Scan error = %v, want EpisodeAlreadyTrackedError", err)
+	}
+}
+
+func TestScanReportsUnchangedUpdatedAndRemoved(t *testing.T) {
+	server := newTestTVDBServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	unchangedPath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
+	updatedPath := filepath.Join(seasonDir, "Bookworm - S01E02 (WebRip 1080p).mkv")
+	writeFile(t, unchangedPath, "episode 1")
+	writeFile(t, updatedPath, "episode 2 changed")
+	unchangedInfo, err := os.Stat(unchangedPath)
+	if err != nil {
+		t.Fatalf("Stat unchanged: %v", err)
+	}
+	updatedInfo, err := os.Stat(updatedPath)
+	if err != nil {
+		t.Fatalf("Stat updated: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": %d,
+					"mtime": %q,
+					"companions": []
+				}
+			},
+			"S01E0002": {
+				"airDate": "2019-10-10",
+				"active": {
+					"path": "Season 1/Bookworm - S01E02 (WebRip 1080p).mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": %d,
+					"mtime": %q,
+					"companions": []
+				}
+			},
+			"S01E0003": {
+				"airDate": "2019-10-17",
+				"active": {
+					"path": "Season 1/missing.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, unchangedInfo.Size(), unchangedInfo.ModTime().UTC().Format(time.RFC3339Nano), updatedInfo.Size()+1, updatedInfo.ModTime().UTC().Format(time.RFC3339Nano)))
+
+	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
+	series, err := lib.Open(mustSeries(t, "Bookworm"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	result, err := series.Scan(context.Background(), seriespkg.ScanInput{})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	statuses := map[refs.Episode]seriespkg.ScanStatus{}
+	for _, synced := range result.Synced {
+		statuses[synced.Episode] = synced.Status
+	}
+	for marker, want := range map[string]seriespkg.ScanStatus{
+		"S01E0001": seriespkg.ScanStatusUnchanged,
+		"S01E0002": seriespkg.ScanStatusUpdated,
+		"S01E0003": seriespkg.ScanStatusRemoved,
+	} {
+		ref, err := refs.ParseEpisode(marker)
+		if err != nil {
+			t.Fatalf("ParseEpisode %s: %v", marker, err)
+		}
+		if got := statuses[ref]; got != want {
+			t.Fatalf("%s status = %q, want %q; synced = %#v", marker, got, want, result.Synced)
+		}
+	}
+	loaded, err := lib.Open(mustSeries(t, "Bookworm"))
+	if err != nil {
+		t.Fatalf("Open after scan: %v", err)
+	}
+	view, err := loaded.Read(context.Background(), seriespkg.ReadInput{})
+	if err != nil {
+		t.Fatalf("Read after scan: %v", err)
+	}
+	removedRef, _ := refs.ParseEpisode("S01E0003")
+	for _, episode := range view.Seasons[0].Episodes {
+		if episode.Episode == removedRef && episode.Active != nil {
+			t.Fatalf("removed episode active = %#v, want nil", episode.Active)
+		}
 	}
 }
 

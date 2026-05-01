@@ -73,3 +73,13 @@ func (e editor) setActive(ref refs.Episode, record MediaRecord) error {
 	e.series.Episodes[ref] = episode
 	return nil
 }
+
+func (e editor) clearActive(ref refs.Episode) error {
+	episode, ok := e.series.Episodes[ref]
+	if !ok {
+		return fmt.Errorf("series: metadata has no %s", ref)
+	}
+	episode.Active = nil
+	e.series.Episodes[ref] = episode
+	return nil
+}
