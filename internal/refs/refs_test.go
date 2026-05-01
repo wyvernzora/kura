@@ -20,8 +20,18 @@ func TestSeries(t *testing.T) {
 	if ref.String() != "Honzuki" {
 		t.Fatalf("unexpected series ref %q", ref)
 	}
-	if _, err := ParseSeries("../Honzuki"); err == nil {
-		t.Fatal("expected escaping series ref error")
+	if _, err := ParseSeries("Season 1/Bookworm"); err == nil {
+		t.Fatal("expected separator series name error")
+	}
+	if _, err := ParseSeries(".kura"); err == nil {
+		t.Fatal("expected reserved series name error")
+	}
+	normalized, err := ParseSeries("Cafe\u0301")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalized.String() != "Café" {
+		t.Fatalf("normalized series ref = %q, want Café", normalized)
 	}
 }
 

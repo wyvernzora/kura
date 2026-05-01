@@ -3,32 +3,29 @@ package refs
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
-// Series identifies a tracked series by its library-root child directory.
+// Series identifies a tracked series by directory name.
 type Series string
 
 func ParseSeries(value string) (Series, error) {
-	value = strings.TrimSpace(value)
+	value = norm.NFC.String(strings.TrimSpace(value))
 	if value == "" {
-		return "", errors.New("series path is required")
+		return "", errors.New("series name is required")
 	}
-	slashName := filepath.ToSlash(value)
-	if filepath.IsAbs(value) || slashName != filepath.Base(slashName) {
-		return "", fmt.Errorf("series path %q must be a direct child of the library root", value)
+	if value == "." || value == ".." || value == ".kura" {
+		return "", fmt.Errorf("invalid series name %q", value)
 	}
-	if slashName == "." || slashName == ".." || slashName == ".kura" {
-		return "", fmt.Errorf("invalid series path %q", value)
-	}
-	if strings.ContainsFunc(slashName, func(r rune) bool {
-		return unicode.IsControl(r) || r == '\t' || r == '\n' || r == '\r'
+	if strings.ContainsFunc(value, func(r rune) bool {
+		return r == '/' || r == '\\' || unicode.IsControl(r)
 	}) {
-		return "", fmt.Errorf("invalid series path %q", value)
+		return "", fmt.Errorf("invalid series name %q", value)
 	}
-	return Series(slashName), nil
+	return Series(value), nil
 }
 
 func (ref Series) String() string {
