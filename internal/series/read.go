@@ -43,12 +43,22 @@ func (h Handle) Read(ctx context.Context, in ReadInput) (Series, error) {
 	if now.IsZero() {
 		now = h.now()
 	}
+	preferredTitle := model.PreferredTitle
+	if preferredTitle.IsZero() {
+		preferredTitle = textnorm.NFC(h.ref.String())
+	}
+	var canonicalTitle *textnorm.NFCString
+	if !model.CanonicalTitle.IsZero() {
+		title := model.CanonicalTitle
+		canonicalTitle = &title
+	}
 	return Series{
 		MetadataRef:    model.Metadata,
 		Ref:            h.ref,
 		Root:           seriesDir.Path(),
 		LastScanned:    formatOptionalTime(model.LastScanned),
-		PreferredTitle: textnorm.NFC(h.ref.String()),
+		PreferredTitle: preferredTitle,
+		CanonicalTitle: canonicalTitle,
 		Seasons:        seasonViews(seriesDir, model, now),
 	}, nil
 }

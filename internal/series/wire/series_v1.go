@@ -14,10 +14,12 @@ func SeriesMetadataPath(seriesDir string) string {
 }
 
 type SeriesV1 struct {
-	SchemaVersion int                  `json:"schemaVersion"`
-	MetadataRef   string               `json:"metadataRef"`
-	LastScanned   string               `json:"lastScanned,omitempty"`
-	Episodes      map[string]EpisodeV1 `json:"episodes,omitempty"`
+	SchemaVersion  int                  `json:"schemaVersion"`
+	MetadataRef    string               `json:"metadataRef"`
+	PreferredTitle string               `json:"preferredTitle,omitempty"`
+	CanonicalTitle string               `json:"canonicalTitle,omitempty"`
+	LastScanned    string               `json:"lastScanned,omitempty"`
+	Episodes       map[string]EpisodeV1 `json:"episodes,omitempty"`
 }
 
 type EpisodeV1 struct {

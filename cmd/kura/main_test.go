@@ -97,8 +97,11 @@ func TestAddCommandCreatesDirAndWritesMetadata(t *testing.T) {
 	if got := series["metadataRef"]; got != "tvdb:370070" {
 		t.Fatalf("metadataRef = %v, want tvdb:370070", got)
 	}
-	if _, ok := series["preferredTitle"]; ok {
-		t.Fatal("preferredTitle present; provider display titles should not be persisted")
+	if got := series["preferredTitle"]; got != "本好きの下剋上" {
+		t.Fatalf("preferredTitle = %v, want 本好きの下剋上", got)
+	}
+	if got := series["canonicalTitle"]; got != "Ascendance of a Bookworm" {
+		t.Fatalf("canonicalTitle = %v, want Ascendance of a Bookworm", got)
 	}
 	episodes, ok := series["episodes"].(map[string]any)
 	if !ok || len(episodes) == 0 {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func fromWire(in wire.SeriesV1) (seriesState, error) {
@@ -15,8 +16,10 @@ func fromWire(in wire.SeriesV1) (seriesState, error) {
 		return seriesState{}, err
 	}
 	out := seriesState{
-		Metadata: metadata,
-		Episodes: map[refs.Episode]episodeState{},
+		Metadata:       metadata,
+		PreferredTitle: textnorm.NFC(in.PreferredTitle),
+		CanonicalTitle: textnorm.NFC(in.CanonicalTitle),
+		Episodes:       map[refs.Episode]episodeState{},
 	}
 	if in.LastScanned != "" {
 		lastScanned, err := time.Parse(time.RFC3339, in.LastScanned)
@@ -41,9 +44,11 @@ func fromWire(in wire.SeriesV1) (seriesState, error) {
 
 func toWire(in seriesState) (wire.SeriesV1, error) {
 	out := wire.SeriesV1{
-		SchemaVersion: wire.CurrentSchemaVersion,
-		MetadataRef:   in.Metadata.String(),
-		Episodes:      map[string]wire.EpisodeV1{},
+		SchemaVersion:  wire.CurrentSchemaVersion,
+		MetadataRef:    in.Metadata.String(),
+		PreferredTitle: in.PreferredTitle.String(),
+		CanonicalTitle: in.CanonicalTitle.String(),
+		Episodes:       map[string]wire.EpisodeV1{},
 	}
 	if !in.LastScanned.IsZero() {
 		out.LastScanned = in.LastScanned.UTC().Format(time.RFC3339)

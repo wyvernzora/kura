@@ -6,6 +6,8 @@
   "properties": {
     "schemaVersion": { "const": 1 },
     "metadataRef": { "type": "string", "minLength": 1 },
+    "preferredTitle": { "type": "string" },
+    "canonicalTitle": { "type": "string" },
     "lastScanned": { "type": "string" },
     "episodes": {
       "type": "object",

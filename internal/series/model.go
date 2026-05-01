@@ -61,9 +61,11 @@ type FilesystemIssue struct {
 }
 
 type seriesState struct {
-	Metadata    refs.Metadata
-	LastScanned time.Time
-	Episodes    map[refs.Episode]episodeState
+	Metadata       refs.Metadata
+	PreferredTitle textnorm.NFCString
+	CanonicalTitle textnorm.NFCString
+	LastScanned    time.Time
+	Episodes       map[refs.Episode]episodeState
 }
 
 type episodeState struct {
@@ -102,9 +104,11 @@ func cloneMediaRecord(in MediaRecord) MediaRecord {
 
 func newSeriesStateFromMetadata(ref refs.Metadata, metadataSeries metadata.Series) (seriesState, error) {
 	out := seriesState{
-		Metadata:    ref,
-		LastScanned: time.Now().UTC(),
-		Episodes:    map[refs.Episode]episodeState{},
+		Metadata:       ref,
+		PreferredTitle: metadataSeries.PreferredTitle,
+		CanonicalTitle: metadataSeries.CanonicalTitle,
+		LastScanned:    time.Now().UTC(),
+		Episodes:       map[refs.Episode]episodeState{},
 	}
 	var spine []SpineEpisode
 	for _, season := range metadataSeries.Seasons {
