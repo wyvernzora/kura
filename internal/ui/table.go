@@ -9,6 +9,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
+	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
@@ -271,6 +272,41 @@ func writeStyledTable(w io.Writer, tw table.Writer, dimLine func(string) bool) e
 	}
 	_, err := fmt.Fprintf(w, "\n%s\n", strings.Join(lines, "\n"))
 	return err
+}
+
+func WriteLibraryList(w io.Writer, entries []library.ListEntry) error {
+	style := shouldStyle(w)
+	tw := table.NewWriter()
+	tw.AppendHeader(table.Row{"STATUS", "TITLE", "SEASONS", "EPISODES", "ROOT"})
+	tw.SetStyle(borderlessTableStyle())
+	tw.SetColumnConfigs([]table.ColumnConfig{
+		{Number: 1},
+		{Number: 2},
+		{Number: 3},
+		{Number: 4},
+		{Number: 5},
+	})
+	for _, entry := range entries {
+		status := string(entry.Status)
+		if entry.Staged {
+			status += "*"
+		}
+		tw.AppendRow(table.Row{
+			renderListStatus(status, style),
+			entry.Title,
+			countCell(entry.SeasonCount, entry.Status),
+			countCell(entry.EpisodeCount, entry.Status),
+			entry.Root,
+		})
+	}
+	return writeStyledTable(w, tw, nil)
+}
+
+func countCell(count int, status library.ListStatus) string {
+	if status == library.ListStatusUntracked || status == library.ListStatusError {
+		return "-"
+	}
+	return strconv.Itoa(count)
 }
 
 func shouldStyle(w io.Writer) bool {

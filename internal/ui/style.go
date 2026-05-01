@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/ttacon/chalk"
+	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/series"
 )
 
@@ -31,6 +32,29 @@ func renderStatus(status string, style bool) string {
 		return chalk.Yellow.Color(value)
 	case string(series.ScanStatusRemoved):
 		return chalk.Bold.TextStyle(chalk.Red.Color(value))
+	default:
+		return value
+	}
+}
+
+func renderListStatus(status string, style bool) string {
+	value := strings.TrimSpace(status)
+	if !style {
+		return value
+	}
+	base := strings.TrimSuffix(value, "*")
+	suffix := strings.TrimPrefix(value, base)
+	switch base {
+	case string(library.ListStatusUntracked):
+		return chalk.Dim.TextStyle(gray(base)) + suffix
+	case string(library.ListStatusComplete):
+		return chalk.Green.Color(base) + suffix
+	case string(library.ListStatusIncomplete):
+		return chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
+	case string(library.ListStatusAiring):
+		return chalk.Blue.Color(base) + suffix
+	case string(library.ListStatusError):
+		return chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
 	default:
 		return value
 	}

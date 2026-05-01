@@ -631,6 +631,186 @@ func TestShowCommandPrintsJSON(t *testing.T) {
 	}
 }
 
+func TestListCommandPrintsLibraryInventoryJSON(t *testing.T) {
+	root := t.TempDir()
+	writeSeriesJSON(t, filepath.Join(root, "Complete"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:1",
+		"preferredTitle": "Complete Title",
+		"canonicalTitle": "Complete Canonical",
+		"episodes": {
+			"S00E0001": {"airDate": "2019-01-01"},
+			"S01E0001": {
+				"airDate": "2019-01-01",
+				"active": {
+					"path": "Season 1/episode-1.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			},
+			"S02E0001": {
+				"airDate": "2026-01-01",
+				"staged": {
+					"path": "/inbox/episode-1.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+	writeSeriesJSON(t, filepath.Join(root, "Airing"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:2",
+		"preferredTitle": "Airing Title",
+		"canonicalTitle": "Airing Canonical",
+		"episodes": {
+			"S01E0001": {"airDate": "2099-01-01"}
+		}
+	}`)
+	writeSeriesJSON(t, filepath.Join(root, "Incomplete"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:3",
+		"preferredTitle": "Incomplete Title",
+		"canonicalTitle": "Incomplete Canonical",
+		"episodes": {
+			"S01E0001": {"airDate": "2019-01-01"}
+		}
+	}`)
+	writeSeriesJSON(t, filepath.Join(root, "Empty"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:4",
+		"preferredTitle": "Empty Title",
+		"canonicalTitle": "Empty Canonical",
+		"episodes": {}
+	}`)
+	if err := os.Mkdir(filepath.Join(root, "Untracked"), 0o755); err != nil {
+		t.Fatalf("Mkdir Untracked: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, ".hidden"), 0o755); err != nil {
+		t.Fatalf("Mkdir .hidden: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "Broken", ".kura"), 0o755); err != nil {
+		t.Fatalf("MkdirAll Broken: %v", err)
+	}
+	writeFile(t, filepath.Join(root, "Broken", ".kura", "series.json"), "{")
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := runContext{
+		Stdin:  bytes.NewBuffer(nil),
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Getenv: func(key string) string {
+			if key == "KURA_LIBRARY_ROOT" {
+				return root
+			}
+			return ""
+		},
+	}
+	err := run([]string{"list", "--json"}, rt)
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
+		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
+	}
+	byRoot := map[string]map[string]any{}
+	for _, row := range rows {
+		byRoot[row["root"].(string)] = row
+	}
+	if _, ok := byRoot[".hidden"]; ok {
+		t.Fatalf("hidden directory listed: %#v", rows)
+	}
+	for rootName, want := range map[string]string{
+		"Airing":     "airing",
+		"Broken":     "error",
+		"Complete":   "complete",
+		"Empty":      "incomplete",
+		"Incomplete": "incomplete",
+		"Untracked":  "untracked",
+	} {
+		row, ok := byRoot[rootName]
+		if !ok {
+			t.Fatalf("missing row %q in %#v", rootName, rows)
+		}
+		if got := row["status"]; got != want {
+			t.Fatalf("%s status = %v, want %s", rootName, got, want)
+		}
+	}
+	if got := byRoot["Complete"]["title"]; got != "Complete Title" {
+		t.Fatalf("Complete title = %v, want Complete Title", got)
+	}
+	if got := byRoot["Complete"]["canonicalTitle"]; got != "Complete Canonical" {
+		t.Fatalf("Complete canonicalTitle = %v, want Complete Canonical", got)
+	}
+	if got := byRoot["Complete"]["staged"]; got != true {
+		t.Fatalf("Complete staged = %v, want true", got)
+	}
+	if got := byRoot["Complete"]["seasonCount"]; got != float64(2) {
+		t.Fatalf("Complete seasonCount = %v, want 2", got)
+	}
+	if got := byRoot["Complete"]["episodeCount"]; got != float64(2) {
+		t.Fatalf("Complete episodeCount = %v, want 2", got)
+	}
+	if got := byRoot["Untracked"]["title"]; got != "Untracked*" {
+		t.Fatalf("Untracked title = %v, want Untracked*", got)
+	}
+}
+
+func TestListCommandPrintsStagedStatusMarker(t *testing.T) {
+	root := t.TempDir()
+	writeSeriesJSON(t, filepath.Join(root, "Bookworm"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"preferredTitle": "Bookworm",
+		"canonicalTitle": "Ascendance of a Bookworm",
+		"episodes": {
+			"S00E0001": {
+				"airDate": "2019-01-01",
+				"staged": {
+					"path": "/inbox/special.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			},
+			"S01E0001": {
+				"airDate": "2019-01-01",
+				"active": {
+					"path": "Season 1/episode-1.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{"list"}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	output := stdout.String()
+	for _, want := range []string{"STATUS", "TITLE", "SEASONS", "EPISODES", "ROOT", "complete*", "Bookworm"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("stdout = %q, want %q", output, want)
+		}
+	}
+}
+
 func TestFindCommandIsRemoved(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

@@ -10,6 +10,7 @@ type cli struct {
 
 	Add       addCmd             `cmd:"" help:"Add a brand new series to the library."`
 	Import    importCmd          `cmd:"" help:"Import an existing directory as a tracked series."`
+	List      listCmd            `cmd:"" help:"List library contents."`
 	Scan      scanCmd            `cmd:"" help:"Scan a tracked series for episode files."`
 	Show      showCmd            `cmd:"" help:"Show tracked series library state."`
 	Reconcile seriesReconcileCmd `cmd:"" help:"Rename tracked files to match Kura metadata."`
