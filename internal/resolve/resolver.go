@@ -99,7 +99,7 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 func nonEmptyTerms(terms []Term) []Term {
 	out := make([]Term, 0, len(terms))
 	for _, term := range terms {
-		if strings.TrimSpace(term.Value.String()) == "" {
+		if strings.TrimSpace(term.String()) == "" {
 			continue
 		}
 		out = append(out, term)

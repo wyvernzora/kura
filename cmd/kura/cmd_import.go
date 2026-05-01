@@ -48,13 +48,12 @@ func (cmd *importCmd) resolveTerms() ([]string, error) {
 
 	for _, raw := range cmd.Terms {
 		term := resolve.ParseTerm(raw)
-		if term == (resolve.Term{}) {
+		if term == "" {
 			continue
 		}
 		nonEmptyTerms++
-		switch term.Prefix {
-		case "":
-		case "tvdb":
+		ref, err := refs.ParseMetadata(term.String())
+		if err == nil && ref.Provider() == "tvdb" {
 			tvdbTerms++
 			tvdbTerm = raw
 		}

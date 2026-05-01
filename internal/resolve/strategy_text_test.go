@@ -12,7 +12,7 @@ import (
 
 func TestTextSearchStrategyResolveEmpty(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: n("missing")})
+	hits, err := strategy.Resolve(context.Background(), Term("missing"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestTextSearchStrategyResolveOne(t *testing.T) {
 			MatchSource:   "title",
 		}},
 	})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
+	hits, err := strategy.Resolve(context.Background(), Term("query"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestTextSearchStrategyAddsMatchAnnotations(t *testing.T) {
 		}},
 	})
 
-	full, err := strategy.Resolve(context.Background(), Term{Value: n("本好きの下剋上")})
+	full, err := strategy.Resolve(context.Background(), Term("本好きの下剋上"))
 	if err != nil {
 		t.Fatalf("Resolve full: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestTextSearchStrategyAddsMatchAnnotations(t *testing.T) {
 		t.Fatalf("full annotations = %#v, want full_match", full)
 	}
 
-	partial, err := strategy.Resolve(context.Background(), Term{Value: n("bookworm")})
+	partial, err := strategy.Resolve(context.Background(), Term("bookworm"))
 	if err != nil {
 		t.Fatalf("Resolve partial: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestTextSearchStrategyResolveRanks(t *testing.T) {
 			{SeriesSummary: testSummary("tvdb:3")},
 		},
 	})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
+	hits, err := strategy.Resolve(context.Background(), Term("query"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestTextSearchStrategyResolveRanks(t *testing.T) {
 
 func TestTextSearchStrategyPropagatesError(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: metadata.ErrUnauthorized})
-	_, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
+	_, err := strategy.Resolve(context.Background(), Term("query"))
 	if !errors.Is(err, metadata.ErrUnauthorized) {
 		t.Fatalf("error = %v, want ErrUnauthorized", err)
 	}
@@ -105,7 +105,7 @@ func TestTextSearchStrategyPropagatesError(t *testing.T) {
 
 func TestTextSearchStrategyNotFound(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: metadata.ErrNotFound})
-	hits, err := strategy.Resolve(context.Background(), Term{Value: n("query")})
+	hits, err := strategy.Resolve(context.Background(), Term("query"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -116,14 +116,14 @@ func TestTextSearchStrategyNotFound(t *testing.T) {
 
 func TestTextSearchStrategyProperties(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{})
-	matched, stop := strategy.Match(Term{Value: n("query")})
+	matched, stop := strategy.Match(Term("query"))
 	if !matched {
 		t.Fatal("Match text = false, want true")
 	}
 	if stop {
 		t.Fatal("Match text stop = true, want false")
 	}
-	matched, stop = strategy.Match(Term{Prefix: "unknown", Value: n("Bookworm")})
+	matched, stop = strategy.Match(Term("unknown:Bookworm"))
 	if !matched {
 		t.Fatal("Match prefixed = false, want true")
 	}

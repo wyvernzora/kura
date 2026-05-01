@@ -2,15 +2,15 @@ package resolve
 
 import "github.com/wyvernzora/kura/internal/refs"
 
-// Term is a parsed user-supplied token split into an optional lowercase
-// prefix and a non-empty value. Strategy matching decides how to interpret it.
+// Term is normalized selector text. Strategy matching decides how to parse and
+// interpret it.
 type Term = refs.Term
 
 // Query is a collection of search terms.
 type Query = refs.Selector
 
-// ParseTerm splits raw into a prefixed term when it has a lowercase
-// alphanumeric prefix, otherwise treating it as free-form text.
+// ParseTerm normalizes raw selector text. Strategies decide how to parse and
+// interpret the term.
 func ParseTerm(raw string) Term {
 	return refs.ParseTerm(raw)
 }

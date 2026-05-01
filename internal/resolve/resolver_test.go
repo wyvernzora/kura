@@ -4,10 +4,9 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
-
-	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestResolverEmptyQuery(t *testing.T) {
@@ -29,9 +28,9 @@ func TestResolverEmptyValuedTermsAreIgnored(t *testing.T) {
 	resolver := New(strategy)
 
 	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{},
-		{Value: n("   ")},
-		{Value: n("Bookworm")},
+		Term(""),
+		Term("   "),
+		Term("Bookworm"),
 	}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -49,9 +48,9 @@ func TestResolverAllEmptyValuedTermsAreEmptyQuery(t *testing.T) {
 	resolver := New(strategy)
 
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{},
-		{Prefix: "tvdb"},
-		{Value: n("   ")},
+		Term(""),
+		Term("   "),
+		Term("   "),
 	}})
 	if !errors.Is(err, ErrEmptyQuery) {
 		t.Fatalf("error = %v, want ErrEmptyQuery", err)
@@ -65,7 +64,7 @@ func TestResolverTooManyTerms(t *testing.T) {
 	resolver := New(fakeStrategy{match: true})
 	query := Query{Terms: make([]Term, MaxTerms+1)}
 	for i := range query.Terms {
-		query.Terms[i] = Term{Value: n("term")}
+		query.Terms[i] = Term("term")
 	}
 	_, err := resolver.Resolve(context.Background(), query)
 	if !errors.Is(err, ErrTooManyTerms) {
@@ -75,7 +74,7 @@ func TestResolverTooManyTerms(t *testing.T) {
 
 func TestResolverNoStrategyMatchWithoutFallback(t *testing.T) {
 	resolver := New(fakeStrategy{})
-	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Prefix: "unknown", Value: n("1")}}})
+	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{Term("unknown:1")}})
 	if !errors.Is(err, ErrNoStrategyMatch) {
 		t.Fatalf("error = %v, want ErrNoStrategyMatch", err)
 	}
@@ -86,7 +85,7 @@ func TestResolverRunsMultipleMatchingStrategiesForSameTerm(t *testing.T) {
 		name:  "first",
 		match: true,
 		hits: []termHit{{
-			Term:        Term{Value: n("Bookworm")},
+			Term:        Term("Bookworm"),
 			MetadataRef: "tvdb:1",
 			Summary:     testSummary("tvdb:1"),
 			MatchSource: "first",
@@ -96,7 +95,7 @@ func TestResolverRunsMultipleMatchingStrategiesForSameTerm(t *testing.T) {
 		name:  "second",
 		match: true,
 		hits: []termHit{{
-			Term:        Term{Value: n("Bookworm")},
+			Term:        Term("Bookworm"),
 			MetadataRef: "tvdb:2",
 			Summary:     testSummary("tvdb:2"),
 			MatchSource: "second",
@@ -104,7 +103,7 @@ func TestResolverRunsMultipleMatchingStrategiesForSameTerm(t *testing.T) {
 	}}
 	resolver := New(first, second)
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("Bookworm")}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{Term("Bookworm")}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -122,7 +121,7 @@ func TestResolverStopsMatchingAfterStoppingStrategy(t *testing.T) {
 		match: true,
 		stop:  true,
 		hits: []termHit{{
-			Term:        Term{Prefix: "tvdb", Value: n("1")},
+			Term:        Term("tvdb:1"),
 			MetadataRef: "tvdb:1",
 			Summary:     testSummary("tvdb:1"),
 		}},
@@ -131,14 +130,14 @@ func TestResolverStopsMatchingAfterStoppingStrategy(t *testing.T) {
 		name:  "second",
 		match: true,
 		hits: []termHit{{
-			Term:        Term{Prefix: "tvdb", Value: n("1")},
+			Term:        Term("tvdb:1"),
 			MetadataRef: "tvdb:2",
 			Summary:     testSummary("tvdb:2"),
 		}},
 	}}
 	resolver := New(first, second)
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Prefix: "tvdb", Value: n("1")}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{Term("tvdb:1")}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -153,8 +152,8 @@ func TestResolverStopsMatchingAfterStoppingStrategy(t *testing.T) {
 func TestResolverConflictingAuthoritativeTerms(t *testing.T) {
 	resolver := New(fakeStrategy{match: true, authoritative: true})
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "tvdb", Value: n("1")},
-		{Prefix: "tvdb", Value: n("2")},
+		Term("tvdb:1"),
+		Term("tvdb:2"),
 	}})
 	if !errors.Is(err, ErrConflictingTerms) {
 		t.Fatalf("error = %v, want ErrConflictingTerms", err)
@@ -173,8 +172,8 @@ func TestResolverDuplicateAuthoritativeTermCollapses(t *testing.T) {
 	resolver := New(strategy)
 
 	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "tvdb", Value: n("1")},
-		{Prefix: "tvdb", Value: n("1")},
+		Term("tvdb:1"),
+		Term("tvdb:1"),
 	}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
@@ -193,8 +192,8 @@ func TestResolverAuthoritativeAndNonAuthoritativeConflict(t *testing.T) {
 		fakeStrategy{matchPrefix: "", matchEmptyPrefix: true},
 	)
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "tvdb", Value: n("1")},
-		{Value: n("Bookworm")},
+		Term("tvdb:1"),
+		Term("Bookworm"),
 	}})
 	if !errors.Is(err, ErrConflictingTerms) {
 		t.Fatalf("error = %v, want ErrConflictingTerms", err)
@@ -205,14 +204,14 @@ func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
 		hitsForTerm: map[Term][]termHit{
-			{Value: n("jp")}: {{
-				Term:        Term{Value: n("jp")},
+			Term("jp"): {{
+				Term:        Term("jp"),
 				MetadataRef: "tvdb:1",
 				Summary:     testSummary("tvdb:1"),
 				Rank:        0,
 			}},
-			{Value: n("en")}: {{
-				Term:        Term{Value: n("en")},
+			Term("en"): {{
+				Term:        Term("en"),
 				MetadataRef: "tvdb:1",
 				Summary:     testSummary("tvdb:1"),
 				Rank:        1,
@@ -220,7 +219,7 @@ func TestResolverAggregatesSameRemoteRef(t *testing.T) {
 		},
 	})
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("jp")}, {Value: n("en")}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{Term("jp"), Term("en")}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -247,7 +246,7 @@ func TestResolverUnresolvedDistinctRemoteRefs(t *testing.T) {
 		},
 	})
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("query")}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{Term("query")}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -258,7 +257,7 @@ func TestResolverUnresolvedDistinctRemoteRefs(t *testing.T) {
 
 func TestResolverNotFound(t *testing.T) {
 	resolver := New(fakeStrategy{match: true})
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("missing")}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{Term("missing")}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -289,8 +288,8 @@ func TestResolverPropagatesErrorAndCancelsSiblings(t *testing.T) {
 	resolver := New(blocking, failing)
 
 	_, err := resolver.Resolve(context.Background(), Query{Terms: []Term{
-		{Prefix: "wait", Value: n("1")},
-		{Prefix: "fail", Value: n("2")},
+		Term("wait:1"),
+		Term("fail:2"),
 	}})
 	if err == nil {
 		t.Fatal("Resolve error = nil, want propagated error")
@@ -302,22 +301,22 @@ func TestResolverSortOrder(t *testing.T) {
 	resolver := New(fakeStrategy{
 		match: true,
 		hitsForTerm: map[Term][]termHit{
-			{Value: n("a")}: {
+			Term("a"): {
 				{MetadataRef: "tvdb:1", Summary: testSummary("tvdb:1"), Rank: 0},
 				{MetadataRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 1},
 				{MetadataRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 0},
 			},
-			{Value: n("b")}: {
+			Term("b"): {
 				{MetadataRef: "tvdb:2", Summary: testSummary("tvdb:2"), Rank: 3},
 				{MetadataRef: "tvdb:3", Summary: testSummary("tvdb:3"), Rank: 1},
 			},
-			{Value: n("c")}: {
+			Term("c"): {
 				{MetadataRef: "tvdb:4", Summary: testSummary("tvdb:4"), Rank: 0},
 			},
 		},
 	})
 
-	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{{Value: n("a")}, {Value: n("b")}, {Value: n("c")}}})
+	result, err := resolver.Resolve(context.Background(), Query{Terms: []Term{Term("a"), Term("b"), Term("c")}})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -355,10 +354,11 @@ func (s fakeStrategy) Match(term Term) (bool, bool) {
 	if s.match {
 		return true, s.stop
 	}
-	if s.matchEmptyPrefix && term.Prefix == "" {
+	prefix := termPrefix(term)
+	if s.matchEmptyPrefix && prefix == "" {
 		return true, s.stop
 	}
-	matched := s.matchPrefix != "" && term.Prefix == s.matchPrefix
+	matched := s.matchPrefix != "" && prefix == s.matchPrefix
 	return matched, matched && s.stop
 }
 
@@ -389,6 +389,10 @@ func (s *countingStrategy) Resolve(ctx context.Context, term Term) ([]termHit, e
 	return s.fakeStrategy.Resolve(ctx, term)
 }
 
-func n(value string) textnorm.NFCString {
-	return textnorm.NFC(value)
+func termPrefix(term Term) string {
+	prefix, _, ok := strings.Cut(term.String(), ":")
+	if !ok {
+		return ""
+	}
+	return prefix
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type metadataIDStrategy struct {
@@ -20,7 +21,8 @@ func (s *metadataIDStrategy) Name() string {
 }
 
 func (s *metadataIDStrategy) Match(t Term) (bool, bool) {
-	if t.Prefix == s.source.Key() {
+	ref, err := refs.ParseMetadata(t.String())
+	if err == nil && ref.Provider() == s.source.Key() {
 		return true, true
 	}
 	return false, false
@@ -31,7 +33,11 @@ func (s *metadataIDStrategy) Authoritative() bool {
 }
 
 func (s *metadataIDStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
-	series, err := s.source.GetSeries(ctx, t.Value.String())
+	ref, err := refs.ParseMetadata(t.String())
+	if err != nil {
+		return nil, err
+	}
+	series, err := s.source.GetSeries(ctx, ref.ID())
 	if err != nil {
 		if errors.Is(err, metadata.ErrNotFound) {
 			return nil, nil

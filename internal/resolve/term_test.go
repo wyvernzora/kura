@@ -11,13 +11,13 @@ func TestParseTerm(t *testing.T) {
 		raw  string
 		want Term
 	}{
-		{name: "text", raw: "本好きの下剋上", want: Term{Value: n("本好きの下剋上")}},
-		{name: "metadata ref", raw: "tvdb:370070", want: Term{Prefix: "tvdb", Value: n("370070")}},
-		{name: "dirname is text", raw: "dir:foo", want: Term{Value: n("dir:foo")}},
-		{name: "uppercase prefix", raw: "DIR:foo", want: Term{Value: n("DIR:foo")}},
-		{name: "trim text", raw: "  X-Men  ", want: Term{Value: n("X-Men")}},
-		{name: "spaces in value", raw: "tvdb:foo bar", want: Term{Prefix: "tvdb", Value: n("foo bar")}},
-		{name: "empty", raw: "", want: Term{}},
+		{name: "text", raw: "本好きの下剋上", want: Term("本好きの下剋上")},
+		{name: "metadata ref", raw: "tvdb:370070", want: Term("tvdb:370070")},
+		{name: "dirname is text", raw: "dir:foo", want: Term("dir:foo")},
+		{name: "uppercase prefix", raw: "DIR:foo", want: Term("DIR:foo")},
+		{name: "trim text", raw: "  X-Men  ", want: Term("X-Men")},
+		{name: "spaces in value", raw: "tvdb:foo bar", want: Term("tvdb:foo bar")},
+		{name: "empty", raw: "", want: Term("")},
 	}
 
 	for _, test := range tests {
@@ -31,7 +31,7 @@ func TestParseTerm(t *testing.T) {
 
 func TestParseQuery(t *testing.T) {
 	got := ParseQuery([]string{"a", "", "tvdb:1"})
-	want := Query{Terms: []Term{{Value: n("a")}, {Prefix: "tvdb", Value: n("1")}}}
+	want := Query{Terms: []Term{Term("a"), Term("tvdb:1")}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ParseQuery = %#v, want %#v", got, want)
 	}
@@ -43,9 +43,9 @@ func TestTermString(t *testing.T) {
 		term Term
 		want string
 	}{
-		{name: "text", term: Term{Value: n("Bookworm")}, want: "Bookworm"},
-		{name: "prefixed", term: Term{Prefix: "tvdb", Value: n("370070")}, want: "tvdb:370070"},
-		{name: "empty", term: Term{}, want: ""},
+		{name: "text", term: Term("Bookworm"), want: "Bookworm"},
+		{name: "prefixed", term: Term("tvdb:370070"), want: "tvdb:370070"},
+		{name: "empty", term: Term(""), want: ""},
 	}
 
 	for _, test := range tests {

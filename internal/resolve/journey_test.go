@@ -119,6 +119,24 @@ func TestResolverJourneys(t *testing.T) {
 		}
 	})
 
+	t.Run("unknown-prefixed term is text search", func(t *testing.T) {
+		source := &strategyFakeSource{
+			searchResultsByQuery: map[string][]metadata.SearchResult{
+				"foo:Bookworm": {
+					{SeriesSummary: testSummary("tvdb:370070")},
+				},
+			},
+		}
+		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
+		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"foo:Bookworm"}))
+		if err != nil {
+			t.Fatalf("Resolve: %v", err)
+		}
+		if len(resolution.Results) != 1 {
+			t.Fatalf("len(Results) = %d, want 1", len(resolution.Results))
+		}
+	})
+
 	t.Run("conflicting terms error", func(t *testing.T) {
 		source := &strategyFakeSource{}
 		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
