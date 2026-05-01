@@ -31,11 +31,15 @@ func newScanner(handle Handle, ctx context.Context, input ScanInput) *scanner {
 
 func (s *scanner) scan() error {
 	progress.Start(s.ctx, "scan", fmt.Sprintf("Scanning %s", s.handle.ref), 0)
-	if err := s.load(); err != nil {
+	if err := s.loadLocal(); err != nil {
 		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 0, 0)
 		return err
 	}
 	if err := s.rejectStagedRecords(); err != nil {
+		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 0, 0)
+		return err
+	}
+	if err := s.refreshMetadata(); err != nil {
 		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 0, 0)
 		return err
 	}
@@ -60,17 +64,8 @@ func (s *scanner) scan() error {
 	return nil
 }
 
-func (s *scanner) load() error {
+func (s *scanner) loadLocal() error {
 	model, err := s.handle.load()
-	if err != nil {
-		return err
-	}
-	progress.Update(s.ctx, "scan", fmt.Sprintf("Fetching metadata for %s", s.handle.ref), 0, 0)
-	metadataSeries, err := s.handle.source().GetSeries(s.ctx, model.Metadata.ID())
-	if err != nil {
-		return err
-	}
-	spine, err := spineFromMetadata(metadataSeries.Seasons)
 	if err != nil {
 		return err
 	}
@@ -80,8 +75,21 @@ func (s *scanner) load() error {
 	}
 	s.model = model
 	s.editor = editor{series: &s.model}
-	s.editor.refreshSpine(spine)
 	s.seriesDir = seriesDir
+	return nil
+}
+
+func (s *scanner) refreshMetadata() error {
+	progress.Update(s.ctx, "scan", fmt.Sprintf("Fetching metadata for %s", s.handle.ref), 0, 0)
+	metadataSeries, err := s.handle.source().GetSeries(s.ctx, s.model.Metadata.ID())
+	if err != nil {
+		return err
+	}
+	spine, err := spineFromMetadata(metadataSeries.Seasons)
+	if err != nil {
+		return err
+	}
+	s.editor.refreshSpine(spine)
 	return nil
 }
 

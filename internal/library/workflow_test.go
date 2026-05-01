@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
@@ -148,6 +150,49 @@ func TestScanWithStagedRecordsReturnsTypedError(t *testing.T) {
 	}
 	if len(staged.Episodes) != 1 || staged.Episodes[0].Marker() != "S01E01" {
 		t.Fatalf("staged episodes = %#v, want S01E01", staged.Episodes)
+	}
+}
+
+func TestScanWithStagedRecordsDoesNotFetchMetadata(t *testing.T) {
+	root, err := ParseRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	seriesDir := root.Join("Bookworm")
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S00E0001": {
+				"airDate": "2019-10-03",
+				"staged": {
+					"path": "/inbox/special.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 14,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+
+	lib := New(root, failingSource{t: t}, mediainfo.Inspector{}, NewIndex(root))
+	series, err := lib.Open(mustSeries(t, "Bookworm"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	_, err = series.Scan(context.Background(), seriespkg.ScanInput{})
+	var staged seriespkg.ScanStagedRecordsError
+	if !errors.As(err, &staged) {
+		t.Fatalf("Scan error = %v, want ScanStagedRecordsError", err)
+	}
+	if len(staged.Episodes) != 1 || staged.Episodes[0].Marker() != "S00E01" {
+		t.Fatalf("staged episodes = %#v, want S00E01", staged.Episodes)
 	}
 }
 
@@ -503,6 +548,16 @@ func newTestLibraryWithMediaInfo(t *testing.T, root string, tvdbBaseURL string, 
 		t.Fatalf("New: %v", err)
 	}
 	return lib
+}
+
+type failingSource struct {
+	fakeSource
+	t *testing.T
+}
+
+func (s failingSource) GetSeries(context.Context, string) (metadata.Series, error) {
+	s.t.Fatal("GetSeries called; staged scan should fail before provider fetch")
+	return metadata.Series{}, nil
 }
 
 func newFakeMediaInfoCommand(t *testing.T, dir string) string {
