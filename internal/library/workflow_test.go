@@ -353,6 +353,58 @@ func TestStageCommits(t *testing.T) {
 	}
 }
 
+func TestResetClearsStagedEpisode(t *testing.T) {
+	server := newTestTVDBServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	stagedPath := filepath.Join(t.TempDir(), "Bookworm - S01E01 (WebRip).mkv")
+	writeFile(t, stagedPath, "episode")
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"staged": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, stagedPath))
+
+	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
+	series, err := lib.Open(mustSeries(t, "Bookworm"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	episode, err := refs.NewEpisode(1, 1)
+	if err != nil {
+		t.Fatalf("NewEpisode: %v", err)
+	}
+	result, err := series.Reset(context.Background(), seriespkg.ResetInput{Episode: episode})
+	if err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+	if !result.Applied || result.Record.Path != stagedPath {
+		t.Fatalf("Reset result = %#v, want applied staged record", result)
+	}
+	view, err := series.Read(context.Background(), seriespkg.ReadInput{})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if len(view.Seasons) != 1 || len(view.Seasons[0].Episodes) != 1 || view.Seasons[0].Episodes[0].Staged != nil {
+		t.Fatalf("read view = %#v, want no staged episode", view)
+	}
+}
+
 func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 	server := newTestTVDBServer(t)
 	defer server.Close()

@@ -24,6 +24,8 @@ directories:
   `.kura/series.json`. Relative paths resolve from the selected series root.
   Use `--replace` when the staged file is intended to replace an active or
   already-staged episode.
+- `kura reset --episode <marker> <selector>` removes the staged record for one
+  episode without touching the staged file on disk.
 - `kura reconcile <dir>` applies Kura's planned filesystem layout, moves staged
   files into the series, and moves replaced active files into `.kura/trash/`.
 - `kura meta ...` exposes the current metadata helper commands.
@@ -37,6 +39,7 @@ The normal local flow is:
 ```sh
 kura scan <series-dir>
 kura stage --episode S01E03 <selector> --replace /media/anime/inbox/example.mkv
+kura reset --episode S01E03 <selector>
 kura reconcile <series-dir>
 ```
 

@@ -13,6 +13,7 @@ type cli struct {
 	Scan      scanCmd            `cmd:"" help:"Scan a tracked series for episode files."`
 	Show      showCmd            `cmd:"" help:"Show tracked series library state."`
 	Reconcile seriesReconcileCmd `cmd:"" help:"Rename tracked files to match Kura metadata."`
+	Reset     resetCmd           `cmd:"" help:"Remove staged media from a tracked episode."`
 	Stage     stageCmd           `cmd:"" help:"Stage an external episode file for a series."`
 	Meta      metaCmd            `cmd:"" help:"Metadata helper commands."`
 }

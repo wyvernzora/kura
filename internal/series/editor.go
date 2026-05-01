@@ -40,6 +40,16 @@ func (e editor) setStaged(ref refs.Episode, record MediaRecord) error {
 	return nil
 }
 
+func (e editor) clearStaged(ref refs.Episode) error {
+	episode, ok := e.series.Episodes[ref]
+	if !ok {
+		return fmt.Errorf("series: metadata has no %s", ref)
+	}
+	episode.Staged = nil
+	e.series.Episodes[ref] = episode
+	return nil
+}
+
 func (e editor) promoteStaged(ref refs.Episode) (*MediaRecord, error) {
 	episode, ok := e.series.Episodes[ref]
 	if !ok {

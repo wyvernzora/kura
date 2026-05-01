@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -844,6 +845,78 @@ func TestStageCommandWritesStagedEpisode(t *testing.T) {
 	companion := companions[0].(map[string]any)
 	if got := companion["path"]; got != companionPath {
 		t.Fatalf("companion.path = %v, want %s", got, companionPath)
+	}
+}
+
+func TestResetCommandClearsStagedEpisode(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	stagedPath := filepath.Join(t.TempDir(), "Bookworm - S01E01 (WebRip).mkv")
+	writeFile(t, stagedPath, "episode")
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"staged": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, stagedPath))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"reset",
+		"--episode", "S01E01",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
+	}
+	if got := result["applied"]; got != true {
+		t.Fatalf("applied = %v, want true", got)
+	}
+	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
+	if err != nil {
+		t.Fatalf("ReadFile series.json: %v", err)
+	}
+	var series map[string]any
+	if err := json.Unmarshal(data, &series); err != nil {
+		t.Fatalf("unmarshal series: %v", err)
+	}
+	episodes := series["episodes"].(map[string]any)
+	entry := episodes["S01E0001"].(map[string]any)
+	if _, ok := entry["staged"]; ok {
+		t.Fatalf("staged entry = %#v, want removed", entry["staged"])
+	}
+}
+
+func TestResetCommandRequiresEpisode(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"reset",
+		"tvdb:370070",
+	}, testRunContext(&stdout, &stderr))
+	if err == nil {
+		t.Fatal("run returned nil, want missing --episode error")
 	}
 }
 
