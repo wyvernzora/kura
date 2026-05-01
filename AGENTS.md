@@ -210,7 +210,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - `kura scan <series>` — scan a tracked series directory, record recognized episode media into `series.json`, refresh changed facts for same-path episodes, keep empty spine episodes, and report skipped files/directories.
 - `kura scan --replace <series>` — required when a discovered file replaces an existing active season/episode at a different media path.
 - `kura stage <series> [opts] <absolute-media-path>` — record an explicit external media file inside the target episode's `series.json` staged record. Active or staged season/episode collisions require `--replace`.
-- `kura reconcile <series>` — move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
+- `kura reconcile <series>` — resolve the series selector through the library index, move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
 - If scan or reconcile has no changes, the CLI must not ask to apply anything.
 - Kura does not currently scan a central inbox. `kura stage` accepts explicitly referenced absolute media paths from any inbox or download directory.
 
@@ -242,6 +242,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Organize commits as appropriate for the work; split unrelated or review-distinct changes into separate commits.
 - Keep selector `Term` string-like; strategies own any prefix or shape parsing they need. In resolver strategy matching, treat prefixed terms as text unless a registered strategy claims the prefix; authoritative strategies like metadata ID stop later strategy matching.
 - Persist series-level `preferredTitle` and `canonicalTitle` in `series.json`; keep episode-level provider data limited to slot identity and air date.
+- For download release triage, prefer staging candidate files with Kura and using the staging report for media facts; reset staged records when the release is not recommended.
 
 ---
 

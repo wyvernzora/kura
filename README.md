@@ -27,7 +27,7 @@ directories:
 - `kura reset --episode <marker> <selector>` removes the staged record for one
   episode without touching the staged file on disk. `kura reset --all <selector>`
   removes every staged record for the series.
-- `kura reconcile <dir>` applies Kura's planned filesystem layout, moves staged
+- `kura reconcile <selector>` applies Kura's planned filesystem layout, moves staged
   files into the series, and moves replaced active files into `.kura/trash/`.
 - `kura reindex` rebuilds `.kura/index.tsv` from per-series metadata.
 - `kura meta ...` exposes the current metadata helper commands.
@@ -39,10 +39,10 @@ media under `.kura/trash/<id>/` and writes the corresponding
 The normal local flow is:
 
 ```sh
-kura scan <series-dir>
+kura scan <selector>
 kura stage --episode S01E03 <selector> --replace /media/anime/inbox/example.mkv
 kura reset --episode S01E03 <selector>
-kura reconcile <series-dir>
+kura reconcile <selector>
 ```
 
 Use `kura import` or `kura add` to create the tracked `series.json` spine before

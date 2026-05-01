@@ -949,6 +949,9 @@ func TestFindCommandIsRemoved(t *testing.T) {
 }
 
 func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Long Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -981,7 +984,8 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 		"reconcile",
 		"--dry-run",
 		"--json",
-		"Long Bookworm",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
@@ -996,6 +1000,9 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 }
 
 func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Bookworm")
 	seasonDir := filepath.Join(seriesDir, "Season 1")
@@ -1026,7 +1033,8 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	var stderr bytes.Buffer
 	err := run([]string{
 		"reconcile",
-		"Bookworm",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())

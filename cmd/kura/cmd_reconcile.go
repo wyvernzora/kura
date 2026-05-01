@@ -3,15 +3,14 @@ package main
 import (
 	"encoding/json"
 
-	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
 type seriesReconcileCmd struct {
-	DryRun bool   `name:"dry-run" help:"Print planned changes without renaming files or writing metadata."`
-	JSON   bool   `name:"json" help:"Print machine-readable JSON instead of a human summary."`
-	Yes    bool   `name:"yes" short:"y" help:"Apply planned changes without prompting."`
-	Series string `arg:"" help:"Series selector. Currently resolves as a directory name below KURA_LIBRARY_ROOT."`
+	DryRun bool     `name:"dry-run" help:"Print planned changes without renaming files or writing metadata."`
+	JSON   bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
+	Yes    bool     `name:"yes" short:"y" help:"Apply planned changes without prompting."`
+	Terms  []string `arg:"" required:"" help:"Resolver terms. Plain text or metadata refs such as tvdb:370070."`
 }
 
 func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
@@ -19,11 +18,11 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	ref, err := refs.ParseSeries(cmd.Series)
+	metadataRef, err := resolveMetadataRef(rt, lib, cmd.Terms)
 	if err != nil {
 		return err
 	}
-	handle, err := lib.Open(ref)
+	handle, err := lib.Find(metadataRef)
 	if err != nil {
 		return err
 	}
