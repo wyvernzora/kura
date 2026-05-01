@@ -196,7 +196,7 @@ func WriteScanResult(w io.Writer, result series.ScanResult) error {
 			Companions: entry.Companions,
 		})
 	}
-	return writeScanTable(w, entries, result.Skipped)
+	return writeScanTable(w, entries, result.Skipped, shouldStyle(w))
 }
 
 type scanTableEntry struct {
@@ -208,39 +208,45 @@ type scanTableEntry struct {
 	Companions []string
 }
 
-func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.ImportSkip) error {
-	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"STATUS", "SEASON", "EPISODE", "SOURCE", "RESOLUTION", "FILE"})
-	tw.SetStyle(borderlessTableStyle())
-	tw.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1},
-		{Number: 2},
-		{Number: 3},
-		{Number: 4},
-		{Number: 5},
-		{Number: 6},
-	})
-	for _, entry := range entries {
-		tw.AppendRow(table.Row{
-			entry.Status,
-			strconv.Itoa(entry.Episode.Season()),
-			strconv.Itoa(entry.Episode.Episode()),
-			entry.Source,
-			entry.Resolution,
-			entry.Path,
-		})
-		for index, companion := range entry.Companions {
-			prefix := "    ┣ "
-			if index == len(entry.Companions)-1 {
-				prefix = "    ┗ "
-			}
-			tw.AppendRow(table.Row{"", "", "", "", "", prefix + companion})
+func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.ImportSkip, tty bool) error {
+	if len(entries) == 0 && tty {
+		if _, err := fmt.Fprintln(w, "\nNo files found."); err != nil {
+			return err
 		}
-	}
-	if err := writeStyledTable(w, tw, func(line string) bool {
-		return strings.Contains(line, "┣ ") || strings.Contains(line, "┗ ") || strings.HasPrefix(strings.TrimSpace(line), "existing")
-	}); err != nil {
-		return err
+	} else {
+		tw := table.NewWriter()
+		tw.AppendHeader(table.Row{"STATUS", "SEASON", "EPISODE", "SOURCE", "RESOLUTION", "FILE"})
+		tw.SetStyle(borderlessTableStyle())
+		tw.SetColumnConfigs([]table.ColumnConfig{
+			{Number: 1},
+			{Number: 2},
+			{Number: 3},
+			{Number: 4},
+			{Number: 5},
+			{Number: 6},
+		})
+		for _, entry := range entries {
+			tw.AppendRow(table.Row{
+				entry.Status,
+				strconv.Itoa(entry.Episode.Season()),
+				strconv.Itoa(entry.Episode.Episode()),
+				entry.Source,
+				entry.Resolution,
+				entry.Path,
+			})
+			for index, companion := range entry.Companions {
+				prefix := "    ┣ "
+				if index == len(entry.Companions)-1 {
+					prefix = "    ┗ "
+				}
+				tw.AppendRow(table.Row{"", "", "", "", "", prefix + companion})
+			}
+		}
+		if err := writeStyledTable(w, tw, func(line string) bool {
+			return strings.Contains(line, "┣ ") || strings.Contains(line, "┗ ") || strings.HasPrefix(strings.TrimSpace(line), "existing")
+		}); err != nil {
+			return err
+		}
 	}
 	if len(skipped) == 0 {
 		return nil
@@ -265,10 +271,14 @@ func WriteReconcilePlan(w io.Writer, plan series.ReconcilePlan) error {
 	for _, change := range plan.Changes {
 		moves = append(moves, change.Moves()...)
 	}
-	return writeReconcileMoves(w, moves)
+	return writeReconcileMoves(w, moves, shouldStyle(w))
 }
 
-func writeReconcileMoves(w io.Writer, moves []series.FileMove) error {
+func writeReconcileMoves(w io.Writer, moves []series.FileMove, tty bool) error {
+	if len(moves) == 0 && tty {
+		_, err := fmt.Fprintln(w, "\nNothing to reconcile.")
+		return err
+	}
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"KIND", "FROM", "TO"})
 	tw.SetStyle(borderlessTableStyle())

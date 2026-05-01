@@ -32,6 +32,14 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 		return err
 	}
 
+	if !plan.HasChanges() {
+		if cmd.JSON {
+			encoder := json.NewEncoder(rt.Stdout)
+			encoder.SetIndent("", "  ")
+			return encoder.Encode(plan)
+		}
+		return ui.WriteReconcilePlan(rt.Stdout, plan)
+	}
 	if cmd.JSON {
 		encoder := json.NewEncoder(rt.Stdout)
 		encoder.SetIndent("", "  ")
@@ -41,7 +49,7 @@ func (cmd *seriesReconcileCmd) Run(rt *runContext) error {
 	} else if err := ui.WriteReconcilePlan(rt.Stdout, plan); err != nil {
 		return err
 	}
-	if cmd.DryRun || !plan.HasChanges() {
+	if cmd.DryRun {
 		return nil
 	}
 	if !cmd.Yes {
