@@ -163,7 +163,7 @@ func TestScanReportsUnchangedUpdatedAndRemoved(t *testing.T) {
 				}
 			}
 		}
-	}`, unchangedInfo.Size(), unchangedInfo.ModTime().UTC().Format(time.RFC3339Nano), updatedInfo.Size()+1, updatedInfo.ModTime().UTC().Format(time.RFC3339Nano)))
+	}`, unchangedInfo.Size(), unchangedInfo.ModTime().UTC().Format(time.RFC3339), updatedInfo.Size()+1, updatedInfo.ModTime().UTC().Format(time.RFC3339)))
 
 	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
 	series, err := lib.Open(mustSeries(t, "Bookworm"))

@@ -101,7 +101,7 @@ func (f files) stat(path string) (fileFacts, error) {
 	if info.IsDir() {
 		return fileFacts{}, fmt.Errorf("series: path %q is a directory", path)
 	}
-	return fileFacts{Size: info.Size(), MTime: info.ModTime().UTC()}, nil
+	return fileFacts{Size: info.Size(), MTime: info.ModTime().UTC().Truncate(time.Second)}, nil
 }
 
 func (f files) canonicalPath(ref refs.Series, episode refs.Episode, media MediaRecord) (string, error) {

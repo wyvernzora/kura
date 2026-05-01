@@ -238,6 +238,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 
 - For `kura import`, prepend dirname only for empty/text extra terms, preserve `tvdb:<id>` as authoritative, pass mixed text/`tvdb:` terms to the resolver, and reject `dir:` terms.
 - Attach CLI progress reporting through `context.Context` using `internal/progress` so nested workflows like implicit `reindex` can report.
+- After being asked to make code changes, commit the completed change and rebuild `bin/kura` unless explicitly told not to.
 
 ---
 
