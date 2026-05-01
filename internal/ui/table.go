@@ -14,7 +14,7 @@ import (
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
-func WriteSeriesRead(w io.Writer, result series.ReadResult) error {
+func WriteSeriesRead(w io.Writer, result series.Series) error {
 	if _, err := fmt.Fprintf(w, "MetadataRef: %s\n", result.MetadataRef); err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func WriteSeriesRead(w io.Writer, result series.ReadResult) error {
 	return nil
 }
 
-func writeEpisodeReadTable(w io.Writer, episodes []series.EpisodeRead) error {
+func writeEpisodeReadTable(w io.Writer, episodes []series.Episode) error {
 	style := shouldStyle(w)
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"NUMBER", "STATUS", "SOURCE", "RESOLUTION", "FILE"})
@@ -98,7 +98,7 @@ func readEpisodeRow(number int, status series.EpisodeStatus, media *series.Episo
 	return row
 }
 
-func firstEpisodeMedia(episode series.EpisodeRead) *series.EpisodeMedia {
+func firstEpisodeMedia(episode series.Episode) *series.EpisodeMedia {
 	if episode.Staged != nil {
 		return episode.Staged
 	}

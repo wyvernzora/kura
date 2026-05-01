@@ -89,11 +89,7 @@ func (l *Library) Add(ctx context.Context, in AddInput) (series.Handle, error) {
 	if err := os.MkdirAll(target, 0o755); err != nil {
 		return series.Handle{}, err
 	}
-	model, err := series.NewFromMetadata(metadataRef, metadataSeries)
-	if err != nil {
-		return series.Handle{}, err
-	}
-	if err := series.Save(l.root.Path(), ref, model); err != nil {
+	if err := series.Initialize(l.root.Path(), ref, metadataRef, metadataSeries); err != nil {
 		return series.Handle{}, err
 	}
 	if err := l.index.Put(metadataRef, ref); err != nil {
@@ -132,11 +128,7 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 	if err := l.checkMetadataAvailable(metadataRef, ref); err != nil {
 		return series.Handle{}, err
 	}
-	model, err := series.NewFromMetadata(metadataRef, metadataSeries)
-	if err != nil {
-		return series.Handle{}, err
-	}
-	if err := series.Save(l.root.Path(), ref, model); err != nil {
+	if err := series.Initialize(l.root.Path(), ref, metadataRef, metadataSeries); err != nil {
 		return series.Handle{}, err
 	}
 	if err := l.index.Put(metadataRef, ref); err != nil {

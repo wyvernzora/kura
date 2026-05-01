@@ -14,10 +14,10 @@ func TestWireRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	mtime := time.Date(2024, 3, 15, 10, 0, 0, 0, time.UTC)
-	in := Series{
+	in := seriesState{
 		Metadata:    refs.Metadata("tvdb:370070"),
 		LastScanned: mtime,
-		Episodes: map[refs.Episode]Episode{
+		Episodes: map[refs.Episode]episodeState{
 			episodeRef: {
 				AirDate: "2019-10-02",
 				Active: &MediaRecord{
@@ -62,9 +62,9 @@ func TestWireRoundTrip(t *testing.T) {
 func TestEditorRefreshSpineNeverRemovesEpisodes(t *testing.T) {
 	oldRef, _ := refs.NewEpisode(1, 1)
 	newRef, _ := refs.NewEpisode(1, 2)
-	series := Series{
+	series := seriesState{
 		Metadata: refs.Metadata("tvdb:370070"),
-		Episodes: map[refs.Episode]Episode{
+		Episodes: map[refs.Episode]episodeState{
 			oldRef: {AirDate: "2019-10-02"},
 		},
 	}

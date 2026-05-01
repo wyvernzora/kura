@@ -105,7 +105,7 @@ func (c Change) MarshalJSON() ([]byte, error) {
 }
 
 func (h Handle) PlanReconcile() (ReconcilePlan, error) {
-	series, err := h.Load()
+	series, err := h.load()
 	if err != nil {
 		return ReconcilePlan{}, err
 	}
@@ -180,7 +180,7 @@ func (h Handle) snapshot() (string, error) {
 	return fmt.Sprintf("%x", sum[:]), nil
 }
 
-func (h Handle) planChanges(series Series) ([]Change, error) {
+func (h Handle) planChanges(series seriesState) ([]Change, error) {
 	var refsList []refs.Episode
 	for ref := range series.Episodes {
 		refsList = append(refsList, ref)
@@ -210,7 +210,7 @@ func (h Handle) planChanges(series Series) ([]Change, error) {
 	return changes, nil
 }
 
-func (h Handle) stagedChange(episodeRef refs.Episode, episode Episode) (Change, error) {
+func (h Handle) stagedChange(episodeRef refs.Episode, episode episodeState) (Change, error) {
 	target, err := h.files().canonicalPath(h.ref, episodeRef, *episode.Staged)
 	if err != nil {
 		return Change{}, err
@@ -294,10 +294,10 @@ func (h Handle) validateMoves(changes []Change) error {
 	return nil
 }
 
-func (h Handle) applyPlanState(plan ReconcilePlan) (Series, error) {
-	series, err := h.Load()
+func (h Handle) applyPlanState(plan ReconcilePlan) (seriesState, error) {
+	series, err := h.load()
 	if err != nil {
-		return Series{}, err
+		return seriesState{}, err
 	}
 	edit := editor{series: &series}
 	for _, change := range plan.Changes {
@@ -305,11 +305,11 @@ func (h Handle) applyPlanState(plan ReconcilePlan) (Series, error) {
 		switch change.Kind {
 		case ChangeAdd, ChangeReplace:
 			if episode.Staged == nil {
-				return Series{}, fmt.Errorf("series: %s has no staged media", change.Episode)
+				return seriesState{}, fmt.Errorf("series: %s has no staged media", change.Episode)
 			}
 			if change.Replaced != nil && episode.Active != nil {
 				if err := h.writeTrash(change.Episode, *episode.Active, *change.Replaced); err != nil {
-					return Series{}, err
+					return seriesState{}, err
 				}
 			}
 			episode.Staged.Path = change.To
@@ -320,11 +320,11 @@ func (h Handle) applyPlanState(plan ReconcilePlan) (Series, error) {
 			}
 			series.Episodes[change.Episode] = episode
 			if _, err := edit.promoteStaged(change.Episode); err != nil {
-				return Series{}, err
+				return seriesState{}, err
 			}
 		case ChangeMove:
 			if episode.Active == nil {
-				return Series{}, fmt.Errorf("series: %s has no active media", change.Episode)
+				return seriesState{}, fmt.Errorf("series: %s has no active media", change.Episode)
 			}
 			episode.Active.Path = change.To
 			for index := range episode.Active.Companions {
@@ -334,7 +334,7 @@ func (h Handle) applyPlanState(plan ReconcilePlan) (Series, error) {
 			}
 			series.Episodes[change.Episode] = episode
 		default:
-			return Series{}, fmt.Errorf("series: unsupported reconcile change kind %q", change.Kind)
+			return seriesState{}, fmt.Errorf("series: unsupported reconcile change kind %q", change.Kind)
 		}
 	}
 	return series, nil

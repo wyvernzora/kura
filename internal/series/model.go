@@ -1,23 +1,63 @@
 package series
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
-// Series is the semantic in-memory model for one tracked series.
+// Series is the consumer-facing view of one tracked series.
 type Series struct {
-	Metadata    refs.Metadata
-	LastScanned time.Time
-	Episodes    map[refs.Episode]Episode
+	MetadataRef    refs.Metadata       `json:"metadataRef"`
+	Ref            refs.Series         `json:"ref"`
+	Root           string              `json:"root"`
+	PreferredTitle textnorm.NFCString  `json:"preferredTitle"`
+	CanonicalTitle *textnorm.NFCString `json:"canonicalTitle,omitempty"`
+	Seasons        []Season            `json:"seasons"`
 }
 
-// Episode is one persisted provider spine entry plus local media intent/state.
+type Season struct {
+	MetadataRef refs.Metadata `json:"metadataRef,omitempty"`
+	Number      int           `json:"number"`
+	Episodes    []Episode     `json:"episodes"`
+}
+
 type Episode struct {
+	MetadataRef    refs.Metadata `json:"metadataRef,omitempty"`
+	Episode        refs.Episode  `json:"episode"`
+	AbsoluteNumber *int          `json:"absoluteNumber,omitempty"`
+	Aired          string        `json:"aired,omitempty"`
+	Status         EpisodeStatus `json:"status"`
+	Active         *EpisodeMedia `json:"active,omitempty"`
+	Staged         *EpisodeMedia `json:"staged,omitempty"`
+}
+
+type EpisodeMedia struct {
+	Source     string          `json:"source"`
+	Resolution string          `json:"resolution,omitempty"`
+	File       string          `json:"file"`
+	Companions []CompanionFile `json:"companions"`
+}
+
+type CompanionFile struct {
+	Path     string `json:"path"`
+	Role     string `json:"role,omitempty"`
+	Language string `json:"language,omitempty"`
+	Label    string `json:"label,omitempty"`
+	Size     int64  `json:"size"`
+	MTime    string `json:"mtime"`
+}
+
+type seriesState struct {
+	Metadata    refs.Metadata
+	LastScanned time.Time
+	Episodes    map[refs.Episode]episodeState
+}
+
+type episodeState struct {
 	AirDate string
 	Active  *MediaRecord
 	Staged  *MediaRecord
@@ -42,31 +82,6 @@ type CompanionRecord struct {
 	MTime    time.Time `json:"mtime"`
 }
 
-func (s Series) Clone() Series {
-	out := Series{
-		Metadata:    s.Metadata,
-		LastScanned: s.LastScanned,
-		Episodes:    make(map[refs.Episode]Episode, len(s.Episodes)),
-	}
-	for ref, episode := range s.Episodes {
-		out.Episodes[ref] = cloneEpisode(episode)
-	}
-	return out
-}
-
-func cloneEpisode(in Episode) Episode {
-	out := in
-	if in.Active != nil {
-		active := cloneMediaRecord(*in.Active)
-		out.Active = &active
-	}
-	if in.Staged != nil {
-		staged := cloneMediaRecord(*in.Staged)
-		out.Staged = &staged
-	}
-	return out
-}
-
 func cloneMediaRecord(in MediaRecord) MediaRecord {
 	out := in
 	out.Companions = append([]CompanionRecord(nil), in.Companions...)
@@ -76,25 +91,17 @@ func cloneMediaRecord(in MediaRecord) MediaRecord {
 	return out
 }
 
-func (s Series) MarshalJSON() ([]byte, error) {
-	encoded, err := toWire(s)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(encoded)
-}
-
-func NewFromMetadata(ref refs.Metadata, metadataSeries metadata.Series) (Series, error) {
-	out := Series{
+func newSeriesStateFromMetadata(ref refs.Metadata, metadataSeries metadata.Series) (seriesState, error) {
+	out := seriesState{
 		Metadata:    ref,
 		LastScanned: time.Now().UTC(),
-		Episodes:    map[refs.Episode]Episode{},
+		Episodes:    map[refs.Episode]episodeState{},
 	}
 	var spine []SpineEpisode
 	for _, season := range metadataSeries.Seasons {
 		for _, episode := range season.Episodes {
 			if episode.Ref.IsZero() {
-				return Series{}, fmt.Errorf("series: metadata has invalid episode ref")
+				return seriesState{}, fmt.Errorf("series: metadata has invalid episode ref")
 			}
 			spine = append(spine, SpineEpisode{Ref: episode.Ref, AirDate: episode.Aired})
 		}

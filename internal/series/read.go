@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -16,47 +15,6 @@ const metadataDateLayout = "2006-01-02"
 
 type ReadInput struct {
 	Now time.Time
-}
-
-type ReadResult struct {
-	MetadataRef    refs.Metadata       `json:"metadataRef"`
-	Ref            refs.Series         `json:"ref"`
-	Root           string              `json:"root"`
-	PreferredTitle textnorm.NFCString  `json:"preferredTitle"`
-	CanonicalTitle *textnorm.NFCString `json:"canonicalTitle,omitempty"`
-	Seasons        []SeasonRead        `json:"seasons"`
-}
-
-type SeasonRead struct {
-	MetadataRef refs.Metadata `json:"metadataRef,omitempty"`
-	Number      int           `json:"number"`
-	Episodes    []EpisodeRead `json:"episodes"`
-}
-
-type EpisodeRead struct {
-	MetadataRef    refs.Metadata `json:"metadataRef,omitempty"`
-	Episode        refs.Episode  `json:"episode"`
-	AbsoluteNumber *int          `json:"absoluteNumber,omitempty"`
-	Aired          string        `json:"aired,omitempty"`
-	Status         EpisodeStatus `json:"status"`
-	Active         *EpisodeMedia `json:"active,omitempty"`
-	Staged         *EpisodeMedia `json:"staged,omitempty"`
-}
-
-type EpisodeMedia struct {
-	Source     string          `json:"source"`
-	Resolution string          `json:"resolution,omitempty"`
-	File       string          `json:"file"`
-	Companions []CompanionFile `json:"companions"`
-}
-
-type CompanionFile struct {
-	Path     string `json:"path"`
-	Role     string `json:"role,omitempty"`
-	Language string `json:"language,omitempty"`
-	Label    string `json:"label,omitempty"`
-	Size     int64  `json:"size"`
-	MTime    string `json:"mtime"`
 }
 
 type EpisodeStatus string
@@ -69,62 +27,62 @@ const (
 	EpisodeStatusUnavailable EpisodeStatus = "unavailable"
 )
 
-func (h Handle) Read(ctx context.Context, in ReadInput) (ReadResult, error) {
+func (h Handle) Read(ctx context.Context, in ReadInput) (Series, error) {
 	_ = ctx
 	seriesDir, err := h.files().seriesDir(h.ref)
 	if err != nil {
-		return ReadResult{}, err
+		return Series{}, err
 	}
-	model, err := h.Load()
+	model, err := h.load()
 	if err != nil {
-		return ReadResult{}, err
+		return Series{}, err
 	}
 	now := in.Now
 	if now.IsZero() {
 		now = h.now()
 	}
-	return ReadResult{
+	return Series{
 		MetadataRef:    model.Metadata,
 		Ref:            h.ref,
 		Root:           seriesDir.Path(),
 		PreferredTitle: textnorm.NFC(h.ref.String()),
-		Seasons:        seasonReads(seriesDir, model, now),
+		Seasons:        seasonViews(seriesDir, model, now),
 	}, nil
 }
 
-func seasonReads(seriesDir SeriesDir, model Series, now time.Time) []SeasonRead {
-	seasons := map[int][]EpisodeRead{}
+func seasonViews(seriesDir SeriesDir, model seriesState, now time.Time) []Season {
+	seasons := map[int][]Episode{}
 	for ref, episode := range model.Episodes {
-		read := EpisodeRead{
+		view := Episode{
 			Episode: ref,
 			Aired:   episode.AirDate,
 			Status:  episodeStatus(seriesDir, episode, now),
 		}
 		if episode.Active != nil {
 			media := episodeMedia(*episode.Active)
-			read.Active = &media
+			view.Active = &media
 		}
 		if episode.Staged != nil {
 			media := episodeMedia(*episode.Staged)
-			read.Staged = &media
+			view.Staged = &media
 		}
-		seasons[ref.Season()] = append(seasons[ref.Season()], read)
+		seasons[ref.Season()] = append(seasons[ref.Season()], view)
 	}
 	numbers := make([]int, 0, len(seasons))
 	for number := range seasons {
 		numbers = append(numbers, number)
 	}
 	sort.Ints(numbers)
-	out := make([]SeasonRead, 0, len(numbers))
+	out := make([]Season, 0, len(numbers))
 	for _, number := range numbers {
 		episodes := seasons[number]
 		sort.Slice(episodes, func(i, j int) bool { return episodes[i].Episode.Episode() < episodes[j].Episode.Episode() })
-		out = append(out, SeasonRead{Number: number, Episodes: episodes})
+		out = append(out, Season{Number: number, Episodes: episodes})
 	}
 	return out
 }
 
-func episodeStatus(seriesDir SeriesDir, episode Episode, now time.Time) EpisodeStatus {
+func episodeStatus(seriesDir SeriesDir, episode episodeState, now time.Time) EpisodeStatus {
 	if episode.Active != nil && mediaUnavailable(seriesDir, *episode.Active, false) {
 		return EpisodeStatusUnavailable
 	}

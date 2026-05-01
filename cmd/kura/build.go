@@ -49,16 +49,16 @@ func resolveMetadataRef(rt *runContext, lib *library.Library, terms []string) (r
 }
 
 func writeSeriesSummary(rt *runContext, handle series.Handle, verb string, asJSON bool) error {
-	model, err := handle.Load()
+	view, err := handle.Read(rt.Context, series.ReadInput{})
 	if err != nil {
 		return err
 	}
 	if asJSON {
 		encoder := json.NewEncoder(rt.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(model)
+		return encoder.Encode(view)
 	}
-	_, err = fmt.Fprintf(rt.Stdout, "%s %s (%s)\n", verb, handle.Ref(), model.Metadata)
+	_, err = fmt.Fprintf(rt.Stdout, "%s %s (%s)\n", verb, handle.Ref(), view.MetadataRef)
 	return err
 }
 

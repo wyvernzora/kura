@@ -8,6 +8,7 @@ import (
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -24,12 +25,12 @@ func TestLibraryAddWritesFullSpine(t *testing.T) {
 	if _, err := os.Stat(root.Join("Bookworm", ".kura", "series.json")); err != nil {
 		t.Fatal(err)
 	}
-	series, err := handle.Load()
+	series, err := handle.Read(context.Background(), seriespkg.ReadInput{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(series.Episodes) != 2 {
-		t.Fatalf("episodes = %d, want 2", len(series.Episodes))
+	if len(series.Seasons) != 1 || len(series.Seasons[0].Episodes) != 2 {
+		t.Fatalf("series = %#v, want 2 episodes", series)
 	}
 }
 

@@ -35,7 +35,7 @@ func (err StagedEpisodeAlreadyExistsError) Error() string {
 }
 
 func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
-	series, err := h.Load()
+	series, err := h.load()
 	if err != nil {
 		return StageResult{}, err
 	}

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/renameio/v2"
+	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
 )
@@ -13,8 +14,12 @@ type repo struct {
 	root string
 }
 
-func Save(root string, ref refs.Series, series Series) error {
-	return repo{root: root}.save(ref, series)
+func Initialize(root string, ref refs.Series, metadataRef refs.Metadata, metadataSeries metadata.Series) error {
+	model, err := newSeriesStateFromMetadata(metadataRef, metadataSeries)
+	if err != nil {
+		return err
+	}
+	return repo{root: root}.save(ref, model)
 }
 
 func ReadMetadataRef(root string, ref refs.Series) (refs.Metadata, error) {
@@ -25,21 +30,21 @@ func ReadMetadataRef(root string, ref refs.Series) (refs.Metadata, error) {
 	return series.Metadata, nil
 }
 
-func (r repo) load(ref refs.Series) (Series, error) {
+func (r repo) load(ref refs.Series) (seriesState, error) {
 	path := wire.SeriesMetadataPath(filepath.Join(r.root, filepath.FromSlash(ref.String())))
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return Series{}, err
+		return seriesState{}, err
 	}
 	decoded, err := wire.Decode(data)
 	if err != nil {
-		return Series{}, err
+		return seriesState{}, err
 	}
 	return fromWire(decoded)
 }
 
-func (r repo) save(ref refs.Series, series Series) error {
-	encoded, err := toWire(series)
+func (r repo) save(ref refs.Series, model seriesState) error {
+	encoded, err := toWire(model)
 	if err != nil {
 		return err
 	}

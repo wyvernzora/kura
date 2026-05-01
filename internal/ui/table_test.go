@@ -15,7 +15,7 @@ func TestFindTableRendersStagedOverAsSeparateRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = writeEpisodeReadTable(&out, []series.EpisodeRead{
+	err = writeEpisodeReadTable(&out, []series.Episode{
 		{
 			Episode: episode,
 			Status:  series.EpisodeStatusStaged,

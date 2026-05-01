@@ -46,12 +46,12 @@ func TestScanCommits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get after scan: %v", err)
 	}
-	model, err := loaded.Load()
+	view, err := loaded.Read(context.Background(), seriespkg.ReadInput{})
 	if err != nil {
-		t.Fatalf("Load after scan: %v", err)
+		t.Fatalf("Read after scan: %v", err)
 	}
-	if len(model.Episodes) != 1 {
-		t.Fatalf("len(Episodes) = %d, want 1", len(model.Episodes))
+	if len(view.Seasons) != 1 || len(view.Seasons[0].Episodes) != 1 {
+		t.Fatalf("view = %#v, want one episode", view)
 	}
 }
 

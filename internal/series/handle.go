@@ -42,7 +42,7 @@ func (h Handle) Ref() refs.Series {
 	return h.ref
 }
 
-func (h Handle) Load() (Series, error) {
+func (h Handle) load() (seriesState, error) {
 	return h.repo().load(h.ref)
 }
 

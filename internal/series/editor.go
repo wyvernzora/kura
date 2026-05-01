@@ -12,12 +12,12 @@ type SpineEpisode struct {
 }
 
 type editor struct {
-	series *Series
+	series *seriesState
 }
 
 func (e editor) refreshSpine(spine []SpineEpisode) {
 	if e.series.Episodes == nil {
-		e.series.Episodes = map[refs.Episode]Episode{}
+		e.series.Episodes = map[refs.Episode]episodeState{}
 	}
 	for _, incoming := range spine {
 		episode := e.series.Episodes[incoming.Ref]

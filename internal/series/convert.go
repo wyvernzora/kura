@@ -9,28 +9,28 @@ import (
 	"github.com/wyvernzora/kura/internal/series/wire"
 )
 
-func fromWire(in wire.SeriesV1) (Series, error) {
+func fromWire(in wire.SeriesV1) (seriesState, error) {
 	metadata, err := refs.ParseMetadata(in.MetadataRef)
 	if err != nil {
-		return Series{}, err
+		return seriesState{}, err
 	}
-	out := Series{
+	out := seriesState{
 		Metadata: metadata,
-		Episodes: map[refs.Episode]Episode{},
+		Episodes: map[refs.Episode]episodeState{},
 	}
 	if in.LastScanned != "" {
 		lastScanned, err := time.Parse(time.RFC3339, in.LastScanned)
 		if err != nil {
-			return Series{}, fmt.Errorf("series: invalid lastScanned %q: %w", in.LastScanned, err)
+			return seriesState{}, fmt.Errorf("series: invalid lastScanned %q: %w", in.LastScanned, err)
 		}
 		out.LastScanned = lastScanned
 	}
 	for key, episode := range in.Episodes {
 		ref, err := refs.ParseEpisode(key)
 		if err != nil {
-			return Series{}, err
+			return seriesState{}, err
 		}
-		out.Episodes[ref] = Episode{
+		out.Episodes[ref] = episodeState{
 			AirDate: episode.AirDate,
 			Active:  fromWireMedia(episode.Active),
 			Staged:  fromWireMedia(episode.Staged),
@@ -39,7 +39,7 @@ func fromWire(in wire.SeriesV1) (Series, error) {
 	return out, nil
 }
 
-func toWire(in Series) (wire.SeriesV1, error) {
+func toWire(in seriesState) (wire.SeriesV1, error) {
 	out := wire.SeriesV1{
 		SchemaVersion: wire.CurrentSchemaVersion,
 		MetadataRef:   in.Metadata.String(),

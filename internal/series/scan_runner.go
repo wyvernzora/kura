@@ -6,7 +6,7 @@ type scanner struct {
 	handle    Handle
 	ctx       context.Context
 	input     ScanInput
-	model     Series
+	model     seriesState
 	editor    editor
 	seriesDir SeriesDir
 	result    ScanResult
@@ -38,7 +38,7 @@ func (s *scanner) scan() error {
 }
 
 func (s *scanner) load() error {
-	model, err := s.handle.Load()
+	model, err := s.handle.load()
 	if err != nil {
 		return err
 	}

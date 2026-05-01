@@ -107,12 +107,12 @@ func TestFindAndGet(t *testing.T) {
 	if series.Ref().String() != "Bookworm" {
 		t.Fatalf("series ref = %q, want Bookworm", series.Ref())
 	}
-	model, err := series.Load()
+	view, err := series.Read(context.Background(), seriespkg.ReadInput{})
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("Read: %v", err)
 	}
-	if model.Metadata != "tvdb:370070" {
-		t.Fatalf("metadata = %q, want tvdb:370070", model.Metadata)
+	if view.MetadataRef != "tvdb:370070" {
+		t.Fatalf("metadata = %q, want tvdb:370070", view.MetadataRef)
 	}
 }
 
@@ -182,12 +182,12 @@ func TestImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Import: %v", err)
 	}
-	model, err := series.Load()
+	view, err := series.Read(context.Background(), seriespkg.ReadInput{})
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("Read: %v", err)
 	}
-	if model.Metadata != "tvdb:370070" {
-		t.Fatalf("MetadataRef = %q, want tvdb:370070", model.Metadata)
+	if view.MetadataRef != "tvdb:370070" {
+		t.Fatalf("MetadataRef = %q, want tvdb:370070", view.MetadataRef)
 	}
 
 	_, err = lib.Import(context.Background(), ImportInput{Ref: mustSeries(t, "Missing"), Metadata: "tvdb:370070"})
