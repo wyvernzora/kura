@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type scanner struct {
@@ -30,6 +32,10 @@ func newScanner(handle Handle, ctx context.Context, input ScanInput) *scanner {
 func (s *scanner) scan() error {
 	progress.Start(s.ctx, "scan", fmt.Sprintf("Scanning %s", s.handle.ref), 0)
 	if err := s.load(); err != nil {
+		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 0, 0)
+		return err
+	}
+	if err := s.rejectStagedRecords(); err != nil {
 		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.handle.ref), 0, 0)
 		return err
 	}
@@ -81,4 +87,18 @@ func (s *scanner) load() error {
 
 func (s *scanner) reportInspecting(file discoveredFile, current int, total int) {
 	progress.Update(s.ctx, "scan", fmt.Sprintf("Inspecting %s", filepath.Base(file.Path)), current, total)
+}
+
+func (s *scanner) rejectStagedRecords() error {
+	var staged []refs.Episode
+	for ref, episode := range s.model.Episodes {
+		if episode.Staged != nil {
+			staged = append(staged, ref)
+		}
+	}
+	if len(staged) == 0 {
+		return nil
+	}
+	sort.Slice(staged, func(i, j int) bool { return staged[i].String() < staged[j].String() })
+	return ScanStagedRecordsError{Episodes: staged}
 }

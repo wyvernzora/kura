@@ -67,6 +67,17 @@ func (err MetadataMissingEpisodeError) Error() string {
 	return fmt.Sprintf("metadata has no %s", err.Episode.Marker())
 }
 
+type ScanStagedRecordsError struct {
+	Episodes []refs.Episode
+}
+
+func (err ScanStagedRecordsError) Error() string {
+	if len(err.Episodes) == 1 {
+		return fmt.Sprintf("series has staged episode %s; reconcile or reset staged records before scanning", err.Episodes[0].Marker())
+	}
+	return fmt.Sprintf("series has %d staged episodes; reconcile or reset staged records before scanning", len(err.Episodes))
+}
+
 func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
 	scanner := newScanner(h, ctx, in)
 	if err := scanner.scan(); err != nil {

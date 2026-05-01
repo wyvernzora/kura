@@ -100,6 +100,57 @@ func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
 	}
 }
 
+func TestScanWithStagedRecordsReturnsTypedError(t *testing.T) {
+	server := newTestTVDBServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	stageDir := filepath.Join(root, "stage")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	if err := os.MkdirAll(stageDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll stage: %v", err)
+	}
+	stagedPath := filepath.Join(stageDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
+	writeFile(t, stagedPath, "staged episode")
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"staged": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 14,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, stagedPath))
+	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
+
+	lib := newTestLibraryWithMediaInfo(t, root, server.URL, newFakeMediaInfoCommand(t, root))
+	series, err := lib.Open(mustSeries(t, "Bookworm"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	_, err = series.Scan(context.Background(), seriespkg.ScanInput{})
+	var staged seriespkg.ScanStagedRecordsError
+	if !errors.As(err, &staged) {
+		t.Fatalf("Scan error = %v, want ScanStagedRecordsError", err)
+	}
+	if len(staged.Episodes) != 1 || staged.Episodes[0].Marker() != "S01E01" {
+		t.Fatalf("staged episodes = %#v, want S01E01", staged.Episodes)
+	}
+}
+
 func TestScanReportsUnchangedUpdatedAndRemoved(t *testing.T) {
 	server := newTestTVDBServer(t)
 	defer server.Close()
