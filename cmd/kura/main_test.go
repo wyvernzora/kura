@@ -811,6 +811,86 @@ func TestListCommandPrintsStagedStatusMarker(t *testing.T) {
 	}
 }
 
+func TestListCommandFiltersByStatus(t *testing.T) {
+	root := t.TempDir()
+	writeSeriesJSON(t, filepath.Join(root, "Complete"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:1",
+		"preferredTitle": "Complete Title",
+		"canonicalTitle": "Complete Canonical",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-01-01",
+				"staged": {
+					"path": "/inbox/episode-1.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+	writeSeriesJSON(t, filepath.Join(root, "Incomplete"), `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:2",
+		"preferredTitle": "Incomplete Title",
+		"canonicalTitle": "Incomplete Canonical",
+		"episodes": {
+			"S01E0001": {"airDate": "2019-01-01"}
+		}
+	}`)
+	if err := os.Mkdir(filepath.Join(root, "Untracked"), 0o755); err != nil {
+		t.Fatalf("Mkdir Untracked: %v", err)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"list",
+		"--json",
+		"--status", "incomplete",
+		"--status", "untracked",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
+		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
+	}
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want 2: %#v", len(rows), rows)
+	}
+	roots := map[string]bool{}
+	for _, row := range rows {
+		roots[row["root"].(string)] = true
+	}
+	if roots["Complete"] {
+		t.Fatalf("filtered rows include staged-complete series: %#v", rows)
+	}
+	if !roots["Incomplete"] || !roots["Untracked"] {
+		t.Fatalf("filtered roots = %#v, want Incomplete and Untracked", roots)
+	}
+}
+
+func TestListCommandRejectsInvalidStatusFilter(t *testing.T) {
+	root := t.TempDir()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{
+		"list",
+		"--status", "missing",
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil {
+		t.Fatal("run returned nil error, want invalid status error")
+	}
+	if !strings.Contains(err.Error(), "invalid list status") {
+		t.Fatalf("error = %v, want invalid list status", err)
+	}
+}
+
 func TestFindCommandIsRemoved(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

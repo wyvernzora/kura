@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -38,8 +39,19 @@ type ListEntry struct {
 }
 
 type ListInput struct {
-	Root string
-	Now  time.Time
+	Root     string
+	Now      time.Time
+	Statuses []ListStatus
+}
+
+func ParseListStatus(value string) (ListStatus, error) {
+	status := ListStatus(strings.TrimSpace(value))
+	switch status {
+	case ListStatusUntracked, ListStatusComplete, ListStatusIncomplete, ListStatusAiring, ListStatusError:
+		return status, nil
+	default:
+		return "", fmt.Errorf("invalid list status %q; expected one of: untracked, complete, incomplete, airing, error", value)
+	}
 }
 
 func List(ctx context.Context, in ListInput) ([]ListEntry, error) {
@@ -80,7 +92,10 @@ func List(ctx context.Context, in ListInput) ([]ListEntry, error) {
 			}
 			scanned++
 			progress.Update(ctx, "list", fmt.Sprintf("Listing %s", name), scanned, 0)
-			entries = append(entries, listOne(root, name, in.Now))
+			entry := listOne(root, name, in.Now)
+			if listStatusAllowed(entry.Status, in.Statuses) {
+				entries = append(entries, entry)
+			}
 		}
 		if errors.Is(err, io.EOF) {
 			break
@@ -91,6 +106,13 @@ func List(ctx context.Context, in ListInput) ([]ListEntry, error) {
 	})
 	progress.Success(ctx, "list", fmt.Sprintf("Listed library contents (%d series)", len(entries)), scanned)
 	return entries, nil
+}
+
+func listStatusAllowed(status ListStatus, allowed []ListStatus) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	return slices.Contains(allowed, status)
 }
 
 func listOne(root Root, name string, now time.Time) ListEntry {
