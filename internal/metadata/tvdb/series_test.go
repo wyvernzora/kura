@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -54,7 +55,15 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 	if series.Seasons[1].Number != 1 {
 		t.Fatalf("season number = %d, want 1", series.Seasons[1].Number)
 	}
-	if got := series.Seasons[1].Episodes[0]; got.MetadataRef != "tvdb:1001" || got.EpisodeNumber != 1 {
+	episodeOne, err := refs.NewEpisode(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	specialOne, err := refs.NewEpisode(0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := series.Seasons[1].Episodes[0]; got.MetadataRef != "tvdb:1001" || got.Ref != episodeOne {
 		t.Fatalf("first season 1 episode = %#v", got)
 	}
 	if series.Seasons[1].Episodes[0].AbsoluteNumber == nil || *series.Seasons[1].Episodes[0].AbsoluteNumber != 1 {
@@ -66,7 +75,7 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 	if len(series.Seasons[0].Episodes) != 1 {
 		t.Fatalf("len(Seasons[0].Episodes) = %d, want 1", len(series.Seasons[0].Episodes))
 	}
-	if got := series.Seasons[0].Episodes[0]; got.MetadataRef != "tvdb:9001" || got.SeasonNumber != 0 || got.EpisodeNumber != 1 {
+	if got := series.Seasons[0].Episodes[0]; got.MetadataRef != "tvdb:9001" || got.Ref != specialOne {
 		t.Fatalf("first special = %#v", got)
 	}
 }

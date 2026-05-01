@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type seriesEpisodesResponse struct {
@@ -116,7 +117,7 @@ func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metada
 		// Deterministic ordering makes read views and tests stable regardless of
 		// TVDB response order.
 		sort.Slice(out[i].Episodes, func(j, k int) bool {
-			return out[i].Episodes[j].EpisodeNumber < out[i].Episodes[k].EpisodeNumber
+			return out[i].Episodes[j].Ref.Episode() < out[i].Episodes[k].Ref.Episode()
 		})
 	}
 
@@ -133,10 +134,10 @@ func normalizeEmbeddedEpisodes(episodes []episodeRecord, seasonNumber int) []met
 }
 
 func normalizeEpisodeRecord(episode episodeRecord, seasonNumber int) metadata.Episode {
+	ref, _ := refs.NewEpisode(seasonNumber, episode.Number)
 	return metadata.Episode{
 		MetadataRef:    providerIntRef(episode.ID),
-		SeasonNumber:   seasonNumber,
-		EpisodeNumber:  episode.Number,
+		Ref:            ref,
 		AbsoluteNumber: positiveIntPtr(episode.AbsoluteNumber),
 		Aired:          firstNormalizedDate(episode.Aired, episode.FirstAired),
 	}

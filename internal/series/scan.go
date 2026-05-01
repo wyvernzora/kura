@@ -33,14 +33,12 @@ const (
 )
 
 type ScannedEpisode struct {
-	Status     ScanStatus `json:"status"`
-	Season     int        `json:"season,omitempty"`
-	Special    bool       `json:"special,omitempty"`
-	Number     int        `json:"number"`
-	Source     string     `json:"source"`
-	Resolution string     `json:"resolution,omitempty"`
-	Path       string     `json:"path"`
-	Companions []string   `json:"companions"`
+	Status     ScanStatus   `json:"status"`
+	Episode    refs.Episode `json:"episode"`
+	Source     string       `json:"source"`
+	Resolution string       `json:"resolution,omitempty"`
+	Path       string       `json:"path"`
+	Companions []string     `json:"companions"`
 }
 
 type ScanStatus string
@@ -53,21 +51,19 @@ const (
 )
 
 type EpisodeAlreadyExistsError struct {
-	Season  int
-	Episode int
+	Episode refs.Episode
 }
 
 func (err EpisodeAlreadyExistsError) Error() string {
-	return fmt.Sprintf("episode S%02dE%02d already exists; pass replace to replace it", err.Season, err.Episode)
+	return fmt.Sprintf("episode %s already exists; pass replace to replace it", err.Episode.Marker())
 }
 
 type MetadataMissingEpisodeError struct {
-	Season  int
-	Episode int
+	Episode refs.Episode
 }
 
 func (err MetadataMissingEpisodeError) Error() string {
-	return fmt.Sprintf("metadata has no S%02dE%02d", err.Season, err.Episode)
+	return fmt.Sprintf("metadata has no %s", err.Episode.Marker())
 }
 
 func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
@@ -82,11 +78,10 @@ func spineFromMetadata(seasons []metadata.Season) ([]SpineEpisode, error) {
 	var spine []SpineEpisode
 	for _, season := range seasons {
 		for _, episode := range season.Episodes {
-			ref, err := refs.NewEpisode(episode.SeasonNumber, episode.EpisodeNumber)
-			if err != nil {
-				return nil, err
+			if episode.Ref.IsZero() {
+				return nil, fmt.Errorf("series: metadata has invalid episode ref")
 			}
-			spine = append(spine, SpineEpisode{Ref: ref, AirDate: episode.Aired})
+			spine = append(spine, SpineEpisode{Ref: episode.Ref, AirDate: episode.Aired})
 		}
 	}
 	return spine, nil

@@ -35,8 +35,7 @@ type SeasonRead struct {
 
 type EpisodeRead struct {
 	MetadataRef    refs.Metadata `json:"metadataRef,omitempty"`
-	Season         int           `json:"season"`
-	Number         int           `json:"number"`
+	Episode        refs.Episode  `json:"episode"`
 	AbsoluteNumber *int          `json:"absoluteNumber,omitempty"`
 	Aired          string        `json:"aired,omitempty"`
 	Status         EpisodeStatus `json:"status"`
@@ -97,10 +96,9 @@ func seasonReads(seriesDir SeriesDir, model Series, now time.Time) []SeasonRead 
 	seasons := map[int][]EpisodeRead{}
 	for ref, episode := range model.Episodes {
 		read := EpisodeRead{
-			Season: ref.Season(),
-			Number: ref.Episode(),
-			Aired:  episode.AirDate,
-			Status: episodeStatus(seriesDir, episode, now),
+			Episode: ref,
+			Aired:   episode.AirDate,
+			Status:  episodeStatus(seriesDir, episode, now),
 		}
 		if episode.Active != nil {
 			media := episodeMedia(*episode.Active)
@@ -120,7 +118,7 @@ func seasonReads(seriesDir SeriesDir, model Series, now time.Time) []SeasonRead 
 	out := make([]SeasonRead, 0, len(numbers))
 	for _, number := range numbers {
 		episodes := seasons[number]
-		sort.Slice(episodes, func(i, j int) bool { return episodes[i].Number < episodes[j].Number })
+		sort.Slice(episodes, func(i, j int) bool { return episodes[i].Episode.Episode() < episodes[j].Episode.Episode() })
 		out = append(out, SeasonRead{Number: number, Episodes: episodes})
 	}
 	return out

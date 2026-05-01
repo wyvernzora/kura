@@ -5,16 +5,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
 )
 
 func TestFindTableRendersStagedOverAsSeparateRows(t *testing.T) {
 	var out bytes.Buffer
-	err := writeEpisodeReadTable(&out, []series.EpisodeRead{
+	episode, err := refs.NewEpisode(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = writeEpisodeReadTable(&out, []series.EpisodeRead{
 		{
-			Season: 1,
-			Number: 1,
-			Status: series.EpisodeStatusStaged,
+			Episode: episode,
+			Status:  series.EpisodeStatusStaged,
 			Active: &series.EpisodeMedia{
 				Source:     "WebRip",
 				Resolution: "1080p",

@@ -22,19 +22,16 @@ type StageResult struct {
 	Series   refs.Series  `json:"series"`
 	Applied  bool         `json:"applied"`
 	Replaced bool         `json:"replaced"`
-	Season   int          `json:"season"`
-	Number   int          `json:"number"`
-	Episode  refs.Episode `json:"-"`
+	Episode  refs.Episode `json:"episode"`
 	Record   MediaRecord  `json:"record"`
 }
 
 type StagedEpisodeAlreadyExistsError struct {
-	Season  int
-	Episode int
+	Episode refs.Episode
 }
 
 func (err StagedEpisodeAlreadyExistsError) Error() string {
-	return fmt.Sprintf("staged episode S%02dE%02d already exists; pass replace to replace it", err.Season, err.Episode)
+	return fmt.Sprintf("staged episode %s already exists; pass replace to replace it", err.Episode.Marker())
 }
 
 func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
@@ -44,13 +41,13 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 	}
 	episode, ok := series.Episodes[in.Episode]
 	if !ok {
-		return StageResult{}, MetadataMissingEpisodeError{Season: in.Episode.Season(), Episode: in.Episode.Episode()}
+		return StageResult{}, MetadataMissingEpisodeError{Episode: in.Episode}
 	}
 	if episode.Active != nil && !in.Replace {
-		return StageResult{}, EpisodeAlreadyExistsError{Season: in.Episode.Season(), Episode: in.Episode.Episode()}
+		return StageResult{}, EpisodeAlreadyExistsError{Episode: in.Episode}
 	}
 	if episode.Staged != nil && !in.Replace {
-		return StageResult{}, StagedEpisodeAlreadyExistsError{Season: in.Episode.Season(), Episode: in.Episode.Episode()}
+		return StageResult{}, StagedEpisodeAlreadyExistsError{Episode: in.Episode}
 	}
 	mediaPath, err := cleanAbsoluteFilePath(in.MediaPath)
 	if err != nil {
@@ -75,8 +72,6 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 		Series:   h.ref,
 		Applied:  true,
 		Replaced: replaced,
-		Season:   in.Episode.Season(),
-		Number:   in.Episode.Episode(),
 		Episode:  in.Episode,
 		Record:   record,
 	}, nil

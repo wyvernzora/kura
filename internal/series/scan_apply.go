@@ -14,13 +14,13 @@ func (s *scanner) apply(discovered []discoveredFile) error {
 func (s *scanner) applyFile(file discoveredFile) error {
 	episode, ok := s.model.Episodes[file.Ref]
 	if !ok {
-		return MetadataMissingEpisodeError{Season: file.Ref.Season(), Episode: file.Ref.Episode()}
+		return MetadataMissingEpisodeError{Episode: file.Ref}
 	}
 	status := ScanStatusNew
 	if episode.Active != nil {
 		if episode.Active.Path != file.Path {
 			if !s.input.Replace {
-				return EpisodeAlreadyExistsError{Season: file.Ref.Season(), Episode: file.Ref.Episode()}
+				return EpisodeAlreadyExistsError{Episode: file.Ref}
 			}
 			status = ScanStatusReplaced
 		} else if unchanged, err := s.unchanged(*episode.Active, file); err != nil {
@@ -110,9 +110,7 @@ func (s *scanner) mediaRecord(file discoveredFile) (MediaRecord, error) {
 func scannedEpisode(status ScanStatus, file discoveredFile, record MediaRecord) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     status,
-		Season:     file.Ref.Season(),
-		Special:    file.Ref.IsSpecial(),
-		Number:     file.Ref.Episode(),
+		Episode:    file.Ref,
 		Source:     ParseMediaSource(record.Source).Display(),
 		Resolution: record.Resolution,
 		Path:       record.Path,
@@ -123,9 +121,7 @@ func scannedEpisode(status ScanStatus, file discoveredFile, record MediaRecord) 
 func existingScannedEpisode(file discoveredFile, active MediaRecord) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     ScanStatusExisting,
-		Season:     file.Ref.Season(),
-		Special:    file.Ref.IsSpecial(),
-		Number:     file.Ref.Episode(),
+		Episode:    file.Ref,
 		Source:     ParseMediaSource(active.Source).Display(),
 		Resolution: active.Resolution,
 		Path:       active.Path,

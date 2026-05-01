@@ -36,7 +36,7 @@ type FileMove struct {
 
 type Change struct {
 	Kind    ChangeKind   `json:"kind"`
-	Episode refs.Episode `json:"-"`
+	Episode refs.Episode `json:"episode"`
 	FileMove
 	Source     string     `json:"source,omitempty"`
 	Resolution string     `json:"resolution,omitempty"`
@@ -85,9 +85,8 @@ func (err PlanStaleError) Error() string {
 
 func (c Change) MarshalJSON() ([]byte, error) {
 	type changeJSON struct {
-		Kind    ChangeKind `json:"kind"`
-		Season  int        `json:"season"`
-		Episode int        `json:"episode"`
+		Kind    ChangeKind   `json:"kind"`
+		Episode refs.Episode `json:"episode"`
 		FileMove
 		Source     string     `json:"source,omitempty"`
 		Resolution string     `json:"resolution,omitempty"`
@@ -96,8 +95,7 @@ func (c Change) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(changeJSON{
 		Kind:       c.Kind,
-		Season:     c.Episode.Season(),
-		Episode:    c.Episode.Episode(),
+		Episode:    c.Episode,
 		FileMove:   c.FileMove,
 		Source:     c.Source,
 		Resolution: c.Resolution,

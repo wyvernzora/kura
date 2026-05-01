@@ -9,6 +9,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
+	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
@@ -56,11 +57,11 @@ func writeEpisodeReadTable(w io.Writer, episodes []series.EpisodeRead) error {
 	})
 	for _, episode := range episodes {
 		if episode.Active != nil && episode.Staged != nil {
-			tw.AppendRow(readEpisodeRow(episode.Number, series.EpisodeStatusPresent, episode.Active, style, true))
-			tw.AppendRow(readEpisodeRow(episode.Number, series.EpisodeStatusStaged, episode.Staged, style, false))
+			tw.AppendRow(readEpisodeRow(episode.Episode.Episode(), series.EpisodeStatusPresent, episode.Active, style, true))
+			tw.AppendRow(readEpisodeRow(episode.Episode.Episode(), series.EpisodeStatusStaged, episode.Staged, style, false))
 			continue
 		}
-		tw.AppendRow(readEpisodeRow(episode.Number, episode.Status, firstEpisodeMedia(episode), style, false))
+		tw.AppendRow(readEpisodeRow(episode.Episode.Episode(), episode.Status, firstEpisodeMedia(episode), style, false))
 	}
 	return writeStyledTable(w, tw, nil)
 }
@@ -181,8 +182,7 @@ func WriteScanResult(w io.Writer, result series.ScanResult) error {
 	for _, entry := range result.Synced {
 		entries = append(entries, scanTableEntry{
 			Status:     string(entry.Status),
-			Season:     entry.Season,
-			Number:     entry.Number,
+			Episode:    entry.Episode,
 			Source:     entry.Source,
 			Resolution: entry.Resolution,
 			Path:       entry.Path,
@@ -194,8 +194,7 @@ func WriteScanResult(w io.Writer, result series.ScanResult) error {
 
 type scanTableEntry struct {
 	Status     string
-	Season     int
-	Number     int
+	Episode    refs.Episode
 	Source     string
 	Resolution string
 	Path       string
@@ -217,8 +216,8 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.Impo
 	for _, entry := range entries {
 		tw.AppendRow(table.Row{
 			entry.Status,
-			strconv.Itoa(entry.Season),
-			strconv.Itoa(entry.Number),
+			strconv.Itoa(entry.Episode.Season()),
+			strconv.Itoa(entry.Episode.Episode()),
 			entry.Source,
 			entry.Resolution,
 			entry.Path,

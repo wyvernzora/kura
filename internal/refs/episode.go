@@ -1,6 +1,7 @@
 package refs
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -53,8 +54,42 @@ func (ref Episode) IsSpecial() bool {
 	return ref.season == 0
 }
 
+func (ref Episode) IsZero() bool {
+	return ref.season == 0 && ref.episode == 0
+}
+
 func (ref Episode) String() string {
 	return fmt.Sprintf("S%02dE%04d", ref.season, ref.episode)
+}
+
+func (ref Episode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(ref.String())
+}
+
+func (ref *Episode) UnmarshalJSON(data []byte) error {
+	var value string
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	parsed, err := ParseEpisode(value)
+	if err != nil {
+		return err
+	}
+	*ref = parsed
+	return nil
+}
+
+func (ref Episode) MarshalText() ([]byte, error) {
+	return []byte(ref.String()), nil
+}
+
+func (ref *Episode) UnmarshalText(data []byte) error {
+	parsed, err := ParseEpisode(string(data))
+	if err != nil {
+		return err
+	}
+	*ref = parsed
+	return nil
 }
 
 // Marker returns the filename-oriented marker with minimum two-digit episode

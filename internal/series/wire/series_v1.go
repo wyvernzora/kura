@@ -21,8 +21,6 @@ type SeriesV1 struct {
 }
 
 type EpisodeV1 struct {
-	Season  int            `json:"season"`
-	Episode int            `json:"episode"`
 	AirDate string         `json:"airDate,omitempty"`
 	Active  *MediaRecordV1 `json:"active,omitempty"`
 	Staged  *MediaRecordV1 `json:"staged,omitempty"`

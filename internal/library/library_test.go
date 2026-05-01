@@ -59,6 +59,8 @@ func (fakeSource) Search(context.Context, textnorm.NFCString, metadata.SearchOpt
 }
 
 func (fakeSource) GetSeries(context.Context, string) (metadata.Series, error) {
+	episodeOne, _ := refs.NewEpisode(1, 1)
+	episodeTwo, _ := refs.NewEpisode(1, 2)
 	return metadata.Series{
 		SeriesSummary: metadata.SeriesSummary{
 			MetadataRef:    refs.Metadata("tvdb:370070"),
@@ -68,8 +70,8 @@ func (fakeSource) GetSeries(context.Context, string) (metadata.Series, error) {
 			{
 				Number: 1,
 				Episodes: []metadata.Episode{
-					{SeasonNumber: 1, EpisodeNumber: 1, Aired: "2019-10-02"},
-					{SeasonNumber: 1, EpisodeNumber: 2, Aired: "2019-10-09"},
+					{Ref: episodeOne, Aired: "2019-10-02"},
+					{Ref: episodeTwo, Aired: "2019-10-09"},
 				},
 			},
 		},

@@ -19,7 +19,6 @@
     "episode": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["season", "episode"],
       "properties": {
         "season": { "type": "integer", "minimum": 0 },
         "episode": { "type": "integer", "minimum": 1 },

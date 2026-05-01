@@ -122,8 +122,7 @@ type Episode struct {
 	// MetadataRef is this episode's opaque metadata reference.
 	MetadataRef refs.Metadata
 
-	SeasonNumber   int
-	EpisodeNumber  int
+	Ref            refs.Episode
 	AbsoluteNumber *int
 
 	// Aired is the source's YYYY-MM-DD air date when known.

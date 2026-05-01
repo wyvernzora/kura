@@ -30,9 +30,6 @@ func fromWire(in wire.SeriesV1) (Series, error) {
 		if err != nil {
 			return Series{}, err
 		}
-		if ref.Season() != episode.Season || ref.Episode() != episode.Episode {
-			return Series{}, fmt.Errorf("series: episode key %s does not match value S%02dE%04d", key, episode.Season, episode.Episode)
-		}
 		out.Episodes[ref] = Episode{
 			AirDate: episode.AirDate,
 			Active:  fromWireMedia(episode.Active),
@@ -59,8 +56,6 @@ func toWire(in Series) (wire.SeriesV1, error) {
 	for _, ref := range keys {
 		episode := in.Episodes[ref]
 		out.Episodes[ref.String()] = wire.EpisodeV1{
-			Season:  ref.Season(),
-			Episode: ref.Episode(),
 			AirDate: episode.AirDate,
 			Active:  toWireMedia(episode.Active),
 			Staged:  toWireMedia(episode.Staged),

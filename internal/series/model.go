@@ -2,6 +2,7 @@ package series
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/metadata"
@@ -92,11 +93,10 @@ func NewFromMetadata(ref refs.Metadata, metadataSeries metadata.Series) (Series,
 	var spine []SpineEpisode
 	for _, season := range metadataSeries.Seasons {
 		for _, episode := range season.Episodes {
-			episodeRef, err := refs.NewEpisode(episode.SeasonNumber, episode.EpisodeNumber)
-			if err != nil {
-				return Series{}, err
+			if episode.Ref.IsZero() {
+				return Series{}, fmt.Errorf("series: metadata has invalid episode ref")
 			}
-			spine = append(spine, SpineEpisode{Ref: episodeRef, AirDate: episode.Aired})
+			spine = append(spine, SpineEpisode{Ref: episode.Ref, AirDate: episode.Aired})
 		}
 	}
 	editor{series: &out}.refreshSpine(spine)

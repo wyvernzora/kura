@@ -1,6 +1,9 @@
 package refs
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestMetadata(t *testing.T) {
 	ref, err := ParseMetadata("tvdb:370070")
@@ -52,6 +55,20 @@ func TestEpisode(t *testing.T) {
 	}
 	if parsed != ref {
 		t.Fatalf("parsed %#v, want %#v", parsed, ref)
+	}
+	data, err := json.Marshal(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != `"S01E0001"` {
+		t.Fatalf("json = %s, want episode ref string", data)
+	}
+	var decoded Episode
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded != ref {
+		t.Fatalf("decoded %#v, want %#v", decoded, ref)
 	}
 }
 
