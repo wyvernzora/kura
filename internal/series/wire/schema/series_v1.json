@@ -20,8 +20,6 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "season": { "type": "integer", "minimum": 0 },
-        "episode": { "type": "integer", "minimum": 1 },
         "airDate": { "type": "string" },
         "active": { "$ref": "#/$defs/mediaRecord" },
         "staged": { "$ref": "#/$defs/mediaRecord" }

@@ -67,8 +67,6 @@ func TestFindAndGet(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/Bookworm - S01E01.mkv",

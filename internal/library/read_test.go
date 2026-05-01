@@ -33,8 +33,6 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/episode-1.mkv",
@@ -45,11 +43,9 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 					"companions": []
 				}
 			},
-			"S01E0002": {"season": 1, "episode": 2, "airDate": "2019-10-10"},
-			"S01E0003": {"season": 1, "episode": 3, "airDate": "2026-04-30"},
+			"S01E0002": {"airDate": "2019-10-10"},
+			"S01E0003": {"airDate": "2026-04-30"},
 			"S01E0004": {
-				"season": 1,
-				"episode": 4,
 				"airDate": "2019-10-24",
 				"active": {
 					"path": "Season 1/missing-file.mkv",
@@ -61,8 +57,6 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 				}
 			},
 			"S01E0005": {
-				"season": 1,
-				"episode": 5,
 				"airDate": "2019-10-31",
 				"staged": {
 					"path": %q,
@@ -74,8 +68,6 @@ func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
 				}
 			},
 			"S01E0006": {
-				"season": 1,
-				"episode": 6,
 				"airDate": "2019-11-07",
 				"active": {
 					"path": "Season 1/episode-6.mkv",

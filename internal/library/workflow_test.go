@@ -25,7 +25,7 @@ func TestScanCommits(t *testing.T) {
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
 		"episodes": {
-			"S01E0001": {"season": 1, "episode": 1, "airDate": "2019-10-03"}
+			"S01E0001": {"airDate": "2019-10-03"}
 		}
 	}`)
 	writeFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv"), "episode")
@@ -70,8 +70,6 @@ func TestScanActiveCollisionReturnsTypedError(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/existing.mkv",
@@ -107,7 +105,7 @@ func TestStageCommits(t *testing.T) {
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
 		"episodes": {
-			"S01E0001": {"season": 1, "episode": 1, "airDate": "2019-10-03"}
+			"S01E0001": {"airDate": "2019-10-03"}
 		}
 	}`)
 	mediaPath := filepath.Join(t.TempDir(), "Bookworm - S01E01 (WebRip).mkv")
@@ -158,8 +156,6 @@ func TestReconcilePlanApplyAndStalePlan(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/old.mkv",

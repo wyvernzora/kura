@@ -469,8 +469,6 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/episode-1.mkv",
@@ -481,7 +479,7 @@ func TestFindCommandPrintsTrackedSeriesTable(t *testing.T) {
 					"companions": []
 				}
 			},
-			"S01E0002": {"season": 1, "episode": 2, "airDate": "2019-10-10"}
+			"S01E0002": {"airDate": "2019-10-10"}
 		}
 	}`)
 
@@ -528,8 +526,6 @@ func TestFindCommandPrintsJSON(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/episode-1.mkv",
@@ -540,7 +536,7 @@ func TestFindCommandPrintsJSON(t *testing.T) {
 					"companions": []
 				}
 			},
-			"S01E0002": {"season": 1, "episode": 2, "airDate": "2019-10-10"}
+			"S01E0002": {"airDate": "2019-10-10"}
 		}
 	}`)
 
@@ -582,8 +578,6 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/old episode.mkv",
@@ -631,8 +625,6 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 		"metadataRef": "tvdb:370070",
 		"episodes": {
 			"S01E0001": {
-				"season": 1,
-				"episode": 1,
 				"airDate": "2019-10-03",
 				"active": {
 					"path": "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
@@ -729,7 +721,7 @@ func TestStageCommandWritesStagedEpisode(t *testing.T) {
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
 		"episodes": {
-			"S01E0001": {"season": 1, "episode": 1, "airDate": "2019-10-03"}
+			"S01E0001": {"airDate": "2019-10-03"}
 		}
 	}`)
 	stageDir := t.TempDir()
