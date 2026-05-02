@@ -103,6 +103,42 @@ func Read(root string, ref refs.Series, id ulid.ULID) (Meta, error) {
 	return fromWire(wire)
 }
 
+// Delete removes the trash ULID directory and reports the bytes
+// reclaimed. Returns (0, os.ErrNotExist) if the entry does not exist;
+// returns the partial sum on RemoveAll failure.
+func Delete(root string, ref refs.Series, id ulid.ULID) (int64, error) {
+	dir := paths.TrashEntry(root, ref, id.String())
+	bytes, err := dirSize(dir)
+	if err != nil {
+		return 0, err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return 0, err
+	}
+	return bytes, nil
+}
+
+// dirSize sums the file sizes immediately inside dir. Trash entries are
+// flat (meta.json + media + companions) — no recursion needed.
+func dirSize(dir string) (int64, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return total, err
+		}
+		total += info.Size()
+	}
+	return total, nil
+}
+
 func List(root string, ref refs.Series) ([]Meta, error) {
 	dir := paths.TrashDir(root, ref)
 	entries, err := os.ReadDir(dir)
