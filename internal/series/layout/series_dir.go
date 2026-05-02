@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-
-	"github.com/wyvernzora/kura/internal/series/wire"
 )
 
 // SeriesDir is a filesystem directory for one series.
@@ -69,7 +67,7 @@ func CleanSeriesRelPath(path string) (string, error) {
 		return "", fmt.Errorf("path %q escapes the series root", path)
 	}
 	clean = filepath.ToSlash(clean)
-	if slices.Contains(strings.Split(clean, "/"), wire.KuraDir) {
+	if slices.Contains(strings.Split(clean, "/"), ".kura") {
 		return "", fmt.Errorf("path %q cannot point inside .kura", path)
 	}
 	return clean, nil

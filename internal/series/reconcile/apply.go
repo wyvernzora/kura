@@ -97,7 +97,7 @@ func (h Runner) applyReconcile(ctx context.Context, plan ReconcilePlan, log *rec
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), len(moves), len(moves))
 		return ReconcileResult{}, err
 	}
-	if err := h.repo().save(h.ref, updated); err != nil {
+	if err := h.save(updated); err != nil {
 		if log != nil {
 			_ = log.result(h.now(), "failure", len(moves), err)
 		}
@@ -133,7 +133,6 @@ func (h Runner) applyPlanState(plan ReconcilePlan) (seriesState, error) {
 	if err != nil {
 		return seriesState{}, err
 	}
-	edit := editor{series: &series}
 	for _, change := range plan.Changes {
 		episode := series.Episodes[change.Episode]
 		switch change.Kind {
@@ -153,7 +152,7 @@ func (h Runner) applyPlanState(plan ReconcilePlan) (seriesState, error) {
 				}
 			}
 			series.Episodes[change.Episode] = episode
-			if _, err := edit.promoteStaged(change.Episode); err != nil {
+			if _, err := series.PromoteStaged(change.Episode); err != nil {
 				return seriesState{}, err
 			}
 		case ChangeMove:

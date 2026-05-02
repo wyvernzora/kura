@@ -9,8 +9,8 @@ import (
 	"sort"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/series/wire"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -44,7 +44,7 @@ func (h Runner) planReconcile() (ReconcilePlan, refs.Metadata, error) {
 }
 
 func (h Runner) snapshot() (string, error) {
-	path := wire.SeriesMetadataPath(filepath.Join(h.root(), filepath.FromSlash(h.ref.String())))
+	path := filepath.Join(h.root(), filepath.FromSlash(h.ref.String()), ".kura", "series.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
@@ -97,19 +97,27 @@ func (h Runner) stagedChange(episodeRef refs.Episode, episode episodeState) (Cha
 		Companions: companionMoves(episode.Staged.Path, target, episode.Staged.Companions),
 	}
 	if episode.Active != nil {
+		activeRel, err := h.relativeRecord(*episode.Active)
+		if err != nil {
+			return Change{}, err
+		}
 		id := ulid.Make()
 		change.Kind = ChangeReplace
 		change.Replaced = &Replaced{
-			FileMove:   FileMove{From: episode.Active.Path, To: trashRelPath(id, episode.Active.Path)},
-			Source:     episode.Active.Source.String(),
-			Resolution: episode.Active.Resolution.String(),
-			Companions: trashCompanionMoves(id, episode.Active.Companions),
+			FileMove:   FileMove{From: activeRel.Path, To: trashRelPath(id, activeRel.Path)},
+			Source:     activeRel.Source.String(),
+			Resolution: activeRel.Resolution.String(),
+			Companions: trashCompanionMoves(id, activeRel.Companions),
 		}
 	}
 	return change, nil
 }
 
 func (h Runner) moveChange(episodeRef refs.Episode, active MediaRecord) (Change, bool, error) {
+	active, err := h.relativeRecord(active)
+	if err != nil {
+		return Change{}, false, err
+	}
 	target, err := h.files().canonicalPath(h.ref, episodeRef, active)
 	if err != nil {
 		return Change{}, false, err
@@ -126,6 +134,36 @@ func (h Runner) moveChange(episodeRef refs.Episode, active MediaRecord) (Change,
 		Resolution: active.Resolution.String(),
 		Companions: companionMoves,
 	}, true, nil
+}
+
+// relativeRecord returns a copy of an active record with paths rewritten
+// relative to the series directory. seriesfile.Load absolutizes active paths
+// in memory; reconcile compares against canonicalPath (relative) and
+// persists FileMove records with relative paths, so it converts back at the
+// boundary.
+func (h Runner) relativeRecord(record MediaRecord) (MediaRecord, error) {
+	seriesDir, err := h.files().seriesDir(h.ref)
+	if err != nil {
+		return MediaRecord{}, err
+	}
+	out := media.CloneRecord(record)
+	if filepath.IsAbs(out.Path) {
+		rel, err := filepath.Rel(seriesDir.Path(), out.Path)
+		if err != nil {
+			return MediaRecord{}, err
+		}
+		out.Path = filepath.ToSlash(rel)
+	}
+	for i := range out.Companions {
+		if filepath.IsAbs(out.Companions[i].Path) {
+			rel, err := filepath.Rel(seriesDir.Path(), out.Companions[i].Path)
+			if err != nil {
+				return MediaRecord{}, err
+			}
+			out.Companions[i].Path = filepath.ToSlash(rel)
+		}
+	}
+	return out, nil
 }
 
 func (h Runner) validateMoves(changes []Change) error {

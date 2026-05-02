@@ -73,8 +73,7 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 		return StageResult{}, err
 	}
 	replaced := episode.Active != nil || episode.Staged != nil
-	editor := editor{series: &series}
-	if err := editor.setStaged(in.Episode, record); err != nil {
+	if err := series.SetStaged(in.Episode, record); err != nil {
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 1, 0)
 		return StageResult{}, err
 	}

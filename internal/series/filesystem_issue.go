@@ -6,6 +6,6 @@ func episodeFilesystemIssues(seriesDir SeriesDir, episode episodeState) []Filesy
 	return layout.EpisodeFilesystemIssues(seriesDir, episode)
 }
 
-func pathFilesystemIssue(seriesDir SeriesDir, recordName string, kind string, rawPath string, absolute bool) []FilesystemIssue {
-	return layout.PathFilesystemIssues(seriesDir, recordName, kind, rawPath, absolute)
+func pathFilesystemIssue(seriesDir SeriesDir, recordName string, kind string, rawPath string) []FilesystemIssue {
+	return layout.PathFilesystemIssues(seriesDir, recordName, kind, rawPath)
 }

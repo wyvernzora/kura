@@ -1,5 +1,10 @@
 package wire
 
+// CurrentSchemaVersion is the version stamped on reconcile plan records.
+// Lives here transitionally; phase 2 commit 4 moves these wire types into
+// internal/storage/planfile/ and this package goes away.
+const CurrentSchemaVersion = 1
+
 type ReconcilePlanRecordV1 struct {
 	Type          string          `json:"type"`
 	SchemaVersion int             `json:"schemaVersion"`

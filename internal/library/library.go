@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/media"
@@ -139,7 +140,7 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 		return series.Handle{}, err
 	}
-	metadataPath := series.SeriesMetadataPath(seriesDir.Path())
+	metadataPath := filepath.Join(seriesDir.Path(), ".kura", "series.json")
 	if _, err := os.Stat(metadataPath); err == nil {
 		if !in.Force {
 			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)

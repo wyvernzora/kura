@@ -1,4 +1,4 @@
-package wire
+package seriesfile
 
 import (
 	"bytes"
@@ -14,28 +14,28 @@ import (
 var schemaFS embed.FS
 
 var (
-	seriesV1Once sync.Once
-	seriesV1     *jsonschema.Schema
-	seriesV1Err  error
+	seriesV1SchemaOnce sync.Once
+	seriesV1Schema     *jsonschema.Schema
+	seriesV1SchemaErr  error
 )
 
 func validateSeries(data []byte) error {
-	seriesV1Once.Do(func() {
+	seriesV1SchemaOnce.Do(func() {
 		var schemaDoc any
 		decoder := json.NewDecoder(bytes.NewReader(mustReadSchema()))
 		decoder.UseNumber()
-		if seriesV1Err = decoder.Decode(&schemaDoc); seriesV1Err != nil {
+		if seriesV1SchemaErr = decoder.Decode(&schemaDoc); seriesV1SchemaErr != nil {
 			return
 		}
 		compiler := jsonschema.NewCompiler()
-		seriesV1Err = compiler.AddResource("series_v1.json", schemaDoc)
-		if seriesV1Err != nil {
+		seriesV1SchemaErr = compiler.AddResource("series_v1.json", schemaDoc)
+		if seriesV1SchemaErr != nil {
 			return
 		}
-		seriesV1, seriesV1Err = compiler.Compile("series_v1.json")
+		seriesV1Schema, seriesV1SchemaErr = compiler.Compile("series_v1.json")
 	})
-	if seriesV1Err != nil {
-		return seriesV1Err
+	if seriesV1SchemaErr != nil {
+		return seriesV1SchemaErr
 	}
 	var value any
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -43,8 +43,8 @@ func validateSeries(data []byte) error {
 	if err := decoder.Decode(&value); err != nil {
 		return err
 	}
-	if err := seriesV1.Validate(value); err != nil {
-		return fmt.Errorf("validate series: %w", err)
+	if err := seriesV1Schema.Validate(value); err != nil {
+		return fmt.Errorf("seriesfile: validate: %w", err)
 	}
 	return nil
 }

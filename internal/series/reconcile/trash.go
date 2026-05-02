@@ -7,7 +7,6 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/series/wire"
 	"github.com/wyvernzora/kura/internal/trash"
 )
 
@@ -62,7 +61,7 @@ func trashCompanionMoves(id ulid.ULID, companions []CompanionRecord) []FileMove 
 }
 
 func trashRelPath(id ulid.ULID, path string) string {
-	return filepath.ToSlash(filepath.Join(wire.KuraDir, trash.DirName, id.String(), filepath.Base(path)))
+	return filepath.ToSlash(filepath.Join(".kura", trash.DirName, id.String(), filepath.Base(path)))
 }
 
 func trashIDFromPath(path string) (ulid.ULID, error) {

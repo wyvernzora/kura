@@ -5,8 +5,9 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/series/layout"
-	"github.com/wyvernzora/kura/internal/series/state"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
 type Runner struct {
@@ -28,36 +29,29 @@ func (h Runner) now() time.Time {
 }
 
 func (h Runner) load() (seriesState, error) {
-	return h.repo().load(h.ref)
+	model, err := seriesfile.Load(h.rootPath, h.ref)
+	if err != nil {
+		return seriesState{}, err
+	}
+	return *model, nil
 }
 
-func (h Runner) repo() repo {
-	return repo{root: h.root()}
+func (h Runner) save(model seriesState) error {
+	model.Ref = h.ref
+	return seriesfile.Save(h.rootPath, &model)
 }
 
 func (h Runner) files() files {
 	return files{root: h.root()}
 }
 
-type seriesState = state.State
+type seriesState = domainseries.Series
 
-type episodeState = state.Episode
+type episodeState = domainseries.Episode
 
 type MediaRecord = media.Record
 
 type CompanionRecord = media.Companion
-
-type repo struct {
-	root string
-}
-
-func (r repo) load(ref refs.Series) (seriesState, error) {
-	return state.NewRepository(r.root).Load(ref)
-}
-
-func (r repo) save(ref refs.Series, model seriesState) error {
-	return state.NewRepository(r.root).Save(ref, model)
-}
 
 type files struct {
 	root string
@@ -73,12 +67,4 @@ func (f files) canonicalPath(ref refs.Series, episode refs.Episode, record Media
 
 func (f files) move(from, to string) error {
 	return layout.NewFiles(f.root).Move(from, to)
-}
-
-type editor struct {
-	series *seriesState
-}
-
-func (e editor) promoteStaged(ref refs.Episode) (*MediaRecord, error) {
-	return e.series.PromoteStaged(ref)
 }

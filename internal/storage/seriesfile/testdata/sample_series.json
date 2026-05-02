@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "metadataRef": "tvdb:370070",
+  "preferredTitle": "Bookworm",
+  "lastScanned": "2026-04-20T03:00:00Z",
+  "episodes": {
+    "S01E0001": {
+      "airDate": "2019-10-02",
+      "active": {
+        "path": "Season 1/Bookworm - S01E01 (BDRip 1080p).mkv",
+        "source": "bdrip",
+        "resolution": "1920x1080",
+        "codec": "H.264",
+        "size": 1234567,
+        "mtime": "2024-03-15T10:00:00Z",
+        "companions": [
+          {
+            "path": "Season 1/Bookworm - S01E01 (BDRip 1080p).en.srt",
+            "language": "en",
+            "size": 1024,
+            "mtime": "2024-03-15T10:00:00Z"
+          }
+        ]
+      }
+    },
+    "S01E0002": {
+      "airDate": "2019-10-09",
+      "staged": {
+        "path": "/inbox/Bookworm S01E02.mkv",
+        "source": "webrip",
+        "resolution": "1280x720",
+        "size": 987654,
+        "mtime": "2026-04-19T22:00:00Z",
+        "companions": []
+      }
+    },
+    "S01E0003": {
+      "airDate": "2019-10-16"
+    }
+  }
+}

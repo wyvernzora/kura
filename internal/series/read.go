@@ -95,7 +95,7 @@ func episodeStatus(seriesDir SeriesDir, episode episodeState, now time.Time) Epi
 	if episode.Active != nil && episode.Staged != nil {
 		return EpisodeStatusStagedReplacement
 	}
-	if episode.Active != nil && len(pathFilesystemIssue(seriesDir, "active", "media", episode.Active.Path, false)) > 0 {
+	if episode.Active != nil && len(pathFilesystemIssue(seriesDir, "active", "media", episode.Active.Path)) > 0 {
 		return EpisodeStatusUnavailable
 	}
 	if episode.Staged != nil {

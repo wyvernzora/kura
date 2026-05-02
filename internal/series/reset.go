@@ -51,8 +51,7 @@ func (h Handle) Reset(ctx context.Context, in ResetInput) (ResetResult, error) {
 		return ResetResult{}, NoStagedEpisodeError{Episode: in.Episode}
 	}
 	record := cloneMediaRecord(*episode.Staged)
-	editor := editor{series: &model}
-	if err := editor.clearStaged(in.Episode); err != nil {
+	if err := model.ClearStaged(in.Episode); err != nil {
 		return ResetResult{}, err
 	}
 	if err := h.repo().save(h.ref, model); err != nil {
@@ -77,10 +76,9 @@ func (h Handle) resetAll(model seriesState) (ResetResult, error) {
 		return refsWithStaged[i].String() < refsWithStaged[j].String()
 	})
 	records := make([]ResetRecord, 0, len(refsWithStaged))
-	editor := editor{series: &model}
 	for _, ref := range refsWithStaged {
 		record := cloneMediaRecord(*model.Episodes[ref].Staged)
-		if err := editor.clearStaged(ref); err != nil {
+		if err := model.ClearStaged(ref); err != nil {
 			return ResetResult{}, err
 		}
 		records = append(records, ResetRecord{Episode: ref, Record: record})

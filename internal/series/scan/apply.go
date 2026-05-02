@@ -29,9 +29,10 @@ func (s *scanner) applyFile(file DiscoveredFile) error {
 	if !ok {
 		return MetadataMissingEpisodeError{Episode: file.Ref}
 	}
+	absolutePath := s.absRel(file.Path)
 	status := ScanStatusAdded
 	if episode.Active != nil {
-		if episode.Active.Path != file.Path {
+		if episode.Active.Path != absolutePath {
 			if !s.input.Replace {
 				return EpisodeAlreadyExistsError{Episode: file.Ref}
 			}
@@ -56,8 +57,12 @@ func (s *scanner) applyFile(file DiscoveredFile) error {
 	return nil
 }
 
+func (s *scanner) absRel(rel string) string {
+	return filepath.Join(s.seriesDir.Path(), filepath.FromSlash(rel))
+}
+
 func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, error) {
-	facts, err := layout.NewFiles(s.runner.root).Stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path)))
+	facts, err := layout.NewFiles(s.runner.root).Stat(s.absRel(file.Path))
 	if err != nil {
 		return false, err
 	}
@@ -72,11 +77,11 @@ func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, err
 		companions[companion.Path] = companion
 	}
 	for _, path := range file.Companions {
-		companion, ok := companions[path]
+		companion, ok := companions[s.absRel(path)]
 		if !ok {
 			return false, nil
 		}
-		facts, err := layout.NewFiles(s.runner.root).Stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(path)))
+		facts, err := layout.NewFiles(s.runner.root).Stat(s.absRel(path))
 		if err != nil {
 			return false, nil
 		}
@@ -88,16 +93,17 @@ func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, err
 }
 
 func (s *scanner) mediaRecord(file DiscoveredFile) (media.Record, error) {
-	absolutePath := filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path))
+	absolutePath := s.absRel(file.Path)
 	input := mediarecord.Input{
 		MediaPath:  absolutePath,
-		RecordPath: file.Path,
+		RecordPath: absolutePath,
 		Source:     file.Source,
 	}
 	for _, companionPath := range file.Companions {
+		absolute := s.absRel(companionPath)
 		input.CompanionPaths = append(input.CompanionPaths, mediarecord.CompanionInput{
-			MediaPath:  filepath.Join(s.seriesDir.Path(), filepath.FromSlash(companionPath)),
-			RecordPath: companionPath,
+			MediaPath:  absolute,
+			RecordPath: absolute,
 		})
 	}
 	return s.mediaRecordBuilder().Build(s.ctx, input)
@@ -128,7 +134,7 @@ func existingScannedEpisode(file DiscoveredFile, active media.Record) ScannedEpi
 func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 	discoveredPaths := map[string]struct{}{}
 	for _, file := range discovered {
-		discoveredPaths[file.Path] = struct{}{}
+		discoveredPaths[s.absRel(file.Path)] = struct{}{}
 	}
 	refsWithActive := make([]refs.Episode, 0, len(s.model.Episodes))
 	for ref, episode := range s.model.Episodes {
@@ -147,8 +153,7 @@ func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 		if _, ok := discoveredPaths[episode.Active.Path]; ok {
 			continue
 		}
-		path := filepath.Join(s.seriesDir.Path(), filepath.FromSlash(episode.Active.Path))
-		if _, err := layout.NewFiles(s.runner.root).Stat(path); err == nil {
+		if _, err := layout.NewFiles(s.runner.root).Stat(episode.Active.Path); err == nil {
 			continue
 		} else if !os.IsNotExist(err) {
 			return err

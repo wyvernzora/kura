@@ -3,8 +3,8 @@ package series
 import (
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	domain "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/series/layout"
-	"github.com/wyvernzora/kura/internal/series/state"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -56,9 +56,11 @@ type CompanionFile struct {
 
 type FilesystemIssue = layout.FilesystemIssue
 
-type seriesState = state.State
+type seriesState = domain.Series
 
-type episodeState = state.Episode
+type episodeState = domain.Episode
+
+type SpineEpisode = domain.SpineEntry
 
 type MediaRecord = media.Record
 

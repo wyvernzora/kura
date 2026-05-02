@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/series/state"
+	"github.com/wyvernzora/kura/internal/domain/series"
 )
 
 type FilesystemIssue struct {
@@ -16,40 +16,32 @@ type FilesystemIssue struct {
 	Reason string `json:"reason"`
 }
 
-func EpisodeFilesystemIssues(seriesDir SeriesDir, episode state.Episode) []FilesystemIssue {
+func EpisodeFilesystemIssues(seriesDir SeriesDir, episode series.Episode) []FilesystemIssue {
 	var issues []FilesystemIssue
 	if episode.Active != nil {
-		issues = append(issues, RecordFilesystemIssues(seriesDir, "active", *episode.Active, false)...)
+		issues = append(issues, RecordFilesystemIssues(seriesDir, "active", *episode.Active)...)
 	}
 	if episode.Staged != nil {
-		issues = append(issues, RecordFilesystemIssues(seriesDir, "staged", *episode.Staged, true)...)
+		issues = append(issues, RecordFilesystemIssues(seriesDir, "staged", *episode.Staged)...)
 	}
 	return issues
 }
 
-func RecordFilesystemIssues(seriesDir SeriesDir, recordName string, record media.Record, absolute bool) []FilesystemIssue {
+func RecordFilesystemIssues(seriesDir SeriesDir, recordName string, record media.Record) []FilesystemIssue {
 	var issues []FilesystemIssue
-	issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "media", record.Path, absolute)...)
+	issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "media", record.Path)...)
 	for _, companion := range record.Companions {
-		issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "companion", companion.Path, absolute)...)
+		issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "companion", companion.Path)...)
 	}
 	return issues
 }
 
-func PathFilesystemIssues(seriesDir SeriesDir, recordName string, kind string, rawPath string, absolute bool) []FilesystemIssue {
+// PathFilesystemIssues stats path and reports filesystem issues. Path must be
+// absolute; series.Series records carry absolute paths in memory after
+// seriesfile.Load.
+func PathFilesystemIssues(seriesDir SeriesDir, recordName string, kind string, rawPath string) []FilesystemIssue {
 	path := rawPath
-	if !absolute {
-		joined, err := seriesDir.JoinRel(rawPath)
-		if err != nil {
-			return []FilesystemIssue{{
-				Record: recordName,
-				Path:   rawPath,
-				Code:   recordName + "_" + kind + "_invalid_path",
-				Reason: err.Error(),
-			}}
-		}
-		path = joined
-	} else if !filepath.IsAbs(path) {
+	if !filepath.IsAbs(path) {
 		return []FilesystemIssue{{
 			Record: recordName,
 			Path:   rawPath,

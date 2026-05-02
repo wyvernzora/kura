@@ -5,6 +5,7 @@ package series
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/civil"
@@ -12,6 +13,16 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
+
+// ParseAirDate parses YYYY-MM-DD or empty into a civil.Date. Empty input
+// returns the zero value (civil.Date.IsValid() reports false).
+func ParseAirDate(value string) (civil.Date, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return civil.Date{}, nil
+	}
+	return civil.ParseDate(value)
+}
 
 // Series is the persisted shape of a tracked series in memory. It is
 // round-trippable through seriesfile.Load/Save.

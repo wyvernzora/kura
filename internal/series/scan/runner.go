@@ -9,11 +9,12 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/mediarecord"
-	"github.com/wyvernzora/kura/internal/series/state"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
 type Runner struct {
@@ -46,7 +47,7 @@ type scanner struct {
 	runner    Runner
 	ctx       context.Context
 	input     Input
-	model     state.State
+	model     domainseries.Series
 	seriesDir layout.SeriesDir
 	result    Result
 }
@@ -87,7 +88,8 @@ func (s *scanner) scan() error {
 		return err
 	}
 	s.model.LastScanned = s.runner.now().UTC()
-	if err := state.NewRepository(s.runner.root).Save(s.runner.ref, s.model); err != nil {
+	s.model.Ref = s.runner.ref
+	if err := seriesfile.Save(s.runner.root, &s.model); err != nil {
 		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.runner.ref), 3, 0)
 		return err
 	}
@@ -96,7 +98,7 @@ func (s *scanner) scan() error {
 }
 
 func (s *scanner) loadLocal() error {
-	model, err := state.NewRepository(s.runner.root).Load(s.runner.ref)
+	model, err := seriesfile.Load(s.runner.root, s.runner.ref)
 	if err != nil {
 		return err
 	}
@@ -104,7 +106,7 @@ func (s *scanner) loadLocal() error {
 	if err != nil {
 		return err
 	}
-	s.model = model
+	s.model = *model
 	s.seriesDir = seriesDir
 	return nil
 }
@@ -145,18 +147,18 @@ func (s *scanner) mediaRecordBuilder() mediarecord.Builder {
 	return mediarecord.NewBuilder(layout.NewFiles(s.runner.root), s.runner.inspector)
 }
 
-func spineFromMetadata(seasons []metadata.Season) ([]state.SpineEpisode, error) {
-	var spine []state.SpineEpisode
+func spineFromMetadata(seasons []metadata.Season) ([]domainseries.SpineEntry, error) {
+	var spine []domainseries.SpineEntry
 	for _, season := range seasons {
 		for _, episode := range season.Episodes {
 			if episode.Ref.IsZero() {
 				return nil, fmt.Errorf("series: metadata has invalid episode ref")
 			}
-			airDate, err := state.ParseAirDate(episode.Aired)
+			airDate, err := domainseries.ParseAirDate(episode.Aired)
 			if err != nil {
 				return nil, fmt.Errorf("series: invalid air date %q: %w", episode.Aired, err)
 			}
-			spine = append(spine, state.SpineEpisode{Ref: episode.Ref, AirDate: airDate})
+			spine = append(spine, domainseries.SpineEntry{Ref: episode.Ref, AirDate: airDate})
 		}
 	}
 	return spine, nil

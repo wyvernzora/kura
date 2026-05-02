@@ -200,7 +200,7 @@ func (h Runner) reconcilePlanPath(token string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(seriesDir.Path(), wire.KuraDir, "reconcile", token+".jsonl"), nil
+	return filepath.Join(seriesDir.Path(), ".kura", "reconcile", token+".jsonl"), nil
 }
 
 func parseReconcilePlanToken(token string) (string, error) {
