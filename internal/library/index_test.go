@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/refs"
 )
 
 func mustSeries(t *testing.T, value string) refs.Series {

@@ -1,4 +1,4 @@
-package resolve
+package selector
 
 import (
 	"reflect"
@@ -29,11 +29,11 @@ func TestParseTerm(t *testing.T) {
 	}
 }
 
-func TestParseQuery(t *testing.T) {
-	got := ParseQuery([]string{"a", "", "tvdb:1"})
-	want := Query{Terms: []Term{Term("a"), Term("tvdb:1")}}
+func TestParseSelectorSkipsEmptyTerms(t *testing.T) {
+	got := ParseSelector([]string{"a", "", "tvdb:1"})
+	want := Selector{Terms: []Term{Term("a"), Term("tvdb:1")}}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("ParseQuery = %#v, want %#v", got, want)
+		t.Fatalf("ParseSelector = %#v, want %#v", got, want)
 	}
 }
 
@@ -54,5 +54,18 @@ func TestTermString(t *testing.T) {
 				t.Fatalf("String = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestParseSelectorTreatsDirAsText(t *testing.T) {
+	selector := ParseSelector([]string{"dir:Honzuki", "tvdb:370070"})
+	if len(selector.Terms) != 2 {
+		t.Fatalf("terms = %d", len(selector.Terms))
+	}
+	if selector.Terms[0].String() != "dir:Honzuki" {
+		t.Fatalf("unexpected dir term: %#v", selector.Terms[0])
+	}
+	if selector.Terms[1].String() != "tvdb:370070" {
+		t.Fatalf("unexpected tvdb term: %#v", selector.Terms[1])
 	}
 }

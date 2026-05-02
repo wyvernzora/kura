@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
@@ -21,7 +22,7 @@ func (s *textSearchStrategy) Name() string {
 	return "text_search"
 }
 
-func (s *textSearchStrategy) Match(t Term) (bool, bool) {
+func (s *textSearchStrategy) Match(t selector.Term) (bool, bool) {
 	return true, false
 }
 
@@ -29,7 +30,7 @@ func (s *textSearchStrategy) Authoritative() bool {
 	return false
 }
 
-func (s *textSearchStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
+func (s *textSearchStrategy) Resolve(ctx context.Context, t selector.Term) ([]termHit, error) {
 	query := textnorm.NFC(t.String())
 	results, err := s.source.Search(ctx, query, metadata.SearchOptions{Type: metadata.MediaTypeSeries})
 	if err != nil {

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/refs"
 )
 
 func TestApplyReconcileTokenRejectsExpiredPlan(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/library"
-	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )

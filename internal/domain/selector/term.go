@@ -1,4 +1,4 @@
-package refs
+package selector
 
 import (
 	"strings"
@@ -14,27 +14,10 @@ func (t Term) String() string {
 	return string(t)
 }
 
-// Selector is a collection of terms used to identify a series.
-type Selector struct {
-	Terms []Term
-}
-
 func ParseTerm(raw string) Term {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return Term("")
 	}
 	return Term(textnorm.NFC(trimmed).String())
-}
-
-func ParseSelector(raw []string) Selector {
-	terms := make([]Term, 0, len(raw))
-	for _, value := range raw {
-		term := ParseTerm(value)
-		if term == "" {
-			continue
-		}
-		terms = append(terms, term)
-	}
-	return Selector{Terms: terms}
 }

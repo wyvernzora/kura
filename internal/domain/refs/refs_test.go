@@ -71,16 +71,3 @@ func TestEpisode(t *testing.T) {
 		t.Fatalf("decoded %#v, want %#v", decoded, ref)
 	}
 }
-
-func TestParseSelectorTreatsDirAsText(t *testing.T) {
-	selector := ParseSelector([]string{"dir:Honzuki", "tvdb:370070"})
-	if len(selector.Terms) != 2 {
-		t.Fatalf("terms = %d", len(selector.Terms))
-	}
-	if selector.Terms[0].String() != "dir:Honzuki" {
-		t.Fatalf("unexpected dir term: %#v", selector.Terms[0])
-	}
-	if selector.Terms[1].String() != "tvdb:370070" {
-		t.Fatalf("unexpected tvdb term: %#v", selector.Terms[1])
-	}
-}

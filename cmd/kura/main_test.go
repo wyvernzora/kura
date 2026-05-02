@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
-	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/ui"
 )

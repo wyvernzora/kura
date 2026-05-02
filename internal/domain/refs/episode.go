@@ -29,7 +29,7 @@ func NewEpisode(season, episode int) (Episode, error) {
 func ParseEpisode(value string) (Episode, error) {
 	match := episodePattern.FindStringSubmatch(value)
 	if match == nil {
-		return Episode{}, invalid("episode ref", value, "expected S<NN>E<NNNN>")
+		return Episode{}, fmt.Errorf("invalid episode ref %q; expected S<NN>E<NNNN>", value)
 	}
 	season, err := strconv.Atoi(match[1])
 	if err != nil {
@@ -62,6 +62,12 @@ func (ref Episode) String() string {
 	return fmt.Sprintf("S%02dE%04d", ref.season, ref.episode)
 }
 
+// Marker returns the filename-oriented marker with minimum two-digit episode
+// padding, for example S01E01.
+func (ref Episode) Marker() string {
+	return fmt.Sprintf("S%02dE%02d", ref.season, ref.episode)
+}
+
 func (ref Episode) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ref.String())
 }
@@ -90,10 +96,4 @@ func (ref *Episode) UnmarshalText(data []byte) error {
 	}
 	*ref = parsed
 	return nil
-}
-
-// Marker returns the filename-oriented marker with minimum two-digit episode
-// padding, for example S01E01.
-func (ref Episode) Marker() string {
-	return fmt.Sprintf("S%02dE%02d", ref.season, ref.episode)
 }

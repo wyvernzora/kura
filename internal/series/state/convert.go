@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )

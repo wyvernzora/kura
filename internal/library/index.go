@@ -12,8 +12,8 @@ import (
 	"sort"
 
 	"github.com/google/renameio/v2"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/refs"
 )
 
 var ErrNotFound = errors.New("library index: not found")

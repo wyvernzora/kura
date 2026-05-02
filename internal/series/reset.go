@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
 type ResetInput struct {

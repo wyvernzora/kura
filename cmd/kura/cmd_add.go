@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/library"
-	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type addCmd struct {

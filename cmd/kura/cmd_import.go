@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/library"
-	"github.com/wyvernzora/kura/internal/refs"
-	"github.com/wyvernzora/kura/internal/resolve"
 )
 
 type importCmd struct {
@@ -47,7 +47,7 @@ func (cmd *importCmd) resolveTerms() ([]string, error) {
 	var tvdbTerm string
 
 	for _, raw := range cmd.Terms {
-		term := resolve.ParseTerm(raw)
+		term := selector.ParseTerm(raw)
 		if term == "" {
 			continue
 		}

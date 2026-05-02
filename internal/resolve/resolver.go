@@ -7,7 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -27,12 +28,12 @@ func New(strategies ...ResolveStrategy) *Resolver {
 }
 
 type matchedTerm struct {
-	term     Term
+	term     selector.Term
 	strategy ResolveStrategy
 }
 
 // Resolve runs the query and returns the merged, sorted result set.
-func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
+func (r *Resolver) Resolve(ctx context.Context, q selector.Selector) (Resolution, error) {
 	terms := nonEmptyTerms(q.Terms)
 	if len(terms) == 0 {
 		return Resolution{}, ErrEmptyQuery
@@ -96,8 +97,8 @@ func (r *Resolver) Resolve(ctx context.Context, q Query) (Resolution, error) {
 	return Resolution{Results: results}, nil
 }
 
-func nonEmptyTerms(terms []Term) []Term {
-	out := make([]Term, 0, len(terms))
+func nonEmptyTerms(terms []selector.Term) []selector.Term {
+	out := make([]selector.Term, 0, len(terms))
 	for _, term := range terms {
 		if strings.TrimSpace(term.String()) == "" {
 			continue
@@ -107,7 +108,7 @@ func nonEmptyTerms(terms []Term) []Term {
 	return out
 }
 
-func (r *Resolver) matchStrategies(term Term) []matchedTerm {
+func (r *Resolver) matchStrategies(term selector.Term) []matchedTerm {
 	var matched []matchedTerm
 	for _, strategy := range r.strategies {
 		ok, stop := strategy.Match(term)
@@ -122,7 +123,7 @@ func (r *Resolver) matchStrategies(term Term) []matchedTerm {
 }
 
 func validateCombinations(matched []matchedTerm) error {
-	deduped := map[Term]struct{}{}
+	deduped := map[selector.Term]struct{}{}
 	hasAuthoritative := false
 	for _, entry := range matched {
 		deduped[entry.term] = struct{}{}
@@ -138,7 +139,7 @@ func validateCombinations(matched []matchedTerm) error {
 
 func dedupeMatched(matched []matchedTerm) []matchedTerm {
 	type key struct {
-		term     Term
+		term     selector.Term
 		strategy string
 	}
 	seen := map[key]struct{}{}

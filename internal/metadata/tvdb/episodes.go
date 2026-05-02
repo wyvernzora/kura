@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type seriesEpisodesResponse struct {

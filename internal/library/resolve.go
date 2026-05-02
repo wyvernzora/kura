@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/resolve"
 )
@@ -15,7 +16,7 @@ func (l *Library) Resolve(ctx context.Context, terms []string) (resolve.Resoluti
 		resolve.NewMetadataIDStrategy(l.source),
 		resolve.NewTextSearchStrategy(l.source),
 	)
-	resolution, err := resolver.Resolve(ctx, resolve.ParseQuery(terms))
+	resolution, err := resolver.Resolve(ctx, selector.ParseSelector(terms))
 	if err != nil {
 		progress.Failure(ctx, "resolve", "Failed to resolve series", 0, 0)
 		return resolve.Resolution{}, err

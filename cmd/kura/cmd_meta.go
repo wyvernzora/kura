@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/resolve"
 )
@@ -31,7 +32,7 @@ func (cmd *metaSearchCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	results, err := resolver.Resolve(rt.Context, resolve.ParseQuery(cmd.Terms))
+	results, err := resolver.Resolve(rt.Context, selector.ParseSelector(cmd.Terms))
 	if err != nil {
 		return err
 	}

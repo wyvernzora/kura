@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/refs"
 )
 
 type metadataIDStrategy struct {
@@ -20,7 +21,7 @@ func (s *metadataIDStrategy) Name() string {
 	return "metadata_id"
 }
 
-func (s *metadataIDStrategy) Match(t Term) (bool, bool) {
+func (s *metadataIDStrategy) Match(t selector.Term) (bool, bool) {
 	ref, err := refs.ParseMetadata(t.String())
 	if err == nil && ref.Provider() == s.source.Key() {
 		return true, true
@@ -32,7 +33,7 @@ func (s *metadataIDStrategy) Authoritative() bool {
 	return true
 }
 
-func (s *metadataIDStrategy) Resolve(ctx context.Context, t Term) ([]termHit, error) {
+func (s *metadataIDStrategy) Resolve(ctx context.Context, t selector.Term) ([]termHit, error) {
 	ref, err := refs.ParseMetadata(t.String())
 	if err != nil {
 		return nil, err

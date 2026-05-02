@@ -3,8 +3,8 @@ package tvdb
 import (
 	"strconv"
 
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 

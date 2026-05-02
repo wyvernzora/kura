@@ -5,19 +5,20 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
 func TestMetadataIDStrategyProperties(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{key: "tvdb"})
-	matched, stop := strategy.Match(Term("tvdb:1"))
+	matched, stop := strategy.Match(selector.Term("tvdb:1"))
 	if !matched {
 		t.Fatal("Match tvdb = false, want true")
 	}
 	if !stop {
 		t.Fatal("Match tvdb stop = false, want true")
 	}
-	matched, stop = strategy.Match(Term("tmdb:1"))
+	matched, stop = strategy.Match(selector.Term("tmdb:1"))
 	if matched {
 		t.Fatal("Match tmdb = true, want false")
 	}
@@ -31,7 +32,7 @@ func TestMetadataIDStrategyProperties(t *testing.T) {
 
 func TestMetadataIDStrategyNotFound(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrNotFound})
-	hits, err := strategy.Resolve(context.Background(), Term("tvdb:1"))
+	hits, err := strategy.Resolve(context.Background(), selector.Term("tvdb:1"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -42,7 +43,7 @@ func TestMetadataIDStrategyNotFound(t *testing.T) {
 
 func TestMetadataIDStrategyPropagatesError(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{seriesErr: metadata.ErrUnavailable})
-	_, err := strategy.Resolve(context.Background(), Term("tvdb:1"))
+	_, err := strategy.Resolve(context.Background(), selector.Term("tvdb:1"))
 	if !errors.Is(err, metadata.ErrUnavailable) {
 		t.Fatalf("error = %v, want ErrUnavailable", err)
 	}
@@ -52,7 +53,7 @@ func TestMetadataIDStrategyResolveSeries(t *testing.T) {
 	strategy := NewMetadataIDStrategy(&strategyFakeSource{
 		series: map[string]metadata.Series{"1": testMetadataSeries("tvdb:1")},
 	})
-	hits, err := strategy.Resolve(context.Background(), Term("tvdb:1"))
+	hits, err := strategy.Resolve(context.Background(), selector.Term("tvdb:1"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}

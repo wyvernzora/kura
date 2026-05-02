@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
 type Meta struct {

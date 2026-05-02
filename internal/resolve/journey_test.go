@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
@@ -14,7 +15,7 @@ func TestResolverJourneys(t *testing.T) {
 			searchResults: []metadata.SearchResult{{SeriesSummary: testSummary("tvdb:370070")}},
 		}
 		resolver := New(NewTextSearchStrategy(source))
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"本好きの下剋上"}))
+		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"本好きの下剋上"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
@@ -32,7 +33,7 @@ func TestResolverJourneys(t *testing.T) {
 			},
 		}
 		resolver := New(NewTextSearchStrategy(source))
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"Ascendance.of.a.Bookworm.S01.1080p.WEB-DL"}))
+		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"Ascendance.of.a.Bookworm.S01.1080p.WEB-DL"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
@@ -53,7 +54,7 @@ func TestResolverJourneys(t *testing.T) {
 			},
 		}
 		resolver := New(NewTextSearchStrategy(source))
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{
+		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{
 			"本好きの下剋上",
 			"Ascendance of a Bookworm",
 		}))
@@ -71,7 +72,7 @@ func TestResolverJourneys(t *testing.T) {
 	t.Run("direct id retry resolves", func(t *testing.T) {
 		source := &strategyFakeSource{series: map[string]metadata.Series{"370070": testMetadataSeries("tvdb:370070")}}
 		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"tvdb:370070"}))
+		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"tvdb:370070"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
@@ -83,7 +84,7 @@ func TestResolverJourneys(t *testing.T) {
 	t.Run("unknown query not found", func(t *testing.T) {
 		source := &strategyFakeSource{}
 		resolver := New(NewTextSearchStrategy(source))
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"Season 2"}))
+		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"Season 2"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
@@ -95,7 +96,7 @@ func TestResolverJourneys(t *testing.T) {
 	t.Run("metadata source down errors", func(t *testing.T) {
 		source := &strategyFakeSource{searchErr: metadata.ErrUnavailable}
 		resolver := New(NewTextSearchStrategy(source))
-		_, err := resolver.Resolve(context.Background(), ParseQuery([]string{"Bookworm"}))
+		_, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"Bookworm"}))
 		if !errors.Is(err, metadata.ErrUnavailable) {
 			t.Fatalf("error = %v, want ErrUnavailable", err)
 		}
@@ -110,7 +111,7 @@ func TestResolverJourneys(t *testing.T) {
 			},
 		}
 		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"dir:Bookworm"}))
+		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"dir:Bookworm"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
@@ -128,7 +129,7 @@ func TestResolverJourneys(t *testing.T) {
 			},
 		}
 		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
-		resolution, err := resolver.Resolve(context.Background(), ParseQuery([]string{"foo:Bookworm"}))
+		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"foo:Bookworm"}))
 		if err != nil {
 			t.Fatalf("Resolve: %v", err)
 		}
@@ -140,7 +141,7 @@ func TestResolverJourneys(t *testing.T) {
 	t.Run("conflicting terms error", func(t *testing.T) {
 		source := &strategyFakeSource{}
 		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
-		_, err := resolver.Resolve(context.Background(), ParseQuery([]string{"X-Men", "tvdb:370070"}))
+		_, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"X-Men", "tvdb:370070"}))
 		if !errors.Is(err, ErrConflictingTerms) {
 			t.Fatalf("error = %v, want ErrConflictingTerms", err)
 		}
@@ -150,7 +151,7 @@ func TestResolverJourneys(t *testing.T) {
 		source := &strategyFakeSource{}
 		resolver := New(NewTextSearchStrategy(source))
 		raw := []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"}
-		_, err := resolver.Resolve(context.Background(), ParseQuery(raw))
+		_, err := resolver.Resolve(context.Background(), selector.ParseSelector(raw))
 		if !errors.Is(err, ErrTooManyTerms) {
 			t.Fatalf("error = %v, want ErrTooManyTerms", err)
 		}

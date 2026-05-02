@@ -3,8 +3,9 @@ package resolve
 import (
 	"context"
 
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/refs"
 )
 
 // ResolveStrategy is the unit of term-resolution behavior. Strategies hold
@@ -15,7 +16,7 @@ type ResolveStrategy interface {
 
 	// Match reports whether this strategy handles the given term. If stop is
 	// true, later strategies are not considered for this term.
-	Match(term Term) (matched bool, stop bool)
+	Match(term selector.Term) (matched bool, stop bool)
 
 	// Authoritative reports whether matching terms must be sole query terms,
 	// modulo same-value duplicates.
@@ -23,12 +24,12 @@ type ResolveStrategy interface {
 
 	// Resolve produces this term's candidate hits. An empty slice with nil error
 	// is a normal term-level not-found outcome.
-	Resolve(ctx context.Context, term Term) ([]termHit, error)
+	Resolve(ctx context.Context, term selector.Term) ([]termHit, error)
 }
 
 // termHit is one term's contribution for one metadata candidate.
 type termHit struct {
-	Term        Term
+	Term        selector.Term
 	MetadataRef refs.Metadata
 	Summary     metadata.SeriesSummary
 	Rank        int

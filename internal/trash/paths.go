@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
 const MetaFileName = "meta.json"
