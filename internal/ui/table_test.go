@@ -191,34 +191,6 @@ func TestScanTableStylesTTYMediaFacts(t *testing.T) {
 	}
 }
 
-func TestReconcileTablePrintsTTYEmptyMessage(t *testing.T) {
-	var out bytes.Buffer
-	if err := writeReconcileMoves(&out, nil, true); err != nil {
-		t.Fatalf("writeReconcileMoves: %v", err)
-	}
-	rendered := out.String()
-	if !strings.Contains(rendered, "Nothing to reconcile.") {
-		t.Fatalf("rendered table = %q, want empty message", rendered)
-	}
-	if strings.Contains(rendered, "KIND") {
-		t.Fatalf("rendered table = %q, want no table header", rendered)
-	}
-}
-
-func TestReconcileTableKeepsNonTTYEmptyTable(t *testing.T) {
-	var out bytes.Buffer
-	if err := writeReconcileMoves(&out, nil, false); err != nil {
-		t.Fatalf("writeReconcileMoves: %v", err)
-	}
-	rendered := out.String()
-	if strings.Contains(rendered, "Nothing to reconcile.") {
-		t.Fatalf("rendered table = %q, want no empty message", rendered)
-	}
-	if !strings.Contains(rendered, "KIND") {
-		t.Fatalf("rendered table = %q, want table header", rendered)
-	}
-}
-
 func TestRenderStatus(t *testing.T) {
 	cases := []struct {
 		name   string

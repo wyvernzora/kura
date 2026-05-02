@@ -4,18 +4,8 @@ import (
 	"testing"
 
 	"cloud.google.com/go/civil"
-	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 )
-
-func mustParseResolution(t *testing.T, value string) media.Resolution {
-	t.Helper()
-	r, err := media.ParseResolution(value)
-	if err != nil {
-		t.Fatalf("ParseResolution(%q): %v", value, err)
-	}
-	return r
-}
 
 func mustParseDate(t *testing.T, value string) civil.Date {
 	t.Helper()

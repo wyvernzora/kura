@@ -217,33 +217,6 @@ func writeScanTable(w io.Writer, entries []scanTableEntry, skipped []series.Impo
 	return writeStyledTable(w, skippedTable, nil)
 }
 
-func WriteReconcilePlan(w io.Writer, plan series.ReconcilePlan) error {
-	var moves []series.FileMove
-	for _, change := range plan.Changes {
-		moves = append(moves, change.Moves()...)
-	}
-	return writeReconcileMoves(w, moves, shouldStyle(w))
-}
-
-func writeReconcileMoves(w io.Writer, moves []series.FileMove, tty bool) error {
-	if len(moves) == 0 && tty {
-		_, err := fmt.Fprintln(w, "\nNothing to reconcile.")
-		return err
-	}
-	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"KIND", "FROM", "TO"})
-	tw.SetStyle(borderlessTableStyle())
-	tw.SetColumnConfigs([]table.ColumnConfig{
-		{Number: 1},
-		{Number: 2},
-		{Number: 3},
-	})
-	for _, move := range moves {
-		tw.AppendRow(table.Row{"FILE", move.From, move.To})
-	}
-	return writeStyledTable(w, tw, nil)
-}
-
 func borderlessTableStyle() table.Style {
 	style := table.StyleDefault
 	style.Options = table.OptionsNoBordersAndSeparators
