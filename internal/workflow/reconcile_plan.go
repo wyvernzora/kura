@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,17 +56,32 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 	if err := validateReconcileMoves(seriesDir.Path(), changes); err != nil {
 		return response.ReconcilePlan{}, err
 	}
+	snapshot := reconcile.Snapshot(rawSeries)
 	plan := reconcile.Plan{
 		Series:   in.Ref,
-		Snapshot: reconcile.Snapshot(rawSeries),
+		Snapshot: snapshot,
 		Changes:  changes,
 	}
 	out := response.ReconcilePlan{Plan: planToResponse(plan)}
 	if !plan.HasChanges() {
 		return out, nil
 	}
-	token := ulid.Make().String()
-	createdAt := deps.Now().UTC()
+	token := snapshot[:planfile.TokenLength]
+	if existing, _, err := planfile.ReadPlan(deps.LibRoot, in.Ref, token); err == nil {
+		// Snapshot-derived token is deterministic: same series state always
+		// produces the same token. If the planfile already exists, return it
+		// as-is to keep plan creation idempotent. Apply still re-validates the
+		// snapshot at execute time.
+		out.Token = existing.Token
+		createdAt := existing.CreatedAt
+		expiresAt := existing.ExpiresAt
+		out.CreatedAt = &createdAt
+		out.ExpiresAt = &expiresAt
+		return out, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return response.ReconcilePlan{}, err
+	}
+	createdAt := deps.Now().UTC().Truncate(time.Second)
 	expiresAt := createdAt.Add(PlanReconcileTTL)
 	record := planfile.PlanRecord{
 		Token:     token,

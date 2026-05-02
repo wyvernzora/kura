@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/google/renameio/v2"
-	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -185,22 +184,39 @@ func (l *Log) AppendResult(at time.Time, status string, appliedMoves int, applyE
 	return l.encoder.Encode(record)
 }
 
+// TokenLength is the canonical length of a reconcile plan token: a 12-char
+// lowercase hex prefix of the snapshot sha256. Fixed length so filename
+// scanning and CLI input share one validator.
+const TokenLength = 12
+
 func tokenFromFilename(name string) (string, bool) {
 	if !strings.HasSuffix(name, paths.PlanExtension) {
 		return "", false
 	}
 	token := strings.TrimSuffix(name, paths.PlanExtension)
-	if _, err := ulid.ParseStrict(token); err != nil {
+	if !validToken(token) {
 		return "", false
 	}
 	return token, true
 }
 
 func validateToken(token string) error {
-	if _, err := ulid.ParseStrict(token); err != nil {
-		return fmt.Errorf("planfile: invalid token %q", token)
+	if !validToken(token) {
+		return fmt.Errorf("planfile: invalid token %q (want %d-char lowercase hex)", token, TokenLength)
 	}
 	return nil
+}
+
+func validToken(token string) bool {
+	if len(token) != TokenLength {
+		return false
+	}
+	for _, r := range token {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 func scanForSuccess(r io.Reader) (bool, error) {

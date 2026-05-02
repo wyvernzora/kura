@@ -7,11 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/planfile"
+)
+
+const (
+	tokenA = "0123456789ab"
+	tokenB = "fedcba987654"
 )
 
 func TestWriteReadPlanRoundTrip(t *testing.T) {
@@ -21,10 +25,9 @@ func TestWriteReadPlanRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	episode, _ := refs.NewEpisode(1, 1)
-	token := ulid.Make().String()
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	in := planfile.PlanRecord{
-		Token:     token,
+		Token:     tokenA,
 		CreatedAt: now,
 		ExpiresAt: now.Add(5 * time.Minute),
 		Plan: reconcile.Plan{
@@ -47,7 +50,7 @@ func TestWriteReadPlanRoundTrip(t *testing.T) {
 	if err := planfile.WritePlan(root, seriesRef, in); err != nil {
 		t.Fatal(err)
 	}
-	out, applied, err := planfile.ReadPlan(root, seriesRef, token)
+	out, applied, err := planfile.ReadPlan(root, seriesRef, tokenA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,10 +71,9 @@ func TestWriteReadPlanRoundTrip(t *testing.T) {
 func TestAppendLogMarksApplied(t *testing.T) {
 	root := t.TempDir()
 	seriesRef, _ := refs.ParseSeries("Bookworm")
-	token := ulid.Make().String()
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	plan := planfile.PlanRecord{
-		Token:     token,
+		Token:     tokenA,
 		CreatedAt: now,
 		ExpiresAt: now.Add(5 * time.Minute),
 		Plan:      reconcile.Plan{Series: seriesRef},
@@ -79,7 +81,7 @@ func TestAppendLogMarksApplied(t *testing.T) {
 	if err := planfile.WritePlan(root, seriesRef, plan); err != nil {
 		t.Fatal(err)
 	}
-	log, err := planfile.OpenLog(root, seriesRef, token)
+	log, err := planfile.OpenLog(root, seriesRef, tokenA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestAppendLogMarksApplied(t *testing.T) {
 	if err := log.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, applied, err := planfile.ReadPlan(root, seriesRef, token)
+	_, applied, err := planfile.ReadPlan(root, seriesRef, tokenA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,10 +106,8 @@ func TestAppendLogMarksApplied(t *testing.T) {
 func TestReadPlanRejectsTokenMismatch(t *testing.T) {
 	root := t.TempDir()
 	seriesRef, _ := refs.ParseSeries("Bookworm")
-	token := ulid.Make().String()
-	other := ulid.Make().String()
 	plan := planfile.PlanRecord{
-		Token:     other,
+		Token:     tokenB,
 		CreatedAt: time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 		Plan:      reconcile.Plan{Series: seriesRef},
@@ -115,12 +115,12 @@ func TestReadPlanRejectsTokenMismatch(t *testing.T) {
 	if err := planfile.WritePlan(root, seriesRef, plan); err != nil {
 		t.Fatal(err)
 	}
-	srcPath := paths.PlanFile(root, seriesRef, other)
-	dstPath := paths.PlanFile(root, seriesRef, token)
+	srcPath := paths.PlanFile(root, seriesRef, tokenB)
+	dstPath := paths.PlanFile(root, seriesRef, tokenA)
 	if err := os.Rename(srcPath, dstPath); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := planfile.ReadPlan(root, seriesRef, token)
+	_, _, err := planfile.ReadPlan(root, seriesRef, tokenA)
 	if err == nil || !strings.Contains(err.Error(), "token mismatch") {
 		t.Fatalf("ReadPlan err = %v, want token mismatch", err)
 	}
@@ -129,9 +129,8 @@ func TestReadPlanRejectsTokenMismatch(t *testing.T) {
 func TestListTokens(t *testing.T) {
 	root := t.TempDir()
 	seriesRef, _ := refs.ParseSeries("Bookworm")
-	token := ulid.Make().String()
 	plan := planfile.PlanRecord{
-		Token:     token,
+		Token:     tokenA,
 		CreatedAt: time.Now().UTC(),
 		ExpiresAt: time.Now().UTC().Add(time.Minute),
 		Plan:      reconcile.Plan{Series: seriesRef},
@@ -143,7 +142,7 @@ func TestListTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tokens) != 1 || tokens[0] != token {
+	if len(tokens) != 1 || tokens[0] != tokenA {
 		t.Fatalf("ListTokens = %v", tokens)
 	}
 }
@@ -151,14 +150,28 @@ func TestListTokens(t *testing.T) {
 func TestWritePlanRejectsBadToken(t *testing.T) {
 	root := t.TempDir()
 	seriesRef, _ := refs.ParseSeries("Bookworm")
-	plan := planfile.PlanRecord{
-		Token:     "not-a-ulid",
-		CreatedAt: time.Now().UTC(),
-		ExpiresAt: time.Now().UTC().Add(time.Minute),
-		Plan:      reconcile.Plan{Series: seriesRef},
+	cases := []struct {
+		name  string
+		token string
+	}{
+		{"too short", "abc"},
+		{"too long", "0123456789abcdef"},
+		{"non-hex", "ZZZZZZZZZZZZ"},
+		{"uppercase", "0123456789AB"},
+		{"ulid", "01KQN3TH7H75ATNP4DV1YQ6487"},
 	}
-	err := planfile.WritePlan(root, seriesRef, plan)
-	if err == nil || !errors.Is(err, err) || !strings.Contains(err.Error(), "invalid token") {
-		t.Fatalf("WritePlan err = %v, want invalid token", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := planfile.PlanRecord{
+				Token:     tc.token,
+				CreatedAt: time.Now().UTC(),
+				ExpiresAt: time.Now().UTC().Add(time.Minute),
+				Plan:      reconcile.Plan{Series: seriesRef},
+			}
+			err := planfile.WritePlan(root, seriesRef, plan)
+			if err == nil || !errors.Is(err, err) || !strings.Contains(err.Error(), "invalid token") {
+				t.Fatalf("WritePlan err = %v, want invalid token", err)
+			}
+		})
 	}
 }

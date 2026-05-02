@@ -1155,6 +1155,83 @@ func TestReconcileApplyCommandAppliesPlanToken(t *testing.T) {
 	}
 }
 
+func TestReconcilePlanIsIdempotent(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "old episode.mkv"), "episode")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/old episode.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+
+	var stdout, stderr bytes.Buffer
+	rt := testRunContextWithLibraryRoot(&stdout, &stderr, root)
+	planArgs := []string{
+		"reconcile", "plan", "--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}
+	if err := run(planArgs, rt); err != nil {
+		t.Fatalf("first plan: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var first map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &first); err != nil {
+		t.Fatalf("unmarshal first: %v\n%s", err, stdout.String())
+	}
+	tokenA := first["token"].(string)
+	createdA := first["createdAt"].(string)
+
+	planPath := filepath.Join(seriesDir, ".kura", "reconcile", tokenA+".jsonl")
+	infoBefore, err := os.Stat(planPath)
+	if err != nil {
+		t.Fatalf("stat plan: %v", err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := run(planArgs, rt); err != nil {
+		t.Fatalf("second plan: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var second map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &second); err != nil {
+		t.Fatalf("unmarshal second: %v\n%s", err, stdout.String())
+	}
+	if got := second["token"].(string); got != tokenA {
+		t.Fatalf("second token = %q, want %q (snapshot-derived)", got, tokenA)
+	}
+	if got := second["createdAt"].(string); got != createdA {
+		t.Fatalf("second createdAt = %q, want %q (existing record returned, not rewritten)", got, createdA)
+	}
+	infoAfter, err := os.Stat(planPath)
+	if err != nil {
+		t.Fatalf("stat plan after: %v", err)
+	}
+	if !infoAfter.ModTime().Equal(infoBefore.ModTime()) {
+		t.Fatalf("plan file mtime changed: before=%v after=%v (idempotency expects no rewrite)", infoBefore.ModTime(), infoAfter.ModTime())
+	}
+}
+
 func TestReconcileApplyHandlesSelfRefresh(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
