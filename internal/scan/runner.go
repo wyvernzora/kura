@@ -13,7 +13,7 @@ import (
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/series/layout"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
@@ -103,7 +103,7 @@ func (s *scanner) loadLocal() error {
 	if err != nil {
 		return err
 	}
-	seriesDir, err := layout.NewFiles(s.runner.root).SeriesDir(s.runner.ref)
+	seriesDir, err := seriesdir.Parse(paths.SeriesDir(s.runner.root, s.runner.ref))
 	if err != nil {
 		return err
 	}

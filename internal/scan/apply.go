@@ -1,15 +1,32 @@
 package scan
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/mediainfo"
-	"github.com/wyvernzora/kura/internal/series/layout"
 )
+
+type fileFacts struct {
+	Size  int64
+	MTime time.Time
+}
+
+func statFacts(path string) (fileFacts, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileFacts{}, err
+	}
+	if info.IsDir() {
+		return fileFacts{}, fmt.Errorf("scan: %q is a directory", path)
+	}
+	return fileFacts{Size: info.Size(), MTime: info.ModTime().UTC().Truncate(time.Second)}, nil
+}
 
 func (s *scanner) apply(discovered []DiscoveredFile) error {
 	if err := s.removeMissingActive(discovered); err != nil {
@@ -62,7 +79,7 @@ func (s *scanner) absRel(rel string) string {
 }
 
 func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, error) {
-	facts, err := layout.NewFiles(s.runner.root).Stat(s.absRel(file.Path))
+	facts, err := statFacts(s.absRel(file.Path))
 	if err != nil {
 		return false, err
 	}
@@ -81,7 +98,7 @@ func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, err
 		if !ok {
 			return false, nil
 		}
-		facts, err := layout.NewFiles(s.runner.root).Stat(s.absRel(path))
+		facts, err := statFacts(s.absRel(path))
 		if err != nil {
 			return false, nil
 		}
@@ -153,7 +170,7 @@ func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 		if _, ok := discoveredPaths[episode.Active.Path]; ok {
 			continue
 		}
-		if _, err := layout.NewFiles(s.runner.root).Stat(episode.Active.Path); err == nil {
+		if _, err := statFacts(episode.Active.Path); err == nil {
 			continue
 		} else if !os.IsNotExist(err) {
 			return err

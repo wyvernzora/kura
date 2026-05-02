@@ -6,7 +6,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series/scan"
+	"github.com/wyvernzora/kura/internal/scan"
 )
 
 // ScanInput parameters for the Scan workflow. Replace=true allows the
