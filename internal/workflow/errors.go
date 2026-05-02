@@ -24,3 +24,24 @@ type NotFoundError struct {
 func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("workflow: series %q not found", e.Ref)
 }
+
+// MetadataMissingEpisodeError signals the requested episode does not
+// exist in the series's metadata-derived spine. The user typed a slot
+// that the provider doesn't know about.
+type MetadataMissingEpisodeError struct {
+	Episode refs.Episode
+}
+
+func (e *MetadataMissingEpisodeError) Error() string {
+	return fmt.Sprintf("workflow: metadata has no %s", e.Episode.Marker())
+}
+
+// NoStagedEpisodeError signals the requested episode has no staged
+// record to drop (reset is a no-op).
+type NoStagedEpisodeError struct {
+	Episode refs.Episode
+}
+
+func (e *NoStagedEpisodeError) Error() string {
+	return fmt.Sprintf("workflow: episode %s has no staged media", e.Episode.Marker())
+}
