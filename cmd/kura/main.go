@@ -18,6 +18,7 @@ type cli struct {
 	Reconcile reconcileCmd `cmd:"" help:"Plan and apply filesystem reconciliation for tracked files."`
 	Reset     resetCmd     `cmd:"" help:"Remove staged media from a tracked episode."`
 	Stage     stageCmd     `cmd:"" help:"Stage an external episode file for a series."`
+	Trash     trashCmd     `cmd:"" help:"Manage per-series trash entries."`
 }
 
 func main() {
