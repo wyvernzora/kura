@@ -10,7 +10,7 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
@@ -39,7 +39,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 	}
 	ref := in.Ref
 	if ref.IsZero() {
-		title, err := series.ParseFileTitle(metadataSeries.PreferredTitle.String())
+		title, err := layout.ParseFileTitle(metadataSeries.PreferredTitle.String())
 		if err != nil {
 			progress.Failure(ctx, "add", "Failed to add series", 0, 0)
 			return response.AddResult{}, err
@@ -57,7 +57,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 	target := paths.SeriesDir(deps.LibRoot, ref)
 	if _, err := os.Stat(target); err == nil {
 		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
-		return response.AddResult{}, series.SeriesAlreadyExistsError{Ref: ref}
+		return response.AddResult{}, &SeriesAlreadyExistsError{Ref: ref}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
 		return response.AddResult{}, err
@@ -103,7 +103,7 @@ func fetchSeriesMetadata(ctx context.Context, deps Deps, ref refs.Metadata) (met
 		return metadata.Series{}, "", err
 	}
 	if ref.Provider() != source.Key() {
-		return metadata.Series{}, "", series.UnsupportedMetadataSourceError{Source: ref.Provider()}
+		return metadata.Series{}, "", &UnsupportedMetadataSourceError{Source: ref.Provider()}
 	}
 	m, err := source.GetSeries(ctx, ref.ID())
 	if err != nil {
@@ -120,7 +120,7 @@ func checkMetadataAvailable(deps Deps, metadataRef refs.Metadata, next refs.Seri
 		return err
 	}
 	if ok && existing != next {
-		return series.MetadataRefConflictError{Ref: metadataRef, Existing: existing, Next: next}
+		return &MetadataRefConflictError{Ref: metadataRef, Existing: existing, Next: next}
 	}
 	return nil
 }

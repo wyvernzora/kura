@@ -19,13 +19,13 @@ func mustParseDate(t *testing.T, value string) civil.Date {
 func TestRefreshSpineNeverRemovesEpisodes(t *testing.T) {
 	oldRef, _ := refs.NewEpisode(1, 1)
 	newRef, _ := refs.NewEpisode(1, 2)
-	model := seriesState{
+	model := Series{
 		Metadata: refs.Metadata("tvdb:370070"),
-		Episodes: map[refs.Episode]episodeState{
+		Episodes: map[refs.Episode]Episode{
 			oldRef: {AirDate: mustParseDate(t, "2019-10-02")},
 		},
 	}
-	model.RefreshSpine([]SpineEpisode{{Ref: newRef, AirDate: mustParseDate(t, "2019-10-09")}})
+	model.RefreshSpine([]SpineEntry{{Ref: newRef, AirDate: mustParseDate(t, "2019-10-09")}})
 	if _, ok := model.Episodes[oldRef]; !ok {
 		t.Fatal("RefreshSpine removed old spine entry")
 	}

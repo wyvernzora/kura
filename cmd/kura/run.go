@@ -9,7 +9,6 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/resolve"
-	"github.com/wyvernzora/kura/internal/ui"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
@@ -67,7 +66,7 @@ func run(args []string, rt runContext) error {
 	}
 
 	rt.Context = stdio.With(rt.Context, stdio.New(rt.Stdin, rt.Stdout, rt.Stderr))
-	rt.Context = progress.With(rt.Context, ui.NewProgressReporter(rt.Stderr))
+	rt.Context = progress.With(rt.Context, newProgressReporter(rt.Stderr))
 	rt.Context = metadata.WithSource(rt.Context, func() (metadata.Source, error) {
 		return buildSourceFromFlags(&rt, flags)
 	})

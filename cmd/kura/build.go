@@ -8,7 +8,6 @@ import (
 
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/media/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
@@ -60,13 +59,13 @@ func validateLibraryRoot(root string) error {
 	}
 	info, err := os.Stat(root)
 	if errors.Is(err, os.ErrNotExist) {
-		return library.ErrRootNotFound
+		return workflow.ErrLibraryRootNotFound
 	}
 	if err != nil {
 		return err
 	}
 	if !info.IsDir() {
-		return library.ErrRootNotDirectory
+		return workflow.ErrLibraryRootNotDirectory
 	}
 	return nil
 }

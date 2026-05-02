@@ -9,7 +9,6 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
@@ -47,7 +46,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 	if _, err := layout.ParseSeriesDir(paths.SeriesDir(deps.LibRoot, ref)); err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 		if errors.Is(err, os.ErrNotExist) {
-			return response.AddResult{}, series.SeriesNotFoundError{Ref: ref}
+			return response.AddResult{}, &SeriesNotFoundError{Ref: ref}
 		}
 		return response.AddResult{}, err
 	}
@@ -55,7 +54,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 	if _, err := os.Stat(metadataPath); err == nil {
 		if !in.Force {
 			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-			return response.AddResult{}, series.SeriesAlreadyTrackedError{Ref: ref}
+			return response.AddResult{}, &SeriesAlreadyTrackedError{Ref: ref}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)

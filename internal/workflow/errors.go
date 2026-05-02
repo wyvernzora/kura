@@ -36,6 +36,58 @@ func (e *MetadataRefNotIndexedError) Error() string {
 	return fmt.Sprintf("workflow: metadata ref %s is not indexed", e.Ref)
 }
 
+// MetadataRefConflictError signals the metadata ref is already tracked
+// at a different series ref. Add/import refuse.
+type MetadataRefConflictError struct {
+	Ref      refs.Metadata
+	Existing refs.Series
+	Next     refs.Series
+}
+
+func (e *MetadataRefConflictError) Error() string {
+	return fmt.Sprintf("workflow: metadata ref %s is already tracked at %q", e.Ref, e.Existing)
+}
+
+// SeriesAlreadyExistsError signals the target series directory exists.
+// Add refuses; the operator picks a different ref or removes the dir.
+type SeriesAlreadyExistsError struct {
+	Ref refs.Series
+}
+
+func (e *SeriesAlreadyExistsError) Error() string {
+	return fmt.Sprintf("workflow: series %q already exists below the library root", e.Ref)
+}
+
+// SeriesNotFoundError signals an import target directory does not exist
+// under the library root.
+type SeriesNotFoundError struct {
+	Ref refs.Series
+}
+
+func (e *SeriesNotFoundError) Error() string {
+	return fmt.Sprintf("workflow: series %q does not exist below the library root", e.Ref)
+}
+
+// SeriesAlreadyTrackedError signals the target directory already has
+// .kura/series.json. Import refuses without --force.
+type SeriesAlreadyTrackedError struct {
+	Ref refs.Series
+}
+
+func (e *SeriesAlreadyTrackedError) Error() string {
+	return fmt.Sprintf("workflow: series %q already has .kura/series.json", e.Ref)
+}
+
+// UnsupportedMetadataSourceError signals the resolved metadata ref's
+// provider does not match the configured source.
+type UnsupportedMetadataSourceError struct {
+	Source string
+}
+
+func (e *UnsupportedMetadataSourceError) Error() string {
+	return fmt.Sprintf("workflow: unsupported metadata ref source %q", e.Source)
+}
+
 // MetadataMissingEpisodeError signals the requested episode does not
 // exist in the series's metadata-derived spine. The user typed a slot
 // that the provider doesn't know about.

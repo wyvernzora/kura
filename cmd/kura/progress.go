@@ -1,4 +1,4 @@
-package ui
+package main
 
 import (
 	"context"
@@ -12,35 +12,35 @@ import (
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
-type Progress struct {
+type spinnerProgress struct {
 	enabled bool
 	spinner *spinner.Spinner
 	stderr  io.Writer
 }
 
-func NewProgress(stderr io.Writer) *Progress {
+func newSpinnerProgress(stderr io.Writer) *spinnerProgress {
 	file, ok := stderr.(*os.File)
 	if !ok || !stdio.IsTerminal(file) {
-		return &Progress{}
+		return &spinnerProgress{}
 	}
 	s := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(stderr))
 	s.FinalMSG = ""
-	return &Progress{enabled: true, spinner: s, stderr: stderr}
+	return &spinnerProgress{enabled: true, spinner: s, stderr: stderr}
 }
 
-func NewProgressReporter(stderr io.Writer) progress.Reporter {
-	spinnerProgress := NewProgress(stderr)
+func newProgressReporter(stderr io.Writer) progress.Reporter {
+	sp := newSpinnerProgress(stderr)
 	return func(_ context.Context, event progress.Event) {
 		message := progressMessage(event)
 		switch event.Status {
 		case progress.StartStatus:
-			spinnerProgress.Start("%s", message)
+			sp.start("%s", message)
 		case progress.UpdateStatus:
-			spinnerProgress.Update("%s", message)
+			sp.update("%s", message)
 		case progress.SuccessStatus:
-			spinnerProgress.Succeed("%s", message)
+			sp.succeed("%s", message)
 		case progress.FailureStatus:
-			spinnerProgress.Fail("%s", message)
+			sp.fail("%s", message)
 		}
 	}
 }
@@ -52,7 +52,7 @@ func progressMessage(event progress.Event) string {
 	return fmt.Sprintf("[%d/%d] %s", event.Current, event.Total, event.Message)
 }
 
-func (p *Progress) Start(format string, args ...any) {
+func (p *spinnerProgress) start(format string, args ...any) {
 	if !p.enabled {
 		return
 	}
@@ -60,14 +60,14 @@ func (p *Progress) Start(format string, args ...any) {
 	p.spinner.Start()
 }
 
-func (p *Progress) Update(format string, args ...any) {
+func (p *spinnerProgress) update(format string, args ...any) {
 	if !p.enabled {
 		return
 	}
 	p.spinner.Suffix = " " + fmt.Sprintf(format, args...)
 }
 
-func (p *Progress) Succeed(format string, args ...any) {
+func (p *spinnerProgress) succeed(format string, args ...any) {
 	if !p.enabled {
 		return
 	}
@@ -75,17 +75,10 @@ func (p *Progress) Succeed(format string, args ...any) {
 	fmt.Fprintf(p.stderr, "✔ %s\n", fmt.Sprintf(format, args...))
 }
 
-func (p *Progress) Fail(format string, args ...any) {
+func (p *spinnerProgress) fail(format string, args ...any) {
 	if !p.enabled {
 		return
 	}
 	p.spinner.Stop()
 	fmt.Fprintf(p.stderr, "✖ %s\n", fmt.Sprintf(format, args...))
-}
-
-func (p *Progress) Stop() {
-	if !p.enabled {
-		return
-	}
-	p.spinner.Stop()
 }

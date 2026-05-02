@@ -14,7 +14,6 @@ import (
 
 	clipkg "github.com/wyvernzora/kura/internal/cli"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
@@ -171,7 +170,7 @@ func TestAddCommandRejectsRefAlreadyTracked(t *testing.T) {
 		"--dirname", "Other",
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	var duplicate seriespkg.MetadataRefConflictError
+	var duplicate *workflow.MetadataRefConflictError
 	if !errors.As(err, &duplicate) {
 		t.Fatalf("error = %v, want MetadataRefConflictError", err)
 	}
@@ -380,7 +379,7 @@ func TestImportCommandRejectsRefAlreadyTracked(t *testing.T) {
 		"Other",
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	var duplicate seriespkg.MetadataRefConflictError
+	var duplicate *workflow.MetadataRefConflictError
 	if !errors.As(err, &duplicate) {
 		t.Fatalf("error = %v, want MetadataRefConflictError", err)
 	}
