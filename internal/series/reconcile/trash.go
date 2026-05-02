@@ -7,7 +7,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/trash"
+	"github.com/wyvernzora/kura/internal/storage/trashfile"
 )
 
 func (h Runner) writeTrash(episode refs.Episode, record MediaRecord, replaced Replaced) error {
@@ -21,7 +21,7 @@ func (h Runner) writeTrash(episode refs.Episode, record MediaRecord, replaced Re
 			record.Companions[index].Path = replaced.Companions[index].To
 		}
 	}
-	return trash.Write(h.root(), h.ref, trash.Meta{
+	return trashfile.Write(h.root(), h.ref, trashfile.Meta{
 		ID:        id,
 		Episode:   episode,
 		TrashedAt: h.now().UTC(),
@@ -29,18 +29,18 @@ func (h Runner) writeTrash(episode refs.Episode, record MediaRecord, replaced Re
 	})
 }
 
-func trashRecord(in MediaRecord) trash.Record {
-	out := trash.Record{
+func trashRecord(in MediaRecord) trashfile.Record {
+	out := trashfile.Record{
 		Path:       in.Path,
 		Source:     in.Source.String(),
 		Resolution: in.Resolution.String(),
 		Codec:      in.Codec.String(),
 		Size:       in.Size,
 		MTime:      in.MTime,
-		Companions: make([]trash.Companion, 0, len(in.Companions)),
+		Companions: make([]trashfile.Companion, 0, len(in.Companions)),
 	}
 	for _, companion := range in.Companions {
-		out.Companions = append(out.Companions, trash.Companion{
+		out.Companions = append(out.Companions, trashfile.Companion{
 			Path:     companion.Path,
 			Role:     companion.Role,
 			Language: companion.Language,
@@ -61,7 +61,7 @@ func trashCompanionMoves(id ulid.ULID, companions []CompanionRecord) []FileMove 
 }
 
 func trashRelPath(id ulid.ULID, path string) string {
-	return filepath.ToSlash(filepath.Join(".kura", trash.DirName, id.String(), filepath.Base(path)))
+	return filepath.ToSlash(filepath.Join(".kura", trashfile.DirName, id.String(), filepath.Base(path)))
 }
 
 func trashIDFromPath(path string) (ulid.ULID, error) {
