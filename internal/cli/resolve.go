@@ -6,8 +6,8 @@ import (
 	"fmt"
 
 	"github.com/wyvernzora/kura/internal/cli/prompt"
+	"github.com/wyvernzora/kura/internal/cli/stdio"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/ui/stdio"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 

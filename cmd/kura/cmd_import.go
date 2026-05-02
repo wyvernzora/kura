@@ -3,9 +3,9 @@ package main
 import (
 	clipkg "github.com/wyvernzora/kura/internal/cli"
 	"github.com/wyvernzora/kura/internal/cli/render"
+	"github.com/wyvernzora/kura/internal/cli/stdio"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/ui/stdio"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 

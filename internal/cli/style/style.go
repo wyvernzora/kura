@@ -11,7 +11,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
-	"github.com/wyvernzora/kura/internal/ui/stdio"
+	"github.com/wyvernzora/kura/internal/cli/stdio"
 )
 
 // ShouldStyle returns true when w is a terminal that supports ANSI

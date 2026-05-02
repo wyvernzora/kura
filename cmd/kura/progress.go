@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
+	"github.com/wyvernzora/kura/internal/cli/stdio"
 	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
 
 type spinnerProgress struct {
