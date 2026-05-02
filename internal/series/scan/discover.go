@@ -12,6 +12,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/mediarecord"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 type DiscoveredFile struct {
@@ -63,7 +64,7 @@ func DiscoverSeriesEpisodes(seriesDir layout.SeriesDir) ([]DiscoveredFile, []Imp
 }
 
 func skipDiscoveryDir(relPath string, name string) (error, string) {
-	if relPath == ".kura" {
+	if relPath == paths.KuraDir {
 		return fs.SkipDir, ""
 	}
 	switch relPathDepth(relPath) {
@@ -88,7 +89,7 @@ func isSeasonExtraDir(relPath string, name string) bool {
 	if _, ok := parseSeasonDir(seasonDir); !ok {
 		return false
 	}
-	return strings.EqualFold(name, "Extra")
+	return strings.EqualFold(name, paths.ExtraDirName)
 }
 
 func discoveredEpisode(seriesDir layout.SeriesDir, relPath string, name string) (DiscoveredFile, *ImportSkip, error) {

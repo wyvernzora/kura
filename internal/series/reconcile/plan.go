@@ -11,6 +11,7 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -44,8 +45,7 @@ func (h Runner) planReconcile() (ReconcilePlan, refs.Metadata, error) {
 }
 
 func (h Runner) snapshot() (string, error) {
-	path := filepath.Join(h.root(), filepath.FromSlash(h.ref.String()), ".kura", "series.json")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(paths.SeriesMetadata(h.root(), h.ref))
 	if err != nil {
 		return "", err
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 type Files struct {
@@ -24,7 +25,7 @@ type FileFacts struct {
 }
 
 func (f Files) SeriesDir(ref refs.Series) (SeriesDir, error) {
-	return ParseSeriesDir(filepath.Join(f.root, filepath.FromSlash(ref.String())))
+	return ParseSeriesDir(paths.SeriesDir(f.root, ref))
 }
 
 func (f Files) Stat(path string) (FileFacts, error) {
@@ -42,10 +43,7 @@ func (f Files) CanonicalPath(ref refs.Series, episode refs.Episode, record media
 	title := CleanFileTitle(ref.String())
 	facts := MediaFilenameFacts{Source: record.Source, Resolution: record.Resolution}
 	filename := BuildMediaFilename(title, episode, facts, filepath.Ext(record.Path)).String()
-	if episode.Season() == 0 {
-		return filename, nil
-	}
-	return filepath.ToSlash(filepath.Join(fmt.Sprintf("Season %d", episode.Season()), filename)), nil
+	return paths.EpisodeMediaRel(episode.Season(), filename), nil
 }
 
 func (f Files) Move(from, to string) error {

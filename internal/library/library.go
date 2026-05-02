@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/media"
@@ -14,6 +13,7 @@ import (
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 type Library struct {
@@ -132,16 +132,15 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 		return series.Handle{}, err
 	}
-	seriesDir, err := series.ParseSeriesDir(l.root.Join(ref.String()))
-	if errors.Is(err, os.ErrNotExist) {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-		return series.Handle{}, series.SeriesNotFoundError{Ref: ref}
-	}
-	if err != nil {
+	if _, err := series.ParseSeriesDir(paths.SeriesDir(l.root.Path(), ref)); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
+			return series.Handle{}, series.SeriesNotFoundError{Ref: ref}
+		}
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 		return series.Handle{}, err
 	}
-	metadataPath := filepath.Join(seriesDir.Path(), ".kura", "series.json")
+	metadataPath := paths.SeriesMetadata(l.root.Path(), ref)
 	if _, err := os.Stat(metadataPath); err == nil {
 		if !in.Force {
 			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
