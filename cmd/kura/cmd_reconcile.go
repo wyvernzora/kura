@@ -1,12 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 
-	"github.com/wyvernzora/kura/internal/domain/reconcile"
-	"github.com/wyvernzora/kura/internal/ui"
+	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/render"
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type reconcileCmd struct {
@@ -24,111 +25,26 @@ type reconcileApplyCmd struct {
 	Args []string `arg:"" required:"" help:"Resolver terms followed by the reconcile plan token."`
 }
 
-type reconcilePlanOutput struct {
-	Token     string                  `json:"token,omitempty"`
-	CreatedAt string                  `json:"createdAt,omitempty"`
-	ExpiresAt string                  `json:"expiresAt,omitempty"`
-	Plan      reconcilePlanOutputPlan `json:"plan"`
-}
-
-type reconcilePlanOutputPlan struct {
-	Series   string                      `json:"series"`
-	Snapshot string                      `json:"snapshot,omitempty"`
-	Changes  []reconcilePlanOutputChange `json:"changes"`
-}
-
-type reconcilePlanOutputChange struct {
-	Kind       string                       `json:"kind"`
-	Episode    string                       `json:"episode"`
-	From       string                       `json:"from"`
-	To         string                       `json:"to"`
-	Source     string                       `json:"source,omitempty"`
-	Resolution string                       `json:"resolution,omitempty"`
-	Companions []reconcilePlanOutputMove    `json:"companions,omitempty"`
-	Replaced   *reconcilePlanOutputReplaced `json:"replaced,omitempty"`
-}
-
-type reconcilePlanOutputMove struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-}
-
-type reconcilePlanOutputReplaced struct {
-	From       string                    `json:"from"`
-	To         string                    `json:"to"`
-	Source     string                    `json:"source,omitempty"`
-	Resolution string                    `json:"resolution,omitempty"`
-	Companions []reconcilePlanOutputMove `json:"companions,omitempty"`
-}
-
-func reconcilePlanOutputFor(plan reconcile.Plan) reconcilePlanOutputPlan {
-	out := reconcilePlanOutputPlan{
-		Series:   plan.Series.String(),
-		Snapshot: plan.Snapshot,
-		Changes:  make([]reconcilePlanOutputChange, 0, len(plan.Changes)),
-	}
-	for _, change := range plan.Changes {
-		entry := reconcilePlanOutputChange{
-			Kind:       string(change.Kind),
-			Episode:    change.Episode.String(),
-			From:       change.From,
-			To:         change.To,
-			Source:     change.Source,
-			Resolution: change.Resolution,
-			Companions: movesToOutput(change.Companions),
-		}
-		if change.Replaced != nil {
-			entry.Replaced = &reconcilePlanOutputReplaced{
-				From:       change.Replaced.From,
-				To:         change.Replaced.To,
-				Source:     change.Replaced.Source,
-				Resolution: change.Replaced.Resolution,
-				Companions: movesToOutput(change.Replaced.Companions),
-			}
-		}
-		out.Changes = append(out.Changes, entry)
-	}
-	return out
-}
-
-func movesToOutput(in []reconcile.FileMove) []reconcilePlanOutputMove {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]reconcilePlanOutputMove, 0, len(in))
-	for _, m := range in {
-		out = append(out, reconcilePlanOutputMove{From: m.From, To: m.To})
-	}
-	return out
-}
-
 func (cmd *reconcilePlanCmd) Run(rt *runContext) error {
-	handle, err := resolveSeriesHandle(rt, cmd.Terms)
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	stored, err := handle.CreateReconcilePlan()
-	if err != nil {
-		return err
-	}
-	if cmd.JSON {
-		encoder := json.NewEncoder(rt.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(reconcilePlanOutput{
-			Token:     stored.Token,
-			CreatedAt: formatOptionalTime(stored.CreatedAt),
-			ExpiresAt: formatOptionalTime(stored.ExpiresAt),
-			Plan:      reconcilePlanOutputFor(stored.Plan),
-		})
-	}
-	if err := ui.WriteReconcilePlan(rt.Stdout, stored.Plan); err != nil {
-		return err
-	}
-	if stored.Token == "" {
-		return nil
-	}
-	_, err = fmt.Fprintf(rt.Stdout, "Token: %s\nExpiresAt: %s\n", stored.Token, stored.ExpiresAt.Format("2006-01-02T15:04:05Z07:00"))
-	return err
+	io := stdio.From(rt.Context)
+	return clipkg.WithResolve(rt.Context, io, deps, cmd.Terms, func(metadataRef refs.Metadata) error {
+		seriesRef, ok, err := deps.Index.Get(metadataRef)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
+		}
+		result, err := workflow.PlanReconcile(rt.Context, deps, workflow.PlanReconcileInput{Ref: seriesRef})
+		if err != nil {
+			return err
+		}
+		return render.PlanReconcile(rt.Stdout, result, cmd.JSON)
+	})
 }
 
 func (cmd *reconcileApplyCmd) Run(rt *runContext) error {
@@ -136,21 +52,25 @@ func (cmd *reconcileApplyCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	handle, err := resolveSeriesHandle(rt, terms)
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	result, err := handle.ApplyReconcileToken(rt.Context, token)
-	if err != nil {
-		return err
-	}
-	if cmd.JSON {
-		encoder := json.NewEncoder(rt.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(result)
-	}
-	_, err = fmt.Fprintf(rt.Stdout, "Applied %d reconcile moves for %s\n", result.AppliedMoves, result.Series)
-	return err
+	io := stdio.From(rt.Context)
+	return clipkg.WithResolve(rt.Context, io, deps, terms, func(metadataRef refs.Metadata) error {
+		seriesRef, ok, err := deps.Index.Get(metadataRef)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
+		}
+		result, err := workflow.ApplyReconcile(rt.Context, deps, workflow.ApplyReconcileInput{Ref: seriesRef, Token: token})
+		if err != nil {
+			return err
+		}
+		return render.ApplyReconcile(rt.Stdout, result, cmd.JSON)
+	})
 }
 
 func splitReconcileApplyArgs(args []string) ([]string, string, error) {

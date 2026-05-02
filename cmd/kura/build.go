@@ -14,8 +14,6 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/ui"
-	"github.com/wyvernzora/kura/internal/ui/stdio"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -82,52 +80,6 @@ func loadOrRebuildIndex(ctx context.Context, libRoot string) (*indexfile.Index, 
 		})
 	}
 	return index, err
-}
-
-func libraryFromFlags(rt *runContext, flags *cli) (*library.Library, error) {
-	preferredLanguages, err := config.ParsePreferredLanguages(rt.Getenv("KURA_PREFERRED_LANGUAGES"))
-	if err != nil {
-		return nil, err
-	}
-	return library.Open(library.Config{
-		Root:               rt.Getenv("KURA_LIBRARY_ROOT"),
-		MediainfoCommand:   rt.Getenv("KURA_MEDIAINFO_COMMAND"),
-		TVDBKey:            rt.Getenv("KURA_TVDB_KEY"),
-		TVDBBaseURL:        flags.TVDBBaseURL,
-		PreferredLanguages: preferredLanguages.Tags(),
-		Context:            rt.Context,
-	})
-}
-
-func resolveMetadataRef(rt *runContext, lib *library.Library, terms []string) (refs.Metadata, error) {
-	resolution, err := lib.Resolve(rt.Context, terms)
-	if err != nil {
-		return "", err
-	}
-	picked, err := ui.SelectFromResolution(stdio.From(rt.Context), resolution, terms)
-	if err != nil {
-		return "", err
-	}
-	return refs.Metadata(picked.Summary.MetadataRef), nil
-}
-
-func resolveSeriesHandle(rt *runContext, terms []string) (series.Handle, error) {
-	lib, err := libraryFromFlags(rt, rt.flags)
-	if err != nil {
-		return series.Handle{}, err
-	}
-	metadataRef, err := resolveMetadataRef(rt, lib, terms)
-	if err != nil {
-		return series.Handle{}, err
-	}
-	return lib.Find(metadataRef)
-}
-
-func formatOptionalTime(value time.Time) string {
-	if value.IsZero() {
-		return ""
-	}
-	return value.UTC().Format(time.RFC3339)
 }
 
 func parseMetadataRef(seriesRef string) (string, string, error) {

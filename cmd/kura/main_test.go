@@ -14,7 +14,6 @@ import (
 
 	clipkg "github.com/wyvernzora/kura/internal/cli"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	librarypkg "github.com/wyvernzora/kura/internal/library"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/workflow"
@@ -1201,8 +1200,8 @@ func TestReconcilePlanCommandReportsMissingTVDBKey(t *testing.T) {
 		"--json",
 		"Bookworm",
 	}, rt)
-	if !errors.Is(err, librarypkg.ErrMissingTVDBKey) {
-		t.Fatalf("run error = %v, want ErrMissingTVDBKey", err)
+	if err == nil || !strings.Contains(err.Error(), "KURA_TVDB_KEY") {
+		t.Fatalf("run error = %v, want missing-key failure", err)
 	}
 }
 
