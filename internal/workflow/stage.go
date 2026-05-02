@@ -8,10 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series/layout"
-	"github.com/wyvernzora/kura/internal/series/mediarecord"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -47,7 +46,7 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
 		return response.StageResult{}, err
 	}
-	if !mediarecord.RecognizedVideoFile(mediaPath) {
+	if !mediainfo.RecognizedVideoFile(mediaPath) {
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
 		return response.StageResult{}, fmt.Errorf("episode path %q is not a recognized video file", mediaPath)
 	}
@@ -66,7 +65,7 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		return response.StageResult{}, &StagedEpisodeAlreadyExistsError{Episode: in.Episode}
 	}
 	progress.Update(ctx, "stage", fmt.Sprintf("Inspecting %s", filepath.Base(mediaPath)), 1, 0)
-	builderInput := mediarecord.Input{
+	builderInput := mediainfo.Input{
 		MediaPath:  mediaPath,
 		RecordPath: mediaPath,
 		Source:     in.Source,
@@ -77,12 +76,12 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 			progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 1, 0)
 			return response.StageResult{}, err
 		}
-		builderInput.CompanionPaths = append(builderInput.CompanionPaths, mediarecord.CompanionInput{
+		builderInput.CompanionPaths = append(builderInput.CompanionPaths, mediainfo.CompanionInput{
 			MediaPath:  path,
 			RecordPath: path,
 		})
 	}
-	record, err := mediarecord.NewBuilder(layout.NewFiles(deps.LibRoot), deps.Inspector).Build(ctx, builderInput)
+	record, err := mediainfo.NewBuilder(deps.Inspector).Build(ctx, builderInput)
 	if err != nil {
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 1, 0)
 		return response.StageResult{}, err

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	mediapkg "github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/internal/domain/media"
 )
 
 const (
@@ -36,10 +36,10 @@ func New() Inspector {
 }
 
 // Inspect runs mediainfo for path and returns the facts Kura persists.
-func (i Inspector) Inspect(ctx context.Context, path string) (mediapkg.Info, error) {
+func (i Inspector) Inspect(ctx context.Context, path string) (media.Info, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return mediapkg.Info{}, errors.New("mediainfo: path is required")
+		return media.Info{}, errors.New("mediainfo: path is required")
 	}
 
 	command := i.Command
@@ -60,31 +60,31 @@ func (i Inspector) Inspect(ctx context.Context, path string) (mediapkg.Info, err
 
 	output, err := cmd.Output()
 	if runCtx.Err() != nil {
-		return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q timed out: %w", path, runCtx.Err())
+		return media.Info{}, fmt.Errorf("mediainfo: inspect %q timed out: %w", path, runCtx.Err())
 	}
 	if err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg != "" {
-			return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q: %w: %s", path, err, msg)
+			return media.Info{}, fmt.Errorf("mediainfo: inspect %q: %w: %s", path, err, msg)
 		}
-		return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
+		return media.Info{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
 	}
 
 	info, err := ParseJSON(output)
 	if err != nil {
-		return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
+		return media.Info{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
 	}
 	return info, nil
 }
 
 // ParseJSON adapts mediainfo --Output=JSON output into Kura's media.Info model.
-func ParseJSON(data []byte) (mediapkg.Info, error) {
+func ParseJSON(data []byte) (media.Info, error) {
 	var doc document
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return mediapkg.Info{}, fmt.Errorf("decode JSON: %w", err)
+		return media.Info{}, fmt.Errorf("decode JSON: %w", err)
 	}
 
-	out := mediapkg.Info{}
+	out := media.Info{}
 	for _, track := range doc.Media.Tracks {
 		switch strings.ToLower(track.Type) {
 		case "video":
@@ -106,10 +106,10 @@ func ParseJSON(data []byte) (mediapkg.Info, error) {
 }
 
 type document struct {
-	Media media `json:"media"`
+	Media mediaPayload `json:"media"`
 }
 
-type media struct {
+type mediaPayload struct {
 	Tracks []track `json:"track"`
 }
 

@@ -10,7 +10,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/series/mediarecord"
+	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 )
@@ -42,7 +42,7 @@ func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []
 			}
 			return skip
 		}
-		if !mediarecord.RecognizedVideoFile(relPath) {
+		if !mediainfo.RecognizedVideoFile(relPath) {
 			return nil
 		}
 		episode, skip, err := discoveredEpisode(seriesDir, relPath, entry.Name())
@@ -139,7 +139,7 @@ func discoveredFileFor(seriesDir seriesdir.SeriesDir, relPath string, season int
 	return DiscoveredFile{
 		Ref:        ref,
 		Path:       relPath,
-		Source:     media.ParseSource(mediarecord.InferSourceFromFilename(relPath)).String(),
+		Source:     media.ParseSource(mediainfo.InferSourceFromFilename(relPath)).String(),
 		Companions: companions,
 	}, nil, nil
 }
@@ -160,7 +160,7 @@ func matchingCompanions(seriesDir seriesdir.SeriesDir, parentRel string, videoNa
 			continue
 		}
 		name := entry.Name()
-		if mediarecord.RecognizedVideoFile(name) {
+		if mediainfo.RecognizedVideoFile(name) {
 			continue
 		}
 		companionBase := strings.TrimSuffix(name, filepath.Ext(name))

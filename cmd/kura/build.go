@@ -8,7 +8,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/media/mediainfo"
+	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"

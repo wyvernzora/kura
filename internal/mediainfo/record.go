@@ -1,25 +1,29 @@
-package mediarecord
+package mediainfo
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/series/layout"
 )
 
 var mediaFactsPattern = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)
 
+// Builder composes a media.Record from a path on disk: runs mediainfo,
+// stats size + mtime, builds companion records.
 type Builder struct {
-	files     layout.Files
 	inspector media.Inspector
 }
 
-func NewBuilder(files layout.Files, inspector media.Inspector) Builder {
-	return Builder{files: files, inspector: inspector}
+// NewBuilder returns a Builder backed by the supplied inspector.
+func NewBuilder(inspector media.Inspector) Builder {
+	return Builder{inspector: inspector}
 }
 
 type Input struct {
@@ -34,12 +38,16 @@ type CompanionInput struct {
 	RecordPath string
 }
 
+// Build runs mediainfo + stat against the inputs and returns the
+// composed media.Record. RecordPath is the path that gets persisted in
+// series.json (typically equal to MediaPath at stage time, or a
+// canonical path during scan).
 func (b Builder) Build(ctx context.Context, in Input) (media.Record, error) {
 	info, err := b.inspector.Inspect(ctx, in.MediaPath)
 	if err != nil {
 		return media.Record{}, err
 	}
-	facts, err := b.files.Stat(in.MediaPath)
+	size, mtime, err := statFileFacts(in.MediaPath)
 	if err != nil {
 		return media.Record{}, err
 	}
@@ -56,24 +64,38 @@ func (b Builder) Build(ctx context.Context, in Input) (media.Record, error) {
 		Source:     media.ParseSource(source),
 		Resolution: resolution,
 		Codec:      media.ParseCodec(info.VideoCodec),
-		Size:       facts.Size,
-		MTime:      facts.MTime,
+		Size:       size,
+		MTime:      mtime,
 		Companions: []media.Companion{},
 	}
 	for _, companion := range in.CompanionPaths {
-		facts, err := b.files.Stat(companion.MediaPath)
+		size, mtime, err := statFileFacts(companion.MediaPath)
 		if err != nil {
 			return media.Record{}, err
 		}
 		record.Companions = append(record.Companions, media.Companion{
 			Path:  companion.RecordPath,
-			Size:  facts.Size,
-			MTime: facts.MTime,
+			Size:  size,
+			MTime: mtime,
 		})
 	}
 	return record, nil
 }
 
+func statFileFacts(path string) (int64, time.Time, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, time.Time{}, err
+	}
+	if info.IsDir() {
+		return 0, time.Time{}, fmt.Errorf("mediainfo: %q is a directory", path)
+	}
+	return info.Size(), info.ModTime().UTC().Truncate(time.Second), nil
+}
+
+// InferSourceFromFilename pulls the source token out of a canonical
+// filename like "Foo - S01E01 (WebRip 1080p).mkv". Returns "unknown"
+// when the canonical "(<source> <res>)" suffix is missing.
 func InferSourceFromFilename(path string) string {
 	name := filepath.ToSlash(path)
 	matches := mediaFactsPattern.FindStringSubmatch(name)
@@ -87,6 +109,8 @@ func InferSourceFromFilename(path string) string {
 	return fields[0]
 }
 
+// RecognizedVideoFile reports whether path's extension is a video format
+// Kura knows how to track.
 func RecognizedVideoFile(path string) bool {
 	extension := strings.ToLower(filepath.Ext(path))
 	return slices.Contains([]string{

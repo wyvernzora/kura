@@ -7,8 +7,8 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/series/layout"
-	"github.com/wyvernzora/kura/internal/series/mediarecord"
 )
 
 func (s *scanner) apply(discovered []DiscoveredFile) error {
@@ -94,14 +94,14 @@ func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, err
 
 func (s *scanner) mediaRecord(file DiscoveredFile) (media.Record, error) {
 	absolutePath := s.absRel(file.Path)
-	input := mediarecord.Input{
+	input := mediainfo.Input{
 		MediaPath:  absolutePath,
 		RecordPath: absolutePath,
 		Source:     file.Source,
 	}
 	for _, companionPath := range file.Companions {
 		absolute := s.absRel(companionPath)
-		input.CompanionPaths = append(input.CompanionPaths, mediarecord.CompanionInput{
+		input.CompanionPaths = append(input.CompanionPaths, mediainfo.CompanionInput{
 			MediaPath:  absolute,
 			RecordPath: absolute,
 		})

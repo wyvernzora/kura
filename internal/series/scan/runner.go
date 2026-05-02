@@ -10,10 +10,10 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/series/layout"
-	"github.com/wyvernzora/kura/internal/series/mediarecord"
 	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
@@ -144,8 +144,8 @@ func (s *scanner) rejectStagedRecords() error {
 	return ScanStagedRecordsError{Episodes: staged}
 }
 
-func (s *scanner) mediaRecordBuilder() mediarecord.Builder {
-	return mediarecord.NewBuilder(layout.NewFiles(s.runner.root), s.runner.inspector)
+func (s *scanner) mediaRecordBuilder() mediainfo.Builder {
+	return mediainfo.NewBuilder(s.runner.inspector)
 }
 
 func spineFromMetadata(seasons []provider.Season) ([]domainseries.SpineEntry, error) {
