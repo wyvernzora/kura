@@ -79,7 +79,7 @@ func newReconcilePlanTestHandle(t *testing.T, now *time.Time) Handle {
 		Metadata: refs.Metadata("tvdb:370070"),
 		Episodes: map[refs.Episode]episodeState{
 			episode: {
-				AirDate: "2019-10-03",
+				AirDate: mustParseDate(t, "2019-10-03"),
 				Active: &MediaRecord{
 					Path:       "Season 1/old episode.mkv",
 					Source:     media.SourceWebRip,

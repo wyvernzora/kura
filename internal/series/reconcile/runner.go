@@ -80,5 +80,5 @@ type editor struct {
 }
 
 func (e editor) promoteStaged(ref refs.Episode) (*MediaRecord, error) {
-	return state.Editor{Series: e.series}.PromoteStaged(ref)
+	return e.series.PromoteStaged(ref)
 }

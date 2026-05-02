@@ -3,9 +3,9 @@ package series
 import (
 	"context"
 	"sort"
-	"strings"
 	"time"
 
+	"cloud.google.com/go/civil"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -65,7 +65,7 @@ func seasonViews(seriesDir SeriesDir, model seriesState, now time.Time) []Season
 	for ref, episode := range model.Episodes {
 		view := Episode{
 			Episode:         ref,
-			Aired:           episode.AirDate,
+			Aired:           formatAirDate(episode.AirDate),
 			Status:          episodeStatus(seriesDir, episode, now),
 			Inconsistencies: episodeFilesystemIssues(seriesDir, episode),
 		}
@@ -148,18 +148,17 @@ func companionFiles(in []CompanionRecord) []CompanionFile {
 	return out
 }
 
-func isPendingEpisode(aired string, now time.Time) bool {
-	aired = strings.TrimSpace(aired)
-	if aired == "" {
+func isPendingEpisode(aired civil.Date, now time.Time) bool {
+	if !aired.IsValid() {
 		return false
 	}
-	airedDate, err := time.Parse(metadataDateLayout, aired)
-	if err != nil {
-		return false
+	today := civil.DateOf(now)
+	return aired.After(today)
+}
+
+func formatAirDate(value civil.Date) string {
+	if !value.IsValid() {
+		return ""
 	}
-	today, err := time.Parse(metadataDateLayout, now.Format(metadataDateLayout))
-	if err != nil {
-		return false
-	}
-	return airedDate.After(today)
+	return value.String()
 }

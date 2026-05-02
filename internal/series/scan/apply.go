@@ -49,7 +49,7 @@ func (s *scanner) applyFile(file DiscoveredFile) error {
 	if err != nil {
 		return err
 	}
-	if err := s.editor.SetActive(file.Ref, record); err != nil {
+	if err := s.model.SetActive(file.Ref, record); err != nil {
 		return err
 	}
 	s.result.Synced = append(s.result.Synced, scannedEpisode(status, file, record))
@@ -154,7 +154,7 @@ func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 			return err
 		}
 		record := media.CloneRecord(*episode.Active)
-		if err := s.editor.ClearActive(ref); err != nil {
+		if err := s.model.ClearActive(ref); err != nil {
 			return err
 		}
 		s.result.Synced = append(s.result.Synced, removedScannedEpisode(ref, record))

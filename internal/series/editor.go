@@ -12,13 +12,13 @@ type editor struct {
 }
 
 func (e editor) refreshSpine(spine []SpineEpisode) {
-	state.Editor{Series: e.series}.RefreshSpine(spine)
+	e.series.RefreshSpine(spine)
 }
 
 func (e editor) setStaged(ref refs.Episode, record MediaRecord) error {
-	return state.Editor{Series: e.series}.SetStaged(ref, record)
+	return e.series.SetStaged(ref, record)
 }
 
 func (e editor) clearStaged(ref refs.Episode) error {
-	return state.Editor{Series: e.series}.ClearStaged(ref)
+	return e.series.ClearStaged(ref)
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"cloud.google.com/go/civil"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
@@ -20,7 +21,7 @@ func TestWireRoundTrip(t *testing.T) {
 		LastScanned: mtime,
 		Episodes: map[refs.Episode]episodeState{
 			episodeRef: {
-				AirDate: "2019-10-02",
+				AirDate: mustParseDate(t, "2019-10-02"),
 				Active: &MediaRecord{
 					Path:       "Season 1/Honzuki - S01E01 (BDRip 1080p).mkv",
 					Source:     media.SourceBDRip,
@@ -52,7 +53,7 @@ func TestWireRoundTrip(t *testing.T) {
 	if out.Metadata != in.Metadata {
 		t.Fatalf("metadata = %s, want %s", out.Metadata, in.Metadata)
 	}
-	if got := out.Episodes[episodeRef].AirDate; got != "2019-10-02" {
+	if got := out.Episodes[episodeRef].AirDate.String(); got != "2019-10-02" {
 		t.Fatalf("air date = %q", got)
 	}
 	if out.Episodes[episodeRef].Active == nil {
@@ -69,20 +70,29 @@ func mustParseResolution(t *testing.T, value string) media.Resolution {
 	return r
 }
 
+func mustParseDate(t *testing.T, value string) civil.Date {
+	t.Helper()
+	d, err := civil.ParseDate(value)
+	if err != nil {
+		t.Fatalf("ParseDate(%q): %v", value, err)
+	}
+	return d
+}
+
 func TestEditorRefreshSpineNeverRemovesEpisodes(t *testing.T) {
 	oldRef, _ := refs.NewEpisode(1, 1)
 	newRef, _ := refs.NewEpisode(1, 2)
 	series := seriesState{
 		Metadata: refs.Metadata("tvdb:370070"),
 		Episodes: map[refs.Episode]episodeState{
-			oldRef: {AirDate: "2019-10-02"},
+			oldRef: {AirDate: mustParseDate(t, "2019-10-02")},
 		},
 	}
-	editor{series: &series}.refreshSpine([]SpineEpisode{{Ref: newRef, AirDate: "2019-10-09"}})
+	editor{series: &series}.refreshSpine([]SpineEpisode{{Ref: newRef, AirDate: mustParseDate(t, "2019-10-09")}})
 	if _, ok := series.Episodes[oldRef]; !ok {
 		t.Fatal("refreshSpine removed old spine entry")
 	}
-	if got := series.Episodes[newRef].AirDate; got != "2019-10-09" {
+	if got := series.Episodes[newRef].AirDate.String(); got != "2019-10-09" {
 		t.Fatalf("new air date = %q", got)
 	}
 }

@@ -42,8 +42,12 @@ func FromWire(in wire.SeriesV1) (State, error) {
 		if err != nil {
 			return State{}, err
 		}
+		airDate, err := parseAirDate(episode.AirDate)
+		if err != nil {
+			return State{}, fmt.Errorf("series: invalid air date %q: %w", episode.AirDate, err)
+		}
 		out.Episodes[ref] = Episode{
-			AirDate: episode.AirDate,
+			AirDate: airDate,
 			Active:  active,
 			Staged:  staged,
 		}
@@ -69,8 +73,12 @@ func ToWire(in State) (wire.SeriesV1, error) {
 	sort.Slice(keys, func(i, j int) bool { return keys[i].String() < keys[j].String() })
 	for _, ref := range keys {
 		episode := in.Episodes[ref]
+		var airDate string
+		if episode.AirDate.IsValid() {
+			airDate = episode.AirDate.String()
+		}
 		out.Episodes[ref.String()] = wire.EpisodeV1{
-			AirDate: episode.AirDate,
+			AirDate: airDate,
 			Active:  toWireMedia(episode.Active),
 			Staged:  toWireMedia(episode.Staged),
 		}

@@ -44,7 +44,12 @@ func (r Repository) Load(ref refs.Series) (State, error) {
 	if err != nil {
 		return State{}, err
 	}
-	return FromWire(decoded)
+	model, err := FromWire(decoded)
+	if err != nil {
+		return State{}, err
+	}
+	model.Ref = ref
+	return model, nil
 }
 
 func (r Repository) Save(ref refs.Series, model State) error {

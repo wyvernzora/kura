@@ -47,7 +47,6 @@ type scanner struct {
 	ctx       context.Context
 	input     Input
 	model     state.State
-	editor    state.Editor
 	seriesDir layout.SeriesDir
 	result    Result
 }
@@ -106,7 +105,6 @@ func (s *scanner) loadLocal() error {
 		return err
 	}
 	s.model = model
-	s.editor = state.Editor{Series: &s.model}
 	s.seriesDir = seriesDir
 	return nil
 }
@@ -121,7 +119,7 @@ func (s *scanner) refreshMetadata() error {
 	if err != nil {
 		return err
 	}
-	s.editor.RefreshSpine(spine)
+	s.model.RefreshSpine(spine)
 	return nil
 }
 
@@ -154,7 +152,11 @@ func spineFromMetadata(seasons []metadata.Season) ([]state.SpineEpisode, error) 
 			if episode.Ref.IsZero() {
 				return nil, fmt.Errorf("series: metadata has invalid episode ref")
 			}
-			spine = append(spine, state.SpineEpisode{Ref: episode.Ref, AirDate: episode.Aired})
+			airDate, err := state.ParseAirDate(episode.Aired)
+			if err != nil {
+				return nil, fmt.Errorf("series: invalid air date %q: %w", episode.Aired, err)
+			}
+			spine = append(spine, state.SpineEpisode{Ref: episode.Ref, AirDate: airDate})
 		}
 	}
 	return spine, nil
