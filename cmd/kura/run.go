@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/resolve"
 	"github.com/wyvernzora/kura/internal/ui/stdio"
 )
@@ -17,11 +17,11 @@ import (
 // parser.Parse, Context carries:
 //   - stdio.Stdio          (always; via stdio.With)
 //   - progress.Reporter    (always; disabled automatically for non-terminals)
-//   - lazy metadata.Source (via metadata.WithSource)
+//   - lazy provider.Source (via provider.WithSource)
 //   - lazy *resolve.Resolver (via resolve.WithResolver)
 //
 // Commands receive *runContext via kong.Bind and read these via stdio.From,
-// metadata.SourceFrom, and resolve.ResolverFrom respectively.
+// provider.SourceFrom, and resolve.ResolverFrom respectively.
 type runContext struct {
 	Context context.Context
 	Stdin   io.Reader
@@ -67,11 +67,11 @@ func run(args []string, rt runContext) error {
 
 	rt.Context = stdio.With(rt.Context, stdio.New(rt.Stdin, rt.Stdout, rt.Stderr))
 	rt.Context = progress.With(rt.Context, newProgressReporter(rt.Stderr))
-	rt.Context = metadata.WithSource(rt.Context, func() (metadata.Source, error) {
+	rt.Context = provider.WithSource(rt.Context, func() (provider.Source, error) {
 		return buildSourceFromFlags(&rt, flags)
 	})
 	rt.Context = resolve.WithResolver(rt.Context, func() (*resolve.Resolver, error) {
-		src, err := metadata.SourceFrom(rt.Context)
+		src, err := provider.SourceFrom(rt.Context)
 		if err != nil {
 			return nil, err
 		}

@@ -5,7 +5,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 // ResolveStrategy is the unit of term-resolution behavior. Strategies hold
@@ -31,7 +31,7 @@ type ResolveStrategy interface {
 type termHit struct {
 	Term        selector.Term
 	MetadataRef refs.Metadata
-	Summary     metadata.SeriesSummary
+	Summary     provider.SeriesSummary
 	Rank        int
 	MatchSource string
 	Annotations []string

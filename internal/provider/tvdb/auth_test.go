@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -31,7 +31,7 @@ func TestClientRefreshesTokenAfterUnauthorized(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	if _, err := p.Search(context.Background(), textnorm.NFC("honzuki"), metadata.SearchOptions{}); err != nil {
+	if _, err := p.Search(context.Background(), textnorm.NFC("honzuki"), provider.SearchOptions{}); err != nil {
 		t.Fatalf("Search after token refresh: %v", err)
 	}
 }
@@ -85,7 +85,7 @@ func TestTokenLoginIsSingleflight(t *testing.T) {
 	errs := make(chan error, 8)
 	for range 8 {
 		wg.Go(func() {
-			_, err := p.Search(context.Background(), textnorm.NFC("honzuki"), metadata.SearchOptions{})
+			_, err := p.Search(context.Background(), textnorm.NFC("honzuki"), provider.SearchOptions{})
 			errs <- err
 		})
 	}

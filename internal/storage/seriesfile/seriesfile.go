@@ -12,7 +12,7 @@ import (
 	"github.com/google/renameio/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/series"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
@@ -91,7 +91,7 @@ func Exists(libRoot string, ref refs.Series) (bool, error) {
 
 // NewFromMetadata builds a fresh *Series from provider metadata. Ref is left
 // unset; callers must assign before Save.
-func NewFromMetadata(metadataRef refs.Metadata, m metadata.Series) (*series.Series, error) {
+func NewFromMetadata(metadataRef refs.Metadata, m provider.Series) (*series.Series, error) {
 	out := &series.Series{
 		Metadata:       metadataRef,
 		PreferredTitle: m.PreferredTitle,
@@ -118,7 +118,7 @@ func NewFromMetadata(metadataRef refs.Metadata, m metadata.Series) (*series.Seri
 
 // Initialize is a convenience for "build from metadata + save." Sets Ref and
 // writes to disk.
-func Initialize(libRoot string, ref refs.Series, metadataRef refs.Metadata, m metadata.Series) error {
+func Initialize(libRoot string, ref refs.Series, metadataRef refs.Metadata, m provider.Series) error {
 	model, err := NewFromMetadata(metadataRef, m)
 	if err != nil {
 		return err

@@ -6,14 +6,14 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 type metadataIDStrategy struct {
-	source metadata.Source
+	source provider.Source
 }
 
-func NewMetadataIDStrategy(source metadata.Source) ResolveStrategy {
+func NewMetadataIDStrategy(source provider.Source) ResolveStrategy {
 	return &metadataIDStrategy{source: source}
 }
 
@@ -40,7 +40,7 @@ func (s *metadataIDStrategy) Resolve(ctx context.Context, t selector.Term) ([]te
 	}
 	series, err := s.source.GetSeries(ctx, ref.ID())
 	if err != nil {
-		if errors.Is(err, metadata.ErrNotFound) {
+		if errors.Is(err, provider.ErrNotFound) {
 			return nil, nil
 		}
 		return nil, err

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 type seriesExtendedResponse struct {
@@ -41,9 +41,9 @@ func (c *client) seriesExtended(ctx context.Context, id string) (seriesExtendedR
 	return out.Data, nil
 }
 
-func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episodeRecord) metadata.Series {
+func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episodeRecord) provider.Series {
 	seasons := normalizeSeasons(record.Seasons, episodes)
-	series := metadata.Series{
+	series := provider.Series{
 		SeriesSummary: p.normalizeSeriesSummary(seriesSummaryInput{
 			ref:              providerIntRef(record.ID),
 			canonicalTitle:   record.Name,

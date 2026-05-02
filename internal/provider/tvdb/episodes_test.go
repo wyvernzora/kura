@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 func TestSeriesEpisodesErrorsWhenPaginationExceedsCap(t *testing.T) {
@@ -43,8 +43,8 @@ func TestSeriesEpisodesErrorsWhenPaginationExceedsCap(t *testing.T) {
 	}
 
 	_, err = p.client.seriesEpisodes(context.Background(), "1")
-	if !errors.Is(err, metadata.ErrUnavailable) {
-		t.Fatalf("seriesEpisodes error = %v, want metadata.ErrUnavailable", err)
+	if !errors.Is(err, provider.ErrUnavailable) {
+		t.Fatalf("seriesEpisodes error = %v, want provider.ErrUnavailable", err)
 	}
 }
 

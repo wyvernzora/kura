@@ -1,9 +1,9 @@
-// Package metadata defines Kura's external metadata contracts.
+// Package provider defines Kura's external metadata-source contracts.
 //
 // Implementations in source-specific packages, such as TVDB, adapt external API
 // response shapes into these types. These values represent live metadata facts
 // and are not the persistent on-disk schema for .kura/series.json.
-package metadata
+package provider
 
 import (
 	"context"

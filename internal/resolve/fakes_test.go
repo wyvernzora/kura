@@ -6,16 +6,16 @@ import (
 	"slices"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type strategyFakeSource struct {
 	key                  string
-	searchResults        []metadata.SearchResult
-	searchResultsByQuery map[string][]metadata.SearchResult
+	searchResults        []provider.SearchResult
+	searchResultsByQuery map[string][]provider.SearchResult
 	searchErr            error
-	series               map[string]metadata.Series
+	series               map[string]provider.Series
 	seriesErr            error
 }
 
@@ -26,7 +26,7 @@ func (s *strategyFakeSource) Key() string {
 	return "tvdb"
 }
 
-func (s *strategyFakeSource) Search(_ context.Context, query textnorm.NFCString, _ metadata.SearchOptions) ([]metadata.SearchResult, error) {
+func (s *strategyFakeSource) Search(_ context.Context, query textnorm.NFCString, _ provider.SearchOptions) ([]provider.SearchResult, error) {
 	if s.searchErr != nil {
 		return nil, s.searchErr
 	}
@@ -36,25 +36,25 @@ func (s *strategyFakeSource) Search(_ context.Context, query textnorm.NFCString,
 	return slices.Clone(s.searchResults), nil
 }
 
-func (s *strategyFakeSource) GetSeries(_ context.Context, metadataID string) (metadata.Series, error) {
+func (s *strategyFakeSource) GetSeries(_ context.Context, metadataID string) (provider.Series, error) {
 	if s.seriesErr != nil {
-		return metadata.Series{}, s.seriesErr
+		return provider.Series{}, s.seriesErr
 	}
 	series, ok := s.series[metadataID]
 	if !ok {
-		return metadata.Series{}, fmt.Errorf("%w: series %s", metadata.ErrNotFound, metadataID)
+		return provider.Series{}, fmt.Errorf("%w: series %s", provider.ErrNotFound, metadataID)
 	}
 	return series, nil
 }
 
-func testSummary(ref string) metadata.SeriesSummary {
-	return metadata.SeriesSummary{
+func testSummary(ref string) provider.SeriesSummary {
+	return provider.SeriesSummary{
 		MetadataRef:    refs.Metadata(ref),
 		PreferredTitle: textnorm.NFC(ref + " preferred"),
 		CanonicalTitle: textnorm.NFC(ref + " canonical"),
 	}
 }
 
-func testMetadataSeries(ref string) metadata.Series {
-	return metadata.Series{SeriesSummary: testSummary(ref)}
+func testMetadataSeries(ref string) provider.Series {
+	return provider.Series{SeriesSummary: testSummary(ref)}
 }

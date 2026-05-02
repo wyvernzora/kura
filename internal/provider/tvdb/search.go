@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -35,7 +35,7 @@ type searchRecord struct {
 	RemoteIDs       []remoteID         `json:"remote_ids"`
 }
 
-func (c *client) search(ctx context.Context, query string, opts metadata.SearchOptions) ([]searchRecord, error) {
+func (c *client) search(ctx context.Context, query string, opts provider.SearchOptions) ([]searchRecord, error) {
 	values := url.Values{}
 	values.Set("query", query)
 	values.Set("type", "series")
@@ -52,11 +52,11 @@ func (c *client) search(ctx context.Context, query string, opts metadata.SearchO
 	return out.Data, nil
 }
 
-func (p *Provider) normalizeSearchResult(record searchRecord) metadata.SearchResult {
+func (p *Provider) normalizeSearchResult(record searchRecord) provider.SearchResult {
 	id := firstNonEmpty(record.TVDBID.String(), trimObjectID(record.ObjectID), trimObjectID(record.ID.String()), record.ID.String())
 	aliases := searchTitleAliases(record)
 
-	return metadata.SearchResult{
+	return provider.SearchResult{
 		SeriesSummary: p.normalizeSeriesSummary(seriesSummaryInput{
 			ref:              providerRef(id),
 			canonicalTitle:   record.Name,

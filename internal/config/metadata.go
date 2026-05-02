@@ -4,8 +4,8 @@ import (
 	"errors"
 	"os"
 
-	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/metadata/tvdb"
+	"github.com/wyvernzora/kura/internal/provider"
+	"github.com/wyvernzora/kura/internal/provider/tvdb"
 )
 
 type EnvFunc func(string) string
@@ -15,7 +15,7 @@ type MetadataSourceOptions struct {
 	Getenv      EnvFunc
 }
 
-func BuildMetadataSource(opts MetadataSourceOptions) (metadata.Source, error) {
+func BuildMetadataSource(opts MetadataSourceOptions) (provider.Source, error) {
 	getenv := opts.Getenv
 	if getenv == nil {
 		getenv = os.Getenv
@@ -36,5 +36,5 @@ func BuildMetadataSource(opts MetadataSourceOptions) (metadata.Source, error) {
 	if err != nil {
 		return nil, err
 	}
-	return metadata.NewCachedSource(p, metadata.CacheOptions{})
+	return provider.NewCachedSource(p, provider.CacheOptions{})
 }

@@ -4,13 +4,13 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 func TestProviderFactoryCachesSuccess(t *testing.T) {
 	calls := 0
-	factory := workflow.NewProviderFactory(func() (metadata.Source, error) {
+	factory := workflow.NewProviderFactory(func() (provider.Source, error) {
 		calls++
 		return nil, nil
 	})
@@ -27,7 +27,7 @@ func TestProviderFactoryCachesSuccess(t *testing.T) {
 func TestProviderFactoryCachesFailure(t *testing.T) {
 	calls := 0
 	want := errors.New("missing key")
-	factory := workflow.NewProviderFactory(func() (metadata.Source, error) {
+	factory := workflow.NewProviderFactory(func() (provider.Source, error) {
 		calls++
 		return nil, want
 	})

@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 func TestResolverJourneys(t *testing.T) {
 	t.Run("clean bootstrap text resolves", func(t *testing.T) {
 		source := &strategyFakeSource{
-			searchResults: []metadata.SearchResult{{SeriesSummary: testSummary("tvdb:370070")}},
+			searchResults: []provider.SearchResult{{SeriesSummary: testSummary("tvdb:370070")}},
 		}
 		resolver := New(NewTextSearchStrategy(source))
 		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"本好きの下剋上"}))
@@ -26,7 +26,7 @@ func TestResolverJourneys(t *testing.T) {
 
 	t.Run("garbled bootstrap unresolved", func(t *testing.T) {
 		source := &strategyFakeSource{
-			searchResults: []metadata.SearchResult{
+			searchResults: []provider.SearchResult{
 				{SeriesSummary: testSummary("tvdb:1")},
 				{SeriesSummary: testSummary("tvdb:2")},
 				{SeriesSummary: testSummary("tvdb:3")},
@@ -44,7 +44,7 @@ func TestResolverJourneys(t *testing.T) {
 
 	t.Run("multi-language text terms agree", func(t *testing.T) {
 		source := &strategyFakeSource{
-			searchResultsByQuery: map[string][]metadata.SearchResult{
+			searchResultsByQuery: map[string][]provider.SearchResult{
 				"本好きの下剋上": {
 					{SeriesSummary: testSummary("tvdb:370070")},
 				},
@@ -70,7 +70,7 @@ func TestResolverJourneys(t *testing.T) {
 	})
 
 	t.Run("direct id retry resolves", func(t *testing.T) {
-		source := &strategyFakeSource{series: map[string]metadata.Series{"370070": testMetadataSeries("tvdb:370070")}}
+		source := &strategyFakeSource{series: map[string]provider.Series{"370070": testMetadataSeries("tvdb:370070")}}
 		resolver := New(NewMetadataIDStrategy(source), NewTextSearchStrategy(source))
 		resolution, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"tvdb:370070"}))
 		if err != nil {
@@ -94,17 +94,17 @@ func TestResolverJourneys(t *testing.T) {
 	})
 
 	t.Run("metadata source down errors", func(t *testing.T) {
-		source := &strategyFakeSource{searchErr: metadata.ErrUnavailable}
+		source := &strategyFakeSource{searchErr: provider.ErrUnavailable}
 		resolver := New(NewTextSearchStrategy(source))
 		_, err := resolver.Resolve(context.Background(), selector.ParseSelector([]string{"Bookworm"}))
-		if !errors.Is(err, metadata.ErrUnavailable) {
+		if !errors.Is(err, provider.ErrUnavailable) {
 			t.Fatalf("error = %v, want ErrUnavailable", err)
 		}
 	})
 
 	t.Run("dir-prefixed term is text search", func(t *testing.T) {
 		source := &strategyFakeSource{
-			searchResultsByQuery: map[string][]metadata.SearchResult{
+			searchResultsByQuery: map[string][]provider.SearchResult{
 				"dir:Bookworm": {
 					{SeriesSummary: testSummary("tvdb:370070")},
 				},
@@ -122,7 +122,7 @@ func TestResolverJourneys(t *testing.T) {
 
 	t.Run("unknown-prefixed term is text search", func(t *testing.T) {
 		source := &strategyFakeSource{
-			searchResultsByQuery: map[string][]metadata.SearchResult{
+			searchResultsByQuery: map[string][]provider.SearchResult{
 				"foo:Bookworm": {
 					{SeriesSummary: testSummary("tvdb:370070")},
 				},

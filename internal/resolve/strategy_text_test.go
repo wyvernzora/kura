@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -24,7 +24,7 @@ func TestTextSearchStrategyResolveEmpty(t *testing.T) {
 
 func TestTextSearchStrategyResolveOne(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{
-		searchResults: []metadata.SearchResult{{
+		searchResults: []provider.SearchResult{{
 			SeriesSummary: testSummary("tvdb:1"),
 			MatchSource:   "title",
 		}},
@@ -46,8 +46,8 @@ func TestTextSearchStrategyResolveOne(t *testing.T) {
 
 func TestTextSearchStrategyAddsMatchAnnotations(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{
-		searchResults: []metadata.SearchResult{{
-			SeriesSummary: metadata.SeriesSummary{
+		searchResults: []provider.SearchResult{{
+			SeriesSummary: provider.SeriesSummary{
 				MetadataRef:    "tvdb:1",
 				PreferredTitle: textnorm.NFC("Ascendance of a Bookworm"),
 				CanonicalTitle: textnorm.NFC("本好きの下剋上"),
@@ -79,7 +79,7 @@ func TestTextSearchStrategyAddsMatchAnnotations(t *testing.T) {
 
 func TestTextSearchStrategyResolveRanks(t *testing.T) {
 	strategy := NewTextSearchStrategy(&strategyFakeSource{
-		searchResults: []metadata.SearchResult{
+		searchResults: []provider.SearchResult{
 			{SeriesSummary: testSummary("tvdb:1")},
 			{SeriesSummary: testSummary("tvdb:2")},
 			{SeriesSummary: testSummary("tvdb:3")},
@@ -97,15 +97,15 @@ func TestTextSearchStrategyResolveRanks(t *testing.T) {
 }
 
 func TestTextSearchStrategyPropagatesError(t *testing.T) {
-	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: metadata.ErrUnauthorized})
+	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: provider.ErrUnauthorized})
 	_, err := strategy.Resolve(context.Background(), selector.Term("query"))
-	if !errors.Is(err, metadata.ErrUnauthorized) {
+	if !errors.Is(err, provider.ErrUnauthorized) {
 		t.Fatalf("error = %v, want ErrUnauthorized", err)
 	}
 }
 
 func TestTextSearchStrategyNotFound(t *testing.T) {
-	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: metadata.ErrNotFound})
+	strategy := NewTextSearchStrategy(&strategyFakeSource{searchErr: provider.ErrNotFound})
 	hits, err := strategy.Resolve(context.Background(), selector.Term("query"))
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)

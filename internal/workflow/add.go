@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -94,20 +94,20 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 
 // fetchSeriesMetadata pulls a full Series view from the provider for
 // the given metadata ref. Returns the validated ref unchanged.
-func fetchSeriesMetadata(ctx context.Context, deps Deps, ref refs.Metadata) (metadata.Series, refs.Metadata, error) {
+func fetchSeriesMetadata(ctx context.Context, deps Deps, ref refs.Metadata) (provider.Series, refs.Metadata, error) {
 	if ref.Provider() == "" || ref.ID() == "" {
-		return metadata.Series{}, "", fmt.Errorf("invalid metadata ref %q; expected <provider>:<id>", ref)
+		return provider.Series{}, "", fmt.Errorf("invalid metadata ref %q; expected <provider>:<id>", ref)
 	}
 	source, err := deps.Provider()
 	if err != nil {
-		return metadata.Series{}, "", err
+		return provider.Series{}, "", err
 	}
 	if ref.Provider() != source.Key() {
-		return metadata.Series{}, "", &UnsupportedMetadataSourceError{Source: ref.Provider()}
+		return provider.Series{}, "", &UnsupportedMetadataSourceError{Source: ref.Provider()}
 	}
 	m, err := source.GetSeries(ctx, ref.ID())
 	if err != nil {
-		return metadata.Series{}, "", err
+		return provider.Series{}, "", err
 	}
 	return m, ref, nil
 }

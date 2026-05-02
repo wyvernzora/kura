@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 type statusRecord struct {
@@ -83,16 +83,16 @@ func (s tvdbString) String() string {
 	return string(s)
 }
 
-func normalizeStatus(status string) metadata.SeriesStatus {
+func normalizeStatus(status string) provider.SeriesStatus {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "continuing", "ongoing", "returning series":
-		return metadata.SeriesStatusContinuing
+		return provider.SeriesStatusContinuing
 	case "ended", "completed":
-		return metadata.SeriesStatusEnded
+		return provider.SeriesStatusEnded
 	case "upcoming", "in development", "planned":
-		return metadata.SeriesStatusUpcoming
+		return provider.SeriesStatusUpcoming
 	default:
-		return metadata.SeriesStatusUnknown
+		return provider.SeriesStatusUnknown
 	}
 }
 

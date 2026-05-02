@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 type loginRequest struct {
@@ -38,7 +38,7 @@ func (c *client) token(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if out.Data.Token == "" {
-		return "", fmt.Errorf("%w: empty token", metadata.ErrUnauthorized)
+		return "", fmt.Errorf("%w: empty token", provider.ErrUnauthorized)
 	}
 
 	c.bearerToken = out.Data.Token

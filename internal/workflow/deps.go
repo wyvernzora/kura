@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
@@ -29,7 +29,7 @@ type Deps struct {
 	// startup. Workflows mutate it via Put/Remove and persist via Save.
 	Index *indexfile.Index
 
-	// Provider yields a metadata.Source on first call and caches the
+	// Provider yields a provider.Source on first call and caches the
 	// result. Local-only workflows never invoke it; provider-needing
 	// workflows call deps.Provider() and surface a missing-key error
 	// only when the provider is actually required.
@@ -42,22 +42,22 @@ type Deps struct {
 	Now func() time.Time
 }
 
-// ProviderFactory constructs a metadata.Source on demand. Wrap the actual
+// ProviderFactory constructs a provider.Source on demand. Wrap the actual
 // constructor with NewProviderFactory so repeated calls share one
-// metadata.Source (and one missing-key error if construction fails).
-type ProviderFactory func() (metadata.Source, error)
+// provider.Source (and one missing-key error if construction fails).
+type ProviderFactory func() (provider.Source, error)
 
 // NewProviderFactory caches the result of construct so it runs at most
 // once per process. construct typically reads KURA_TVDB_KEY and builds a
 // TVDB client; deferring the call lets local-only commands run without
 // the key.
-func NewProviderFactory(construct func() (metadata.Source, error)) ProviderFactory {
+func NewProviderFactory(construct func() (provider.Source, error)) ProviderFactory {
 	var (
 		once sync.Once
-		src  metadata.Source
+		src  provider.Source
 		err  error
 	)
-	return func() (metadata.Source, error) {
+	return func() (provider.Source, error) {
 		once.Do(func() {
 			src, err = construct()
 		})

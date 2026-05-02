@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -23,7 +23,7 @@ func TestSearchNormalizesSeriesResults(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	results, err := p.Search(context.Background(), textnorm.NFC("honzuki"), metadata.SearchOptions{
+	results, err := p.Search(context.Background(), textnorm.NFC("honzuki"), provider.SearchOptions{
 		Limit: 5,
 		Year:  2019,
 	})
@@ -58,7 +58,7 @@ func TestSearchNormalizesSeriesResults(t *testing.T) {
 	if got.Year != 2019 {
 		t.Fatalf("Year = %d, want 2019", got.Year)
 	}
-	if got.Status != metadata.SeriesStatusEnded {
+	if got.Status != provider.SeriesStatusEnded {
 		t.Fatalf("Status = %q, want ended", got.Status)
 	}
 	if len(got.Genres) != 2 || got.Genres[0] != "Fantasy" || got.Genres[1] != "Anime" {
@@ -87,7 +87,7 @@ func TestSearchUsesCanonicalTitleWhenNoPreferredLanguages(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	results, err := p.Search(context.Background(), textnorm.NFC("honzuki"), metadata.SearchOptions{})
+	results, err := p.Search(context.Background(), textnorm.NFC("honzuki"), provider.SearchOptions{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestSearchNormalizesQueryToNFC(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 
-	_, err = p.Search(context.Background(), textnorm.NFC("転生したらドラゴンの卵だった"), metadata.SearchOptions{})
+	_, err = p.Search(context.Background(), textnorm.NFC("転生したらドラゴンの卵だった"), provider.SearchOptions{})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

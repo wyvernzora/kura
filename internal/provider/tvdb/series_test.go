@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -150,7 +150,7 @@ func TestNormalizeSeriesSummaryNormalizesProviderTitlesToNFC(t *testing.T) {
 		originalLanguage: "jpn",
 		originalCountry:  "JP",
 		firstAired:       "2019-10-03",
-		status:           metadata.SeriesStatusContinuing,
+		status:           provider.SeriesStatusContinuing,
 		year:             2019,
 		titles: []titleCandidate{
 			{Language: "jpn", Value: "本好きの下剋上 司書になるためには手段を選んでいられません"},

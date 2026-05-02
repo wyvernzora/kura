@@ -10,8 +10,8 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
-	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/mediarecord"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
@@ -20,12 +20,12 @@ import (
 type Runner struct {
 	root      string
 	ref       refs.Series
-	source    metadata.Source
+	source    provider.Source
 	inspector media.Inspector
 	now       func() time.Time
 }
 
-func NewRunner(root string, ref refs.Series, source metadata.Source, inspector media.Inspector, now func() time.Time) Runner {
+func NewRunner(root string, ref refs.Series, source provider.Source, inspector media.Inspector, now func() time.Time) Runner {
 	return Runner{
 		root:      root,
 		ref:       ref,
@@ -147,7 +147,7 @@ func (s *scanner) mediaRecordBuilder() mediarecord.Builder {
 	return mediarecord.NewBuilder(layout.NewFiles(s.runner.root), s.runner.inspector)
 }
 
-func spineFromMetadata(seasons []metadata.Season) ([]domainseries.SpineEntry, error) {
+func spineFromMetadata(seasons []provider.Season) ([]domainseries.SpineEntry, error) {
 	var spine []domainseries.SpineEntry
 	for _, season := range seasons {
 		for _, episode := range season.Episodes {

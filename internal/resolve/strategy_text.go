@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type textSearchStrategy struct {
-	source metadata.Source
+	source provider.Source
 }
 
-func NewTextSearchStrategy(source metadata.Source) ResolveStrategy {
+func NewTextSearchStrategy(source provider.Source) ResolveStrategy {
 	return &textSearchStrategy{source: source}
 }
 
@@ -32,9 +32,9 @@ func (s *textSearchStrategy) Authoritative() bool {
 
 func (s *textSearchStrategy) Resolve(ctx context.Context, t selector.Term) ([]termHit, error) {
 	query := textnorm.NFC(t.String())
-	results, err := s.source.Search(ctx, query, metadata.SearchOptions{Type: metadata.MediaTypeSeries})
+	results, err := s.source.Search(ctx, query, provider.SearchOptions{Type: provider.MediaTypeSeries})
 	if err != nil {
-		if errors.Is(err, metadata.ErrNotFound) {
+		if errors.Is(err, provider.ErrNotFound) {
 			return nil, nil
 		}
 		return nil, err
@@ -53,7 +53,7 @@ func (s *textSearchStrategy) Resolve(ctx context.Context, t selector.Term) ([]te
 	return hits, nil
 }
 
-func matchAnnotations(term string, result metadata.SearchResult) []string {
+func matchAnnotations(term string, result provider.SearchResult) []string {
 	term = strings.ToLower(strings.TrimSpace(term))
 	if term == "" {
 		return nil
@@ -76,6 +76,6 @@ func matchAnnotations(term string, result metadata.SearchResult) []string {
 	return nil
 }
 
-func matchTitles(result metadata.SearchResult) []textnorm.NFCString {
+func matchTitles(result provider.SearchResult) []textnorm.NFCString {
 	return result.Aliases
 }

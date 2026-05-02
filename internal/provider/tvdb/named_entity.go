@@ -4,7 +4,7 @@ import (
 	"strconv"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -33,19 +33,19 @@ type seriesSummaryInput struct {
 	originalLanguage string
 	originalCountry  string
 	firstAired       string
-	status           metadata.SeriesStatus
+	status           provider.SeriesStatus
 	year             int
 	genres           []string
 	titles           []titleCandidate
 }
 
-func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) metadata.SeriesSummary {
+func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) provider.SeriesSummary {
 	canonicalTitle := normalizeTitle(input.canonicalTitle)
-	return metadata.SeriesSummary{
+	return provider.SeriesSummary{
 		MetadataRef:      input.ref,
 		PreferredTitle:   p.selectTitle(canonicalTitle, input.originalLanguage, input.titles),
 		CanonicalTitle:   canonicalTitle,
-		Type:             metadata.MediaTypeSeries,
+		Type:             provider.MediaTypeSeries,
 		Status:           input.status,
 		Year:             input.year,
 		OriginalLanguage: normalizeLanguage(input.originalLanguage),

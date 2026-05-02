@@ -1,7 +1,7 @@
 // Package tvdb implements Kura's metadata source interface using TVDB API v4.
 //
 // The package owns TVDB-specific HTTP, auth, pagination, and response
-// normalization. Callers should depend on the metadata.Source interface unless
+// normalization. Callers should depend on the provider.Source interface unless
 // they need TVDB construction options or TVDB-specific error inspection.
 package tvdb
 
@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -66,11 +66,11 @@ func (p *Provider) Key() string {
 }
 
 // Search returns lightweight TVDB series candidates for a title query.
-func (p *Provider) Search(ctx context.Context, query textnorm.NFCString, opts metadata.SearchOptions) ([]metadata.SearchResult, error) {
+func (p *Provider) Search(ctx context.Context, query textnorm.NFCString, opts provider.SearchOptions) ([]provider.SearchResult, error) {
 	if query.IsZero() {
 		return nil, errors.New("tvdb: empty search query")
 	}
-	if opts.Type != "" && opts.Type != metadata.MediaTypeSeries {
+	if opts.Type != "" && opts.Type != provider.MediaTypeSeries {
 		// Kura's P0 TVDB integration only searches series. Returning no matches
 		// keeps mixed-provider callers from treating unsupported types as errors.
 		return nil, nil
@@ -81,7 +81,7 @@ func (p *Provider) Search(ctx context.Context, query textnorm.NFCString, opts me
 		return nil, err
 	}
 
-	results := make([]metadata.SearchResult, 0, len(records))
+	results := make([]provider.SearchResult, 0, len(records))
 	for _, record := range records {
 		if !isSeriesRecord(record.Type) {
 			continue
@@ -92,20 +92,20 @@ func (p *Provider) Search(ctx context.Context, query textnorm.NFCString, opts me
 }
 
 // GetSeries returns the complete source-neutral series view Kura needs.
-func (p *Provider) GetSeries(ctx context.Context, metadataID string) (metadata.Series, error) {
+func (p *Provider) GetSeries(ctx context.Context, metadataID string) (provider.Series, error) {
 	metadataID = strings.TrimSpace(metadataID)
 	if metadataID == "" {
-		return metadata.Series{}, errors.New("tvdb: empty series id")
+		return provider.Series{}, errors.New("tvdb: empty series id")
 	}
 
 	extended, err := p.client.seriesExtended(ctx, metadataID)
 	if err != nil {
-		return metadata.Series{}, err
+		return provider.Series{}, err
 	}
 
 	episodes, err := p.client.seriesEpisodes(ctx, metadataID)
 	if err != nil {
-		return metadata.Series{}, err
+		return provider.Series{}, err
 	}
 
 	return p.normalizeSeries(extended, episodes), nil

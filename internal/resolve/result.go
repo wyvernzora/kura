@@ -1,6 +1,6 @@
 package resolve
 
-import "github.com/wyvernzora/kura/internal/metadata"
+import "github.com/wyvernzora/kura/internal/provider"
 
 // Resolution is the resolver's success-path output. Outcome is encoded by
 // result cardinality: zero is not found, one is resolved, many is unresolved.
@@ -10,7 +10,7 @@ type Resolution struct {
 
 // Result is one metadata candidate with all evidence supporting it.
 type Result struct {
-	Summary  metadata.SeriesSummary
+	Summary  provider.SeriesSummary
 	Evidence []Evidence
 }
 

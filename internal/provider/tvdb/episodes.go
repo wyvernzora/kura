@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 type seriesEpisodesResponse struct {
@@ -60,21 +60,21 @@ func (c *client) seriesEpisodes(ctx context.Context, id string) ([]episodeRecord
 			break
 		}
 		if page == maxEpisodePages-1 {
-			return nil, fmt.Errorf("%w: episode pagination exceeded %d pages", metadata.ErrUnavailable, maxEpisodePages)
+			return nil, fmt.Errorf("%w: episode pagination exceeded %d pages", provider.ErrUnavailable, maxEpisodePages)
 		}
 	}
 
 	return episodes, nil
 }
 
-func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metadata.Season {
-	bySeason := map[int][]metadata.Episode{}
+func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []provider.Season {
+	bySeason := map[int][]provider.Episode{}
 	for _, episode := range episodes {
 		number := episode.SeasonNumber
 		bySeason[number] = append(bySeason[number], normalizeEpisodeRecord(episode, number))
 	}
 
-	out := make([]metadata.Season, 0, len(bySeason))
+	out := make([]provider.Season, 0, len(bySeason))
 	seen := map[int]bool{}
 	for _, season := range seasons {
 		if season.Number < 0 {
@@ -91,7 +91,7 @@ func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metada
 			continue
 		}
 
-		out = append(out, metadata.Season{
+		out = append(out, provider.Season{
 			MetadataRef: providerIntRef(season.ID),
 			Number:      season.Number,
 			Episodes:    seasonEpisodes,
@@ -103,7 +103,7 @@ func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metada
 		if seen[seasonNumber] {
 			continue
 		}
-		out = append(out, metadata.Season{
+		out = append(out, provider.Season{
 			MetadataRef: "",
 			Number:      seasonNumber,
 			Episodes:    seasonEpisodes,
@@ -124,8 +124,8 @@ func normalizeSeasons(seasons []seasonRecord, episodes []episodeRecord) []metada
 	return out
 }
 
-func normalizeEmbeddedEpisodes(episodes []episodeRecord, seasonNumber int) []metadata.Episode {
-	out := make([]metadata.Episode, 0, len(episodes))
+func normalizeEmbeddedEpisodes(episodes []episodeRecord, seasonNumber int) []provider.Episode {
+	out := make([]provider.Episode, 0, len(episodes))
 	for _, episode := range episodes {
 		number := firstPositive(episode.SeasonNumber, seasonNumber)
 		out = append(out, normalizeEpisodeRecord(episode, number))
@@ -133,9 +133,9 @@ func normalizeEmbeddedEpisodes(episodes []episodeRecord, seasonNumber int) []met
 	return out
 }
 
-func normalizeEpisodeRecord(episode episodeRecord, seasonNumber int) metadata.Episode {
+func normalizeEpisodeRecord(episode episodeRecord, seasonNumber int) provider.Episode {
 	ref, _ := refs.NewEpisode(seasonNumber, episode.Number)
-	return metadata.Episode{
+	return provider.Episode{
 		MetadataRef:    providerIntRef(episode.ID),
 		Ref:            ref,
 		AbsoluteNumber: positiveIntPtr(episode.AbsoluteNumber),

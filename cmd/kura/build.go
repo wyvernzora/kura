@@ -9,15 +9,15 @@ import (
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/media/mediainfo"
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 // buildSourceFromFlags constructs the metadata source from the global CLI
-// flags. Used by run.go to seed the lazy metadata.WithSource builder.
-func buildSourceFromFlags(rt *runContext, flags *cli) (metadata.Source, error) {
+// flags. Used by run.go to seed the lazy provider.WithSource builder.
+func buildSourceFromFlags(rt *runContext, flags *cli) (provider.Source, error) {
 	return config.BuildMetadataSource(config.MetadataSourceOptions{
 		TVDBBaseURL: flags.TVDBBaseURL,
 		Getenv:      rt.Getenv,
@@ -41,7 +41,7 @@ func buildDeps(rt *runContext) (workflow.Deps, error) {
 	if cmd := rt.Getenv("KURA_MEDIAINFO_COMMAND"); cmd != "" {
 		inspector.Command = cmd
 	}
-	provider := workflow.NewProviderFactory(func() (metadata.Source, error) {
+	provider := workflow.NewProviderFactory(func() (provider.Source, error) {
 		return buildSourceFromFlags(rt, rt.flags)
 	})
 	return workflow.Deps{

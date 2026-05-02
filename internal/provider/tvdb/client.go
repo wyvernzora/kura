@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/provider"
 )
 
 type client struct {
@@ -88,7 +88,7 @@ func (c *client) doJSON(ctx context.Context, method, path string, values url.Val
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %v", metadata.ErrUnavailable, err)
+		return fmt.Errorf("%w: %v", provider.ErrUnavailable, err)
 	}
 	defer resp.Body.Close()
 
@@ -116,10 +116,10 @@ func (c *client) doJSON(ctx context.Context, method, path string, values url.Val
 func tvdbHTTPError(resp *http.Response) error {
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return fmt.Errorf("%w: status %d", metadata.ErrUnauthorized, resp.StatusCode)
+		return fmt.Errorf("%w: status %d", provider.ErrUnauthorized, resp.StatusCode)
 	case http.StatusNotFound:
-		return fmt.Errorf("%w: status %d", metadata.ErrNotFound, resp.StatusCode)
+		return fmt.Errorf("%w: status %d", provider.ErrNotFound, resp.StatusCode)
 	default:
-		return fmt.Errorf("%w: status %d", metadata.ErrUnavailable, resp.StatusCode)
+		return fmt.Errorf("%w: status %d", provider.ErrUnavailable, resp.StatusCode)
 	}
 }

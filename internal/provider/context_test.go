@@ -1,4 +1,4 @@
-package metadata
+package provider
 
 import (
 	"context"
