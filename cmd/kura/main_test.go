@@ -11,10 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/oklog/ulid/v2"
 	clipkg "github.com/wyvernzora/kura/internal/cli"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/trashfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -2064,4 +2068,253 @@ func loadSeriesDocument(t *testing.T, seriesDir string) (map[string]any, error) 
 		return nil, err
 	}
 	return doc, nil
+}
+
+func writeTrashEntry(t *testing.T, root string, ref refs.Series, episode refs.Episode, trashedAt time.Time, mediaName string, body string) ulid.ULID {
+	t.Helper()
+	id := ulid.MustNew(ulid.Timestamp(trashedAt), ulid.DefaultEntropy())
+	meta := trashfile.Meta{
+		ID:        id,
+		Episode:   episode,
+		TrashedAt: trashedAt,
+		Record: trashfile.Record{
+			Path:       fmt.Sprintf("Season %d/%s", episode.Season(), mediaName),
+			Source:     "webrip",
+			Resolution: "1920x1080",
+			Codec:      "HEVC",
+			Size:       int64(len(body)),
+			MTime:      trashedAt,
+			Companions: []trashfile.Companion{},
+		},
+	}
+	if err := trashfile.Write(root, ref, meta); err != nil {
+		t.Fatalf("trashfile.Write: %v", err)
+	}
+	mediaPath := filepath.Join(paths.TrashEntry(root, ref, id.String()), mediaName)
+	if err := os.WriteFile(mediaPath, []byte(body), 0o644); err != nil {
+		t.Fatalf("WriteFile media: %v", err)
+	}
+	return id
+}
+
+func setupTrashSeries(t *testing.T, root, name, metadataID string) refs.Series {
+	t.Helper()
+	seriesDir := filepath.Join(root, name)
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll series: %v", err)
+	}
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:%s",
+		"episodes": {}
+	}`, metadataID))
+	ref, err := refs.ParseSeries(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ref
+}
+
+func TestTrashListPerSeriesJSON(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	ref := setupTrashSeries(t, root, "Bookworm", "370070")
+	episode, _ := refs.NewEpisode(1, 3)
+	id := writeTrashEntry(t, root, ref, episode,
+		time.Date(2026, 4, 20, 3, 0, 0, 0, time.UTC),
+		"old episode.mkv", "episode-body")
+
+	var stdout, stderr bytes.Buffer
+	rt := testRunContextWithLibraryRoot(&stdout, &stderr, root)
+	if err := run([]string{"trash", "list", "--json", "--tvdb-base-url", server.URL, "tvdb:370070"}, rt); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
+	}
+	series := result["series"].([]any)
+	if len(series) != 1 {
+		t.Fatalf("len(series) = %d, want 1", len(series))
+	}
+	first := series[0].(map[string]any)
+	entries := first["entries"].([]any)
+	if len(entries) != 1 {
+		t.Fatalf("len(entries) = %d, want 1", len(entries))
+	}
+	if entries[0].(map[string]any)["id"] != id.String() {
+		t.Fatalf("id = %v, want %s", entries[0].(map[string]any)["id"], id.String())
+	}
+}
+
+func TestTrashListAllJSON(t *testing.T) {
+	root := t.TempDir()
+	bookwormRef := setupTrashSeries(t, root, "Bookworm", "370070")
+	otonariRef := setupTrashSeries(t, root, "Otonari", "999999")
+	episode, _ := refs.NewEpisode(1, 1)
+	writeTrashEntry(t, root, bookwormRef, episode,
+		time.Date(2026, 4, 20, 3, 0, 0, 0, time.UTC), "bw.mkv", "x")
+	writeTrashEntry(t, root, otonariRef, episode,
+		time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), "ot.mkv", "yy")
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"trash", "list", "--json", "--all"}, testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
+	}
+	if total := int(result["totalEntries"].(float64)); total != 2 {
+		t.Fatalf("totalEntries = %d, want 2", total)
+	}
+	if total := int(result["totalBytes"].(float64)); total != 3 {
+		t.Fatalf("totalBytes = %d, want 3", total)
+	}
+}
+
+func TestTrashListRequiresSelectorOrAll(t *testing.T) {
+	root := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"trash", "list"}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil || !strings.Contains(err.Error(), "selector terms or --all") {
+		t.Fatalf("err = %v, want selector-or-all message", err)
+	}
+}
+
+func TestTrashListRejectsBothSelectorAndAll(t *testing.T) {
+	root := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"trash", "list", "--all", "Bookworm"}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil || !strings.Contains(err.Error(), "either selector terms or --all") {
+		t.Fatalf("err = %v, want selector-xor-all message", err)
+	}
+}
+
+func TestTrashListOlderThanFilters(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	ref := setupTrashSeries(t, root, "Bookworm", "370070")
+	episode, _ := refs.NewEpisode(1, 1)
+	old := writeTrashEntry(t, root, ref, episode,
+		time.Now().UTC().Add(-48*time.Hour), "old.mkv", "x")
+	_ = writeTrashEntry(t, root, ref, episode,
+		time.Now().UTC().Add(-1*time.Hour), "fresh.mkv", "yy")
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"trash", "list", "--json", "--tvdb-base-url", server.URL, "--older-than", "24h", "tvdb:370070"},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
+	}
+	series := result["series"].([]any)
+	if len(series) != 1 {
+		t.Fatalf("len(series) = %d, want 1", len(series))
+	}
+	entries := series[0].(map[string]any)["entries"].([]any)
+	if len(entries) != 1 {
+		t.Fatalf("len(entries) = %d, want 1 (only old entry past 24h threshold)", len(entries))
+	}
+	if entries[0].(map[string]any)["id"] != old.String() {
+		t.Fatalf("id = %v, want %s", entries[0].(map[string]any)["id"], old.String())
+	}
+}
+
+func TestTrashEmptyAllRequiresConfirm(t *testing.T) {
+	root := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"trash", "empty", "--all"}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil || !strings.Contains(err.Error(), "--confirm") {
+		t.Fatalf("err = %v, want --confirm message", err)
+	}
+}
+
+func TestTrashEmptyAllWithConfirmRemovesEverything(t *testing.T) {
+	root := t.TempDir()
+	bookwormRef := setupTrashSeries(t, root, "Bookworm", "370070")
+	otonariRef := setupTrashSeries(t, root, "Otonari", "999999")
+	episode, _ := refs.NewEpisode(1, 1)
+	writeTrashEntry(t, root, bookwormRef, episode,
+		time.Date(2026, 4, 20, 3, 0, 0, 0, time.UTC), "bw.mkv", "x")
+	writeTrashEntry(t, root, otonariRef, episode,
+		time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), "ot.mkv", "yy")
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"trash", "empty", "--json", "--all", "--confirm"},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
+	}
+	if total := int(result["totalEntries"].(float64)); total != 2 {
+		t.Fatalf("totalEntries = %d, want 2", total)
+	}
+	for _, dir := range []string{
+		paths.TrashDir(root, bookwormRef),
+		paths.TrashDir(root, otonariRef),
+	} {
+		entries, _ := os.ReadDir(dir)
+		if len(entries) != 0 {
+			t.Fatalf("trash dir %q non-empty after empty: %d entries", dir, len(entries))
+		}
+	}
+}
+
+func TestTrashRestoreMovesFilesBack(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	ref := setupTrashSeries(t, root, "Bookworm", "370070")
+	episode, _ := refs.NewEpisode(1, 3)
+	id := writeTrashEntry(t, root, ref, episode,
+		time.Date(2026, 4, 20, 3, 0, 0, 0, time.UTC),
+		"old episode.mkv", "episode-body")
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"trash", "restore", "--json", "--tvdb-base-url", server.URL, "tvdb:370070", id.String()},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	restoredPath := filepath.Join(root, "Bookworm", "Season 1", "old episode.mkv")
+	if _, err := os.Stat(restoredPath); err != nil {
+		t.Fatalf("restored file missing at %s: %v", restoredPath, err)
+	}
+	if _, err := os.Stat(paths.TrashEntry(root, ref, id.String())); !os.IsNotExist(err) {
+		t.Fatalf("trash entry still present after restore: err=%v", err)
+	}
+}
+
+func TestTrashRestoreRefusesIfTargetExists(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	ref := setupTrashSeries(t, root, "Bookworm", "370070")
+	seasonDir := filepath.Join(root, "Bookworm", "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "old episode.mkv"), "different content")
+	episode, _ := refs.NewEpisode(1, 3)
+	id := writeTrashEntry(t, root, ref, episode,
+		time.Date(2026, 4, 20, 3, 0, 0, 0, time.UTC),
+		"old episode.mkv", "episode-body")
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"trash", "restore", "--tvdb-base-url", server.URL, "tvdb:370070", id.String()},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	var existsErr *workflow.TrashRestoreTargetExistsError
+	if !errors.As(err, &existsErr) {
+		t.Fatalf("err = %v, want TrashRestoreTargetExistsError", err)
+	}
+	if _, err := os.Stat(paths.TrashEntry(root, ref, id.String())); err != nil {
+		t.Fatalf("trash entry removed despite refusal: %v", err)
+	}
 }
