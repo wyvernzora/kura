@@ -162,7 +162,8 @@ Under 300 lines is a good ceiling. Over 500 and you are fighting your own config
 - **Language:** Go (1.26.2 or newer).
 - **Main command entrypoint:** `cmd/kura`.
 - **Library orchestration:** `internal/library` owns root/index/open/find/add/import.
-- **Series workflow logic:** `internal/series` owns per-series scan/stage/reconcile/read behavior.
+- **Series import point:** `internal/series` owns per-series scan/stage/reconcile/read behavior for other top-level packages.
+- **Series implementation packages:** `internal/series/state` owns persisted state/editor/repository, `internal/series/layout` owns filesystem layout and naming, `internal/series/reconcile` owns reconcile plan/apply internals, and `internal/series/scan` owns scan parsing/discovery internals.
 - **Container:** Docker, single-binary image.
 
 ### Commands
@@ -245,6 +246,8 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Persist series-level `preferredTitle` and `canonicalTitle` in `series.json`; keep episode-level provider data limited to slot identity and air date.
 - For download release triage, prefer staging candidate files with Kura and using the staging report for media facts; reset staged records when the release is not recommended.
 - For series-level actions that need review before mutation, use explicit selector-based `plan` and `apply <selector> <token>` workflows instead of combined dry-run/yes commands.
+- Top-level `internal` packages must not import child packages of sibling top-level packages; import the sibling facade instead, while child packages may import siblings under their own top-level package.
+- When extracting an implementation subpackage, move the full cohesive workflow or leave it in place; do not leave runner/helper remnants in the facade package unless they are intentional public API.
 
 ---
 

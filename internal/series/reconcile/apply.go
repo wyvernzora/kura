@@ -1,4 +1,4 @@
-package series
+package reconcile
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/wyvernzora/kura/internal/progress"
 )
 
-func (h Handle) ApplyReconcileToken(ctx context.Context, token string) (ReconcileResult, error) {
+func (h Runner) ApplyReconcileToken(ctx context.Context, token string) (ReconcileResult, error) {
 	stored, applied, err := h.loadStoredReconcilePlan(token)
 	if err != nil {
 		return ReconcileResult{}, err
@@ -29,11 +29,11 @@ func (h Handle) ApplyReconcileToken(ctx context.Context, token string) (Reconcil
 	return h.applyReconcile(ctx, stored.Plan, log)
 }
 
-func (h Handle) ApplyReconcile(ctx context.Context, plan ReconcilePlan) (ReconcileResult, error) {
+func (h Runner) ApplyReconcile(ctx context.Context, plan ReconcilePlan) (ReconcileResult, error) {
 	return h.applyReconcile(ctx, plan, nil)
 }
 
-func (h Handle) applyReconcile(ctx context.Context, plan ReconcilePlan, log *reconcilePlanLog) (ReconcileResult, error) {
+func (h Runner) applyReconcile(ctx context.Context, plan ReconcilePlan, log *reconcilePlanLog) (ReconcileResult, error) {
 	progress.Start(ctx, "reconcile", fmt.Sprintf("Applying reconcile for %s", h.ref), 0)
 	if err := h.validatePlan(plan); err != nil {
 		if log != nil {
@@ -114,7 +114,7 @@ func (h Handle) applyReconcile(ctx context.Context, plan ReconcilePlan, log *rec
 	return ReconcileResult{Series: h.ref, AppliedMoves: len(moves)}, nil
 }
 
-func (h Handle) validatePlan(plan ReconcilePlan) error {
+func (h Runner) validatePlan(plan ReconcilePlan) error {
 	if plan.Series != h.ref {
 		return PlanStaleError{Series: plan.Series}
 	}
@@ -128,7 +128,7 @@ func (h Handle) validatePlan(plan ReconcilePlan) error {
 	return nil
 }
 
-func (h Handle) applyPlanState(plan ReconcilePlan) (seriesState, error) {
+func (h Runner) applyPlanState(plan ReconcilePlan) (seriesState, error) {
 	series, err := h.load()
 	if err != nil {
 		return seriesState{}, err

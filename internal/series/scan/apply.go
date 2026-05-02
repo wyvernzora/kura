@@ -1,4 +1,4 @@
-package series
+package scan
 
 import (
 	"os"
@@ -7,9 +7,12 @@ import (
 
 	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series/layout"
+	"github.com/wyvernzora/kura/internal/series/mediarecord"
+	"github.com/wyvernzora/kura/internal/series/state"
 )
 
-func (s *scanner) apply(discovered []discoveredFile) error {
+func (s *scanner) apply(discovered []DiscoveredFile) error {
 	if err := s.removeMissingActive(discovered); err != nil {
 		return err
 	}
@@ -22,7 +25,7 @@ func (s *scanner) apply(discovered []discoveredFile) error {
 	return nil
 }
 
-func (s *scanner) applyFile(file discoveredFile) error {
+func (s *scanner) applyFile(file DiscoveredFile) error {
 	episode, ok := s.model.Episodes[file.Ref]
 	if !ok {
 		return MetadataMissingEpisodeError{Episode: file.Ref}
@@ -47,15 +50,15 @@ func (s *scanner) applyFile(file discoveredFile) error {
 	if err != nil {
 		return err
 	}
-	if err := s.editor.setActive(file.Ref, record); err != nil {
+	if err := s.editor.SetActive(file.Ref, record); err != nil {
 		return err
 	}
 	s.result.Synced = append(s.result.Synced, scannedEpisode(status, file, record))
 	return nil
 }
 
-func (s *scanner) unchanged(active MediaRecord, file discoveredFile) (bool, error) {
-	facts, err := s.handle.files().stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path)))
+func (s *scanner) unchanged(active state.MediaRecord, file DiscoveredFile) (bool, error) {
+	facts, err := layout.NewFiles(s.runner.root).Stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path)))
 	if err != nil {
 		return false, err
 	}
@@ -65,7 +68,7 @@ func (s *scanner) unchanged(active MediaRecord, file discoveredFile) (bool, erro
 	if len(active.Companions) != len(file.Companions) {
 		return false, nil
 	}
-	companions := map[string]CompanionRecord{}
+	companions := map[string]state.CompanionRecord{}
 	for _, companion := range active.Companions {
 		companions[companion.Path] = companion
 	}
@@ -74,7 +77,7 @@ func (s *scanner) unchanged(active MediaRecord, file discoveredFile) (bool, erro
 		if !ok {
 			return false, nil
 		}
-		facts, err := s.handle.files().stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(path)))
+		facts, err := layout.NewFiles(s.runner.root).Stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(path)))
 		if err != nil {
 			return false, nil
 		}
@@ -85,23 +88,23 @@ func (s *scanner) unchanged(active MediaRecord, file discoveredFile) (bool, erro
 	return true, nil
 }
 
-func (s *scanner) mediaRecord(file discoveredFile) (MediaRecord, error) {
+func (s *scanner) mediaRecord(file DiscoveredFile) (state.MediaRecord, error) {
 	absolutePath := filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path))
-	input := mediaRecordInput{
+	input := mediarecord.Input{
 		MediaPath:  absolutePath,
 		RecordPath: file.Path,
 		Source:     file.Source,
 	}
 	for _, companionPath := range file.Companions {
-		input.CompanionPaths = append(input.CompanionPaths, mediaRecordCompanionInput{
+		input.CompanionPaths = append(input.CompanionPaths, mediarecord.CompanionInput{
 			MediaPath:  filepath.Join(s.seriesDir.Path(), filepath.FromSlash(companionPath)),
 			RecordPath: companionPath,
 		})
 	}
-	return s.handle.mediaRecord(s.ctx, input)
+	return s.mediaRecordBuilder().Build(s.ctx, input)
 }
 
-func scannedEpisode(status ScanStatus, file discoveredFile, record MediaRecord) ScannedEpisode {
+func scannedEpisode(status ScanStatus, file DiscoveredFile, record state.MediaRecord) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     status,
 		Episode:    file.Ref,
@@ -112,7 +115,7 @@ func scannedEpisode(status ScanStatus, file discoveredFile, record MediaRecord) 
 	}
 }
 
-func existingScannedEpisode(file discoveredFile, active MediaRecord) ScannedEpisode {
+func existingScannedEpisode(file DiscoveredFile, active state.MediaRecord) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     ScanStatusUnchanged,
 		Episode:    file.Ref,
@@ -123,7 +126,7 @@ func existingScannedEpisode(file discoveredFile, active MediaRecord) ScannedEpis
 	}
 }
 
-func (s *scanner) removeMissingActive(discovered []discoveredFile) error {
+func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 	discoveredPaths := map[string]struct{}{}
 	for _, file := range discovered {
 		discoveredPaths[file.Path] = struct{}{}
@@ -146,13 +149,13 @@ func (s *scanner) removeMissingActive(discovered []discoveredFile) error {
 			continue
 		}
 		path := filepath.Join(s.seriesDir.Path(), filepath.FromSlash(episode.Active.Path))
-		if _, err := s.handle.files().stat(path); err == nil {
+		if _, err := layout.NewFiles(s.runner.root).Stat(path); err == nil {
 			continue
 		} else if !os.IsNotExist(err) {
 			return err
 		}
-		record := cloneMediaRecord(*episode.Active)
-		if err := s.editor.clearActive(ref); err != nil {
+		record := state.CloneMediaRecord(*episode.Active)
+		if err := s.editor.ClearActive(ref); err != nil {
 			return err
 		}
 		s.result.Synced = append(s.result.Synced, removedScannedEpisode(ref, record))
@@ -160,7 +163,7 @@ func (s *scanner) removeMissingActive(discovered []discoveredFile) error {
 	return nil
 }
 
-func removedScannedEpisode(ref refs.Episode, record MediaRecord) ScannedEpisode {
+func removedScannedEpisode(ref refs.Episode, record state.MediaRecord) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     ScanStatusRemoved,
 		Episode:    ref,
@@ -171,7 +174,7 @@ func removedScannedEpisode(ref refs.Episode, record MediaRecord) ScannedEpisode 
 	}
 }
 
-func companionPaths(records []CompanionRecord) []string {
+func companionPaths(records []state.CompanionRecord) []string {
 	out := make([]string, 0, len(records))
 	for _, record := range records {
 		out = append(out, record.Path)

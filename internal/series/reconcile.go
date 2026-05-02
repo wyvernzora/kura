@@ -1,81 +1,49 @@
 package series
 
 import (
-	"fmt"
+	"context"
 
-	"github.com/wyvernzora/kura/internal/refs"
-	"github.com/wyvernzora/kura/internal/textnorm"
+	reconcileworkflow "github.com/wyvernzora/kura/internal/series/reconcile"
 )
 
-type ReconcilePlan struct {
-	Series    refs.Series        `json:"series"`
-	FileTitle textnorm.NFCString `json:"fileTitle"`
-	Snapshot  string             `json:"snapshot"`
-	Changes   []Change           `json:"changes"`
-}
+type ReconcilePlan = reconcileworkflow.ReconcilePlan
 
-func (p ReconcilePlan) HasChanges() bool {
-	return len(p.Changes) > 0
-}
+type FileMove = reconcileworkflow.FileMove
 
-func (p ReconcilePlan) Moves() []FileMove {
-	var moves []FileMove
-	for _, change := range p.Changes {
-		moves = append(moves, change.Moves()...)
-	}
-	return moves
-}
+type Change = reconcileworkflow.Change
 
-type FileMove struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-}
-
-type Change struct {
-	Kind    ChangeKind   `json:"kind"`
-	Episode refs.Episode `json:"episode"`
-	FileMove
-	Source     string     `json:"source,omitempty"`
-	Resolution string     `json:"resolution,omitempty"`
-	Companions []FileMove `json:"companions,omitempty"`
-	Replaced   *Replaced  `json:"replaced,omitempty"`
-}
-
-func (c Change) Moves() []FileMove {
-	moves := make([]FileMove, 0, 2+len(c.Companions))
-	if c.Replaced != nil {
-		moves = append(moves, c.Replaced.FileMove)
-		moves = append(moves, c.Replaced.Companions...)
-	}
-	moves = append(moves, c.FileMove)
-	moves = append(moves, c.Companions...)
-	return moves
-}
-
-type ChangeKind string
+type ChangeKind = reconcileworkflow.ChangeKind
 
 const (
-	ChangeAdd     ChangeKind = "add"
-	ChangeMove    ChangeKind = "move"
-	ChangeReplace ChangeKind = "replace"
+	ChangeAdd     = reconcileworkflow.ChangeAdd
+	ChangeMove    = reconcileworkflow.ChangeMove
+	ChangeReplace = reconcileworkflow.ChangeReplace
 )
 
-type Replaced struct {
-	FileMove
-	Source     string     `json:"source,omitempty"`
-	Resolution string     `json:"resolution,omitempty"`
-	Companions []FileMove `json:"companions,omitempty"`
+type Replaced = reconcileworkflow.Replaced
+
+type ReconcileResult = reconcileworkflow.ReconcileResult
+
+type PlanStaleError = reconcileworkflow.PlanStaleError
+
+type StoredReconcilePlan = reconcileworkflow.StoredReconcilePlan
+
+type ReconcilePlanExpiredError = reconcileworkflow.ReconcilePlanExpiredError
+
+type ReconcilePlanAlreadyAppliedError = reconcileworkflow.ReconcilePlanAlreadyAppliedError
+
+func (h Handle) PlanReconcile() (ReconcilePlan, error) {
+	return reconcileworkflow.NewRunner(h.root(), h.ref, h.now).PlanReconcile()
 }
 
-type ReconcileResult struct {
-	Series       refs.Series `json:"series"`
-	AppliedMoves int         `json:"appliedMoves"`
+func (h Handle) CreateReconcilePlan() (StoredReconcilePlan, error) {
+	return reconcileworkflow.NewRunner(h.root(), h.ref, h.now).CreateReconcilePlan()
 }
 
-type PlanStaleError struct {
-	Series refs.Series
+func (h Handle) ApplyReconcileToken(ctx context.Context, token string) (ReconcileResult, error) {
+	return reconcileworkflow.NewRunner(h.root(), h.ref, h.now).ApplyReconcileToken(ctx, token)
 }
 
-func (err PlanStaleError) Error() string {
-	return fmt.Sprintf("series: reconcile plan for %s is stale", err.Series)
+func (h Handle) ApplyReconcile(ctx context.Context, plan ReconcilePlan) (ReconcileResult, error) {
+	return reconcileworkflow.NewRunner(h.root(), h.ref, h.now).ApplyReconcile(ctx, plan)
 }

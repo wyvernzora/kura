@@ -1,4 +1,4 @@
-package series
+package reconcile
 
 import (
 	"encoding/json"
@@ -13,7 +13,7 @@ type reconcilePlanLog struct {
 	encoder *json.Encoder
 }
 
-func (h Handle) openReconcilePlanLog(token string) (*reconcilePlanLog, error) {
+func (h Runner) openReconcilePlanLog(token string) (*reconcilePlanLog, error) {
 	path, err := h.reconcilePlanPath(token)
 	if err != nil {
 		return nil, err

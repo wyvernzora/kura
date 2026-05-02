@@ -1,4 +1,4 @@
-package series
+package reconcile
 
 import (
 	"path/filepath"

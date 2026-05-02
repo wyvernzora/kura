@@ -1,9 +1,8 @@
-package series
+package scan
 
 import (
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -26,7 +25,6 @@ var (
 	seasonEpisodePattern = regexp.MustCompile(`(?i)\bS([0-9]{1,2})E([0-9]{1,3})\b`)
 	episodeMarkerPattern = regexp.MustCompile(`(?i)(?:^|[^[:alnum:]])E([0-9]{1,3})(?:[^[:alnum:]]|$)`)
 	seasonDirPattern     = regexp.MustCompile(`(?i)^Season[[:space:]]+([0-9]+)$`)
-	mediaFactsPattern    = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)
 )
 
 func parseSeasonDir(name string) (int, bool) {
@@ -41,34 +39,8 @@ func parseSeasonDir(name string) (int, bool) {
 	return season, true
 }
 
-func recognizedVideoFile(path string) bool {
-	extension := strings.ToLower(filepath.Ext(path))
-	return slices.Contains([]string{
-		".mkv",
-		".mp4",
-		".m4v",
-		".avi",
-		".mov",
-		".webm",
-		".ts",
-		".m2ts",
-		".wmv",
-		".ogm",
-		".ogv",
-	}, extension)
-}
-
-func inferSourceFromFilename(path string) string {
-	name := filepath.ToSlash(path)
-	matches := mediaFactsPattern.FindStringSubmatch(name)
-	if len(matches) != 2 {
-		return "unknown"
-	}
-	fields := strings.Fields(matches[1])
-	if len(fields) == 0 {
-		return "unknown"
-	}
-	return fields[0]
+func InferEpisodeFromFilename(name string) (int, int, bool) {
+	return inferEpisodeFromFilename(name)
 }
 
 func inferEpisodeFromFilename(name string) (int, int, bool) {

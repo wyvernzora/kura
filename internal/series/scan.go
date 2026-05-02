@@ -3,100 +3,43 @@ package series
 import (
 	"context"
 	"errors"
-	"fmt"
 
-	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/refs"
+	scanworkflow "github.com/wyvernzora/kura/internal/series/scan"
 )
 
-type ScanInput struct {
-	Replace bool
-}
+type ScanInput = scanworkflow.Input
 
-type ScanResult struct {
-	Series  refs.Series      `json:"series"`
-	Synced  []ScannedEpisode `json:"synced"`
-	Skipped []ImportSkip     `json:"skipped"`
-}
+type ScanResult = scanworkflow.Result
 
-type ImportSkip struct {
-	Path   string `json:"path"`
-	Code   string `json:"code"`
-	Reason string `json:"reason"`
-}
+type ImportSkip = scanworkflow.ImportSkip
 
 const (
-	SkipCodeSpecialNumberNotInferred = "special_number_not_inferred"
-	SkipCodeEpisodeNumberNotInferred = "episode_number_not_inferred"
-	SkipCodeSeasonMismatch           = "season_mismatch"
-	SkipCodeIgnoredDirectory         = "ignored_directory"
+	SkipCodeSpecialNumberNotInferred = scanworkflow.SkipCodeSpecialNumberNotInferred
+	SkipCodeEpisodeNumberNotInferred = scanworkflow.SkipCodeEpisodeNumberNotInferred
+	SkipCodeSeasonMismatch           = scanworkflow.SkipCodeSeasonMismatch
+	SkipCodeIgnoredDirectory         = scanworkflow.SkipCodeIgnoredDirectory
 )
 
-type ScannedEpisode struct {
-	Status     ScanStatus   `json:"status"`
-	Episode    refs.Episode `json:"episode"`
-	Source     string       `json:"source"`
-	Resolution string       `json:"resolution,omitempty"`
-	Path       string       `json:"path"`
-	Companions []string     `json:"companions"`
-}
+type ScannedEpisode = scanworkflow.ScannedEpisode
 
-type ScanStatus string
+type ScanStatus = scanworkflow.ScanStatus
 
 const (
-	ScanStatusAdded     ScanStatus = "added"
-	ScanStatusReplaced  ScanStatus = "replaced"
-	ScanStatusUpdated   ScanStatus = "updated"
-	ScanStatusUnchanged ScanStatus = "unchanged"
-	ScanStatusRemoved   ScanStatus = "removed"
+	ScanStatusAdded     = scanworkflow.ScanStatusAdded
+	ScanStatusReplaced  = scanworkflow.ScanStatusReplaced
+	ScanStatusUpdated   = scanworkflow.ScanStatusUpdated
+	ScanStatusUnchanged = scanworkflow.ScanStatusUnchanged
+	ScanStatusRemoved   = scanworkflow.ScanStatusRemoved
 )
 
-type EpisodeAlreadyExistsError struct {
-	Episode refs.Episode
-}
+type EpisodeAlreadyExistsError = scanworkflow.EpisodeAlreadyExistsError
 
-func (err EpisodeAlreadyExistsError) Error() string {
-	return fmt.Sprintf("episode %s already exists; pass replace to replace it", err.Episode.Marker())
-}
+type MetadataMissingEpisodeError = scanworkflow.MetadataMissingEpisodeError
 
-type MetadataMissingEpisodeError struct {
-	Episode refs.Episode
-}
-
-func (err MetadataMissingEpisodeError) Error() string {
-	return fmt.Sprintf("metadata has no %s", err.Episode.Marker())
-}
-
-type ScanStagedRecordsError struct {
-	Episodes []refs.Episode
-}
-
-func (err ScanStagedRecordsError) Error() string {
-	if len(err.Episodes) == 1 {
-		return fmt.Sprintf("series has staged episode %s; reconcile or reset staged records before scanning", err.Episodes[0].Marker())
-	}
-	return fmt.Sprintf("series has %d staged episodes; reconcile or reset staged records before scanning", len(err.Episodes))
-}
+type ScanStagedRecordsError = scanworkflow.ScanStagedRecordsError
 
 func (h Handle) Scan(ctx context.Context, in ScanInput) (ScanResult, error) {
-	scanner := newScanner(h, ctx, in)
-	if err := scanner.scan(); err != nil {
-		return ScanResult{}, err
-	}
-	return scanner.result, nil
-}
-
-func spineFromMetadata(seasons []metadata.Season) ([]SpineEpisode, error) {
-	var spine []SpineEpisode
-	for _, season := range seasons {
-		for _, episode := range season.Episodes {
-			if episode.Ref.IsZero() {
-				return nil, fmt.Errorf("series: metadata has invalid episode ref")
-			}
-			spine = append(spine, SpineEpisode{Ref: episode.Ref, AirDate: episode.Aired})
-		}
-	}
-	return spine, nil
+	return scanworkflow.NewRunner(h.root(), h.ref, h.source(), h.inspector(), h.now).Scan(ctx, in)
 }
 
 func IsNotTracked(err error) bool {

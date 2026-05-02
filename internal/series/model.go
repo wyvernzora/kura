@@ -1,11 +1,9 @@
 package series
 
 import (
-	"fmt"
-	"time"
-
-	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series/layout"
+	"github.com/wyvernzora/kura/internal/series/state"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -55,72 +53,16 @@ type CompanionFile struct {
 	MTime    string `json:"mtime"`
 }
 
-type FilesystemIssue struct {
-	Record string `json:"record"`
-	Path   string `json:"path"`
-	Code   string `json:"code"`
-	Reason string `json:"reason"`
-}
+type FilesystemIssue = layout.FilesystemIssue
 
-type seriesState struct {
-	Metadata       refs.Metadata
-	PreferredTitle textnorm.NFCString
-	CanonicalTitle textnorm.NFCString
-	LastScanned    time.Time
-	Episodes       map[refs.Episode]episodeState
-}
+type seriesState = state.State
 
-type episodeState struct {
-	AirDate string
-	Active  *MediaRecord
-	Staged  *MediaRecord
-}
+type episodeState = state.Episode
 
-type MediaRecord struct {
-	Path       string            `json:"path"`
-	Source     string            `json:"source"`
-	Resolution string            `json:"resolution,omitempty"`
-	Codec      string            `json:"codec,omitempty"`
-	Size       int64             `json:"size"`
-	MTime      time.Time         `json:"mtime"`
-	Companions []CompanionRecord `json:"companions"`
-}
+type MediaRecord = state.MediaRecord
 
-type CompanionRecord struct {
-	Path     string    `json:"path"`
-	Role     string    `json:"role,omitempty"`
-	Language string    `json:"language,omitempty"`
-	Label    string    `json:"label,omitempty"`
-	Size     int64     `json:"size"`
-	MTime    time.Time `json:"mtime"`
-}
+type CompanionRecord = state.CompanionRecord
 
 func cloneMediaRecord(in MediaRecord) MediaRecord {
-	out := in
-	out.Companions = append([]CompanionRecord(nil), in.Companions...)
-	if out.Companions == nil {
-		out.Companions = []CompanionRecord{}
-	}
-	return out
-}
-
-func newSeriesStateFromMetadata(ref refs.Metadata, metadataSeries metadata.Series) (seriesState, error) {
-	out := seriesState{
-		Metadata:       ref,
-		PreferredTitle: metadataSeries.PreferredTitle,
-		CanonicalTitle: metadataSeries.CanonicalTitle,
-		LastScanned:    time.Now().UTC(),
-		Episodes:       map[refs.Episode]episodeState{},
-	}
-	var spine []SpineEpisode
-	for _, season := range metadataSeries.Seasons {
-		for _, episode := range season.Episodes {
-			if episode.Ref.IsZero() {
-				return seriesState{}, fmt.Errorf("series: metadata has invalid episode ref")
-			}
-			spine = append(spine, SpineEpisode{Ref: episode.Ref, AirDate: episode.Aired})
-		}
-	}
-	editor{series: &out}.refreshSpine(spine)
-	return out, nil
+	return state.CloneMediaRecord(in)
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series"
-	"github.com/wyvernzora/kura/internal/series/wire"
 )
 
 type Library struct {
@@ -140,7 +139,7 @@ func (l *Library) Import(ctx context.Context, in ImportInput) (series.Handle, er
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 		return series.Handle{}, err
 	}
-	metadataPath := wire.SeriesMetadataPath(seriesDir.Path())
+	metadataPath := series.SeriesMetadataPath(seriesDir.Path())
 	if _, err := os.Stat(metadataPath); err == nil {
 		if !in.Force {
 			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)

@@ -1,4 +1,4 @@
-package series
+package reconcile
 
 import (
 	"bufio"
@@ -42,7 +42,7 @@ func (err ReconcilePlanAlreadyAppliedError) Error() string {
 	return fmt.Sprintf("series: reconcile plan %s was already applied", err.Token)
 }
 
-func (h Handle) CreateReconcilePlan() (StoredReconcilePlan, error) {
+func (h Runner) CreateReconcilePlan() (StoredReconcilePlan, error) {
 	plan, metadataRef, err := h.planReconcile()
 	if err != nil {
 		return StoredReconcilePlan{}, err
@@ -86,7 +86,7 @@ func (h Handle) CreateReconcilePlan() (StoredReconcilePlan, error) {
 	return stored, nil
 }
 
-func (h Handle) loadStoredReconcilePlan(token string) (StoredReconcilePlan, bool, error) {
+func (h Runner) loadStoredReconcilePlan(token string) (StoredReconcilePlan, bool, error) {
 	path, err := h.reconcilePlanPath(token)
 	if err != nil {
 		return StoredReconcilePlan{}, false, err
@@ -142,7 +142,7 @@ func reconcilePlanHasSuccess(r io.Reader) (bool, error) {
 	return false, scanner.Err()
 }
 
-func (h Handle) fromWireReconcilePlanRecord(record wire.ReconcilePlanRecordV1) (StoredReconcilePlan, error) {
+func (h Runner) fromWireReconcilePlanRecord(record wire.ReconcilePlanRecordV1) (StoredReconcilePlan, error) {
 	if record.Type != "plan" {
 		return StoredReconcilePlan{}, fmt.Errorf("series: reconcile plan record has type %q", record.Type)
 	}
@@ -191,7 +191,7 @@ func (h Handle) fromWireReconcilePlanRecord(record wire.ReconcilePlanRecordV1) (
 	}, nil
 }
 
-func (h Handle) reconcilePlanPath(token string) (string, error) {
+func (h Runner) reconcilePlanPath(token string) (string, error) {
 	token, err := parseReconcilePlanToken(token)
 	if err != nil {
 		return "", err

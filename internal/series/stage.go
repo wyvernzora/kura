@@ -9,6 +9,8 @@ import (
 
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
+	"github.com/wyvernzora/kura/internal/series/layout"
+	"github.com/wyvernzora/kura/internal/series/mediarecord"
 )
 
 type StageInput struct {
@@ -60,7 +62,7 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
 		return StageResult{}, err
 	}
-	if !recognizedVideoFile(mediaPath) {
+	if !mediarecord.RecognizedVideoFile(mediaPath) {
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
 		return StageResult{}, fmt.Errorf("episode path %q is not a recognized video file", mediaPath)
 	}
@@ -91,7 +93,7 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 }
 
 func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source string, companions []string) (MediaRecord, error) {
-	input := mediaRecordInput{
+	input := mediarecord.Input{
 		MediaPath:  mediaPath,
 		RecordPath: mediaPath,
 		Source:     source,
@@ -101,12 +103,12 @@ func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source strin
 		if err != nil {
 			return MediaRecord{}, err
 		}
-		input.CompanionPaths = append(input.CompanionPaths, mediaRecordCompanionInput{
+		input.CompanionPaths = append(input.CompanionPaths, mediarecord.CompanionInput{
 			MediaPath:  path,
 			RecordPath: path,
 		})
 	}
-	return h.mediaRecord(ctx, input)
+	return mediarecord.NewBuilder(layout.NewFiles(h.root()), h.inspector()).Build(ctx, input)
 }
 
 func cleanAbsoluteFilePath(path string) (string, error) {

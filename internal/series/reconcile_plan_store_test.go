@@ -45,10 +45,7 @@ func TestCreateReconcilePlanWritesCompactJSONL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateReconcilePlan: %v", err)
 	}
-	path, err := handle.reconcilePlanPath(stored.Token)
-	if err != nil {
-		t.Fatalf("reconcilePlanPath: %v", err)
-	}
+	path := filepath.Join(handle.root(), "Bookworm", ".kura", "reconcile", stored.Token+".jsonl")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)

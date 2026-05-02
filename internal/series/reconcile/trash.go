@@ -1,4 +1,4 @@
-package series
+package reconcile
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"github.com/wyvernzora/kura/internal/trash"
 )
 
-func (h Handle) writeTrash(episode refs.Episode, record MediaRecord, replaced Replaced) error {
+func (h Runner) writeTrash(episode refs.Episode, record MediaRecord, replaced Replaced) error {
 	id, err := trashIDFromPath(replaced.To)
 	if err != nil {
 		return err

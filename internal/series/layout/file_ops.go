@@ -1,4 +1,4 @@
-package series
+package layout
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 	"syscall"
 )
 
-func safeMoveFile(from string, to string) error {
+func SafeMoveFile(from string, to string) error {
 	if from == to {
 		return nil
 	}

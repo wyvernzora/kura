@@ -1,4 +1,4 @@
-package series
+package reconcile
 
 import (
 	"crypto/sha256"
@@ -14,12 +14,12 @@ import (
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
-func (h Handle) PlanReconcile() (ReconcilePlan, error) {
+func (h Runner) PlanReconcile() (ReconcilePlan, error) {
 	plan, _, err := h.planReconcile()
 	return plan, err
 }
 
-func (h Handle) planReconcile() (ReconcilePlan, refs.Metadata, error) {
+func (h Runner) planReconcile() (ReconcilePlan, refs.Metadata, error) {
 	series, err := h.load()
 	if err != nil {
 		return ReconcilePlan{}, "", err
@@ -43,7 +43,7 @@ func (h Handle) planReconcile() (ReconcilePlan, refs.Metadata, error) {
 	}, series.Metadata, nil
 }
 
-func (h Handle) snapshot() (string, error) {
+func (h Runner) snapshot() (string, error) {
 	path := wire.SeriesMetadataPath(filepath.Join(h.root(), filepath.FromSlash(h.ref.String())))
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -53,7 +53,7 @@ func (h Handle) snapshot() (string, error) {
 	return fmt.Sprintf("%x", sum[:]), nil
 }
 
-func (h Handle) planChanges(series seriesState) ([]Change, error) {
+func (h Runner) planChanges(series seriesState) ([]Change, error) {
 	var refsList []refs.Episode
 	for ref := range series.Episodes {
 		refsList = append(refsList, ref)
@@ -83,7 +83,7 @@ func (h Handle) planChanges(series seriesState) ([]Change, error) {
 	return changes, nil
 }
 
-func (h Handle) stagedChange(episodeRef refs.Episode, episode episodeState) (Change, error) {
+func (h Runner) stagedChange(episodeRef refs.Episode, episode episodeState) (Change, error) {
 	target, err := h.files().canonicalPath(h.ref, episodeRef, *episode.Staged)
 	if err != nil {
 		return Change{}, err
@@ -109,7 +109,7 @@ func (h Handle) stagedChange(episodeRef refs.Episode, episode episodeState) (Cha
 	return change, nil
 }
 
-func (h Handle) moveChange(episodeRef refs.Episode, active MediaRecord) (Change, bool, error) {
+func (h Runner) moveChange(episodeRef refs.Episode, active MediaRecord) (Change, bool, error) {
 	target, err := h.files().canonicalPath(h.ref, episodeRef, active)
 	if err != nil {
 		return Change{}, false, err
@@ -128,7 +128,7 @@ func (h Handle) moveChange(episodeRef refs.Episode, active MediaRecord) (Change,
 	}, true, nil
 }
 
-func (h Handle) validateMoves(changes []Change) error {
+func (h Runner) validateMoves(changes []Change) error {
 	seriesDir, err := h.files().seriesDir(h.ref)
 	if err != nil {
 		return err

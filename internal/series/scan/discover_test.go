@@ -1,10 +1,12 @@
-package series
+package scan
 
 import (
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/wyvernzora/kura/internal/series/layout"
 )
 
 func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
@@ -16,13 +18,13 @@ func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := layout.ParseSeriesDir(seriesDir)
 	if err != nil {
-		t.Fatalf("ParseSeriesDir: %v", err)
+		t.Fatalf("layout.ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("discoverSeriesEpisodes: %v", err)
+		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
 	}
 	if len(skipped) != 0 {
 		t.Fatalf("skipped = %#v, want none", skipped)
@@ -44,13 +46,13 @@ func TestDiscoverSeasonEpisodesRejectsFallbackSeasonMismatch(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[Conclave-Mendoi]_Mobile_Suit_Gundam_00_S2_-_01v2_[1280x720_H.264_AAC][4863FBE8].mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := layout.ParseSeriesDir(seriesDir)
 	if err != nil {
-		t.Fatalf("ParseSeriesDir: %v", err)
+		t.Fatalf("layout.ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("discoverSeriesEpisodes: %v", err)
+		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
 	}
 	if len(episodes) != 0 {
 		t.Fatalf("episodes = %#v, want none", episodes)
@@ -68,13 +70,13 @@ func TestDiscoverSeriesRootRejectsImplicitFallbackSeason(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seriesDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := layout.ParseSeriesDir(seriesDir)
 	if err != nil {
-		t.Fatalf("ParseSeriesDir: %v", err)
+		t.Fatalf("layout.ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("discoverSeriesEpisodes: %v", err)
+		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
 	}
 	if len(episodes) != 0 {
 		t.Fatalf("episodes = %#v, want none", episodes)
@@ -91,13 +93,13 @@ func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 		t.Fatalf("MkdirAll Downloads: %v", err)
 	}
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := layout.ParseSeriesDir(seriesDir)
 	if err != nil {
-		t.Fatalf("ParseSeriesDir: %v", err)
+		t.Fatalf("layout.ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("discoverSeriesEpisodes: %v", err)
+		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
 	}
 	if len(episodes) != 0 {
 		t.Fatalf("episodes = %#v, want none", episodes)
@@ -124,13 +126,13 @@ func TestDiscoverSeriesEpisodesIgnoresSeasonExtraDirectory(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(extraDir, "interview.mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := layout.ParseSeriesDir(seriesDir)
 	if err != nil {
-		t.Fatalf("ParseSeriesDir: %v", err)
+		t.Fatalf("layout.ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("discoverSeriesEpisodes: %v", err)
+		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
 	}
 	if len(episodes) != 0 {
 		t.Fatalf("episodes = %#v, want none", episodes)
@@ -152,13 +154,13 @@ func TestDiscoverSeriesEpisodesFindsCompanions(t *testing.T) {
 	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).nfo"))
 	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E02 (WebRip 1080p).mkv"))
 
-	dir, err := ParseSeriesDir(seriesDir)
+	dir, err := layout.ParseSeriesDir(seriesDir)
 	if err != nil {
-		t.Fatalf("ParseSeriesDir: %v", err)
+		t.Fatalf("layout.ParseSeriesDir: %v", err)
 	}
-	episodes, skipped, err := discoverSeriesEpisodes(dir)
+	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
-		t.Fatalf("discoverSeriesEpisodes: %v", err)
+		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
 	}
 	if len(skipped) != 0 {
 		t.Fatalf("skipped = %#v, want none", skipped)
