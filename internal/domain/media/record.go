@@ -10,7 +10,7 @@ import "time"
 type Record struct {
 	Path       string      `json:"path"`
 	Source     Source      `json:"source"`
-	Resolution Resolution  `json:"resolution,omitempty"`
+	Resolution Resolution  `json:"resolution"`
 	Codec      Codec       `json:"codec,omitempty"`
 	Size       int64       `json:"size"`
 	MTime      time.Time   `json:"mtime"`

@@ -9,8 +9,6 @@ import (
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
-const metadataDateLayout = "2006-01-02"
-
 type ReadInput struct {
 	Now time.Time
 }
