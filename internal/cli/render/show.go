@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/wyvernzora/kura/internal/cli/style"
@@ -46,14 +47,14 @@ func Show(w io.Writer, result response.Show, asJSON bool) error {
 		if _, err := fmt.Fprintf(w, "\n%s\n", label); err != nil {
 			return err
 		}
-		if err := writeShowSeasonTable(w, season.Episodes); err != nil {
+		if err := writeShowSeasonTable(w, result.Root, season.Episodes); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func writeShowSeasonTable(w io.Writer, episodes []response.EpisodeShow) error {
+func writeShowSeasonTable(w io.Writer, seriesRoot string, episodes []response.EpisodeShow) error {
 	styled := style.ShouldStyle(w)
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"EPISODE", "STATUS", "SOURCE", "RESOLUTION", "FILE"})
@@ -67,17 +68,17 @@ func writeShowSeasonTable(w io.Writer, episodes []response.EpisodeShow) error {
 	})
 	for _, episode := range episodes {
 		if episode.Active != nil && episode.Staged != nil {
-			appendShowRows(tw, episode.Episode, response.StatusPresent, episode.Active, styled, true)
-			appendShowRows(tw, episode.Episode, response.StatusStaged, episode.Staged, styled, false)
+			appendShowRows(tw, seriesRoot, episode.Episode, response.StatusPresent, episode.Active, styled, true)
+			appendShowRows(tw, seriesRoot, episode.Episode, response.StatusStaged, episode.Staged, styled, false)
 			continue
 		}
-		appendShowRows(tw, episode.Episode, episode.Status, firstShowMedia(episode), styled, false)
+		appendShowRows(tw, seriesRoot, episode.Episode, episode.Status, firstShowMedia(episode), styled, false)
 	}
 	return style.WriteStyledTable(w, tw, nil)
 }
 
-func appendShowRows(tw table.Writer, episode refs.Episode, status response.Status, media *response.MediaShow, styled bool, retired bool) {
-	tw.AppendRow(showEpisodeRow(episode, status, media, styled, retired))
+func appendShowRows(tw table.Writer, seriesRoot string, episode refs.Episode, status response.Status, media *response.MediaShow, styled bool, retired bool) {
+	tw.AppendRow(showEpisodeRow(seriesRoot, episode, status, media, styled, retired))
 	if media == nil {
 		return
 	}
@@ -86,7 +87,7 @@ func appendShowRows(tw table.Writer, episode refs.Episode, status response.Statu
 		if index == len(media.Companions)-1 {
 			prefix = "    ┗ "
 		}
-		row := table.Row{"", "", "", "", prefix + companion.Path}
+		row := table.Row{"", "", "", "", prefix + showRelPath(seriesRoot, companion.Path)}
 		if styled && retired {
 			for index := range row {
 				row[index] = style.Retired(row[index].(string))
@@ -96,14 +97,14 @@ func appendShowRows(tw table.Writer, episode refs.Episode, status response.Statu
 	}
 }
 
-func showEpisodeRow(episode refs.Episode, status response.Status, media *response.MediaShow, styled bool, retired bool) table.Row {
+func showEpisodeRow(seriesRoot string, episode refs.Episode, status response.Status, media *response.MediaShow, styled bool, retired bool) table.Row {
 	source := ""
 	resolution := ""
 	file := ""
 	if media != nil {
-		source = media.Source
+		source = displaySource(media.Source, status)
 		resolution = media.Resolution
-		file = media.File
+		file = showRelPath(seriesRoot, media.File)
 	}
 	row := table.Row{
 		episode.Marker(),
@@ -125,6 +126,33 @@ func showEpisodeRow(episode refs.Episode, status response.Status, media *respons
 	row[2] = style.MediaSource(source, true)
 	row[3] = style.MediaResolution(resolution, true)
 	return row
+}
+
+// showRelPath strips the series root prefix from path so the table column
+// stays narrow. Paths outside the series dir (typically staged inbox files)
+// are returned as-is.
+func showRelPath(seriesRoot, path string) string {
+	if path == "" || seriesRoot == "" {
+		return path
+	}
+	prefix := seriesRoot
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	if strings.HasPrefix(path, prefix) {
+		return path[len(prefix):]
+	}
+	return path
+}
+
+// displaySource hides the placeholder "Unknown" source for episodes whose
+// file is not actually available on disk. Recorded sources are still shown
+// for present + staged rows even when they happen to be Unknown.
+func displaySource(source string, status response.Status) string {
+	if source == "Unknown" && (status == response.StatusUnavailable || status == response.StatusMissing || status == response.StatusPending) {
+		return ""
+	}
+	return source
 }
 
 func firstShowMedia(episode response.EpisodeShow) *response.MediaShow {
