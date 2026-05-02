@@ -1155,6 +1155,257 @@ func TestReconcileApplyCommandAppliesPlanToken(t *testing.T) {
 	}
 }
 
+func TestReconcileApplyHandlesSelfRefresh(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	mediainfoCommand := newFakeMediaInfoCommand(t, root)
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	canonicalRel := "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv"
+	canonicalAbs := filepath.Join(seriesDir, filepath.FromSlash(canonicalRel))
+	writeFile(t, canonicalAbs, "episode")
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"active": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, canonicalRel))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand)
+	err := run([]string{
+		"stage",
+		"--episode", "S01E01",
+		"--source", "WebRip",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+		canonicalRel,
+	}, rt)
+	if err != nil {
+		t.Fatalf("stage: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = run([]string{
+		"reconcile",
+		"plan",
+		"--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, rt)
+	if err != nil {
+		t.Fatalf("plan: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var planOutput map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &planOutput); err != nil {
+		t.Fatalf("unmarshal plan: %v\nstdout:\n%s", err, stdout.String())
+	}
+	token := planOutput["token"].(string)
+	plan := planOutput["plan"].(map[string]any)
+	changes := plan["changes"].([]any)
+	if len(changes) != 1 {
+		t.Fatalf("len(changes) = %d, want 1", len(changes))
+	}
+	change := changes[0].(map[string]any)
+	if got := change["kind"]; got != "add" {
+		t.Fatalf("kind = %v, want add (self-refresh skips trash)", got)
+	}
+	if _, ok := change["replaced"]; ok {
+		t.Fatalf("replaced field present, want absent for self-refresh: %#v", change)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = run([]string{
+		"reconcile",
+		"apply",
+		"--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+		token,
+	}, rt)
+	if err != nil {
+		t.Fatalf("apply: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if _, err := os.Stat(canonicalAbs); err != nil {
+		t.Fatalf("canonical file missing after self-refresh apply: %v", err)
+	}
+	if entries, err := os.ReadDir(filepath.Join(seriesDir, ".kura", "trash")); err == nil && len(entries) > 0 {
+		t.Fatalf("trash dir non-empty after self-refresh: %v entries", len(entries))
+	}
+}
+
+func TestReconcileApplySelfRefreshRenamesInPlace(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	mediainfoCommand := newFakeMediaInfoCommand(t, root)
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	originalRel := "Season 1/[LoliHouse] Bookworm - 01 [WebRip 1080p].mkv"
+	originalAbs := filepath.Join(seriesDir, filepath.FromSlash(originalRel))
+	writeFile(t, originalAbs, "episode")
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"active": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, originalRel))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand)
+	err := run([]string{
+		"stage",
+		"--episode", "S01E01",
+		"--source", "BDRip",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+		originalRel,
+	}, rt)
+	if err != nil {
+		t.Fatalf("stage: %v\nstderr:\n%s", err, stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = run([]string{
+		"reconcile",
+		"plan",
+		"--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, rt)
+	if err != nil {
+		t.Fatalf("plan: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var planOutput map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &planOutput); err != nil {
+		t.Fatalf("unmarshal plan: %v\nstdout:\n%s", err, stdout.String())
+	}
+	token := planOutput["token"].(string)
+	plan := planOutput["plan"].(map[string]any)
+	changes := plan["changes"].([]any)
+	if len(changes) != 1 {
+		t.Fatalf("len(changes) = %d, want 1", len(changes))
+	}
+	change := changes[0].(map[string]any)
+	if got := change["kind"]; got != "add" {
+		t.Fatalf("kind = %v, want add", got)
+	}
+	if _, ok := change["replaced"]; ok {
+		t.Fatalf("replaced field present, want absent: %#v", change)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = run([]string{
+		"reconcile",
+		"apply",
+		"--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+		token,
+	}, rt)
+	if err != nil {
+		t.Fatalf("apply: %v\nstderr:\n%s", err, stderr.String())
+	}
+	canonicalAbs := filepath.Join(seasonDir, "Bookworm - S01E01 (BDRip 1080p).mkv")
+	if _, err := os.Stat(canonicalAbs); err != nil {
+		t.Fatalf("canonical (BDRip) file missing after rename: %v", err)
+	}
+	if _, err := os.Stat(originalAbs); !os.IsNotExist(err) {
+		t.Fatalf("original LoliHouse file still present after rename: err=%v", err)
+	}
+	if entries, err := os.ReadDir(filepath.Join(seriesDir, ".kura", "trash")); err == nil && len(entries) > 0 {
+		t.Fatalf("trash dir non-empty after self-refresh rename: %d entries", len(entries))
+	}
+}
+
+func TestStageAllowsSamePathRefreshWithoutReplace(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	mediainfoCommand := newFakeMediaInfoCommand(t, root)
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	canonicalRel := "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv"
+	canonicalAbs := filepath.Join(seriesDir, filepath.FromSlash(canonicalRel))
+	writeFile(t, canonicalAbs, "episode")
+	writeSeriesJSON(t, seriesDir, fmt.Sprintf(`{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"active": {
+					"path": %q,
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`, canonicalRel))
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := testRunContextWithLibraryRootAndMediaInfo(&stdout, &stderr, root, mediainfoCommand)
+	err := run([]string{
+		"stage",
+		"--episode", "S01E01",
+		"--source", "WebRip",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+		canonicalRel,
+	}, rt)
+	if err != nil {
+		t.Fatalf("same-path stage without --replace: %v\nstderr:\n%s", err, stderr.String())
+	}
+}
+
 func TestReconcilePlanCommandReportsMissingTVDBKey(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Bookworm")

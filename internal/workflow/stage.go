@@ -42,14 +42,6 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
 		return response.StageResult{}, &MetadataMissingEpisodeError{Episode: in.Episode}
 	}
-	if episode.Active != nil && !in.Replace {
-		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
-		return response.StageResult{}, &EpisodeAlreadyExistsError{Episode: in.Episode}
-	}
-	if episode.Staged != nil && !in.Replace {
-		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
-		return response.StageResult{}, &StagedEpisodeAlreadyExistsError{Episode: in.Episode}
-	}
 	mediaPath, err := cleanAbsoluteFilePath(in.MediaPath)
 	if err != nil {
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
@@ -58,6 +50,20 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 	if !mediarecord.RecognizedVideoFile(mediaPath) {
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
 		return response.StageResult{}, fmt.Errorf("episode path %q is not a recognized video file", mediaPath)
+	}
+	// Active collision: an active record at a different path requires --replace.
+	// Same-path re-stage is a metadata refresh (e.g. updating Source) and is
+	// allowed without --replace; reconcile detects this and skips the trash
+	// step. Same applies when the active file is missing from disk.
+	if episode.Active != nil && episode.Active.Path != mediaPath && !in.Replace {
+		if _, statErr := os.Stat(episode.Active.Path); statErr == nil {
+			progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
+			return response.StageResult{}, &EpisodeAlreadyExistsError{Episode: in.Episode}
+		}
+	}
+	if episode.Staged != nil && !in.Replace {
+		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 0, 0)
+		return response.StageResult{}, &StagedEpisodeAlreadyExistsError{Episode: in.Episode}
 	}
 	progress.Update(ctx, "stage", fmt.Sprintf("Inspecting %s", filepath.Base(mediaPath)), 1, 0)
 	builderInput := mediarecord.Input{

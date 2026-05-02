@@ -127,6 +127,14 @@ func stagedReconcileChange(files layout.Files, ref refs.Series, seriesDirPath st
 		Companions: companionReconcileMoves(episode.Staged.Path, target, episode.Staged.Companions),
 	}
 	if episode.Active != nil {
+		// Self-refresh: staged points at the same physical file as active
+		// (typically a metadata-only update such as changing Source). Skip
+		// the trash step entirely; the move loop renames in place if the
+		// canonical filename changed, and applyPlanToSeries promotes the
+		// staged record over active.
+		if episode.Active.Path == episode.Staged.Path {
+			return change, nil
+		}
 		activeRel, err := relativeRecord(seriesDirPath, *episode.Active)
 		if err != nil {
 			return reconcile.Change{}, err
