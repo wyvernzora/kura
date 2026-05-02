@@ -7,6 +7,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 )
 
 type FilesystemIssue struct {
@@ -16,22 +17,22 @@ type FilesystemIssue struct {
 	Reason string `json:"reason"`
 }
 
-func EpisodeFilesystemIssues(seriesDir SeriesDir, episode series.Episode) []FilesystemIssue {
+func EpisodeFilesystemIssues(dir seriesdir.SeriesDir, episode series.Episode) []FilesystemIssue {
 	var issues []FilesystemIssue
 	if episode.Active != nil {
-		issues = append(issues, RecordFilesystemIssues(seriesDir, "active", *episode.Active)...)
+		issues = append(issues, RecordFilesystemIssues(dir, "active", *episode.Active)...)
 	}
 	if episode.Staged != nil {
-		issues = append(issues, RecordFilesystemIssues(seriesDir, "staged", *episode.Staged)...)
+		issues = append(issues, RecordFilesystemIssues(dir, "staged", *episode.Staged)...)
 	}
 	return issues
 }
 
-func RecordFilesystemIssues(seriesDir SeriesDir, recordName string, record media.Record) []FilesystemIssue {
+func RecordFilesystemIssues(dir seriesdir.SeriesDir, recordName string, record media.Record) []FilesystemIssue {
 	var issues []FilesystemIssue
-	issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "media", record.Path)...)
+	issues = append(issues, PathFilesystemIssues(dir, recordName, "media", record.Path)...)
 	for _, companion := range record.Companions {
-		issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "companion", companion.Path)...)
+		issues = append(issues, PathFilesystemIssues(dir, recordName, "companion", companion.Path)...)
 	}
 	return issues
 }
@@ -39,7 +40,7 @@ func RecordFilesystemIssues(seriesDir SeriesDir, recordName string, record media
 // PathFilesystemIssues stats path and reports filesystem issues. Path must be
 // absolute; series.Series records carry absolute paths in memory after
 // seriesfile.Load.
-func PathFilesystemIssues(seriesDir SeriesDir, recordName string, kind string, rawPath string) []FilesystemIssue {
+func PathFilesystemIssues(dir seriesdir.SeriesDir, recordName string, kind string, rawPath string) []FilesystemIssue {
 	path := rawPath
 	if !filepath.IsAbs(path) {
 		return []FilesystemIssue{{

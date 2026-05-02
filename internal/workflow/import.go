@@ -9,8 +9,8 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -43,7 +43,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 		return response.AddResult{}, err
 	}
-	if _, err := layout.ParseSeriesDir(paths.SeriesDir(deps.LibRoot, ref)); err != nil {
+	if _, err := seriesdir.Parse(paths.SeriesDir(deps.LibRoot, ref)); err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 		if errors.Is(err, os.ErrNotExist) {
 			return response.AddResult{}, &SeriesNotFoundError{Ref: ref}

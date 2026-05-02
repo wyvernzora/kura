@@ -11,6 +11,7 @@ import (
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -40,7 +41,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 	if preferredTitle == "" {
 		preferredTitle = in.Ref.String()
 	}
-	seriesDir, err := layout.ParseSeriesDir(paths.SeriesDir(deps.LibRoot, in.Ref))
+	seriesDir, err := seriesdir.Parse(paths.SeriesDir(deps.LibRoot, in.Ref))
 	if err != nil {
 		return response.Show{}, err
 	}
@@ -55,7 +56,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 	}, nil
 }
 
-func buildSeasons(seriesDir layout.SeriesDir, model *domainseries.Series, now time.Time) []response.SeasonShow {
+func buildSeasons(seriesDir seriesdir.SeriesDir, model *domainseries.Series, now time.Time) []response.SeasonShow {
 	bySeason := map[int][]response.EpisodeShow{}
 	for ref, episode := range model.Episodes {
 		view := response.EpisodeShow{
@@ -88,7 +89,7 @@ func buildSeasons(seriesDir layout.SeriesDir, model *domainseries.Series, now ti
 	return out
 }
 
-func computeEpisodeStatus(seriesDir layout.SeriesDir, episode domainseries.Episode, now time.Time) response.Status {
+func computeEpisodeStatus(seriesDir seriesdir.SeriesDir, episode domainseries.Episode, now time.Time) response.Status {
 	if episode.Active != nil && episode.Staged != nil {
 		return response.StatusStagedReplacement
 	}
@@ -107,7 +108,7 @@ func computeEpisodeStatus(seriesDir layout.SeriesDir, episode domainseries.Episo
 	return response.StatusMissing
 }
 
-func episodeIssues(seriesDir layout.SeriesDir, episode domainseries.Episode) []response.Issue {
+func episodeIssues(seriesDir seriesdir.SeriesDir, episode domainseries.Episode) []response.Issue {
 	raw := layout.EpisodeFilesystemIssues(seriesDir, episode)
 	if len(raw) == 0 {
 		return nil

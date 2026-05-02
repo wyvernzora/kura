@@ -10,9 +10,9 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/mediarecord"
 	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 )
 
 type DiscoveredFile struct {
@@ -22,7 +22,7 @@ type DiscoveredFile struct {
 	Companions []string
 }
 
-func DiscoverSeriesEpisodes(seriesDir layout.SeriesDir) ([]DiscoveredFile, []ImportSkip, error) {
+func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []ImportSkip, error) {
 	var episodes []DiscoveredFile
 	var skipped []ImportSkip
 	err := fs.WalkDir(os.DirFS(seriesDir.Path()), ".", func(relPath string, entry fs.DirEntry, walkErr error) error {
@@ -92,7 +92,7 @@ func isSeasonExtraDir(relPath string, name string) bool {
 	return strings.EqualFold(name, paths.ExtraDirName)
 }
 
-func discoveredEpisode(seriesDir layout.SeriesDir, relPath string, name string) (DiscoveredFile, *ImportSkip, error) {
+func discoveredEpisode(seriesDir seriesdir.SeriesDir, relPath string, name string) (DiscoveredFile, *ImportSkip, error) {
 	switch relPathDepth(relPath) {
 	case 1:
 		return discoveredSpecial(seriesDir, relPath, name)
@@ -103,7 +103,7 @@ func discoveredEpisode(seriesDir layout.SeriesDir, relPath string, name string) 
 	}
 }
 
-func discoveredSpecial(seriesDir layout.SeriesDir, relPath string, name string) (DiscoveredFile, *ImportSkip, error) {
+func discoveredSpecial(seriesDir seriesdir.SeriesDir, relPath string, name string) (DiscoveredFile, *ImportSkip, error) {
 	season, number, ok := inferEpisodeFromFilename(name)
 	if !ok || season != 0 {
 		return DiscoveredFile{}, &ImportSkip{Path: relPath, Code: SkipCodeSpecialNumberNotInferred, Reason: "could not infer special number"}, nil
@@ -111,7 +111,7 @@ func discoveredSpecial(seriesDir layout.SeriesDir, relPath string, name string) 
 	return discoveredFileFor(seriesDir, relPath, 0, number)
 }
 
-func discoveredSeasonEpisode(seriesDir layout.SeriesDir, relPath string, name string) (DiscoveredFile, *ImportSkip, error) {
+func discoveredSeasonEpisode(seriesDir seriesdir.SeriesDir, relPath string, name string) (DiscoveredFile, *ImportSkip, error) {
 	seasonDir, _, _ := strings.Cut(relPath, "/")
 	season, ok := parseSeasonDir(seasonDir)
 	if !ok {
@@ -127,7 +127,7 @@ func discoveredSeasonEpisode(seriesDir layout.SeriesDir, relPath string, name st
 	return discoveredFileFor(seriesDir, relPath, season, number)
 }
 
-func discoveredFileFor(seriesDir layout.SeriesDir, relPath string, season int, number int) (DiscoveredFile, *ImportSkip, error) {
+func discoveredFileFor(seriesDir seriesdir.SeriesDir, relPath string, season int, number int) (DiscoveredFile, *ImportSkip, error) {
 	ref, err := refs.NewEpisode(season, number)
 	if err != nil {
 		return DiscoveredFile{}, nil, err
@@ -144,7 +144,7 @@ func discoveredFileFor(seriesDir layout.SeriesDir, relPath string, season int, n
 	}, nil, nil
 }
 
-func matchingCompanions(seriesDir layout.SeriesDir, parentRel string, videoName string) ([]string, error) {
+func matchingCompanions(seriesDir seriesdir.SeriesDir, parentRel string, videoName string) ([]string, error) {
 	parentDir := seriesDir.Path()
 	if parentRel != "." {
 		parentDir = filepath.Join(parentDir, filepath.FromSlash(parentRel))

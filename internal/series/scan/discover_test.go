@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/series/layout"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 )
 
 func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
@@ -18,9 +18,9 @@ func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := seriesdir.Parse(seriesDir)
 	if err != nil {
-		t.Fatalf("layout.ParseSeriesDir: %v", err)
+		t.Fatalf("seriesdir.Parse: %v", err)
 	}
 	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
@@ -46,9 +46,9 @@ func TestDiscoverSeasonEpisodesRejectsFallbackSeasonMismatch(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seasonDir, "[Conclave-Mendoi]_Mobile_Suit_Gundam_00_S2_-_01v2_[1280x720_H.264_AAC][4863FBE8].mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := seriesdir.Parse(seriesDir)
 	if err != nil {
-		t.Fatalf("layout.ParseSeriesDir: %v", err)
+		t.Fatalf("seriesdir.Parse: %v", err)
 	}
 	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
@@ -70,9 +70,9 @@ func TestDiscoverSeriesRootRejectsImplicitFallbackSeason(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(seriesDir, "[SubsPlease] Sousou no Frieren - 12 (1080p) [ABC12345].mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := seriesdir.Parse(seriesDir)
 	if err != nil {
-		t.Fatalf("layout.ParseSeriesDir: %v", err)
+		t.Fatalf("seriesdir.Parse: %v", err)
 	}
 	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
@@ -93,9 +93,9 @@ func TestDiscoverSeriesEpisodesReportsIgnoredDirectories(t *testing.T) {
 		t.Fatalf("MkdirAll Downloads: %v", err)
 	}
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := seriesdir.Parse(seriesDir)
 	if err != nil {
-		t.Fatalf("layout.ParseSeriesDir: %v", err)
+		t.Fatalf("seriesdir.Parse: %v", err)
 	}
 	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
@@ -126,9 +126,9 @@ func TestDiscoverSeriesEpisodesIgnoresSeasonExtraDirectory(t *testing.T) {
 	}
 	writeScanTestFile(t, filepath.Join(extraDir, "interview.mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := seriesdir.Parse(seriesDir)
 	if err != nil {
-		t.Fatalf("layout.ParseSeriesDir: %v", err)
+		t.Fatalf("seriesdir.Parse: %v", err)
 	}
 	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {
@@ -154,9 +154,9 @@ func TestDiscoverSeriesEpisodesFindsCompanions(t *testing.T) {
 	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).nfo"))
 	writeScanTestFile(t, filepath.Join(seasonDir, "Bookworm - S01E02 (WebRip 1080p).mkv"))
 
-	dir, err := layout.ParseSeriesDir(seriesDir)
+	dir, err := seriesdir.Parse(seriesDir)
 	if err != nil {
-		t.Fatalf("layout.ParseSeriesDir: %v", err)
+		t.Fatalf("seriesdir.Parse: %v", err)
 	}
 	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 )
 
 type Files struct {
@@ -25,8 +26,8 @@ type FileFacts struct {
 	MTime time.Time
 }
 
-func (f Files) SeriesDir(ref refs.Series) (SeriesDir, error) {
-	return ParseSeriesDir(paths.SeriesDir(f.root, ref))
+func (f Files) SeriesDir(ref refs.Series) (seriesdir.SeriesDir, error) {
+	return seriesdir.Parse(paths.SeriesDir(f.root, ref))
 }
 
 func (f Files) Stat(path string) (FileFacts, error) {

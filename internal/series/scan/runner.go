@@ -14,6 +14,7 @@ import (
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/mediarecord"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -48,7 +49,7 @@ type scanner struct {
 	ctx       context.Context
 	input     Input
 	model     domainseries.Series
-	seriesDir layout.SeriesDir
+	seriesDir seriesdir.SeriesDir
 	result    Result
 }
 
