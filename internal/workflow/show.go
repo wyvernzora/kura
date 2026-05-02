@@ -9,7 +9,6 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
@@ -93,7 +92,8 @@ func computeEpisodeStatus(seriesDir seriesdir.SeriesDir, episode domainseries.Ep
 	if episode.Active != nil && episode.Staged != nil {
 		return response.StatusStagedReplacement
 	}
-	if episode.Active != nil && len(layout.PathFilesystemIssues(seriesDir, "active", "media", episode.Active.Path)) > 0 {
+	_ = seriesDir
+	if episode.Active != nil && len(pathFilesystemIssues("active", "media", episode.Active.Path)) > 0 {
 		return response.StatusUnavailable
 	}
 	if episode.Staged != nil {
@@ -109,7 +109,7 @@ func computeEpisodeStatus(seriesDir seriesdir.SeriesDir, episode domainseries.Ep
 }
 
 func episodeIssues(seriesDir seriesdir.SeriesDir, episode domainseries.Episode) []response.Issue {
-	raw := layout.EpisodeFilesystemIssues(seriesDir, episode)
+	raw := episodeFilesystemIssues(seriesDir, episode)
 	if len(raw) == 0 {
 		return nil
 	}
