@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 
@@ -82,9 +82,9 @@ func newReconcilePlanTestHandle(t *testing.T, now *time.Time) Handle {
 				AirDate: "2019-10-03",
 				Active: &MediaRecord{
 					Path:       "Season 1/old episode.mkv",
-					Source:     "webrip",
-					Resolution: "1920x1080",
-					Codec:      "HEVC",
+					Source:     media.SourceWebRip,
+					Resolution: mustParseResolution(t, "1920x1080"),
+					Codec:      media.Codec("HEVC"),
 					Size:       7,
 					MTime:      mtime,
 					Companions: []CompanionRecord{},

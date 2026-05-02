@@ -6,9 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/series/state"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
 type Files struct {
@@ -39,14 +38,9 @@ func (f Files) Stat(path string) (FileFacts, error) {
 	return FileFacts{Size: info.Size(), MTime: info.ModTime().UTC().Truncate(time.Second)}, nil
 }
 
-func (f Files) CanonicalPath(ref refs.Series, episode refs.Episode, record state.MediaRecord) (string, error) {
+func (f Files) CanonicalPath(ref refs.Series, episode refs.Episode, record media.Record) (string, error) {
 	title := CleanFileTitle(ref.String())
-	facts := MediaFilenameFacts{Source: media.ParseSource(record.Source)}
-	if record.Resolution != "" {
-		if resolution, err := media.ParseResolution(record.Resolution); err == nil {
-			facts.Resolution = resolution
-		}
-	}
+	facts := MediaFilenameFacts{Source: record.Source, Resolution: record.Resolution}
 	filename := BuildMediaFilename(title, episode, facts, filepath.Ext(record.Path)).String()
 	if episode.Season() == 0 {
 		return filename, nil

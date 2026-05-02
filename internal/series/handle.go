@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/metadata"
 )
 

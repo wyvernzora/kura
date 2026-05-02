@@ -3,6 +3,7 @@ package reconcile
 import (
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/state"
@@ -42,9 +43,9 @@ type seriesState = state.State
 
 type episodeState = state.Episode
 
-type MediaRecord = state.MediaRecord
+type MediaRecord = media.Record
 
-type CompanionRecord = state.CompanionRecord
+type CompanionRecord = media.Companion
 
 type repo struct {
 	root string

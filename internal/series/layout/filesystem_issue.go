@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/series/state"
 )
 
@@ -26,10 +27,10 @@ func EpisodeFilesystemIssues(seriesDir SeriesDir, episode state.Episode) []Files
 	return issues
 }
 
-func RecordFilesystemIssues(seriesDir SeriesDir, recordName string, media state.MediaRecord, absolute bool) []FilesystemIssue {
+func RecordFilesystemIssues(seriesDir SeriesDir, recordName string, record media.Record, absolute bool) []FilesystemIssue {
 	var issues []FilesystemIssue
-	issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "media", media.Path, absolute)...)
-	for _, companion := range media.Companions {
+	issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "media", record.Path, absolute)...)
+	for _, companion := range record.Companions {
 		issues = append(issues, PathFilesystemIssues(seriesDir, recordName, "companion", companion.Path, absolute)...)
 	}
 	return issues

@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/mediarecord"
 	"github.com/wyvernzora/kura/internal/series/wire"

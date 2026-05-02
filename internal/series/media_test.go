@@ -3,8 +3,8 @@ package series
 import (
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
 func TestFileTitleNormalizesAndCompares(t *testing.T) {

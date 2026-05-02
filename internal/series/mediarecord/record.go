@@ -9,7 +9,6 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/series/layout"
-	"github.com/wyvernzora/kura/internal/series/state"
 )
 
 var mediaFactsPattern = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)
@@ -35,34 +34,38 @@ type CompanionInput struct {
 	RecordPath string
 }
 
-func (b Builder) Build(ctx context.Context, in Input) (state.MediaRecord, error) {
+func (b Builder) Build(ctx context.Context, in Input) (media.Record, error) {
 	info, err := b.inspector.Inspect(ctx, in.MediaPath)
 	if err != nil {
-		return state.MediaRecord{}, err
+		return media.Record{}, err
 	}
 	facts, err := b.files.Stat(in.MediaPath)
 	if err != nil {
-		return state.MediaRecord{}, err
+		return media.Record{}, err
 	}
 	source := in.Source
 	if source == "" {
-		source = media.ParseSource(InferSourceFromFilename(in.RecordPath)).String()
+		source = InferSourceFromFilename(in.RecordPath)
 	}
-	record := state.MediaRecord{
+	resolution, err := media.ParseResolution(info.Resolution)
+	if err != nil {
+		return media.Record{}, err
+	}
+	record := media.Record{
 		Path:       in.RecordPath,
-		Source:     media.ParseSource(source).String(),
-		Resolution: info.Resolution,
-		Codec:      info.VideoCodec,
+		Source:     media.ParseSource(source),
+		Resolution: resolution,
+		Codec:      media.ParseCodec(info.VideoCodec),
 		Size:       facts.Size,
 		MTime:      facts.MTime,
-		Companions: []state.CompanionRecord{},
+		Companions: []media.Companion{},
 	}
 	for _, companion := range in.CompanionPaths {
 		facts, err := b.files.Stat(companion.MediaPath)
 		if err != nil {
-			return state.MediaRecord{}, err
+			return media.Record{}, err
 		}
-		record.Companions = append(record.Companions, state.CompanionRecord{
+		record.Companions = append(record.Companions, media.Companion{
 			Path:  companion.RecordPath,
 			Size:  facts.Size,
 			MTime: facts.MTime,

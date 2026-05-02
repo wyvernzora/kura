@@ -92,8 +92,8 @@ func (h Runner) stagedChange(episodeRef refs.Episode, episode episodeState) (Cha
 		Kind:       ChangeAdd,
 		Episode:    episodeRef,
 		FileMove:   FileMove{From: episode.Staged.Path, To: target},
-		Source:     episode.Staged.Source,
-		Resolution: episode.Staged.Resolution,
+		Source:     episode.Staged.Source.String(),
+		Resolution: episode.Staged.Resolution.String(),
 		Companions: companionMoves(episode.Staged.Path, target, episode.Staged.Companions),
 	}
 	if episode.Active != nil {
@@ -101,8 +101,8 @@ func (h Runner) stagedChange(episodeRef refs.Episode, episode episodeState) (Cha
 		change.Kind = ChangeReplace
 		change.Replaced = &Replaced{
 			FileMove:   FileMove{From: episode.Active.Path, To: trashRelPath(id, episode.Active.Path)},
-			Source:     episode.Active.Source,
-			Resolution: episode.Active.Resolution,
+			Source:     episode.Active.Source.String(),
+			Resolution: episode.Active.Resolution.String(),
 			Companions: trashCompanionMoves(id, episode.Active.Companions),
 		}
 	}
@@ -122,8 +122,8 @@ func (h Runner) moveChange(episodeRef refs.Episode, active MediaRecord) (Change,
 		Kind:       ChangeMove,
 		Episode:    episodeRef,
 		FileMove:   FileMove{From: active.Path, To: target},
-		Source:     active.Source,
-		Resolution: active.Resolution,
+		Source:     active.Source.String(),
+		Resolution: active.Resolution.String(),
 		Companions: companionMoves,
 	}, true, nil
 }

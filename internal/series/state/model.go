@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/textnorm"
@@ -19,36 +20,8 @@ type State struct {
 
 type Episode struct {
 	AirDate string
-	Active  *MediaRecord
-	Staged  *MediaRecord
-}
-
-type MediaRecord struct {
-	Path       string            `json:"path"`
-	Source     string            `json:"source"`
-	Resolution string            `json:"resolution,omitempty"`
-	Codec      string            `json:"codec,omitempty"`
-	Size       int64             `json:"size"`
-	MTime      time.Time         `json:"mtime"`
-	Companions []CompanionRecord `json:"companions"`
-}
-
-type CompanionRecord struct {
-	Path     string    `json:"path"`
-	Role     string    `json:"role,omitempty"`
-	Language string    `json:"language,omitempty"`
-	Label    string    `json:"label,omitempty"`
-	Size     int64     `json:"size"`
-	MTime    time.Time `json:"mtime"`
-}
-
-func CloneMediaRecord(in MediaRecord) MediaRecord {
-	out := in
-	out.Companions = append([]CompanionRecord(nil), in.Companions...)
-	if out.Companions == nil {
-		out.Companions = []CompanionRecord{}
-	}
-	return out
+	Active  *media.Record
+	Staged  *media.Record
 }
 
 func NewFromMetadata(ref refs.Metadata, metadataSeries metadata.Series) (State, error) {

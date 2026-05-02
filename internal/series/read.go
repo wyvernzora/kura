@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -122,25 +121,13 @@ func formatOptionalTime(value time.Time) string {
 
 func episodeMedia(record MediaRecord) EpisodeMedia {
 	return EpisodeMedia{
-		Source:     media.ParseSource(record.Source).Display(),
-		Resolution: displayResolution(record.Resolution),
-		Codec:      record.Codec,
+		Source:     record.Source.Display(),
+		Resolution: record.Resolution.Display(),
+		Codec:      record.Codec.String(),
 		Size:       record.Size,
 		File:       record.Path,
 		Companions: companionFiles(record.Companions),
 	}
-}
-
-func displayResolution(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-	resolution, err := media.ParseResolution(raw)
-	if err != nil || !resolution.Known() {
-		return raw
-	}
-	return resolution.Display()
 }
 
 func companionFiles(in []CompanionRecord) []CompanionFile {

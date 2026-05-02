@@ -33,9 +33,9 @@ func (h Runner) writeTrash(episode refs.Episode, record MediaRecord, replaced Re
 func trashRecord(in MediaRecord) trash.Record {
 	out := trash.Record{
 		Path:       in.Path,
-		Source:     in.Source,
-		Resolution: in.Resolution,
-		Codec:      in.Codec,
+		Source:     in.Source.String(),
+		Resolution: in.Resolution.String(),
+		Codec:      in.Codec.String(),
 		Size:       in.Size,
 		MTime:      in.MTime,
 		Companions: make([]trash.Companion, 0, len(in.Companions)),

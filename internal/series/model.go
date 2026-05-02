@@ -1,6 +1,7 @@
 package series
 
 import (
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/state"
@@ -59,10 +60,10 @@ type seriesState = state.State
 
 type episodeState = state.Episode
 
-type MediaRecord = state.MediaRecord
+type MediaRecord = media.Record
 
-type CompanionRecord = state.CompanionRecord
+type CompanionRecord = media.Companion
 
 func cloneMediaRecord(in MediaRecord) MediaRecord {
-	return state.CloneMediaRecord(in)
+	return media.CloneRecord(in)
 }

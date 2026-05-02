@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
 	"github.com/wyvernzora/kura/internal/textnorm"
@@ -33,10 +34,18 @@ func FromWire(in wire.SeriesV1) (State, error) {
 		if err != nil {
 			return State{}, err
 		}
+		active, err := fromWireMedia(episode.Active)
+		if err != nil {
+			return State{}, err
+		}
+		staged, err := fromWireMedia(episode.Staged)
+		if err != nil {
+			return State{}, err
+		}
 		out.Episodes[ref] = Episode{
 			AirDate: episode.AirDate,
-			Active:  fromWireMedia(episode.Active),
-			Staged:  fromWireMedia(episode.Staged),
+			Active:  active,
+			Staged:  staged,
 		}
 	}
 	return out, nil
@@ -69,17 +78,21 @@ func ToWire(in State) (wire.SeriesV1, error) {
 	return out, nil
 }
 
-func fromWireMedia(in *wire.MediaRecordV1) *MediaRecord {
+func fromWireMedia(in *wire.MediaRecordV1) (*media.Record, error) {
 	if in == nil {
-		return nil
+		return nil, nil
 	}
-	out := MediaRecord{
+	resolution, err := media.ParseResolution(in.Resolution)
+	if err != nil {
+		return nil, fmt.Errorf("series: invalid resolution %q: %w", in.Resolution, err)
+	}
+	out := media.Record{
 		Path:       in.Path,
-		Source:     in.Source,
-		Resolution: in.Resolution,
-		Codec:      in.Codec,
+		Source:     media.ParseSource(in.Source),
+		Resolution: resolution,
+		Codec:      media.ParseCodec(in.Codec),
 		Size:       in.Size,
-		Companions: make([]CompanionRecord, 0, len(in.Companions)),
+		Companions: make([]media.Companion, 0, len(in.Companions)),
 	}
 	if in.MTime != "" {
 		if parsed, err := time.Parse(time.RFC3339, in.MTime); err == nil {
@@ -89,18 +102,18 @@ func fromWireMedia(in *wire.MediaRecordV1) *MediaRecord {
 	for _, companion := range in.Companions {
 		out.Companions = append(out.Companions, fromWireCompanion(companion))
 	}
-	return &out
+	return &out, nil
 }
 
-func toWireMedia(in *MediaRecord) *wire.MediaRecordV1 {
+func toWireMedia(in *media.Record) *wire.MediaRecordV1 {
 	if in == nil {
 		return nil
 	}
 	out := wire.MediaRecordV1{
 		Path:       in.Path,
-		Source:     in.Source,
-		Resolution: in.Resolution,
-		Codec:      in.Codec,
+		Source:     in.Source.String(),
+		Resolution: in.Resolution.String(),
+		Codec:      in.Codec.String(),
 		Size:       in.Size,
 		MTime:      in.MTime.UTC().Format(time.RFC3339),
 		Companions: make([]wire.CompanionRecordV1, 0, len(in.Companions)),
@@ -111,8 +124,8 @@ func toWireMedia(in *MediaRecord) *wire.MediaRecordV1 {
 	return &out
 }
 
-func fromWireCompanion(in wire.CompanionRecordV1) CompanionRecord {
-	out := CompanionRecord{
+func fromWireCompanion(in wire.CompanionRecordV1) media.Companion {
+	out := media.Companion{
 		Path:     in.Path,
 		Role:     in.Role,
 		Language: in.Language,
@@ -127,7 +140,7 @@ func fromWireCompanion(in wire.CompanionRecordV1) CompanionRecord {
 	return out
 }
 
-func toWireCompanion(in CompanionRecord) wire.CompanionRecordV1 {
+func toWireCompanion(in media.Companion) wire.CompanionRecordV1 {
 	return wire.CompanionRecordV1{
 		Path:     in.Path,
 		Role:     in.Role,

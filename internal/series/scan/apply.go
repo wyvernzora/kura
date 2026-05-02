@@ -5,11 +5,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/mediarecord"
-	"github.com/wyvernzora/kura/internal/series/state"
 )
 
 func (s *scanner) apply(discovered []DiscoveredFile) error {
@@ -57,7 +56,7 @@ func (s *scanner) applyFile(file DiscoveredFile) error {
 	return nil
 }
 
-func (s *scanner) unchanged(active state.MediaRecord, file DiscoveredFile) (bool, error) {
+func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, error) {
 	facts, err := layout.NewFiles(s.runner.root).Stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path)))
 	if err != nil {
 		return false, err
@@ -68,7 +67,7 @@ func (s *scanner) unchanged(active state.MediaRecord, file DiscoveredFile) (bool
 	if len(active.Companions) != len(file.Companions) {
 		return false, nil
 	}
-	companions := map[string]state.CompanionRecord{}
+	companions := map[string]media.Companion{}
 	for _, companion := range active.Companions {
 		companions[companion.Path] = companion
 	}
@@ -88,7 +87,7 @@ func (s *scanner) unchanged(active state.MediaRecord, file DiscoveredFile) (bool
 	return true, nil
 }
 
-func (s *scanner) mediaRecord(file DiscoveredFile) (state.MediaRecord, error) {
+func (s *scanner) mediaRecord(file DiscoveredFile) (media.Record, error) {
 	absolutePath := filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path))
 	input := mediarecord.Input{
 		MediaPath:  absolutePath,
@@ -104,23 +103,23 @@ func (s *scanner) mediaRecord(file DiscoveredFile) (state.MediaRecord, error) {
 	return s.mediaRecordBuilder().Build(s.ctx, input)
 }
 
-func scannedEpisode(status ScanStatus, file DiscoveredFile, record state.MediaRecord) ScannedEpisode {
+func scannedEpisode(status ScanStatus, file DiscoveredFile, record media.Record) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     status,
 		Episode:    file.Ref,
-		Source:     media.ParseSource(record.Source).Display(),
-		Resolution: record.Resolution,
+		Source:     record.Source.Display(),
+		Resolution: record.Resolution.String(),
 		Path:       record.Path,
 		Companions: append([]string(nil), file.Companions...),
 	}
 }
 
-func existingScannedEpisode(file DiscoveredFile, active state.MediaRecord) ScannedEpisode {
+func existingScannedEpisode(file DiscoveredFile, active media.Record) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     ScanStatusUnchanged,
 		Episode:    file.Ref,
-		Source:     media.ParseSource(active.Source).Display(),
-		Resolution: active.Resolution,
+		Source:     active.Source.Display(),
+		Resolution: active.Resolution.String(),
 		Path:       active.Path,
 		Companions: append([]string(nil), file.Companions...),
 	}
@@ -154,7 +153,7 @@ func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 		} else if !os.IsNotExist(err) {
 			return err
 		}
-		record := state.CloneMediaRecord(*episode.Active)
+		record := media.CloneRecord(*episode.Active)
 		if err := s.editor.ClearActive(ref); err != nil {
 			return err
 		}
@@ -163,18 +162,18 @@ func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 	return nil
 }
 
-func removedScannedEpisode(ref refs.Episode, record state.MediaRecord) ScannedEpisode {
+func removedScannedEpisode(ref refs.Episode, record media.Record) ScannedEpisode {
 	return ScannedEpisode{
 		Status:     ScanStatusRemoved,
 		Episode:    ref,
-		Source:     media.ParseSource(record.Source).Display(),
-		Resolution: record.Resolution,
+		Source:     record.Source.Display(),
+		Resolution: record.Resolution.String(),
 		Path:       record.Path,
 		Companions: companionPaths(record.Companions),
 	}
 }
 
-func companionPaths(records []state.CompanionRecord) []string {
+func companionPaths(records []media.Companion) []string {
 	out := make([]string, 0, len(records))
 	for _, record := range records {
 		out = append(out, record.Path)

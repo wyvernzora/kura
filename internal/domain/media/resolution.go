@@ -1,6 +1,7 @@
 package media
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -52,6 +53,23 @@ func (r Resolution) String() string {
 		return ""
 	}
 	return fmt.Sprintf("%dx%d", r.width, r.height)
+}
+
+func (r Resolution) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.String())
+}
+
+func (r *Resolution) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	parsed, err := ParseResolution(s)
+	if err != nil {
+		return err
+	}
+	*r = parsed
+	return nil
 }
 
 func (r Resolution) Display() string {

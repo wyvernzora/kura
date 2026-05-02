@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
 )
@@ -22,9 +23,9 @@ func TestWireRoundTrip(t *testing.T) {
 				AirDate: "2019-10-02",
 				Active: &MediaRecord{
 					Path:       "Season 1/Honzuki - S01E01 (BDRip 1080p).mkv",
-					Source:     "BDRip",
-					Resolution: "1080p",
-					Codec:      "H.264",
+					Source:     media.SourceBDRip,
+					Resolution: mustParseResolution(t, "1920x1080"),
+					Codec:      media.Codec("H.264"),
 					Size:       123,
 					MTime:      mtime,
 					Companions: []CompanionRecord{},
@@ -57,6 +58,15 @@ func TestWireRoundTrip(t *testing.T) {
 	if out.Episodes[episodeRef].Active == nil {
 		t.Fatal("active record missing")
 	}
+}
+
+func mustParseResolution(t *testing.T, value string) media.Resolution {
+	t.Helper()
+	r, err := media.ParseResolution(value)
+	if err != nil {
+		t.Fatalf("ParseResolution(%q): %v", value, err)
+	}
+	return r
 }
 
 func TestEditorRefreshSpineNeverRemovesEpisodes(t *testing.T) {
