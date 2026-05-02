@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/wyvernzora/kura/internal/domain/filename"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
@@ -39,7 +39,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 	}
 	ref := in.Ref
 	if ref.IsZero() {
-		title, err := layout.ParseFileTitle(metadataSeries.PreferredTitle.String())
+		title, err := filename.ParseTitle(metadataSeries.PreferredTitle.String())
 		if err != nil {
 			progress.Failure(ctx, "add", "Failed to add series", 0, 0)
 			return response.AddResult{}, err

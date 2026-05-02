@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/filename"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -40,8 +41,10 @@ func (f Files) Stat(path string) (FileFacts, error) {
 }
 
 func (f Files) CanonicalPath(ref refs.Series, episode refs.Episode, record media.Record) (string, error) {
-	title := CleanFileTitle(ref.String())
-	facts := MediaFilenameFacts{Source: record.Source, Resolution: record.Resolution}
-	filename := BuildMediaFilename(title, episode, facts, filepath.Ext(record.Path)).String()
-	return paths.EpisodeMediaRel(episode.Season(), filename), nil
+	title := filename.CleanTitle(ref.String())
+	basename := filename.BuildMedia(title, episode, filename.Facts{
+		Source:     record.Source,
+		Resolution: record.Resolution,
+	}, filepath.Ext(record.Path)).String()
+	return paths.EpisodeMediaRel(episode.Season(), basename), nil
 }
