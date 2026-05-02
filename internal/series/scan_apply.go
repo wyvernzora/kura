@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/refs"
 )
 
@@ -104,7 +105,7 @@ func scannedEpisode(status ScanStatus, file discoveredFile, record MediaRecord) 
 	return ScannedEpisode{
 		Status:     status,
 		Episode:    file.Ref,
-		Source:     ParseMediaSource(record.Source).Display(),
+		Source:     media.ParseSource(record.Source).Display(),
 		Resolution: record.Resolution,
 		Path:       record.Path,
 		Companions: append([]string(nil), file.Companions...),
@@ -115,7 +116,7 @@ func existingScannedEpisode(file discoveredFile, active MediaRecord) ScannedEpis
 	return ScannedEpisode{
 		Status:     ScanStatusUnchanged,
 		Episode:    file.Ref,
-		Source:     ParseMediaSource(active.Source).Display(),
+		Source:     media.ParseSource(active.Source).Display(),
 		Resolution: active.Resolution,
 		Path:       active.Path,
 		Companions: append([]string(nil), file.Companions...),
@@ -163,7 +164,7 @@ func removedScannedEpisode(ref refs.Episode, record MediaRecord) ScannedEpisode 
 	return ScannedEpisode{
 		Status:     ScanStatusRemoved,
 		Episode:    ref,
-		Source:     ParseMediaSource(record.Source).Display(),
+		Source:     media.ParseSource(record.Source).Display(),
 		Resolution: record.Resolution,
 		Path:       record.Path,
 		Companions: companionPaths(record.Companions),

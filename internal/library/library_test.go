@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/media/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"

@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -18,7 +18,7 @@ import (
 type Library struct {
 	root    Root
 	source  metadata.Source
-	inspect mediainfo.Inspector
+	inspect media.Inspector
 	index   *Index
 	now     func() time.Time
 }
@@ -34,7 +34,7 @@ type ImportInput struct {
 	Force    bool
 }
 
-func New(root Root, source metadata.Source, inspector mediainfo.Inspector, idx *Index) *Library {
+func New(root Root, source metadata.Source, inspector media.Inspector, idx *Index) *Library {
 	return &Library{
 		root:    root,
 		source:  source,
@@ -52,7 +52,7 @@ func (l *Library) MetadataSource() metadata.Source {
 	return l.source
 }
 
-func (l *Library) MediaInspector() series.Inspector {
+func (l *Library) MediaInspector() media.Inspector {
 	return l.inspect
 }
 

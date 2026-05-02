@@ -5,6 +5,7 @@ import (
 
 	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/library"
+	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/series"
 )
 
@@ -61,7 +62,7 @@ func renderListStatus(status string, style bool) string {
 }
 
 func renderMediaSource(source string, style bool) string {
-	value := series.ParseMediaSource(source).Display()
+	value := media.ParseSource(source).Display()
 	if !style {
 		return value
 	}
@@ -81,7 +82,7 @@ func renderMediaSource(source string, style bool) string {
 
 func renderMediaResolution(resolution string, style bool) string {
 	value := strings.TrimSpace(resolution)
-	if parsed, err := series.ParseResolution(value); err == nil && parsed.Known() {
+	if parsed, err := media.ParseResolution(value); err == nil && parsed.Known() {
 		value = parsed.Display()
 	}
 	if !style {

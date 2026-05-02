@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/refs"
 	"github.com/wyvernzora/kura/internal/series/wire"
 )
@@ -136,7 +137,7 @@ func discoveredFileFor(seriesDir SeriesDir, relPath string, season int, number i
 	return discoveredFile{
 		Ref:        ref,
 		Path:       relPath,
-		Source:     ParseMediaSource(inferSourceFromFilename(relPath)).String(),
+		Source:     media.ParseSource(inferSourceFromFilename(relPath)).String(),
 		Companions: companions,
 	}, nil, nil
 }

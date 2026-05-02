@@ -2,6 +2,8 @@ package series
 
 import (
 	"context"
+
+	"github.com/wyvernzora/kura/internal/media"
 )
 
 type mediaRecordInput struct {
@@ -27,11 +29,11 @@ func (h Handle) mediaRecord(ctx context.Context, in mediaRecordInput) (MediaReco
 	}
 	source := in.Source
 	if source == "" {
-		source = ParseMediaSource(inferSourceFromFilename(in.RecordPath)).String()
+		source = media.ParseSource(inferSourceFromFilename(in.RecordPath)).String()
 	}
 	record := MediaRecord{
 		Path:       in.RecordPath,
-		Source:     ParseMediaSource(source).String(),
+		Source:     media.ParseSource(source).String(),
 		Resolution: info.Resolution,
 		Codec:      info.VideoCodec,
 		Size:       facts.Size,

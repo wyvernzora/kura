@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 )
@@ -121,7 +122,7 @@ func (d reconcilePlanTestDeps) MetadataSource() metadata.Source {
 	return nil
 }
 
-func (d reconcilePlanTestDeps) MediaInspector() Inspector {
+func (d reconcilePlanTestDeps) MediaInspector() media.Inspector {
 	return nil
 }
 

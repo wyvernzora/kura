@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/media/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/metadata/tvdb"
 	"github.com/wyvernzora/kura/internal/refs"

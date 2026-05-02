@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/series"
+	mediapkg "github.com/wyvernzora/kura/internal/media"
 )
 
 const (
@@ -36,10 +36,10 @@ func New() Inspector {
 }
 
 // Inspect runs mediainfo for path and returns the facts Kura persists.
-func (i Inspector) Inspect(ctx context.Context, path string) (series.MediaInfo, error) {
+func (i Inspector) Inspect(ctx context.Context, path string) (mediapkg.Info, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return series.MediaInfo{}, errors.New("mediainfo: path is required")
+		return mediapkg.Info{}, errors.New("mediainfo: path is required")
 	}
 
 	command := i.Command
@@ -60,31 +60,31 @@ func (i Inspector) Inspect(ctx context.Context, path string) (series.MediaInfo, 
 
 	output, err := cmd.Output()
 	if runCtx.Err() != nil {
-		return series.MediaInfo{}, fmt.Errorf("mediainfo: inspect %q timed out: %w", path, runCtx.Err())
+		return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q timed out: %w", path, runCtx.Err())
 	}
 	if err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg != "" {
-			return series.MediaInfo{}, fmt.Errorf("mediainfo: inspect %q: %w: %s", path, err, msg)
+			return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q: %w: %s", path, err, msg)
 		}
-		return series.MediaInfo{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
+		return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
 	}
 
 	info, err := ParseJSON(output)
 	if err != nil {
-		return series.MediaInfo{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
+		return mediapkg.Info{}, fmt.Errorf("mediainfo: inspect %q: %w", path, err)
 	}
 	return info, nil
 }
 
-// ParseJSON adapts mediainfo --Output=JSON output into Kura's MediaInfo model.
-func ParseJSON(data []byte) (series.MediaInfo, error) {
+// ParseJSON adapts mediainfo --Output=JSON output into Kura's media.Info model.
+func ParseJSON(data []byte) (mediapkg.Info, error) {
 	var doc document
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return series.MediaInfo{}, fmt.Errorf("decode JSON: %w", err)
+		return mediapkg.Info{}, fmt.Errorf("decode JSON: %w", err)
 	}
 
-	out := series.MediaInfo{}
+	out := mediapkg.Info{}
 	for _, track := range doc.Media.Tracks {
 		switch strings.ToLower(track.Type) {
 		case "video":

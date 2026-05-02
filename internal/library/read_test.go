@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/media/mediainfo"
 	"github.com/wyvernzora/kura/internal/refs"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 )

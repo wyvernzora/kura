@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/media"
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/refs"
 )
@@ -12,7 +13,7 @@ import (
 type Dependencies interface {
 	LibraryRoot() string
 	MetadataSource() metadata.Source
-	MediaInspector() Inspector
+	MediaInspector() media.Inspector
 	Now() time.Time
 }
 
@@ -54,7 +55,7 @@ func (h Handle) source() metadata.Source {
 	return h.deps.MetadataSource()
 }
 
-func (h Handle) inspector() Inspector {
+func (h Handle) inspector() media.Inspector {
 	return h.deps.MediaInspector()
 }
 
