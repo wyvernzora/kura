@@ -13,13 +13,14 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 type Library struct {
 	root    Root
 	source  metadata.Source
 	inspect media.Inspector
-	index   *Index
+	index   *indexfile.Index
 	now     func() time.Time
 }
 
@@ -34,7 +35,7 @@ type ImportInput struct {
 	Force    bool
 }
 
-func New(root Root, source metadata.Source, inspector media.Inspector, idx *Index) *Library {
+func New(root Root, source metadata.Source, inspector media.Inspector, idx *indexfile.Index) *Library {
 	return &Library{
 		root:    root,
 		source:  source,

@@ -10,6 +10,7 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -18,7 +19,7 @@ func TestLibraryAddWritesFullSpine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, indexfile.New(root.Path()))
 	handle, err := lib.Add(context.Background(), AddInput{Metadata: refs.Metadata("tvdb:370070"), Ref: mustSeries(t, "Bookworm")})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +41,7 @@ func TestLibraryImportRequiresExistingUntrackedDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, indexfile.New(root.Path()))
 	if _, err := lib.Import(context.Background(), ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: mustSeries(t, "Missing")}); err == nil {
 		t.Fatal("expected missing series error")
 	}
@@ -75,7 +76,7 @@ func TestLibraryImportForceReplacesSeriesJSONAndPreservesKuraSiblings(t *testing
 		t.Fatal(err)
 	}
 
-	idx := NewIndex(root)
+	idx := indexfile.New(root.Path())
 	if err := idx.Put(refs.Metadata("tvdb:999999"), ref); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestLibraryImportReportsProgress(t *testing.T) {
 	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
 		events = append(events, event)
 	})
-	lib := New(root, fakeSource{}, mediainfo.Inspector{}, NewIndex(root))
+	lib := New(root, fakeSource{}, mediainfo.Inspector{}, indexfile.New(root.Path()))
 	if _, err := lib.Import(ctx, ImportInput{Metadata: refs.Metadata("tvdb:370070"), Ref: mustSeries(t, "Bookworm")}); err != nil {
 		t.Fatal(err)
 	}
@@ -136,6 +137,15 @@ func TestLibraryImportReportsProgress(t *testing.T) {
 	if events[len(events)-1].Status != progress.SuccessStatus || events[len(events)-1].Stage != "import" {
 		t.Fatalf("last event = %#v, want import success", events[len(events)-1])
 	}
+}
+
+func mustSeries(t *testing.T, value string) refs.Series {
+	t.Helper()
+	ref, err := refs.ParseSeries(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ref
 }
 
 type fakeSource struct{}

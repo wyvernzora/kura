@@ -11,6 +11,7 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/metadata/tvdb"
 	"github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 type Config struct {
@@ -60,9 +61,9 @@ func Open(cfg Config) (*Library, error) {
 	if err != nil {
 		return nil, err
 	}
-	index, err := LoadIndex(root)
-	if errors.Is(err, ErrNotFound) {
-		index, err = RebuildIndex(ctx, root, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+	index, err := indexfile.Load(root.Path())
+	if errors.Is(err, indexfile.ErrNotFound) {
+		index, err = indexfile.Rebuild(ctx, root.Path(), func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
 			return series.ReadMetadataRef(root.Path(), ref)
 		})
 	} else if err != nil {

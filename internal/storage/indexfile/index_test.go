@@ -1,12 +1,14 @@
-package library
+package indexfile_test
 
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 func mustSeries(t *testing.T, value string) refs.Series {
@@ -19,11 +21,8 @@ func mustSeries(t *testing.T, value string) refs.Series {
 }
 
 func TestIndexSaveLoad(t *testing.T) {
-	root, err := ParseRoot(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	idx := NewIndex(root)
+	root := t.TempDir()
+	idx := indexfile.New(root)
 	honzuki := mustSeries(t, "Honzuki")
 	if err := idx.Put(refs.Metadata("tvdb:370070"), honzuki); err != nil {
 		t.Fatal(err)
@@ -31,7 +30,7 @@ func TestIndexSaveLoad(t *testing.T) {
 	if err := idx.Save(); err != nil {
 		t.Fatal(err)
 	}
-	loaded, err := LoadIndex(root)
+	loaded, err := indexfile.Load(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,11 +44,7 @@ func TestIndexSaveLoad(t *testing.T) {
 }
 
 func TestIndexRejectsDuplicateMetadataRef(t *testing.T) {
-	root, err := ParseRoot(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	idx := NewIndex(root)
+	idx := indexfile.New(t.TempDir())
 	if err := idx.Put(refs.Metadata("tvdb:370070"), mustSeries(t, "A")); err != nil {
 		t.Fatal(err)
 	}
@@ -59,11 +54,7 @@ func TestIndexRejectsDuplicateMetadataRef(t *testing.T) {
 }
 
 func TestIndexRemove(t *testing.T) {
-	root, err := ParseRoot(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	idx := NewIndex(root)
+	idx := indexfile.New(t.TempDir())
 	bookworm := mustSeries(t, "Bookworm")
 	other := mustSeries(t, "Other")
 	if err := idx.Put(refs.Metadata("tvdb:370070"), bookworm); err != nil {
@@ -87,19 +78,16 @@ func TestIndexRemove(t *testing.T) {
 	}
 }
 
-func TestRebuildIndexReportsProgress(t *testing.T) {
-	root, err := ParseRoot(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Mkdir(root.Join("Bookworm"), 0o755); err != nil {
+func TestRebuildReportsProgress(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "Bookworm"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	var events []progress.Event
 	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
 		events = append(events, event)
 	})
-	_, err = RebuildIndex(ctx, root, func(context.Context, refs.Series) (refs.Metadata, error) {
+	_, err := indexfile.Rebuild(ctx, root, func(context.Context, refs.Series) (refs.Metadata, error) {
 		return refs.Metadata("tvdb:370070"), nil
 	})
 	if err != nil {

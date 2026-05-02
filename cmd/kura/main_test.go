@@ -15,6 +15,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -1521,13 +1522,9 @@ func testRunContextWithLibraryRootAndMediaInfo(stdout, stderr *bytes.Buffer, lib
 
 func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) string {
 	t.Helper()
-	root, err := librarypkg.ParseRoot(rootPath)
+	idx, err := indexfile.Load(rootPath)
 	if err != nil {
-		t.Fatalf("ParseRoot: %v", err)
-	}
-	idx, err := librarypkg.LoadIndex(root)
-	if err != nil {
-		t.Fatalf("LoadIndex: %v", err)
+		t.Fatalf("indexfile.Load: %v", err)
 	}
 	path, ok, err := idx.Get(refs.Metadata(metadataRef))
 	if err != nil {
@@ -1541,13 +1538,9 @@ func libraryIndexPathForRef(t *testing.T, rootPath string, metadataRef string) s
 
 func libraryIndexHasRef(t *testing.T, rootPath string, metadataRef string) bool {
 	t.Helper()
-	root, err := librarypkg.ParseRoot(rootPath)
+	idx, err := indexfile.Load(rootPath)
 	if err != nil {
-		t.Fatalf("ParseRoot: %v", err)
-	}
-	idx, err := librarypkg.LoadIndex(root)
-	if err != nil {
-		t.Fatalf("LoadIndex: %v", err)
+		t.Fatalf("indexfile.Load: %v", err)
 	}
 	_, ok, err := idx.Get(refs.Metadata(metadataRef))
 	if err != nil {
@@ -1558,11 +1551,7 @@ func libraryIndexHasRef(t *testing.T, rootPath string, metadataRef string) bool 
 
 func writeLibraryIndex(t *testing.T, rootPath string, entries map[string]string) {
 	t.Helper()
-	root, err := librarypkg.ParseRoot(rootPath)
-	if err != nil {
-		t.Fatalf("ParseRoot: %v", err)
-	}
-	idx := librarypkg.NewIndex(root)
+	idx := indexfile.New(rootPath)
 	for metadataRef, seriesRef := range entries {
 		ref, err := refs.ParseSeries(seriesRef)
 		if err != nil {

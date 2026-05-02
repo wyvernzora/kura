@@ -11,6 +11,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/media/mediainfo"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 func TestReadOverlaysLocalMediaOntoMetadataEpisodes(t *testing.T) {
@@ -160,7 +161,7 @@ func newReadTestLibrary(t *testing.T, rootPath string) *Library {
 	if err != nil {
 		t.Fatalf("ParseRoot: %v", err)
 	}
-	idx := NewIndex(root)
+	idx := indexfile.New(root.Path())
 	if err := idx.Put(refs.Metadata("tvdb:370070"), mustSeries(t, "Bookworm")); err != nil {
 		t.Fatalf("Put index: %v", err)
 	}

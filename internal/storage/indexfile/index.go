@@ -1,4 +1,7 @@
-package library
+// Package indexfile owns reading and writing <library>/.kura/index.tsv. It
+// holds the metadata-ref → series-ref map used by selectors. The Index value
+// is the in-memory cache mutated by Get/Put/Remove and persisted by Save.
+package indexfile
 
 import (
 	"bytes"
@@ -16,15 +19,16 @@ import (
 	"github.com/wyvernzora/kura/internal/progress"
 )
 
-var ErrNotFound = errors.New("library index: not found")
+var ErrNotFound = errors.New("indexfile: not found")
 
 const (
-	KuraDir       = ".kura"
-	IndexFileName = "index.tsv"
+	kuraDir       = ".kura"
+	indexFileName = "index.tsv"
 )
 
-func IndexMetadataPath(libraryRoot string) string {
-	return filepath.Join(libraryRoot, KuraDir, IndexFileName)
+// MetadataPath returns the absolute path to <root>/.kura/index.tsv.
+func MetadataPath(root string) string {
+	return filepath.Join(root, kuraDir, indexFileName)
 }
 
 type DuplicateRefError struct {
@@ -34,23 +38,26 @@ type DuplicateRefError struct {
 }
 
 func (e DuplicateRefError) Error() string {
-	return fmt.Sprintf("library index: %s is already tracked at %q", e.Ref, e.Existing)
+	return fmt.Sprintf("indexfile: %s is already tracked at %q", e.Ref, e.Existing)
 }
 
+// Index is the in-memory map of metadata refs to series refs. It is
+// constructed empty by New, populated by Load or Rebuild, and persisted by
+// Save.
 type Index struct {
-	root Root
+	root string
 	refs map[refs.Metadata]refs.Series
 }
 
-func NewIndex(root Root) *Index {
+func New(root string) *Index {
 	return &Index{
 		root: root,
 		refs: map[refs.Metadata]refs.Series{},
 	}
 }
 
-func LoadIndex(root Root) (*Index, error) {
-	path := IndexMetadataPath(root.Path())
+func Load(root string) (*Index, error) {
+	path := MetadataPath(root)
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrNotFound
@@ -60,7 +67,7 @@ func LoadIndex(root Root) (*Index, error) {
 	}
 	defer file.Close()
 
-	index := NewIndex(root)
+	index := New(root)
 	reader := csv.NewReader(file)
 	reader.Comma = '\t'
 	reader.FieldsPerRecord = 2
@@ -70,33 +77,36 @@ func LoadIndex(root Root) (*Index, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("library index: read %s: %w", path, err)
+			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
 		}
 		metadataRef, err := refs.ParseMetadata(record[0])
 		if err != nil {
-			return nil, fmt.Errorf("library index: read %s: %w", path, err)
+			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
 		}
 		seriesRef, err := refs.ParseSeries(record[1])
 		if err != nil {
-			return nil, fmt.Errorf("library index: read %s: %w", path, err)
+			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
 		}
 		if err := index.Put(metadataRef, seriesRef); err != nil {
-			return nil, fmt.Errorf("library index: read %s: %w", path, err)
+			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
 		}
 	}
 	return index, nil
 }
 
-func RebuildIndex(ctx context.Context, root Root, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
+// Rebuild walks root for series subdirectories and asks read for each one's
+// metadata ref. Series whose metadata is missing on disk are silently
+// skipped. Progress events are reported under the "reindex" stage.
+func Rebuild(ctx context.Context, root string, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
 	progress.Start(ctx, "reindex", "Rebuilding library index", 0)
-	dir, err := os.Open(root.Path())
+	dir, err := os.Open(root)
 	if err != nil {
 		progress.Failure(ctx, "reindex", "Failed to rebuild library index", 0, 0)
 		return nil, err
 	}
 	defer dir.Close()
 
-	index := NewIndex(root)
+	index := New(root)
 	scanned := 0
 	for {
 		entries, err := dir.ReadDir(64)
@@ -105,7 +115,7 @@ func RebuildIndex(ctx context.Context, root Root, read func(context.Context, ref
 			return nil, err
 		}
 		for _, entry := range entries {
-			if !entry.IsDir() || entry.Name() == KuraDir {
+			if !entry.IsDir() || entry.Name() == kuraDir {
 				continue
 			}
 			seriesRef, err := refs.ParseSeries(entry.Name())
@@ -138,7 +148,7 @@ func RebuildIndex(ctx context.Context, root Root, read func(context.Context, ref
 
 func (i *Index) Get(ref refs.Metadata) (refs.Series, bool, error) {
 	if ref == "" {
-		return refs.Series{}, false, errors.New("library index: metadata ref is required")
+		return refs.Series{}, false, errors.New("indexfile: metadata ref is required")
 	}
 	seriesRef, ok := i.refs[ref]
 	return seriesRef, ok, nil
@@ -146,10 +156,10 @@ func (i *Index) Get(ref refs.Metadata) (refs.Series, bool, error) {
 
 func (i *Index) Put(metadataRef refs.Metadata, seriesRef refs.Series) error {
 	if metadataRef == "" {
-		return errors.New("library index: metadata ref is required")
+		return errors.New("indexfile: metadata ref is required")
 	}
 	if seriesRef.IsZero() {
-		return errors.New("library index: series ref is required")
+		return errors.New("indexfile: series ref is required")
 	}
 	existing, exists := i.refs[metadataRef]
 	if exists && existing != seriesRef {
@@ -168,7 +178,7 @@ func (i *Index) Remove(seriesRef refs.Series) {
 }
 
 func (i *Index) Save() error {
-	if err := os.MkdirAll(filepath.Join(i.root.Path(), KuraDir), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(i.root, kuraDir), 0o755); err != nil {
 		return err
 	}
 	keys := make([]string, 0, len(i.refs))
@@ -189,5 +199,5 @@ func (i *Index) Save() error {
 	if err := writer.Error(); err != nil {
 		return err
 	}
-	return renameio.WriteFile(IndexMetadataPath(i.root.Path()), data.Bytes(), 0o644)
+	return renameio.WriteFile(MetadataPath(i.root), data.Bytes(), 0o644)
 }

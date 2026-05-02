@@ -15,6 +15,7 @@ import (
 	"github.com/wyvernzora/kura/internal/metadata"
 	"github.com/wyvernzora/kura/internal/progress"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 func TestScanCommits(t *testing.T) {
@@ -181,7 +182,7 @@ func TestScanWithStagedRecordsDoesNotFetchMetadata(t *testing.T) {
 		}
 	}`)
 
-	lib := New(root, failingSource{t: t}, mediainfo.Inspector{}, NewIndex(root))
+	lib := New(root, failingSource{t: t}, mediainfo.Inspector{}, indexfile.New(root.Path()))
 	series, err := lib.Open(mustSeries(t, "Bookworm"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
