@@ -12,11 +12,12 @@ import (
 	"strings"
 	"testing"
 
+	clipkg "github.com/wyvernzora/kura/internal/cli"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	librarypkg "github.com/wyvernzora/kura/internal/library"
 	seriespkg "github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/ui"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 func TestMetaSearchPrintsJSON(t *testing.T) {
@@ -202,8 +203,8 @@ func TestAddCommandRejectsAmbiguousQueryNonInteractive(t *testing.T) {
 		"--tvdb-base-url", server.URL,
 		"bookworm",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
-	if !errors.Is(err, ui.ErrSelectionRequired) {
-		t.Fatalf("error = %v, want ErrSelectionRequired", err)
+	if !errors.Is(err, clipkg.ErrAmbiguousSelector) {
+		t.Fatalf("error = %v, want ErrAmbiguousSelector", err)
 	}
 	if !strings.Contains(stderr.String(), "tvdb:370070") || !strings.Contains(stderr.String(), "tvdb:999999") {
 		t.Fatalf("stderr = %q, want candidate refs", stderr.String())
@@ -463,7 +464,7 @@ func TestScanCommandFailsWhenRefNotTracked(t *testing.T) {
 	if err == nil {
 		t.Fatal("run returned nil error, want missing tracked series error")
 	}
-	var notIndexed seriespkg.MetadataRefNotIndexedError
+	var notIndexed *workflow.MetadataRefNotIndexedError
 	if !errors.As(err, &notIndexed) {
 		t.Fatalf("error = %v, want MetadataRefNotIndexedError", err)
 	}

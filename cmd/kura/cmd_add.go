@@ -1,8 +1,11 @@
 package main
 
 import (
+	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/render"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/library"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type addCmd struct {
@@ -12,25 +15,23 @@ type addCmd struct {
 }
 
 func (cmd *addCmd) Run(rt *runContext) error {
-	lib, err := libraryFromFlags(rt, rt.flags)
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	metadataRef, err := resolveMetadataRef(rt, lib, cmd.Terms)
-	if err != nil {
-		return err
-	}
-
-	var ref refs.Series
-	if cmd.Dirname != "" {
-		ref, err = refs.ParseSeries(cmd.Dirname)
+	io := stdio.From(rt.Context)
+	return clipkg.WithResolve(rt.Context, io, deps, cmd.Terms, func(metadataRef refs.Metadata) error {
+		var ref refs.Series
+		if cmd.Dirname != "" {
+			ref, err = refs.ParseSeries(cmd.Dirname)
+			if err != nil {
+				return err
+			}
+		}
+		result, err := workflow.Add(rt.Context, deps, workflow.AddInput{Metadata: metadataRef, Ref: ref})
 		if err != nil {
 			return err
 		}
-	}
-	series, err := lib.Add(rt.Context, library.AddInput{Metadata: metadataRef, Ref: ref})
-	if err != nil {
-		return err
-	}
-	return writeSeriesSummary(rt, series, "Added", cmd.JSON)
+		return render.Add(rt.Stdout, result, "Added", cmd.JSON)
+	})
 }

@@ -1,9 +1,12 @@
 package main
 
 import (
+	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/render"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/library"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type importCmd struct {
@@ -14,34 +17,30 @@ type importCmd struct {
 }
 
 func (cmd *importCmd) Run(rt *runContext) error {
-	lib, err := libraryFromFlags(rt, rt.flags)
-	if err != nil {
-		return err
-	}
-	terms, err := cmd.resolveTerms()
-	if err != nil {
-		return err
-	}
-	metadataRef, err := resolveMetadataRef(rt, lib, terms)
-	if err != nil {
-		return err
-	}
+	terms := cmd.resolveTerms()
 	ref, err := refs.ParseSeries(cmd.Dirname)
 	if err != nil {
 		return err
 	}
-	series, err := lib.Import(rt.Context, library.ImportInput{
-		Ref:      ref,
-		Metadata: metadataRef,
-		Force:    cmd.Force,
-	})
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	return writeSeriesSummary(rt, series, "Imported", cmd.JSON)
+	io := stdio.From(rt.Context)
+	return clipkg.WithResolve(rt.Context, io, deps, terms, func(metadataRef refs.Metadata) error {
+		result, err := workflow.Import(rt.Context, deps, workflow.ImportInput{
+			Ref:      ref,
+			Metadata: metadataRef,
+			Force:    cmd.Force,
+		})
+		if err != nil {
+			return err
+		}
+		return render.Add(rt.Stdout, result, "Imported", cmd.JSON)
+	})
 }
 
-func (cmd *importCmd) resolveTerms() ([]string, error) {
+func (cmd *importCmd) resolveTerms() []string {
 	tvdbTerms := 0
 	nonEmptyTerms := 0
 	var tvdbTerm string
@@ -60,14 +59,14 @@ func (cmd *importCmd) resolveTerms() ([]string, error) {
 	}
 
 	if tvdbTerms == 1 && nonEmptyTerms == 1 {
-		return []string{tvdbTerm}, nil
+		return []string{tvdbTerm}
 	}
 	if nonEmptyTerms > 0 && tvdbTerms > 0 {
-		return cmd.Terms, nil
+		return cmd.Terms
 	}
 
 	terms := make([]string, 0, len(cmd.Terms)+1)
 	terms = append(terms, cmd.Dirname)
 	terms = append(terms, cmd.Terms...)
-	return terms, nil
+	return terms
 }

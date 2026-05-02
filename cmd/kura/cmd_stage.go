@@ -1,15 +1,18 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
 	"strconv"
 
+	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/render"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type stageCmd struct {
@@ -29,42 +32,38 @@ func (cmd *stageCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	lib, err := libraryFromFlags(rt, rt.flags)
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	metadataRef, err := resolveMetadataRef(rt, lib, terms)
-	if err != nil {
-		return err
-	}
-	handle, err := lib.Find(metadataRef)
-	if err != nil {
-		return err
-	}
-	view, err := handle.Read(rt.Context, series.ReadInput{})
-	if err != nil {
-		return err
-	}
-	mediaPath = pathFromSeriesRoot(view.Root, mediaPath)
-	companions := make([]string, 0, len(cmd.Companions))
-	for _, companion := range cmd.Companions {
-		companions = append(companions, pathFromSeriesRoot(view.Root, companion))
-	}
-
-	result, err := handle.Stage(rt.Context, series.StageInput{
-		Episode:    episode,
-		Source:     cmd.Source,
-		Companions: companions,
-		MediaPath:  mediaPath,
-		Replace:    cmd.Replace,
+	io := stdio.From(rt.Context)
+	return clipkg.WithResolve(rt.Context, io, deps, terms, func(metadataRef refs.Metadata) error {
+		seriesRef, ok, err := deps.Index.Get(metadataRef)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
+		}
+		seriesRoot := paths.SeriesDir(deps.LibRoot, seriesRef)
+		absoluteMedia := pathFromSeriesRoot(seriesRoot, mediaPath)
+		companions := make([]string, 0, len(cmd.Companions))
+		for _, c := range cmd.Companions {
+			companions = append(companions, pathFromSeriesRoot(seriesRoot, c))
+		}
+		result, err := workflow.Stage(rt.Context, deps, workflow.StageInput{
+			Ref:            seriesRef,
+			Episode:        episode,
+			Source:         cmd.Source,
+			CompanionPaths: companions,
+			MediaPath:      absoluteMedia,
+			Replace:        cmd.Replace,
+		})
+		if err != nil {
+			return err
+		}
+		return render.Stage(rt.Stdout, result, true)
 	})
-	if err != nil {
-		return err
-	}
-
-	encoder := json.NewEncoder(rt.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(result)
 }
 
 func splitStageArgs(args []string) ([]string, string, error) {

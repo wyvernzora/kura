@@ -25,6 +25,16 @@ func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("workflow: series %q not found", e.Ref)
 }
 
+// MetadataRefNotIndexedError signals the requested metadata ref has no
+// matching series under the library root.
+type MetadataRefNotIndexedError struct {
+	Ref refs.Metadata
+}
+
+func (e *MetadataRefNotIndexedError) Error() string {
+	return fmt.Sprintf("workflow: metadata ref %s is not indexed", e.Ref)
+}
+
 // MetadataMissingEpisodeError signals the requested episode does not
 // exist in the series's metadata-derived spine. The user typed a slot
 // that the provider doesn't know about.

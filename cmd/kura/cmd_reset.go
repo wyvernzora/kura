@@ -1,10 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 
-	"github.com/wyvernzora/kura/internal/series"
+	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/render"
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type resetCmd struct {
@@ -14,37 +17,38 @@ type resetCmd struct {
 }
 
 func (cmd *resetCmd) Run(rt *runContext) error {
-	input := series.ResetInput{All: cmd.All}
 	if cmd.Episode == "" && !cmd.All {
 		return errors.New("reset requires --episode or --all")
 	}
 	if cmd.Episode != "" && cmd.All {
 		return errors.New("reset accepts either --episode or --all, not both")
 	}
+	in := workflow.ResetInput{All: cmd.All}
 	if cmd.Episode != "" {
 		episode, err := parseStageEpisode(cmd.Episode)
 		if err != nil {
 			return err
 		}
-		input.Episode = episode
+		in.Episode = episode
 	}
-	lib, err := libraryFromFlags(rt, rt.flags)
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	metadataRef, err := resolveMetadataRef(rt, lib, cmd.Terms)
-	if err != nil {
-		return err
-	}
-	handle, err := lib.Find(metadataRef)
-	if err != nil {
-		return err
-	}
-	result, err := handle.Reset(rt.Context, input)
-	if err != nil {
-		return err
-	}
-	encoder := json.NewEncoder(rt.Stdout)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(result)
+	io := stdio.From(rt.Context)
+	return clipkg.WithResolve(rt.Context, io, deps, cmd.Terms, func(metadataRef refs.Metadata) error {
+		seriesRef, ok, err := deps.Index.Get(metadataRef)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
+		}
+		in.Ref = seriesRef
+		result, err := workflow.Reset(rt.Context, deps, in)
+		if err != nil {
+			return err
+		}
+		return render.Reset(rt.Stdout, result, true)
+	})
 }

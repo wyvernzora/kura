@@ -25,7 +25,7 @@ func (cmd *showCmd) Run(rt *runContext) error {
 			return err
 		}
 		if !ok {
-			return &workflow.NotFoundError{}
+			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
 		}
 		result, err := workflow.Show(rt.Context, deps, workflow.ShowInput{Ref: seriesRef})
 		if err != nil {

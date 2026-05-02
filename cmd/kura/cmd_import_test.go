@@ -55,10 +55,7 @@ func TestImportCmdResolveTerms(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := test.cmd.resolveTerms()
-			if err != nil {
-				t.Fatalf("resolveTerms error = %v", err)
-			}
+			got := test.cmd.resolveTerms()
 			if !slices.Equal(got, test.want) {
 				t.Fatalf("resolveTerms = %#v, want %#v", got, test.want)
 			}

@@ -1,10 +1,11 @@
 package main
 
 import (
-	"encoding/json"
-
-	"github.com/wyvernzora/kura/internal/series"
-	"github.com/wyvernzora/kura/internal/ui"
+	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/render"
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/ui/stdio"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type scanCmd struct {
@@ -14,30 +15,23 @@ type scanCmd struct {
 }
 
 func (cmd *scanCmd) Run(rt *runContext) error {
-	lib, err := libraryFromFlags(rt, rt.flags)
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	metadataRef, err := resolveMetadataRef(rt, lib, cmd.Terms)
-	if err != nil {
-		return err
-	}
-	handle, err := lib.Find(metadataRef)
-	if err != nil {
-		return err
-	}
-	result, err := handle.Scan(rt.Context, series.ScanInput{Replace: cmd.Replace})
-	if err != nil {
-		return err
-	}
-	if cmd.JSON {
-		encoder := json.NewEncoder(rt.Stdout)
-		encoder.SetIndent("", "  ")
-		if err := encoder.Encode(result); err != nil {
+	io := stdio.From(rt.Context)
+	return clipkg.WithResolve(rt.Context, io, deps, cmd.Terms, func(metadataRef refs.Metadata) error {
+		seriesRef, ok, err := deps.Index.Get(metadataRef)
+		if err != nil {
 			return err
 		}
-	} else if err := ui.WriteScanResult(rt.Stdout, result); err != nil {
-		return err
-	}
-	return nil
+		if !ok {
+			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
+		}
+		result, err := workflow.Scan(rt.Context, deps, workflow.ScanInput{Ref: seriesRef, Replace: cmd.Replace})
+		if err != nil {
+			return err
+		}
+		return render.Scan(rt.Stdout, result, cmd.JSON)
+	})
 }

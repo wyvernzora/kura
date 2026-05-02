@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -122,20 +121,6 @@ func resolveSeriesHandle(rt *runContext, terms []string) (series.Handle, error) 
 		return series.Handle{}, err
 	}
 	return lib.Find(metadataRef)
-}
-
-func writeSeriesSummary(rt *runContext, handle series.Handle, verb string, asJSON bool) error {
-	view, err := handle.Read(rt.Context, series.ReadInput{})
-	if err != nil {
-		return err
-	}
-	if asJSON {
-		encoder := json.NewEncoder(rt.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(view)
-	}
-	_, err = fmt.Fprintf(rt.Stdout, "%s %s (%s)\n", verb, handle.Ref(), view.MetadataRef)
-	return err
 }
 
 func formatOptionalTime(value time.Time) string {
