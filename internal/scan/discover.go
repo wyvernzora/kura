@@ -33,14 +33,14 @@ func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []
 			return nil
 		}
 		if entry.IsDir() {
-			skip, reason := skipDiscoveryDir(relPath, entry.Name())
-			if skip == nil {
+			descend, reason := classifyDirectory(relPath, entry.Name())
+			if descend {
 				return nil
 			}
 			if reason != "" {
 				skipped = append(skipped, ImportSkip{Path: relPath, Code: SkipCodeIgnoredDirectory, Reason: reason})
 			}
-			return skip
+			return fs.SkipDir
 		}
 		if !mediainfo.RecognizedVideoFile(relPath) {
 			return nil
@@ -63,22 +63,25 @@ func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []
 	return episodes, skipped, nil
 }
 
-func skipDiscoveryDir(relPath string, name string) (error, string) {
+// classifyDirectory decides whether discovery should descend into a
+// directory. Returns descend=true to walk in, otherwise (false, reason)
+// where reason is the human-readable skip note ("" for silent skips like
+// .kura/ and Season N/Extra/).
+func classifyDirectory(relPath, name string) (descend bool, reason string) {
 	if relPath == paths.KuraDir {
-		return fs.SkipDir, ""
+		return false, ""
 	}
-	switch relPathDepth(relPath) {
-	case 1:
+	depth := relPathDepth(relPath)
+	if depth == 1 {
 		if _, ok := parseSeasonDir(name); ok {
-			return nil, ""
+			return true, ""
 		}
-		return fs.SkipDir, "directory is not a season directory"
-	default:
-		if relPathDepth(relPath) == 2 && isSeasonExtraDir(relPath, name) {
-			return fs.SkipDir, ""
-		}
-		return fs.SkipDir, "season subdirectory is not scanned"
+		return false, "directory is not a season directory"
 	}
+	if depth == 2 && isSeasonExtraDir(relPath, name) {
+		return false, ""
+	}
+	return false, "season subdirectory is not scanned"
 }
 
 func isSeasonExtraDir(relPath string, name string) bool {
@@ -163,8 +166,9 @@ func matchingCompanions(seriesDir seriesdir.SeriesDir, parentRel string, videoNa
 		if mediainfo.RecognizedVideoFile(name) {
 			continue
 		}
-		companionBase := strings.TrimSuffix(name, filepath.Ext(name))
-		if companionBase != videoBase && !strings.HasPrefix(name, videoBase+".") {
+		// Companions match either "<videoBase>.<ext>" or
+		// "<videoBase>.<lang>.<ext>"; both share the "<videoBase>." prefix.
+		if !strings.HasPrefix(name, videoBase+".") {
 			continue
 		}
 		relPath := name

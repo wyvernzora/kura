@@ -18,6 +18,7 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
+// Runner bundles the dependencies a single scan needs.
 type Runner struct {
 	root      string
 	ref       refs.Series
@@ -26,6 +27,7 @@ type Runner struct {
 	now       func() time.Time
 }
 
+// NewRunner returns a Runner ready to Scan one series.
 func NewRunner(root string, ref refs.Series, source provider.Source, inspector media.Inspector, now func() time.Time) Runner {
 	return Runner{
 		root:      root,
@@ -36,85 +38,79 @@ func NewRunner(root string, ref refs.Series, source provider.Source, inspector m
 	}
 }
 
+// Scan loads the series, refreshes its spine from the provider, walks
+// the filesystem, and reconciles discovered files into the in-memory
+// model.
 func (r Runner) Scan(ctx context.Context, input Input) (Result, error) {
-	scanner := newScanner(r, ctx, input)
-	if err := scanner.scan(); err != nil {
+	s := scanner{Runner: r, input: input, result: Result{Series: r.ref}}
+	if err := s.run(ctx); err != nil {
 		return Result{}, err
 	}
-	return scanner.result, nil
+	return s.result, nil
 }
 
+// scanner is per-call state. Embeds Runner so methods reach config
+// directly (s.root, s.ref, s.now()) instead of through s.runner.X.
 type scanner struct {
-	runner    Runner
-	ctx       context.Context
+	Runner
 	input     Input
 	model     domainseries.Series
 	seriesDir seriesdir.SeriesDir
 	result    Result
 }
 
-func newScanner(runner Runner, ctx context.Context, input Input) *scanner {
-	return &scanner{
-		runner: runner,
-		ctx:    ctx,
-		input:  input,
-		result: Result{Series: runner.ref},
-	}
-}
-
-func (s *scanner) scan() error {
-	progress.Start(s.ctx, "scan", fmt.Sprintf("Scanning %s", s.runner.ref), 0)
-	if err := s.loadLocal(); err != nil {
-		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.runner.ref), 0, 0)
+func (s *scanner) run(ctx context.Context) (err error) {
+	progress.Start(ctx, "scan", fmt.Sprintf("Scanning %s", s.ref), 0)
+	defer func() {
+		if err != nil {
+			progress.Failure(ctx, "scan", fmt.Sprintf("Failed to scan %s", s.ref), 0, 0)
+		}
+	}()
+	if err = s.loadLocal(); err != nil {
 		return err
 	}
-	if err := s.rejectStagedRecords(); err != nil {
-		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.runner.ref), 0, 0)
+	if err = s.rejectStagedRecords(); err != nil {
 		return err
 	}
-	if err := s.refreshMetadata(); err != nil {
-		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.runner.ref), 0, 0)
+	if err = s.refreshMetadata(ctx); err != nil {
 		return err
 	}
-	progress.Update(s.ctx, "scan", fmt.Sprintf("Discovering files in %s", s.runner.ref), 1, 0)
+	progress.Update(ctx, "scan", fmt.Sprintf("Discovering files in %s", s.ref), 1, 0)
 	discovered, skipped, err := DiscoverSeriesEpisodes(s.seriesDir)
 	if err != nil {
-		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.runner.ref), 1, 0)
 		return err
 	}
 	s.result.Skipped = skipped
-	progress.Update(s.ctx, "scan", fmt.Sprintf("Inspecting %d files", len(discovered)), 2, 0)
-	if err := s.apply(discovered); err != nil {
-		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.runner.ref), 2, 0)
+	progress.Update(ctx, "scan", fmt.Sprintf("Inspecting %d files", len(discovered)), 2, 0)
+	if err = s.apply(ctx, discovered); err != nil {
 		return err
 	}
-	s.model.LastScanned = s.runner.now().UTC()
-	s.model.Ref = s.runner.ref
-	if err := seriesfile.Save(s.runner.root, &s.model); err != nil {
-		progress.Failure(s.ctx, "scan", fmt.Sprintf("Failed to scan %s", s.runner.ref), 3, 0)
+	s.model.LastScanned = s.now().UTC()
+	s.model.Ref = s.ref
+	if err = seriesfile.Save(s.root, &s.model); err != nil {
 		return err
 	}
-	progress.Success(s.ctx, "scan", fmt.Sprintf("Scanned %s", s.runner.ref), len(discovered))
+	progress.Success(ctx, "scan", fmt.Sprintf("Scanned %s", s.ref), len(discovered))
 	return nil
 }
 
 func (s *scanner) loadLocal() error {
-	model, err := seriesfile.Load(s.runner.root, s.runner.ref)
+	model, err := seriesfile.Load(s.root, s.ref)
 	if err != nil {
 		return err
 	}
-	seriesDir, err := seriesdir.Parse(paths.SeriesDir(s.runner.root, s.runner.ref))
+	dir, err := seriesdir.Parse(paths.SeriesDir(s.root, s.ref))
 	if err != nil {
 		return err
 	}
 	s.model = *model
-	s.seriesDir = seriesDir
+	s.seriesDir = dir
 	return nil
 }
 
-func (s *scanner) refreshMetadata() error {
-	progress.Update(s.ctx, "scan", fmt.Sprintf("Fetching metadata for %s", s.runner.ref), 0, 0)
-	metadataSeries, err := s.runner.source.GetSeries(s.ctx, s.model.Metadata.ID())
+func (s *scanner) refreshMetadata(ctx context.Context) error {
+	progress.Update(ctx, "scan", fmt.Sprintf("Fetching metadata for %s", s.ref), 0, 0)
+	metadataSeries, err := s.source.GetSeries(ctx, s.model.Metadata.ID())
 	if err != nil {
 		return err
 	}
@@ -124,10 +120,6 @@ func (s *scanner) refreshMetadata() error {
 	}
 	s.model.RefreshSpine(spine)
 	return nil
-}
-
-func (s *scanner) reportInspecting(file DiscoveredFile, current int, total int) {
-	progress.Update(s.ctx, "scan", fmt.Sprintf("Inspecting %s", filepath.Base(file.Path)), current, total)
 }
 
 func (s *scanner) rejectStagedRecords() error {
@@ -144,8 +136,12 @@ func (s *scanner) rejectStagedRecords() error {
 	return ScanStagedRecordsError{Episodes: staged}
 }
 
-func (s *scanner) mediaRecordBuilder() mediainfo.Builder {
-	return mediainfo.NewBuilder(s.runner.inspector)
+func (s *scanner) builder() mediainfo.Builder {
+	return mediainfo.NewBuilder(s.inspector)
+}
+
+func (s *scanner) absRel(rel string) string {
+	return filepath.Join(s.seriesDir.Path(), filepath.FromSlash(rel))
 }
 
 func spineFromMetadata(seasons []provider.Season) ([]domainseries.SpineEntry, error) {

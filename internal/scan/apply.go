@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/mediainfo"
+	"github.com/wyvernzora/kura/internal/progress"
 )
 
 type fileFacts struct {
@@ -28,20 +30,20 @@ func statFacts(path string) (fileFacts, error) {
 	return fileFacts{Size: info.Size(), MTime: info.ModTime().UTC().Truncate(time.Second)}, nil
 }
 
-func (s *scanner) apply(discovered []DiscoveredFile) error {
+func (s *scanner) apply(ctx context.Context, discovered []DiscoveredFile) error {
 	if err := s.removeMissingActive(discovered); err != nil {
 		return err
 	}
 	for index, file := range discovered {
-		s.reportInspecting(file, index+1, len(discovered))
-		if err := s.applyFile(file); err != nil {
+		progress.Update(ctx, "scan", fmt.Sprintf("Inspecting %s", filepath.Base(file.Path)), index+1, len(discovered))
+		if err := s.applyFile(ctx, file); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *scanner) applyFile(file DiscoveredFile) error {
+func (s *scanner) applyFile(ctx context.Context, file DiscoveredFile) error {
 	episode, ok := s.model.Episodes[file.Ref]
 	if !ok {
 		return MetadataMissingEpisodeError{Episode: file.Ref}
@@ -63,7 +65,7 @@ func (s *scanner) applyFile(file DiscoveredFile) error {
 			status = ScanStatusUpdated
 		}
 	}
-	record, err := s.mediaRecord(file)
+	record, err := s.mediaRecord(ctx, file)
 	if err != nil {
 		return err
 	}
@@ -72,10 +74,6 @@ func (s *scanner) applyFile(file DiscoveredFile) error {
 	}
 	s.result.Synced = append(s.result.Synced, scannedEpisode(status, file, record))
 	return nil
-}
-
-func (s *scanner) absRel(rel string) string {
-	return filepath.Join(s.seriesDir.Path(), filepath.FromSlash(rel))
 }
 
 func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, error) {
@@ -109,7 +107,7 @@ func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, err
 	return true, nil
 }
 
-func (s *scanner) mediaRecord(file DiscoveredFile) (media.Record, error) {
+func (s *scanner) mediaRecord(ctx context.Context, file DiscoveredFile) (media.Record, error) {
 	absolutePath := s.absRel(file.Path)
 	input := mediainfo.Input{
 		MediaPath:  absolutePath,
@@ -123,7 +121,7 @@ func (s *scanner) mediaRecord(file DiscoveredFile) (media.Record, error) {
 			RecordPath: absolute,
 		})
 	}
-	return s.mediaRecordBuilder().Build(s.ctx, input)
+	return s.builder().Build(ctx, input)
 }
 
 func scannedEpisode(status ScanStatus, file DiscoveredFile, record media.Record) ScannedEpisode {
@@ -148,6 +146,9 @@ func existingScannedEpisode(file DiscoveredFile, active media.Record) ScannedEpi
 	}
 }
 
+// removeMissingActive prunes active records whose file did not turn up
+// in the discovery walk. The walk is the source of truth for what's on
+// disk, so a missing entry there means the file is gone.
 func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 	discoveredPaths := map[string]struct{}{}
 	for _, file := range discovered {
@@ -169,11 +170,6 @@ func (s *scanner) removeMissingActive(discovered []DiscoveredFile) error {
 		episode := s.model.Episodes[ref]
 		if _, ok := discoveredPaths[episode.Active.Path]; ok {
 			continue
-		}
-		if _, err := statFacts(episode.Active.Path); err == nil {
-			continue
-		} else if !os.IsNotExist(err) {
-			return err
 		}
 		record := media.CloneRecord(*episode.Active)
 		if err := s.model.ClearActive(ref); err != nil {
