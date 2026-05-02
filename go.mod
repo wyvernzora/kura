@@ -10,6 +10,7 @@ require (
 )
 
 require (
+	cloud.google.com/go v0.123.0
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/briandowns/spinner v1.23.2
 	github.com/google/renameio/v2 v2.0.2
@@ -22,7 +23,6 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.123.0 // indirect
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
