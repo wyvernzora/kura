@@ -116,12 +116,13 @@ func Rebuild(ctx context.Context, root string, read func(context.Context, refs.S
 			scanned++
 			progress.Update(ctx, "reindex", fmt.Sprintf("Indexing %s", seriesRef), scanned, 0)
 			metadataRef, err := read(ctx, seriesRef)
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
 			if err != nil {
-				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
-				return nil, err
+				// Series with missing or unreadable metadata are skipped
+				// silently here; downstream workflows that walk the
+				// filesystem (e.g. List) surface the broken state with
+				// an explicit error status. Failing the whole rebuild
+				// over one bad series would block every other workflow.
+				continue
 			}
 			if err := index.Put(metadataRef, seriesRef); err != nil {
 				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)

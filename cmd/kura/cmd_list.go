@@ -1,10 +1,10 @@
 package main
 
 import (
-	"encoding/json"
-
-	"github.com/wyvernzora/kura/internal/library"
-	"github.com/wyvernzora/kura/internal/ui"
+	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/render"
+	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type listCmd struct {
@@ -13,25 +13,21 @@ type listCmd struct {
 }
 
 func (cmd *listCmd) Run(rt *runContext) error {
-	statuses := make([]library.ListStatus, 0, len(cmd.Statuses))
+	statuses := make([]response.ListStatus, 0, len(cmd.Statuses))
 	for _, raw := range cmd.Statuses {
-		status, err := library.ParseListStatus(raw)
+		status, err := clipkg.ParseListStatus(raw)
 		if err != nil {
 			return err
 		}
 		statuses = append(statuses, status)
 	}
-	entries, err := library.List(rt.Context, library.ListInput{
-		Root:     rt.Getenv("KURA_LIBRARY_ROOT"),
-		Statuses: statuses,
-	})
+	deps, err := buildDeps(rt)
 	if err != nil {
 		return err
 	}
-	if cmd.JSON {
-		encoder := json.NewEncoder(rt.Stdout)
-		encoder.SetIndent("", "  ")
-		return encoder.Encode(entries)
+	result, err := workflow.List(rt.Context, deps, workflow.ListInput{Statuses: statuses})
+	if err != nil {
+		return err
 	}
-	return ui.WriteLibraryList(rt.Stdout, entries)
+	return render.List(rt.Stdout, result, cmd.JSON)
 }

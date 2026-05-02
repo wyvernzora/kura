@@ -14,7 +14,7 @@ func TestProviderFactoryCachesSuccess(t *testing.T) {
 		calls++
 		return nil, nil
 	})
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := factory(); err != nil {
 			t.Fatalf("call %d: %v", i, err)
 		}
@@ -31,7 +31,7 @@ func TestProviderFactoryCachesFailure(t *testing.T) {
 		calls++
 		return nil, want
 	})
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if _, err := factory(); !errors.Is(err, want) {
 			t.Fatalf("call %d err = %v, want %v", i, err, want)
 		}
