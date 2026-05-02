@@ -3,6 +3,7 @@ package workflow
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 )
@@ -74,4 +75,25 @@ type StagedEpisodeAlreadyExistsError struct {
 
 func (e *StagedEpisodeAlreadyExistsError) Error() string {
 	return fmt.Sprintf("workflow: staged episode %s already exists; pass replace to replace it", e.Episode.Marker())
+}
+
+// ReconcilePlanExpiredError signals the plan TTL has elapsed before
+// apply was called. Caller re-plans.
+type ReconcilePlanExpiredError struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
+func (e *ReconcilePlanExpiredError) Error() string {
+	return fmt.Sprintf("workflow: reconcile plan %s expired at %s", e.Token, e.ExpiresAt.Format(time.RFC3339))
+}
+
+// ReconcilePlanAlreadyAppliedError signals the plan log already has a
+// success record. Apply refuses to re-apply.
+type ReconcilePlanAlreadyAppliedError struct {
+	Token string
+}
+
+func (e *ReconcilePlanAlreadyAppliedError) Error() string {
+	return fmt.Sprintf("workflow: reconcile plan %s was already applied", e.Token)
 }
