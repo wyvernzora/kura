@@ -1,19 +1,11 @@
 package reconcile
 
 import (
-	"bufio"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/google/renameio/v2"
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/series/wire"
+	"github.com/wyvernzora/kura/internal/storage/planfile"
 )
 
 const reconcilePlanTTL = 5 * time.Minute
@@ -58,154 +50,41 @@ func (h Runner) CreateReconcilePlan() (StoredReconcilePlan, error) {
 		ExpiresAt: createdAt.Add(reconcilePlanTTL),
 		Plan:      plan,
 	}
-	record := wire.ReconcilePlanRecordV1{
-		Type:          "plan",
-		SchemaVersion: wire.CurrentSchemaVersion,
-		Token:         token,
-		CreatedAt:     stored.CreatedAt.Format(time.RFC3339),
-		ExpiresAt:     stored.ExpiresAt.Format(time.RFC3339),
-		Series:        h.ref.String(),
-		MetadataRef:   metadataRef.String(),
-		Plan:          toWireReconcilePlan(plan),
+	record := planfile.PlanRecord{
+		Token:       token,
+		CreatedAt:   stored.CreatedAt,
+		ExpiresAt:   stored.ExpiresAt,
+		Series:      plan.Series,
+		MetadataRef: metadataRef,
+		FileTitle:   plan.FileTitle,
+		Snapshot:    plan.Snapshot,
+		Changes:     toPlanFileChanges(plan.Changes),
 	}
-	data, err := json.Marshal(record)
-	if err != nil {
-		return StoredReconcilePlan{}, err
-	}
-	data = append(data, '\n')
-	path, err := h.reconcilePlanPath(token)
-	if err != nil {
-		return StoredReconcilePlan{}, err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return StoredReconcilePlan{}, err
-	}
-	if err := renameio.WriteFile(path, data, 0o644); err != nil {
+	if err := planfile.WritePlan(h.root(), h.ref, record); err != nil {
 		return StoredReconcilePlan{}, err
 	}
 	return stored, nil
 }
 
 func (h Runner) loadStoredReconcilePlan(token string) (StoredReconcilePlan, bool, error) {
-	path, err := h.reconcilePlanPath(token)
+	record, applied, err := planfile.ReadPlan(h.root(), h.ref, token)
 	if err != nil {
 		return StoredReconcilePlan{}, false, err
 	}
-	file, err := os.Open(path)
+	if record.Series != h.ref {
+		return StoredReconcilePlan{}, false, PlanStaleError{Series: record.Series}
+	}
+	currentSeries, err := h.load()
 	if err != nil {
 		return StoredReconcilePlan{}, false, err
 	}
-	defer file.Close()
-
-	reader := bufio.NewReader(file)
-	line, err := reader.ReadBytes('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return StoredReconcilePlan{}, false, err
-	}
-	if len(line) == 0 {
-		return StoredReconcilePlan{}, false, fmt.Errorf("series: reconcile plan %s is empty", token)
-	}
-	var record wire.ReconcilePlanRecordV1
-	if err := json.Unmarshal(line, &record); err != nil {
-		return StoredReconcilePlan{}, false, fmt.Errorf("series: decode reconcile plan %s: %w", token, err)
-	}
-	stored, err := h.fromWireReconcilePlanRecord(record)
-	if err != nil {
-		return StoredReconcilePlan{}, false, err
-	}
-	if stored.Token != token {
-		return StoredReconcilePlan{}, false, fmt.Errorf("series: reconcile plan token mismatch: file %s contains %s", token, stored.Token)
-	}
-	applied, err := reconcilePlanHasSuccess(reader)
-	if err != nil {
-		return StoredReconcilePlan{}, false, err
-	}
-	return stored, applied, nil
-}
-
-func reconcilePlanHasSuccess(r io.Reader) (bool, error) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 1024), 1024*1024)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		var header struct {
-			Type   string `json:"type"`
-			Status string `json:"status"`
-		}
-		if err := json.Unmarshal(line, &header); err != nil {
-			return false, err
-		}
-		if header.Type == "result" && header.Status == "success" {
-			return true, nil
-		}
-	}
-	return false, scanner.Err()
-}
-
-func (h Runner) fromWireReconcilePlanRecord(record wire.ReconcilePlanRecordV1) (StoredReconcilePlan, error) {
-	if record.Type != "plan" {
-		return StoredReconcilePlan{}, fmt.Errorf("series: reconcile plan record has type %q", record.Type)
-	}
-	if record.SchemaVersion != wire.CurrentSchemaVersion {
-		return StoredReconcilePlan{}, fmt.Errorf("unsupported reconcile plan schemaVersion %d", record.SchemaVersion)
-	}
-	if record.Series != h.ref.String() {
-		seriesRef, err := refs.ParseSeries(record.Series)
-		if err != nil {
-			return StoredReconcilePlan{}, err
-		}
-		return StoredReconcilePlan{}, PlanStaleError{Series: seriesRef}
-	}
-	metadataRef, err := refs.ParseMetadata(record.MetadataRef)
-	if err != nil {
-		return StoredReconcilePlan{}, err
-	}
-	series, err := h.load()
-	if err != nil {
-		return StoredReconcilePlan{}, err
-	}
-	if metadataRef != series.Metadata {
-		return StoredReconcilePlan{}, PlanStaleError{Series: h.ref}
-	}
-	token, err := parseReconcilePlanToken(record.Token)
-	if err != nil {
-		return StoredReconcilePlan{}, err
-	}
-	createdAt, err := time.Parse(time.RFC3339, record.CreatedAt)
-	if err != nil {
-		return StoredReconcilePlan{}, fmt.Errorf("series: invalid reconcile plan createdAt %q: %w", record.CreatedAt, err)
-	}
-	expiresAt, err := time.Parse(time.RFC3339, record.ExpiresAt)
-	if err != nil {
-		return StoredReconcilePlan{}, fmt.Errorf("series: invalid reconcile plan expiresAt %q: %w", record.ExpiresAt, err)
-	}
-	plan, err := fromWireReconcilePlan(record.Plan)
-	if err != nil {
-		return StoredReconcilePlan{}, err
+	if record.MetadataRef != currentSeries.Metadata {
+		return StoredReconcilePlan{}, false, PlanStaleError{Series: h.ref}
 	}
 	return StoredReconcilePlan{
-		Token:     token,
-		CreatedAt: createdAt,
-		ExpiresAt: expiresAt,
-		Plan:      plan,
-	}, nil
-}
-
-func (h Runner) reconcilePlanPath(token string) (string, error) {
-	token, err := parseReconcilePlanToken(token)
-	if err != nil {
-		return "", err
-	}
-	seriesDir, err := h.files().seriesDir(h.ref)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(seriesDir.Path(), ".kura", "reconcile", token+".jsonl"), nil
-}
-
-func parseReconcilePlanToken(token string) (string, error) {
-	if _, err := ulid.ParseStrict(token); err != nil {
-		return "", fmt.Errorf("series: invalid reconcile plan token %q", token)
-	}
-	return token, nil
+		Token:     record.Token,
+		CreatedAt: record.CreatedAt,
+		ExpiresAt: record.ExpiresAt,
+		Plan:      fromPlanFileRecord(record),
+	}, applied, nil
 }
