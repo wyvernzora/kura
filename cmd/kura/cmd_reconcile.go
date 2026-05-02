@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/series"
+	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/ui"
 )
 
@@ -25,10 +25,81 @@ type reconcileApplyCmd struct {
 }
 
 type reconcilePlanOutput struct {
-	Token     string               `json:"token,omitempty"`
-	CreatedAt string               `json:"createdAt,omitempty"`
-	ExpiresAt string               `json:"expiresAt,omitempty"`
-	Plan      series.ReconcilePlan `json:"plan"`
+	Token     string                  `json:"token,omitempty"`
+	CreatedAt string                  `json:"createdAt,omitempty"`
+	ExpiresAt string                  `json:"expiresAt,omitempty"`
+	Plan      reconcilePlanOutputPlan `json:"plan"`
+}
+
+type reconcilePlanOutputPlan struct {
+	Series   string                      `json:"series"`
+	Snapshot string                      `json:"snapshot,omitempty"`
+	Changes  []reconcilePlanOutputChange `json:"changes"`
+}
+
+type reconcilePlanOutputChange struct {
+	Kind       string                       `json:"kind"`
+	Episode    string                       `json:"episode"`
+	From       string                       `json:"from"`
+	To         string                       `json:"to"`
+	Source     string                       `json:"source,omitempty"`
+	Resolution string                       `json:"resolution,omitempty"`
+	Companions []reconcilePlanOutputMove    `json:"companions,omitempty"`
+	Replaced   *reconcilePlanOutputReplaced `json:"replaced,omitempty"`
+}
+
+type reconcilePlanOutputMove struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+type reconcilePlanOutputReplaced struct {
+	From       string                    `json:"from"`
+	To         string                    `json:"to"`
+	Source     string                    `json:"source,omitempty"`
+	Resolution string                    `json:"resolution,omitempty"`
+	Companions []reconcilePlanOutputMove `json:"companions,omitempty"`
+}
+
+func reconcilePlanOutputFor(plan reconcile.Plan) reconcilePlanOutputPlan {
+	out := reconcilePlanOutputPlan{
+		Series:   plan.Series.String(),
+		Snapshot: plan.Snapshot,
+		Changes:  make([]reconcilePlanOutputChange, 0, len(plan.Changes)),
+	}
+	for _, change := range plan.Changes {
+		entry := reconcilePlanOutputChange{
+			Kind:       string(change.Kind),
+			Episode:    change.Episode.String(),
+			From:       change.From,
+			To:         change.To,
+			Source:     change.Source,
+			Resolution: change.Resolution,
+			Companions: movesToOutput(change.Companions),
+		}
+		if change.Replaced != nil {
+			entry.Replaced = &reconcilePlanOutputReplaced{
+				From:       change.Replaced.From,
+				To:         change.Replaced.To,
+				Source:     change.Replaced.Source,
+				Resolution: change.Replaced.Resolution,
+				Companions: movesToOutput(change.Replaced.Companions),
+			}
+		}
+		out.Changes = append(out.Changes, entry)
+	}
+	return out
+}
+
+func movesToOutput(in []reconcile.FileMove) []reconcilePlanOutputMove {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]reconcilePlanOutputMove, 0, len(in))
+	for _, m := range in {
+		out = append(out, reconcilePlanOutputMove{From: m.From, To: m.To})
+	}
+	return out
 }
 
 func (cmd *reconcilePlanCmd) Run(rt *runContext) error {
@@ -47,7 +118,7 @@ func (cmd *reconcilePlanCmd) Run(rt *runContext) error {
 			Token:     stored.Token,
 			CreatedAt: formatOptionalTime(stored.CreatedAt),
 			ExpiresAt: formatOptionalTime(stored.ExpiresAt),
-			Plan:      stored.Plan,
+			Plan:      reconcilePlanOutputFor(stored.Plan),
 		})
 	}
 	if err := ui.WriteReconcilePlan(rt.Stdout, stored.Plan); err != nil {

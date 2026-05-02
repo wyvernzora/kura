@@ -3,9 +3,12 @@ package reconcile
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
+	domainreconcile "github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 func (h Runner) ApplyReconcileToken(ctx context.Context, token string) (ReconcileResult, error) {
@@ -62,31 +65,25 @@ func (h Runner) applyReconcile(ctx context.Context, plan ReconcilePlan, log *rec
 	}
 	moves := plan.Moves()
 	for index, move := range moves {
-		if log != nil {
-			if err := log.move(h.now(), "before", index+1, len(moves), move, nil); err != nil {
-				progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), index, len(moves))
-				return ReconcileResult{}, err
-			}
-		}
 		progress.Update(ctx, "reconcile", fmt.Sprintf("Moving %s", filepath.Base(move.To)), index+1, len(moves))
 		from := move.From
 		if !filepath.IsAbs(from) {
 			from = filepath.Join(seriesDir.Path(), filepath.FromSlash(move.From))
 		}
 		to := filepath.Join(seriesDir.Path(), filepath.FromSlash(move.To))
-		if err := h.files().move(from, to); err != nil {
-			if log != nil {
-				_ = log.move(h.now(), "after", index+1, len(moves), move, err)
-				_ = log.result(h.now(), "failure", index, err)
-			}
-			progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), index+1, len(moves))
-			return ReconcileResult{}, err
-		}
+		moveErr := h.files().move(from, to)
 		if log != nil {
-			if err := log.move(h.now(), "after", index+1, len(moves), move, nil); err != nil {
+			if err := log.move(h.now(), index+1, len(moves), move, moveErr); err != nil {
 				progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), index+1, len(moves))
 				return ReconcileResult{}, err
 			}
+		}
+		if moveErr != nil {
+			if log != nil {
+				_ = log.result(h.now(), "failure", index, moveErr)
+			}
+			progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", h.ref), index+1, len(moves))
+			return ReconcileResult{}, moveErr
 		}
 	}
 	updated, err := h.applyPlanState(plan)
@@ -118,14 +115,11 @@ func (h Runner) validatePlan(plan ReconcilePlan) error {
 	if plan.Series != h.ref {
 		return PlanStaleError{Series: plan.Series}
 	}
-	snapshot, err := h.snapshot()
+	data, err := os.ReadFile(paths.SeriesMetadata(h.root(), h.ref))
 	if err != nil {
 		return err
 	}
-	if snapshot != plan.Snapshot {
-		return PlanStaleError{Series: plan.Series}
-	}
-	return nil
+	return domainreconcile.ValidateSnapshot(plan, data)
 }
 
 func (h Runner) applyPlanState(plan ReconcilePlan) (seriesState, error) {

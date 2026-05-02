@@ -1,7 +1,6 @@
 package reconcile
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -10,9 +9,9 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/media"
+	domainreconcile "github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
-	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func (h Runner) PlanReconcile() (ReconcilePlan, error) {
@@ -37,10 +36,9 @@ func (h Runner) planReconcile() (ReconcilePlan, refs.Metadata, error) {
 		return ReconcilePlan{}, "", err
 	}
 	return ReconcilePlan{
-		Series:    h.ref,
-		FileTitle: textnorm.NFC(h.ref.String()),
-		Snapshot:  snapshot,
-		Changes:   changes,
+		Series:   h.ref,
+		Snapshot: snapshot,
+		Changes:  changes,
 	}, series.Metadata, nil
 }
 
@@ -49,8 +47,7 @@ func (h Runner) snapshot() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(data)
-	return fmt.Sprintf("%x", sum[:]), nil
+	return domainreconcile.Snapshot(data), nil
 }
 
 func (h Runner) planChanges(series seriesState) ([]Change, error) {

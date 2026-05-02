@@ -35,7 +35,7 @@ func (err ReconcilePlanAlreadyAppliedError) Error() string {
 }
 
 func (h Runner) CreateReconcilePlan() (StoredReconcilePlan, error) {
-	plan, metadataRef, err := h.planReconcile()
+	plan, _, err := h.planReconcile()
 	if err != nil {
 		return StoredReconcilePlan{}, err
 	}
@@ -51,14 +51,10 @@ func (h Runner) CreateReconcilePlan() (StoredReconcilePlan, error) {
 		Plan:      plan,
 	}
 	record := planfile.PlanRecord{
-		Token:       token,
-		CreatedAt:   stored.CreatedAt,
-		ExpiresAt:   stored.ExpiresAt,
-		Series:      plan.Series,
-		MetadataRef: metadataRef,
-		FileTitle:   plan.FileTitle,
-		Snapshot:    plan.Snapshot,
-		Changes:     toPlanFileChanges(plan.Changes),
+		Token:     token,
+		CreatedAt: stored.CreatedAt,
+		ExpiresAt: stored.ExpiresAt,
+		Plan:      plan,
 	}
 	if err := planfile.WritePlan(h.root(), h.ref, record); err != nil {
 		return StoredReconcilePlan{}, err
@@ -71,20 +67,13 @@ func (h Runner) loadStoredReconcilePlan(token string) (StoredReconcilePlan, bool
 	if err != nil {
 		return StoredReconcilePlan{}, false, err
 	}
-	if record.Series != h.ref {
-		return StoredReconcilePlan{}, false, PlanStaleError{Series: record.Series}
-	}
-	currentSeries, err := h.load()
-	if err != nil {
-		return StoredReconcilePlan{}, false, err
-	}
-	if record.MetadataRef != currentSeries.Metadata {
-		return StoredReconcilePlan{}, false, PlanStaleError{Series: h.ref}
+	if record.Plan.Series != h.ref {
+		return StoredReconcilePlan{}, false, PlanStaleError{Series: record.Plan.Series}
 	}
 	return StoredReconcilePlan{
 		Token:     record.Token,
 		CreatedAt: record.CreatedAt,
 		ExpiresAt: record.ExpiresAt,
-		Plan:      fromPlanFileRecord(record),
+		Plan:      record.Plan,
 	}, applied, nil
 }

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 type planRecordV1 struct {
@@ -14,16 +14,13 @@ type planRecordV1 struct {
 	Token         string `json:"token"`
 	CreatedAt     string `json:"createdAt"`
 	ExpiresAt     string `json:"expiresAt"`
-	Series        string `json:"series"`
-	MetadataRef   string `json:"metadataRef"`
 	Plan          planV1 `json:"plan"`
 }
 
 type planV1 struct {
-	Series    string     `json:"series"`
-	FileTitle string     `json:"fileTitle"`
-	Snapshot  string     `json:"snapshot"`
-	Changes   []changeV1 `json:"changes"`
+	Series   string     `json:"series"`
+	Snapshot string     `json:"snapshot"`
+	Changes  []changeV1 `json:"changes"`
 }
 
 type changeV1 struct {
@@ -54,7 +51,6 @@ type eventV1 struct {
 	Type          string     `json:"type"`
 	SchemaVersion int        `json:"schemaVersion"`
 	At            string     `json:"at"`
-	Phase         string     `json:"phase"`
 	Index         int        `json:"index"`
 	Total         int        `json:"total"`
 	Move          fileMoveV1 `json:"move"`
@@ -77,22 +73,19 @@ func planRecordToWire(p PlanRecord) planRecordV1 {
 		Token:         p.Token,
 		CreatedAt:     p.CreatedAt.UTC().Format(time.RFC3339),
 		ExpiresAt:     p.ExpiresAt.UTC().Format(time.RFC3339),
-		Series:        p.Series.String(),
-		MetadataRef:   p.MetadataRef.String(),
 		Plan: planV1{
-			Series:    p.Series.String(),
-			FileTitle: p.FileTitle.String(),
-			Snapshot:  p.Snapshot,
-			Changes:   changesToWire(p.Changes),
+			Series:   p.Plan.Series.String(),
+			Snapshot: p.Plan.Snapshot,
+			Changes:  changesToWire(p.Plan.Changes),
 		},
 	}
 }
 
-func changesToWire(in []Change) []changeV1 {
+func changesToWire(in []reconcile.Change) []changeV1 {
 	out := make([]changeV1, 0, len(in))
 	for _, change := range in {
 		w := changeV1{
-			Kind:       change.Kind,
+			Kind:       string(change.Kind),
 			Episode:    change.Episode.String(),
 			From:       change.From,
 			To:         change.To,
@@ -114,7 +107,7 @@ func changesToWire(in []Change) []changeV1 {
 	return out
 }
 
-func fileMovesToWire(in []FileMove) []fileMoveV1 {
+func fileMovesToWire(in []reconcile.FileMove) []fileMoveV1 {
 	if len(in) == 0 {
 		return nil
 	}
@@ -125,7 +118,7 @@ func fileMovesToWire(in []FileMove) []fileMoveV1 {
 	return out
 }
 
-func fileMoveToWire(in FileMove) fileMoveV1 {
+func fileMoveToWire(in reconcile.FileMove) fileMoveV1 {
 	return fileMoveV1{From: in.From, To: in.To}
 }
 
@@ -138,57 +131,44 @@ func planRecordFromWire(in planRecordV1) (PlanRecord, error) {
 	if err != nil {
 		return PlanRecord{}, fmt.Errorf("planfile: invalid expiresAt %q: %w", in.ExpiresAt, err)
 	}
-	seriesRef, err := refs.ParseSeries(in.Series)
+	seriesRef, err := refs.ParseSeries(in.Plan.Series)
 	if err != nil {
 		return PlanRecord{}, err
-	}
-	metadataRef, err := refs.ParseMetadata(in.MetadataRef)
-	if err != nil {
-		return PlanRecord{}, err
-	}
-	planSeriesRef, err := refs.ParseSeries(in.Plan.Series)
-	if err != nil {
-		return PlanRecord{}, err
-	}
-	if planSeriesRef != seriesRef {
-		return PlanRecord{}, fmt.Errorf("planfile: nested plan series %q does not match envelope %q", planSeriesRef, seriesRef)
 	}
 	changes, err := changesFromWire(in.Plan.Changes)
 	if err != nil {
 		return PlanRecord{}, err
 	}
 	return PlanRecord{
-		Token:       in.Token,
-		CreatedAt:   createdAt,
-		ExpiresAt:   expiresAt,
-		Series:      seriesRef,
-		MetadataRef: metadataRef,
-		FileTitle:   textnorm.NFC(in.Plan.FileTitle),
-		Snapshot:    in.Plan.Snapshot,
-		Changes:     changes,
+		Token:     in.Token,
+		CreatedAt: createdAt,
+		ExpiresAt: expiresAt,
+		Plan: reconcile.Plan{
+			Series:   seriesRef,
+			Snapshot: in.Plan.Snapshot,
+			Changes:  changes,
+		},
 	}, nil
 }
 
-func changesFromWire(in []changeV1) ([]Change, error) {
-	out := make([]Change, 0, len(in))
+func changesFromWire(in []changeV1) ([]reconcile.Change, error) {
+	out := make([]reconcile.Change, 0, len(in))
 	for _, w := range in {
 		episode, err := refs.ParseEpisode(w.Episode)
 		if err != nil {
 			return nil, err
 		}
-		change := Change{
-			Kind:       w.Kind,
+		change := reconcile.Change{
+			Kind:       reconcile.ChangeKind(w.Kind),
 			Episode:    episode,
-			From:       w.From,
-			To:         w.To,
+			FileMove:   reconcile.FileMove{From: w.From, To: w.To},
 			Source:     w.Source,
 			Resolution: w.Resolution,
 			Companions: fileMovesFromWire(w.Companions),
 		}
 		if w.Replaced != nil {
-			change.Replaced = &Replaced{
-				From:       w.Replaced.From,
-				To:         w.Replaced.To,
+			change.Replaced = &reconcile.Replaced{
+				FileMove:   reconcile.FileMove{From: w.Replaced.From, To: w.Replaced.To},
 				Source:     w.Replaced.Source,
 				Resolution: w.Replaced.Resolution,
 				Companions: fileMovesFromWire(w.Replaced.Companions),
@@ -199,13 +179,13 @@ func changesFromWire(in []changeV1) ([]Change, error) {
 	return out, nil
 }
 
-func fileMovesFromWire(in []fileMoveV1) []FileMove {
+func fileMovesFromWire(in []fileMoveV1) []reconcile.FileMove {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make([]FileMove, 0, len(in))
+	out := make([]reconcile.FileMove, 0, len(in))
 	for _, m := range in {
-		out = append(out, FileMove{From: m.From, To: m.To})
+		out = append(out, reconcile.FileMove{From: m.From, To: m.To})
 	}
 	return out
 }

@@ -5,10 +5,6 @@
 // are append-only events: one per attempted move plus one terminating
 // result. Apply opens the log once, appends N+1 lines, closes; readers scan
 // later to determine whether the plan was applied successfully.
-//
-// The exported PlanRecord/Change/Event types mirror the on-disk shape with
-// native Go fields. Phase 7 of refactor.md may lift the plan-record schema
-// into domain/reconcile/ once the redesign is locked.
 package planfile
 
 import (
@@ -25,47 +21,20 @@ import (
 
 	"github.com/google/renameio/v2"
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
-	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 const currentSchemaVersion = 1
 
-// PlanRecord is line 1 of the JSONL file: the immutable plan to apply.
+// PlanRecord is line 1 of the JSONL file: persistence envelope plus the
+// immutable plan to apply.
 type PlanRecord struct {
-	Token       string
-	CreatedAt   time.Time
-	ExpiresAt   time.Time
-	Series      refs.Series
-	MetadataRef refs.Metadata
-	FileTitle   textnorm.NFCString
-	Snapshot    string
-	Changes     []Change
-}
-
-type Change struct {
-	Kind       string
-	Episode    refs.Episode
-	From       string
-	To         string
-	Source     string
-	Resolution string
-	Companions []FileMove
-	Replaced   *Replaced
-}
-
-type FileMove struct {
-	From string
-	To   string
-}
-
-type Replaced struct {
-	From       string
-	To         string
-	Source     string
-	Resolution string
-	Companions []FileMove
+	Token     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	Plan      reconcile.Plan
 }
 
 // WritePlan creates the JSONL file with PlanRecord as line 1. The file is
@@ -158,13 +127,14 @@ func ListTokens(root string, ref refs.Series) ([]string, error) {
 }
 
 // Log is an open append handle to a plan's JSONL file. Apply opens once at
-// the start, appends move events as it works through the plan, then appends
-// a final result event before closing.
+// the start, appends one event per move as it works, then appends a final
+// result event before closing.
 type Log struct {
 	file    *os.File
 	encoder *json.Encoder
 }
 
+// OpenLog opens the plan file for append.
 func OpenLog(root string, ref refs.Series, token string) (*Log, error) {
 	if err := validateToken(token); err != nil {
 		return nil, err
@@ -176,19 +146,18 @@ func OpenLog(root string, ref refs.Series, token string) (*Log, error) {
 	return &Log{file: file, encoder: json.NewEncoder(file)}, nil
 }
 
+// Close releases the file handle.
 func (l *Log) Close() error {
 	return l.file.Close()
 }
 
 // AppendMove records one move attempt. moveErr is the result of the move
-// (nil for success); when non-nil, callers typically follow with
-// AppendResult("failure", ...).
-func (l *Log) AppendMove(at time.Time, phase string, index, total int, move FileMove, moveErr error) error {
+// (nil on success).
+func (l *Log) AppendMove(at time.Time, index, total int, move reconcile.FileMove, moveErr error) error {
 	record := eventV1{
 		Type:          "event",
 		SchemaVersion: currentSchemaVersion,
 		At:            at.UTC().Format(time.RFC3339),
-		Phase:         phase,
 		Index:         index,
 		Total:         total,
 		Move:          fileMoveToWire(move),

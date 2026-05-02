@@ -22,8 +22,8 @@ func (l *reconcilePlanLog) Close() error {
 	return l.log.Close()
 }
 
-func (l *reconcilePlanLog) move(at time.Time, phase string, index int, total int, move FileMove, moveErr error) error {
-	return l.log.AppendMove(at, phase, index, total, planfile.FileMove{From: move.From, To: move.To}, moveErr)
+func (l *reconcilePlanLog) move(at time.Time, index int, total int, move FileMove, moveErr error) error {
+	return l.log.AppendMove(at, index, total, move, moveErr)
 }
 
 func (l *reconcilePlanLog) result(at time.Time, status string, appliedMoves int, applyErr error) error {

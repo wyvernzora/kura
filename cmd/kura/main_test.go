@@ -1162,10 +1162,10 @@ func TestReconcileApplyCommandAppliesPlanToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read plan log: %v", err)
 	}
-	if lines := strings.Split(strings.TrimSpace(string(data)), "\n"); len(lines) != 4 {
-		t.Fatalf("plan log lines = %d, want 4\n%s", len(lines), string(data))
+	if lines := strings.Split(strings.TrimSpace(string(data)), "\n"); len(lines) != 3 {
+		t.Fatalf("plan log lines = %d, want 3\n%s", len(lines), string(data))
 	}
-	if !strings.Contains(string(data), `"phase":"before"`) || !strings.Contains(string(data), `"phase":"after"`) || !strings.Contains(string(data), `"status":"success"`) {
+	if !strings.Contains(string(data), `"type":"event"`) || !strings.Contains(string(data), `"status":"success"`) {
 		t.Fatalf("plan log missing move/result records:\n%s", string(data))
 	}
 }
