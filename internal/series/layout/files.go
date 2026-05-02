@@ -45,7 +45,3 @@ func (f Files) CanonicalPath(ref refs.Series, episode refs.Episode, record media
 	filename := BuildMediaFilename(title, episode, facts, filepath.Ext(record.Path)).String()
 	return paths.EpisodeMediaRel(episode.Season(), filename), nil
 }
-
-func (f Files) Move(from, to string) error {
-	return SafeMoveFile(from, to)
-}

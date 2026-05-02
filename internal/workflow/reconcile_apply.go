@@ -12,6 +12,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/internal/fsop"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/series/layout"
@@ -83,7 +84,7 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, plan reco
 			from = filepath.Join(seriesDir.Path(), filepath.FromSlash(move.From))
 		}
 		to := filepath.Join(seriesDir.Path(), filepath.FromSlash(move.To))
-		moveErr := layout.SafeMoveFile(from, to)
+		moveErr := fsop.SafeMoveFile(from, to)
 		if err := log.AppendMove(deps.Now(), index+1, len(moves), move, moveErr); err != nil {
 			progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), index+1, len(moves))
 			return response.ReconcileApply{}, err
