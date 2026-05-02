@@ -45,3 +45,23 @@ type NoStagedEpisodeError struct {
 func (e *NoStagedEpisodeError) Error() string {
 	return fmt.Sprintf("workflow: episode %s has no staged media", e.Episode.Marker())
 }
+
+// EpisodeAlreadyExistsError signals an active record is present for the
+// episode and the operation requires --replace to overwrite it.
+type EpisodeAlreadyExistsError struct {
+	Episode refs.Episode
+}
+
+func (e *EpisodeAlreadyExistsError) Error() string {
+	return fmt.Sprintf("workflow: episode %s already has active media; pass replace to replace it", e.Episode.Marker())
+}
+
+// StagedEpisodeAlreadyExistsError signals a staged record is present
+// for the episode and the operation requires --replace to overwrite it.
+type StagedEpisodeAlreadyExistsError struct {
+	Episode refs.Episode
+}
+
+func (e *StagedEpisodeAlreadyExistsError) Error() string {
+	return fmt.Sprintf("workflow: staged episode %s already exists; pass replace to replace it", e.Episode.Marker())
+}
