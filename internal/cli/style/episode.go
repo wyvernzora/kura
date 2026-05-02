@@ -32,7 +32,12 @@ func EpisodeStatus(status string, styled bool) string {
 }
 
 // MediaSource colors a source label after running it through media.ParseSource.Display.
+// Empty input passes through as empty so callers can suppress the column for
+// rows where there is no source to report (e.g. Missing or Pending episodes).
 func MediaSource(source string, styled bool) string {
+	if strings.TrimSpace(source) == "" {
+		return ""
+	}
 	value := media.ParseSource(source).Display()
 	if !styled {
 		return value
