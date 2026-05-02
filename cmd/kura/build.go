@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/library"
@@ -49,6 +50,18 @@ func resolveMetadataRef(rt *runContext, lib *library.Library, terms []string) (r
 	return refs.Metadata(picked.Summary.MetadataRef), nil
 }
 
+func resolveSeriesHandle(rt *runContext, terms []string) (series.Handle, error) {
+	lib, err := libraryFromFlags(rt, rt.flags)
+	if err != nil {
+		return series.Handle{}, err
+	}
+	metadataRef, err := resolveMetadataRef(rt, lib, terms)
+	if err != nil {
+		return series.Handle{}, err
+	}
+	return lib.Find(metadataRef)
+}
+
 func writeSeriesSummary(rt *runContext, handle series.Handle, verb string, asJSON bool) error {
 	view, err := handle.Read(rt.Context, series.ReadInput{})
 	if err != nil {
@@ -61,6 +74,13 @@ func writeSeriesSummary(rt *runContext, handle series.Handle, verb string, asJSO
 	}
 	_, err = fmt.Fprintf(rt.Stdout, "%s %s (%s)\n", verb, handle.Ref(), view.MetadataRef)
 	return err
+}
+
+func formatOptionalTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func parseMetadataRef(seriesRef string) (string, string, error) {

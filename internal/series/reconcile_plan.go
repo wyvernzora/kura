@@ -15,27 +15,32 @@ import (
 )
 
 func (h Handle) PlanReconcile() (ReconcilePlan, error) {
+	plan, _, err := h.planReconcile()
+	return plan, err
+}
+
+func (h Handle) planReconcile() (ReconcilePlan, refs.Metadata, error) {
 	series, err := h.load()
 	if err != nil {
-		return ReconcilePlan{}, err
+		return ReconcilePlan{}, "", err
 	}
 	snapshot, err := h.snapshot()
 	if err != nil {
-		return ReconcilePlan{}, err
+		return ReconcilePlan{}, "", err
 	}
 	changes, err := h.planChanges(series)
 	if err != nil {
-		return ReconcilePlan{}, err
+		return ReconcilePlan{}, "", err
 	}
 	if err := h.validateMoves(changes); err != nil {
-		return ReconcilePlan{}, err
+		return ReconcilePlan{}, "", err
 	}
 	return ReconcilePlan{
 		Series:    h.ref,
 		FileTitle: textnorm.NFC(h.ref.String()),
 		Snapshot:  snapshot,
 		Changes:   changes,
-	}, nil
+	}, series.Metadata, nil
 }
 
 func (h Handle) snapshot() (string, error) {

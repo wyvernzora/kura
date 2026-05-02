@@ -126,6 +126,8 @@ func episodeMedia(record MediaRecord) EpisodeMedia {
 	return EpisodeMedia{
 		Source:     ParseMediaSource(record.Source).Display(),
 		Resolution: displayResolution(record.Resolution),
+		Codec:      record.Codec,
+		Size:       record.Size,
 		File:       record.Path,
 		Companions: companionFiles(record.Companions),
 	}

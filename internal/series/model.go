@@ -40,6 +40,8 @@ type Episode struct {
 type EpisodeMedia struct {
 	Source     string          `json:"source"`
 	Resolution string          `json:"resolution,omitempty"`
+	Codec      string          `json:"codec,omitempty"`
+	Size       int64           `json:"size"`
 	File       string          `json:"file"`
 	Companions []CompanionFile `json:"companions"`
 }

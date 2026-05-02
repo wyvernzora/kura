@@ -535,6 +535,7 @@ func TestShowCommandPrintsTrackedSeriesTable(t *testing.T) {
 					"path": "Season 1/episode-1.mkv",
 					"source": "webrip",
 					"resolution": "1920x1080",
+					"codec": "HEVC",
 					"size": 9,
 					"mtime": "2026-04-20T03:00:00Z",
 					"companions": []
@@ -571,6 +572,11 @@ func TestShowCommandPrintsTrackedSeriesTable(t *testing.T) {
 			t.Fatalf("stdout = %q, want %q", output, want)
 		}
 	}
+	for _, unwanted := range []string{"HEVC"} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("stdout = %q, did not want %q in table output", output, unwanted)
+		}
+	}
 }
 
 func TestShowCommandPrintsJSON(t *testing.T) {
@@ -594,6 +600,7 @@ func TestShowCommandPrintsJSON(t *testing.T) {
 					"path": "Season 1/episode-1.mkv",
 					"source": "webrip",
 					"resolution": "1920x1080",
+					"codec": "HEVC",
 					"size": 9,
 					"mtime": "2026-04-20T03:00:00Z",
 					"companions": []
@@ -625,6 +632,13 @@ func TestShowCommandPrintsJSON(t *testing.T) {
 	episodes := seasons[0].(map[string]any)["episodes"].([]any)
 	if got := episodes[0].(map[string]any)["status"]; got != "present" {
 		t.Fatalf("episode 1 status = %v, want present", got)
+	}
+	active := episodes[0].(map[string]any)["active"].(map[string]any)
+	if got := active["codec"]; got != "HEVC" {
+		t.Fatalf("episode 1 active codec = %v, want HEVC", got)
+	}
+	if got := active["size"]; got != float64(9) {
+		t.Fatalf("episode 1 active size = %v, want 9", got)
 	}
 	if got := episodes[1].(map[string]any)["status"]; got != "missing" {
 		t.Fatalf("episode 2 status = %v, want missing", got)
@@ -948,7 +962,16 @@ func TestFindCommandIsRemoved(t *testing.T) {
 	}
 }
 
-func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
+func TestCombinedReconcileCommandIsRemoved(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err := run([]string{"reconcile", "tvdb:370070"}, testRunContext(&stdout, &stderr))
+	if err == nil {
+		t.Fatal("combined reconcile command succeeded, want removed command error")
+	}
+}
+
+func TestReconcilePlanCommandWritesPlanJSON(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -982,7 +1005,7 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	var stderr bytes.Buffer
 	err := run([]string{
 		"reconcile",
-		"--dry-run",
+		"plan",
 		"--json",
 		"--tvdb-base-url", server.URL,
 		"tvdb:370070",
@@ -990,16 +1013,27 @@ func TestReconcileCommandPrintsDryRunJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
 	}
-	var plan map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &plan); err != nil {
+	var output map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
+	if output["token"] == "" {
+		t.Fatalf("token = %v, want non-empty token", output["token"])
+	}
+	plan := output["plan"].(map[string]any)
 	if changes := plan["changes"].([]any); len(changes) != 1 {
 		t.Fatalf("len(changes) = %d, want 1", len(changes))
 	}
+	matches, err := filepath.Glob(filepath.Join(seriesDir, ".kura", "reconcile", "*.jsonl"))
+	if err != nil {
+		t.Fatalf("glob reconcile plans: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("plan files = %d, want 1", len(matches))
+	}
 }
 
-func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
+func TestReconcilePlanCommandWritesNoPlanWhenNothingChanged(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
@@ -1033,18 +1067,108 @@ func TestReconcileCommandDoesNotPromptWhenNothingChanged(t *testing.T) {
 	var stderr bytes.Buffer
 	err := run([]string{
 		"reconcile",
+		"plan",
 		"--tvdb-base-url", server.URL,
 		"tvdb:370070",
 	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
 	}
-	if strings.Contains(stderr.String(), "Apply these changes?") {
-		t.Fatalf("stderr = %q, want no apply prompt", stderr.String())
+	matches, err := filepath.Glob(filepath.Join(seriesDir, ".kura", "reconcile", "*.jsonl"))
+	if err != nil {
+		t.Fatalf("glob reconcile plans: %v", err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("plan files = %d, want 0", len(matches))
 	}
 }
 
-func TestReconcileCommandReportsMissingTVDBKey(t *testing.T) {
+func TestReconcileApplyCommandAppliesPlanToken(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll season: %v", err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "old episode.mkv"), "episode")
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"active": {
+					"path": "Season 1/old episode.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	rt := testRunContextWithLibraryRoot(&stdout, &stderr, root)
+	err := run([]string{
+		"reconcile",
+		"plan",
+		"--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+	}, rt)
+	if err != nil {
+		t.Fatalf("plan: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var planOutput map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &planOutput); err != nil {
+		t.Fatalf("unmarshal plan stdout: %v\nstdout:\n%s", err, stdout.String())
+	}
+	token := planOutput["token"].(string)
+
+	stdout.Reset()
+	stderr.Reset()
+	err = run([]string{
+		"reconcile",
+		"apply",
+		"--json",
+		"--tvdb-base-url", server.URL,
+		"tvdb:370070",
+		token,
+	}, rt)
+	if err != nil {
+		t.Fatalf("apply: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal apply stdout: %v\nstdout:\n%s", err, stdout.String())
+	}
+	if got := int(result["appliedMoves"].(float64)); got != 1 {
+		t.Fatalf("appliedMoves = %d, want 1", got)
+	}
+	if _, err := os.Stat(filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")); err != nil {
+		t.Fatalf("stat reconciled file: %v", err)
+	}
+	planPath := filepath.Join(seriesDir, ".kura", "reconcile", token+".jsonl")
+	data, err := os.ReadFile(planPath)
+	if err != nil {
+		t.Fatalf("read plan log: %v", err)
+	}
+	if lines := strings.Split(strings.TrimSpace(string(data)), "\n"); len(lines) != 4 {
+		t.Fatalf("plan log lines = %d, want 4\n%s", len(lines), string(data))
+	}
+	if !strings.Contains(string(data), `"phase":"before"`) || !strings.Contains(string(data), `"phase":"after"`) || !strings.Contains(string(data), `"status":"success"`) {
+		t.Fatalf("plan log missing move/result records:\n%s", string(data))
+	}
+}
+
+func TestReconcilePlanCommandReportsMissingTVDBKey(t *testing.T) {
 	root := t.TempDir()
 	seriesDir := filepath.Join(root, "Bookworm")
 	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
@@ -1071,7 +1195,7 @@ func TestReconcileCommandReportsMissingTVDBKey(t *testing.T) {
 	}
 	err := run([]string{
 		"reconcile",
-		"--dry-run",
+		"plan",
 		"--json",
 		"Bookworm",
 	}, rt)
