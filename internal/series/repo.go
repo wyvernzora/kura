@@ -14,14 +14,6 @@ func Initialize(root string, ref refs.Series, metadataRef refs.Metadata, metadat
 	return seriesfile.Initialize(root, ref, metadataRef, metadataSeries)
 }
 
-func ReadMetadataRef(root string, ref refs.Series) (refs.Metadata, error) {
-	model, err := seriesfile.Load(root, ref)
-	if err != nil {
-		return "", err
-	}
-	return model.Metadata, nil
-}
-
 func (r repo) load(ref refs.Series) (seriesState, error) {
 	model, err := seriesfile.Load(r.root, ref)
 	if err != nil {

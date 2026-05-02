@@ -65,6 +65,17 @@ func Save(libRoot string, m *series.Series) error {
 	return renameio.WriteFile(paths.SeriesMetadata(libRoot, m.Ref), data, 0o644)
 }
 
+// ReadMetadataRef returns the metadataRef field of <libRoot>/<ref>/.kura/
+// series.json without exposing the rest of the loaded model. Used by index
+// rebuild to populate the metadataRef → seriesRef map cheaply.
+func ReadMetadataRef(libRoot string, ref refs.Series) (refs.Metadata, error) {
+	model, err := Load(libRoot, ref)
+	if err != nil {
+		return "", err
+	}
+	return model.Metadata, nil
+}
+
 // Exists reports whether series.json is present at the canonical path. It
 // distinguishes "not found" (false, nil) from stat errors (false, err).
 func Exists(libRoot string, ref refs.Series) (bool, error) {

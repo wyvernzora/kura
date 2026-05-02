@@ -11,8 +11,8 @@ import (
 	"github.com/wyvernzora/kura/internal/library"
 	"github.com/wyvernzora/kura/internal/media/mediainfo"
 	"github.com/wyvernzora/kura/internal/metadata"
-	"github.com/wyvernzora/kura/internal/series"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -75,7 +75,7 @@ func loadOrRebuildIndex(ctx context.Context, libRoot string) (*indexfile.Index, 
 	index, err := indexfile.Load(libRoot)
 	if errors.Is(err, indexfile.ErrNotFound) {
 		return indexfile.Rebuild(ctx, libRoot, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
-			return series.ReadMetadataRef(libRoot, ref)
+			return seriesfile.ReadMetadataRef(libRoot, ref)
 		})
 	}
 	return index, err
