@@ -149,3 +149,19 @@ type ReconcilePlanAlreadyAppliedError struct {
 func (e *ReconcilePlanAlreadyAppliedError) Error() string {
 	return fmt.Sprintf("workflow: reconcile plan %s was already applied", e.Token)
 }
+
+// TrashRestoreTargetExistsError signals one or more recorded paths in
+// the trash entry already exist on disk. Restore refuses to overwrite;
+// the operator must move the conflicting files out of the way first.
+type TrashRestoreTargetExistsError struct {
+	Ref     refs.Series
+	ID      string
+	Targets []string
+}
+
+func (e *TrashRestoreTargetExistsError) Error() string {
+	if len(e.Targets) == 1 {
+		return fmt.Sprintf("workflow: trash restore %s for %q blocked: %s already exists", e.ID, e.Ref, e.Targets[0])
+	}
+	return fmt.Sprintf("workflow: trash restore %s for %q blocked: %d target paths already exist", e.ID, e.Ref, len(e.Targets))
+}
