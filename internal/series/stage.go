@@ -91,42 +91,22 @@ func (h Handle) Stage(ctx context.Context, in StageInput) (StageResult, error) {
 }
 
 func (h Handle) stagedRecord(ctx context.Context, mediaPath string, source string, companions []string) (MediaRecord, error) {
-	info, err := h.inspector().Inspect(ctx, mediaPath)
-	if err != nil {
-		return MediaRecord{}, err
-	}
-	facts, err := h.files().stat(mediaPath)
-	if err != nil {
-		return MediaRecord{}, err
-	}
-	if source == "" {
-		source = ParseMediaSource(inferSourceFromFilename(mediaPath)).String()
-	}
-	record := MediaRecord{
-		Path:       mediaPath,
-		Source:     ParseMediaSource(source).String(),
-		Resolution: info.Resolution,
-		Codec:      info.VideoCodec,
-		Size:       facts.Size,
-		MTime:      facts.MTime,
-		Companions: []CompanionRecord{},
+	input := mediaRecordInput{
+		MediaPath:  mediaPath,
+		RecordPath: mediaPath,
+		Source:     source,
 	}
 	for _, companion := range companions {
 		path, err := cleanAbsoluteFilePath(companion)
 		if err != nil {
 			return MediaRecord{}, err
 		}
-		facts, err := h.files().stat(path)
-		if err != nil {
-			return MediaRecord{}, err
-		}
-		record.Companions = append(record.Companions, CompanionRecord{
-			Path:  path,
-			Size:  facts.Size,
-			MTime: facts.MTime,
+		input.CompanionPaths = append(input.CompanionPaths, mediaRecordCompanionInput{
+			MediaPath:  path,
+			RecordPath: path,
 		})
 	}
-	return record, nil
+	return h.mediaRecord(ctx, input)
 }
 
 func cleanAbsoluteFilePath(path string) (string, error) {

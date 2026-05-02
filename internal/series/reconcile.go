@@ -1,7 +1,6 @@
 package series
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/wyvernzora/kura/internal/refs"
@@ -79,25 +78,4 @@ type PlanStaleError struct {
 
 func (err PlanStaleError) Error() string {
 	return fmt.Sprintf("series: reconcile plan for %s is stale", err.Series)
-}
-
-func (c Change) MarshalJSON() ([]byte, error) {
-	type changeJSON struct {
-		Kind    ChangeKind   `json:"kind"`
-		Episode refs.Episode `json:"episode"`
-		FileMove
-		Source     string     `json:"source,omitempty"`
-		Resolution string     `json:"resolution,omitempty"`
-		Companions []FileMove `json:"companions,omitempty"`
-		Replaced   *Replaced  `json:"replaced,omitempty"`
-	}
-	return json.Marshal(changeJSON{
-		Kind:       c.Kind,
-		Episode:    c.Episode,
-		FileMove:   c.FileMove,
-		Source:     c.Source,
-		Resolution: c.Resolution,
-		Companions: c.Companions,
-		Replaced:   c.Replaced,
-	})
 }

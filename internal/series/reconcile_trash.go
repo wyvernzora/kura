@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/refs"
@@ -26,7 +25,7 @@ func (h Handle) writeTrash(episode refs.Episode, record MediaRecord, replaced Re
 	return trash.Write(h.root(), h.ref, trash.Meta{
 		ID:        id,
 		Episode:   episode,
-		TrashedAt: time.Now().UTC(),
+		TrashedAt: h.now().UTC(),
 		Record:    trashRecord(record),
 	})
 }

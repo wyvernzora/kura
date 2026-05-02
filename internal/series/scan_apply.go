@@ -86,35 +86,18 @@ func (s *scanner) unchanged(active MediaRecord, file discoveredFile) (bool, erro
 
 func (s *scanner) mediaRecord(file discoveredFile) (MediaRecord, error) {
 	absolutePath := filepath.Join(s.seriesDir.Path(), filepath.FromSlash(file.Path))
-	info, err := s.handle.inspector().Inspect(s.ctx, absolutePath)
-	if err != nil {
-		return MediaRecord{}, err
-	}
-	facts, err := s.handle.files().stat(absolutePath)
-	if err != nil {
-		return MediaRecord{}, err
-	}
-	record := MediaRecord{
-		Path:       file.Path,
-		Source:     ParseMediaSource(file.Source).String(),
-		Resolution: info.Resolution,
-		Codec:      info.VideoCodec,
-		Size:       facts.Size,
-		MTime:      facts.MTime,
-		Companions: []CompanionRecord{},
+	input := mediaRecordInput{
+		MediaPath:  absolutePath,
+		RecordPath: file.Path,
+		Source:     file.Source,
 	}
 	for _, companionPath := range file.Companions {
-		facts, err := s.handle.files().stat(filepath.Join(s.seriesDir.Path(), filepath.FromSlash(companionPath)))
-		if err != nil {
-			return MediaRecord{}, err
-		}
-		record.Companions = append(record.Companions, CompanionRecord{
-			Path:  companionPath,
-			Size:  facts.Size,
-			MTime: facts.MTime,
+		input.CompanionPaths = append(input.CompanionPaths, mediaRecordCompanionInput{
+			MediaPath:  filepath.Join(s.seriesDir.Path(), filepath.FromSlash(companionPath)),
+			RecordPath: companionPath,
 		})
 	}
-	return record, nil
+	return s.handle.mediaRecord(s.ctx, input)
 }
 
 func scannedEpisode(status ScanStatus, file discoveredFile, record MediaRecord) ScannedEpisode {
