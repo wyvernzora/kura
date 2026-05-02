@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/media"
+	"github.com/wyvernzora/kura/internal/domain/media"
 )
 
 func TestFileTitleNormalizesAndCompares(t *testing.T) {

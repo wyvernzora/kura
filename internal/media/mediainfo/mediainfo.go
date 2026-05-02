@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	mediapkg "github.com/wyvernzora/kura/internal/media"
+	mediapkg "github.com/wyvernzora/kura/internal/domain/media"
 )
 
 const (

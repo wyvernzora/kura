@@ -7,7 +7,7 @@ import (
 	"unicode"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/media"
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 

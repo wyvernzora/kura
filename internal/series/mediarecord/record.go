@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/media"
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/series/state"
 )
