@@ -9,6 +9,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/planfile"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
@@ -118,8 +119,8 @@ func TestReadPlanRejectsTokenMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Move the file under the wrong token to force a mismatch on read.
-	srcPath, _ := planfile.Path(root, seriesRef, other)
-	dstPath, _ := planfile.Path(root, seriesRef, token)
+	srcPath := paths.PlanFile(root, seriesRef, other)
+	dstPath := paths.PlanFile(root, seriesRef, token)
 	if err := os.Rename(srcPath, dstPath); err != nil {
 		t.Fatal(err)
 	}

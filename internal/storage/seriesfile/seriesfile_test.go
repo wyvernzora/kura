@@ -10,6 +10,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -66,7 +67,7 @@ func TestLoadDecodesFixture(t *testing.T) {
 
 func TestSaveRoundTripBytes(t *testing.T) {
 	libRoot, ref := setupFixtureLibrary(t)
-	original, err := os.ReadFile(seriesfile.MetadataPath(libRoot, ref))
+	original, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestSaveRoundTripBytes(t *testing.T) {
 	if err := seriesfile.Save(libRoot, model); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
-	saved, err := os.ReadFile(seriesfile.MetadataPath(libRoot, ref))
+	saved, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
 	if err != nil {
 		t.Fatalf("ReadFile after Save: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestExistsReportsPresence(t *testing.T) {
 func TestLoadRejectsUnknownSchemaVersion(t *testing.T) {
 	libRoot, ref := setupFixtureLibrary(t)
 	bad := []byte(`{"schemaVersion":2,"metadataRef":"tvdb:1","episodes":{}}`)
-	if err := os.WriteFile(seriesfile.MetadataPath(libRoot, ref), bad, 0o644); err != nil {
+	if err := os.WriteFile(paths.SeriesMetadata(libRoot, ref), bad, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	if _, err := seriesfile.Load(libRoot, ref); err == nil || !strings.Contains(err.Error(), "schemaVersion") {
@@ -151,7 +152,7 @@ func setupFixtureLibrary(t *testing.T) (string, refs.Series) {
 	if err != nil {
 		t.Fatalf("ParseSeries: %v", err)
 	}
-	dst := seriesfile.MetadataPath(libRoot, ref)
+	dst := paths.SeriesMetadata(libRoot, ref)
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

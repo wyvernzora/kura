@@ -20,19 +20,17 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/renameio/v2"
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
-const (
-	currentSchemaVersion = 1
-	kuraDir              = ".kura"
-	dirName              = "reconcile"
-)
+const currentSchemaVersion = 1
 
 // PlanRecord is line 1 of the JSONL file: the immutable plan to apply.
 type PlanRecord struct {
@@ -82,7 +80,7 @@ func WritePlan(root string, ref refs.Series, p PlanRecord) error {
 		return err
 	}
 	data = append(data, '\n')
-	path := planPath(root, ref, p.Token)
+	path := paths.PlanFile(root, ref, p.Token)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -95,7 +93,7 @@ func ReadPlan(root string, ref refs.Series, token string) (PlanRecord, bool, err
 	if err := validateToken(token); err != nil {
 		return PlanRecord{}, false, err
 	}
-	file, err := os.Open(planPath(root, ref, token))
+	file, err := os.Open(paths.PlanFile(root, ref, token))
 	if err != nil {
 		return PlanRecord{}, false, err
 	}
@@ -135,7 +133,7 @@ func ReadPlan(root string, ref refs.Series, token string) (PlanRecord, bool, err
 
 // ListTokens returns the ULIDs of every plan file under the series.
 func ListTokens(root string, ref refs.Series) ([]string, error) {
-	dir := filepath.Join(root, filepath.FromSlash(ref.String()), kuraDir, dirName)
+	dir := paths.PlanDir(root, ref)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -171,7 +169,7 @@ func OpenLog(root string, ref refs.Series, token string) (*Log, error) {
 	if err := validateToken(token); err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(planPath(root, ref, token), os.O_WRONLY|os.O_APPEND, 0)
+	file, err := os.OpenFile(paths.PlanFile(root, ref, token), os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -218,26 +216,11 @@ func (l *Log) AppendResult(at time.Time, status string, appliedMoves int, applyE
 	return l.encoder.Encode(record)
 }
 
-// Path returns the absolute path to a plan's JSONL file. Exported so
-// reconcile callers can format paths in error messages and tests can stat
-// the file directly.
-func Path(root string, ref refs.Series, token string) (string, error) {
-	if err := validateToken(token); err != nil {
-		return "", err
-	}
-	return planPath(root, ref, token), nil
-}
-
-func planPath(root string, ref refs.Series, token string) string {
-	return filepath.Join(root, filepath.FromSlash(ref.String()), kuraDir, dirName, token+".jsonl")
-}
-
 func tokenFromFilename(name string) (string, bool) {
-	const ext = ".jsonl"
-	if len(name) <= len(ext) || name[len(name)-len(ext):] != ext {
+	if !strings.HasSuffix(name, paths.PlanExtension) {
 		return "", false
 	}
-	token := name[:len(name)-len(ext)]
+	token := strings.TrimSuffix(name, paths.PlanExtension)
 	if _, err := ulid.ParseStrict(token); err != nil {
 		return "", false
 	}

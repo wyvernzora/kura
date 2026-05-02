@@ -3,21 +3,9 @@ package seriesfile
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 )
 
 const currentSchemaVersion = 1
-
-const (
-	kuraDir        = ".kura"
-	seriesFileName = "series.json"
-)
-
-// metadataPath returns the absolute path to series.json for a series at
-// seriesDir. seriesDir must be absolute.
-func metadataPath(seriesDir string) string {
-	return filepath.Join(seriesDir, kuraDir, seriesFileName)
-}
 
 type seriesV1 struct {
 	SchemaVersion  int                  `json:"schemaVersion"`

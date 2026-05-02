@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/google/renameio/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/metadata"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 // Load reads <libRoot>/<ref>/.kura/series.json, decodes it, absolutizes
@@ -22,8 +22,8 @@ func Load(libRoot string, ref refs.Series) (*series.Series, error) {
 	if ref.IsZero() {
 		return nil, errors.New("seriesfile: ref is required")
 	}
-	seriesDir := seriesDirPath(libRoot, ref)
-	data, err := os.ReadFile(metadataPath(seriesDir))
+	seriesDir := paths.SeriesDir(libRoot, ref)
+	data, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func Save(libRoot string, m *series.Series) error {
 	if m.Ref.IsZero() {
 		return errors.New("seriesfile: Save called with zero Ref")
 	}
-	seriesDir := seriesDirPath(libRoot, m.Ref)
+	seriesDir := paths.SeriesDir(libRoot, m.Ref)
 	wire := toWire(m)
 	if err := relativizeActiveWire(&wire, seriesDir); err != nil {
 		return err
@@ -59,17 +59,16 @@ func Save(libRoot string, m *series.Series) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Join(seriesDir, kuraDir), 0o755); err != nil {
+	if err := os.MkdirAll(paths.SeriesKuraDir(libRoot, m.Ref), 0o755); err != nil {
 		return err
 	}
-	return renameio.WriteFile(metadataPath(seriesDir), data, 0o644)
+	return renameio.WriteFile(paths.SeriesMetadata(libRoot, m.Ref), data, 0o644)
 }
 
 // Exists reports whether series.json is present at the canonical path. It
 // distinguishes "not found" (false, nil) from stat errors (false, err).
 func Exists(libRoot string, ref refs.Series) (bool, error) {
-	seriesDir := seriesDirPath(libRoot, ref)
-	_, err := os.Stat(metadataPath(seriesDir))
+	_, err := os.Stat(paths.SeriesMetadata(libRoot, ref))
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
@@ -115,16 +114,4 @@ func Initialize(libRoot string, ref refs.Series, metadataRef refs.Metadata, m me
 	}
 	model.Ref = ref
 	return Save(libRoot, model)
-}
-
-// MetadataPath returns the canonical absolute path to series.json for ref
-// under libRoot. Exposed because a couple of callers still need to remove
-// the file directly during force-overwrite. Phase 3 centralizes path
-// construction in storage/paths/.
-func MetadataPath(libRoot string, ref refs.Series) string {
-	return metadataPath(seriesDirPath(libRoot, ref))
-}
-
-func seriesDirPath(libRoot string, ref refs.Series) string {
-	return filepath.Join(libRoot, filepath.FromSlash(ref.String()))
 }

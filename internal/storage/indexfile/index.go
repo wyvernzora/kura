@@ -11,25 +11,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 
 	"github.com/google/renameio/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 var ErrNotFound = errors.New("indexfile: not found")
-
-const (
-	kuraDir       = ".kura"
-	indexFileName = "index.tsv"
-)
-
-// MetadataPath returns the absolute path to <root>/.kura/index.tsv.
-func MetadataPath(root string) string {
-	return filepath.Join(root, kuraDir, indexFileName)
-}
 
 type DuplicateRefError struct {
 	Ref      refs.Metadata
@@ -57,7 +47,7 @@ func New(root string) *Index {
 }
 
 func Load(root string) (*Index, error) {
-	path := MetadataPath(root)
+	path := paths.IndexFile(root)
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, ErrNotFound
@@ -115,7 +105,7 @@ func Rebuild(ctx context.Context, root string, read func(context.Context, refs.S
 			return nil, err
 		}
 		for _, entry := range entries {
-			if !entry.IsDir() || entry.Name() == kuraDir {
+			if !entry.IsDir() || entry.Name() == paths.KuraDir {
 				continue
 			}
 			seriesRef, err := refs.ParseSeries(entry.Name())
@@ -178,7 +168,7 @@ func (i *Index) Remove(seriesRef refs.Series) {
 }
 
 func (i *Index) Save() error {
-	if err := os.MkdirAll(filepath.Join(i.root, kuraDir), 0o755); err != nil {
+	if err := os.MkdirAll(paths.LibraryKuraDir(i.root), 0o755); err != nil {
 		return err
 	}
 	keys := make([]string, 0, len(i.refs))
@@ -199,5 +189,5 @@ func (i *Index) Save() error {
 	if err := writer.Error(); err != nil {
 		return err
 	}
-	return renameio.WriteFile(MetadataPath(i.root), data.Bytes(), 0o644)
+	return renameio.WriteFile(paths.IndexFile(i.root), data.Bytes(), 0o644)
 }

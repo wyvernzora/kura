@@ -9,21 +9,16 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"time"
 
 	"github.com/google/renameio/v2"
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
-const (
-	schemaVersion = 1
-	kuraDir       = ".kura"
-	DirName       = "trash"
-	MetaFileName  = "meta.json"
-)
+const schemaVersion = 1
 
 // Meta is one trashed media event: which episode it belonged to, when it was
 // trashed, and the record describing the displaced media.
@@ -83,46 +78,21 @@ type companionWire struct {
 	MTime    string `json:"mtime"`
 }
 
-func eventDir(root string, ref refs.Series, id ulid.ULID) string {
-	return filepath.Join(root, filepath.FromSlash(ref.String()), kuraDir, DirName, id.String())
-}
-
-func metaPath(root string, ref refs.Series, id ulid.ULID) string {
-	return filepath.Join(eventDir(root, ref, id), MetaFileName)
-}
-
-// EventDir is the absolute directory that holds one trashed media event's
-// files. Media is moved into this directory; meta.json sits beside it.
-func EventDir(root string, ref refs.Series, id ulid.ULID) string {
-	return eventDir(root, ref, id)
-}
-
-// MetaPath is the absolute path to the meta.json for one trashed event.
-func MetaPath(root string, ref refs.Series, id ulid.ULID) string {
-	return metaPath(root, ref, id)
-}
-
-// MediaPath is the absolute path to a trashed media file inside an event
-// directory.
-func MediaPath(root string, ref refs.Series, id ulid.ULID, basename string) string {
-	return filepath.Join(eventDir(root, ref, id), basename)
-}
-
 func Write(root string, ref refs.Series, m Meta) error {
 	data, err := json.MarshalIndent(toWire(m), "", "  ")
 	if err != nil {
 		return err
 	}
 	data = append(data, '\n')
-	dir := eventDir(root, ref, m.ID)
+	dir := paths.TrashEntry(root, ref, m.ID.String())
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return renameio.WriteFile(metaPath(root, ref, m.ID), data, 0o644)
+	return renameio.WriteFile(paths.TrashMeta(root, ref, m.ID.String()), data, 0o644)
 }
 
 func Read(root string, ref refs.Series, id ulid.ULID) (Meta, error) {
-	data, err := os.ReadFile(metaPath(root, ref, id))
+	data, err := os.ReadFile(paths.TrashMeta(root, ref, id.String()))
 	if err != nil {
 		return Meta{}, err
 	}
@@ -134,7 +104,7 @@ func Read(root string, ref refs.Series, id ulid.ULID) (Meta, error) {
 }
 
 func List(root string, ref refs.Series) ([]Meta, error) {
-	dir := filepath.Join(root, filepath.FromSlash(ref.String()), kuraDir, DirName)
+	dir := paths.TrashDir(root, ref)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return []Meta{}, nil
