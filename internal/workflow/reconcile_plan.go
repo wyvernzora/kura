@@ -12,14 +12,15 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/domain/filename"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/planfile"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -45,11 +46,11 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 	if err != nil {
 		return response.ReconcilePlan{}, err
 	}
-	seriesDir, err := layout.NewFiles(deps.LibRoot).SeriesDir(in.Ref)
+	seriesDir, err := seriesdir.Parse(paths.SeriesDir(deps.LibRoot, in.Ref))
 	if err != nil {
 		return response.ReconcilePlan{}, err
 	}
-	changes, err := computeReconcileChanges(deps.LibRoot, in.Ref, series, seriesDir.Path())
+	changes, err := computeReconcileChanges(in.Ref, series, seriesDir.Path())
 	if err != nil {
 		return response.ReconcilePlan{}, err
 	}
@@ -98,18 +99,17 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 	return out, nil
 }
 
-func computeReconcileChanges(root string, ref refs.Series, series *domainseries.Series, seriesDirPath string) ([]reconcile.Change, error) {
+func computeReconcileChanges(ref refs.Series, series *domainseries.Series, seriesDirPath string) ([]reconcile.Change, error) {
 	episodeRefs := make([]refs.Episode, 0, len(series.Episodes))
 	for episodeRef := range series.Episodes {
 		episodeRefs = append(episodeRefs, episodeRef)
 	}
 	sort.Slice(episodeRefs, func(i, j int) bool { return episodeRefs[i].String() < episodeRefs[j].String() })
-	files := layout.NewFiles(root)
 	changes := make([]reconcile.Change, 0)
 	for _, episodeRef := range episodeRefs {
 		episode := series.Episodes[episodeRef]
 		if episode.Staged != nil {
-			change, err := stagedReconcileChange(files, ref, seriesDirPath, episodeRef, episode)
+			change, err := stagedReconcileChange(ref, seriesDirPath, episodeRef, episode)
 			if err != nil {
 				return nil, err
 			}
@@ -117,7 +117,7 @@ func computeReconcileChanges(root string, ref refs.Series, series *domainseries.
 			continue
 		}
 		if episode.Active != nil {
-			change, ok, err := moveReconcileChange(files, ref, seriesDirPath, episodeRef, *episode.Active)
+			change, ok, err := moveReconcileChange(ref, seriesDirPath, episodeRef, *episode.Active)
 			if err != nil {
 				return nil, err
 			}
@@ -129,11 +129,19 @@ func computeReconcileChanges(root string, ref refs.Series, series *domainseries.
 	return changes, nil
 }
 
-func stagedReconcileChange(files layout.Files, ref refs.Series, seriesDirPath string, episodeRef refs.Episode, episode domainseries.Episode) (reconcile.Change, error) {
-	target, err := files.CanonicalPath(ref, episodeRef, *episode.Staged)
-	if err != nil {
-		return reconcile.Change{}, err
-	}
+// canonicalEpisodePath composes the canonical "Season N/<basename>"
+// relative path for the given episode + media facts.
+func canonicalEpisodePath(ref refs.Series, episode refs.Episode, record media.Record) string {
+	title := filename.CleanTitle(ref.String())
+	basename := filename.BuildMedia(title, episode, filename.Facts{
+		Source:     record.Source,
+		Resolution: record.Resolution,
+	}, filepath.Ext(record.Path)).String()
+	return paths.EpisodeMediaRel(episode.Season(), basename)
+}
+
+func stagedReconcileChange(ref refs.Series, seriesDirPath string, episodeRef refs.Episode, episode domainseries.Episode) (reconcile.Change, error) {
+	target := canonicalEpisodePath(ref, episodeRef, *episode.Staged)
 	change := reconcile.Change{
 		Kind:       reconcile.ChangeAdd,
 		Episode:    episodeRef,
@@ -167,15 +175,12 @@ func stagedReconcileChange(files layout.Files, ref refs.Series, seriesDirPath st
 	return change, nil
 }
 
-func moveReconcileChange(files layout.Files, ref refs.Series, seriesDirPath string, episodeRef refs.Episode, active media.Record) (reconcile.Change, bool, error) {
+func moveReconcileChange(ref refs.Series, seriesDirPath string, episodeRef refs.Episode, active media.Record) (reconcile.Change, bool, error) {
 	active, err := relativeRecord(seriesDirPath, active)
 	if err != nil {
 		return reconcile.Change{}, false, err
 	}
-	target, err := files.CanonicalPath(ref, episodeRef, active)
-	if err != nil {
-		return reconcile.Change{}, false, err
-	}
+	target := canonicalEpisodePath(ref, episodeRef, active)
 	companions := companionReconcileMoves(active.Path, target, active.Companions)
 	if target == active.Path && len(companions) == 0 {
 		return reconcile.Change{}, false, nil

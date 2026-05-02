@@ -15,9 +15,9 @@ import (
 	"github.com/wyvernzora/kura/internal/fsop"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/series/layout"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/planfile"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/storage/trashfile"
 )
@@ -70,7 +70,7 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, plan reco
 		progress.Success(ctx, "reconcile", fmt.Sprintf("Reconciled %s", ref), 0)
 		return response.ReconcileApply{Series: ref}, nil
 	}
-	seriesDir, err := layout.NewFiles(deps.LibRoot).SeriesDir(ref)
+	seriesDir, err := seriesdir.Parse(paths.SeriesDir(deps.LibRoot, ref))
 	if err != nil {
 		_ = log.AppendResult(deps.Now(), "failure", 0, err)
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), 0, 0)
