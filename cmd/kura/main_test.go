@@ -19,54 +19,41 @@ import (
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
-func TestMetaSearchPrintsJSON(t *testing.T) {
+func TestResolveCommandPrintsJSON(t *testing.T) {
 	server := newCLITestServer(t)
 	defer server.Close()
 
+	root := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	err := run([]string{
-		"meta",
-		"search",
+		"resolve",
+		"--json",
 		"--tvdb-base-url", server.URL,
 		"--limit", "1",
 		"honzuki",
-	}, testRunContext(&stdout, &stderr))
+	}, testRunContextWithLibraryRoot(&stdout, &stderr, root))
 	if err != nil {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
 	}
 
-	var resolution map[string][]map[string]any
+	var resolution map[string]any
 	if err := json.Unmarshal(stdout.Bytes(), &resolution); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
-	results := resolution["Results"]
-	if len(results) != 1 {
-		t.Fatalf("len(results) = %d, want 1", len(results))
-	}
-	summary, ok := results[0]["Summary"].(map[string]any)
+	candidates, ok := resolution["candidates"].([]any)
 	if !ok {
-		t.Fatalf("Summary = %#v, want object", results[0]["Summary"])
+		t.Fatalf("candidates = %#v, want array", resolution["candidates"])
 	}
-	if got := summary["MetadataRef"]; got != "tvdb:370070" {
-		t.Fatalf("MetadataRef = %v, want tvdb:370070", got)
+	if len(candidates) != 1 {
+		t.Fatalf("len(candidates) = %d, want 1", len(candidates))
 	}
-	evidence, ok := results[0]["Evidence"].([]any)
-	if !ok || len(evidence) != 1 {
-		t.Fatalf("Evidence = %#v, want one entry", results[0]["Evidence"])
-	}
-	firstEvidence, ok := evidence[0].(map[string]any)
+	first, ok := candidates[0].(map[string]any)
 	if !ok {
-		t.Fatalf("Evidence[0] = %#v, want object", evidence[0])
+		t.Fatalf("candidates[0] = %#v, want object", candidates[0])
 	}
-	if got := firstEvidence["Term"]; got != "honzuki" {
-		t.Fatalf("Evidence[0].Term = %v, want honzuki", got)
-	}
-	if _, ok := firstEvidence["Summary"]; ok {
-		t.Fatal("Evidence[0].Summary present, want omitted")
-	}
-	if _, ok := firstEvidence["MetadataRef"]; ok {
-		t.Fatal("Evidence[0].MetadataRef present, want omitted")
+	if got := first["ref"]; got != "tvdb:370070" {
+		t.Fatalf("ref = %v, want tvdb:370070", got)
 	}
 }
 
@@ -1205,16 +1192,22 @@ func TestReconcilePlanCommandReportsMissingTVDBKey(t *testing.T) {
 	}
 }
 
-func TestMetaSearchReportsMissingTVDBKey(t *testing.T) {
+func TestResolveReportsMissingTVDBKey(t *testing.T) {
+	root := t.TempDir()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	rt := runContext{
 		Stdin:  bytes.NewBuffer(nil),
 		Stdout: &stdout,
 		Stderr: &stderr,
-		Getenv: func(string) string { return "" },
+		Getenv: func(key string) string {
+			if key == "KURA_LIBRARY_ROOT" {
+				return root
+			}
+			return ""
+		},
 	}
-	err := run([]string{"meta", "search", "honzuki"}, rt)
+	err := run([]string{"resolve", "honzuki"}, rt)
 	if err == nil {
 		t.Fatal("run: nil error, want missing-key failure")
 	}

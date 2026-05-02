@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
@@ -80,15 +79,4 @@ func loadOrRebuildIndex(ctx context.Context, libRoot string) (*indexfile.Index, 
 		})
 	}
 	return index, err
-}
-
-func parseMetadataRef(seriesRef string) (string, string, error) {
-	ref, err := refs.ParseMetadata(seriesRef)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid metadata ref %q; expected <source>:<id>", seriesRef)
-	}
-	if ref.Provider() != "tvdb" {
-		return "", "", fmt.Errorf("unsupported metadata ref source %q; only tvdb:<id> is supported", ref.Provider())
-	}
-	return ref.Provider(), ref.ID(), nil
 }
