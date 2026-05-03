@@ -50,7 +50,9 @@ func MediaSource(source string, styled bool) string {
 	case "tv", "hdtv", "tvrip", "tv-rip":
 		return Orange(value)
 	case "unknown":
-		return chalk.Red.Color(value)
+		// Dim/gray, not red — Unknown is a "we don't have a source
+		// tag" state, not an error to fix.
+		return chalk.Dim.TextStyle(Gray(value))
 	default:
 		return value
 	}
