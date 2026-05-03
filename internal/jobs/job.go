@@ -94,3 +94,17 @@ func (j *Job[T]) State() Status {
 	defer j.mu.RUnlock()
 	return j.state
 }
+
+// LatestProgress returns a copy of the most recent progress event
+// captured by the job goroutine, or nil if no event has been
+// recorded. Surfaces (CLI spinner, MCP polling, REST SSE) call this
+// to render progress; pre-resolved jobs always return nil.
+func (j *Job[T]) LatestProgress() *progress.Event {
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	if j.progress == nil {
+		return nil
+	}
+	cp := *j.progress
+	return &cp
+}

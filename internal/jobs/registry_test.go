@@ -3,7 +3,6 @@ package jobs_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -178,36 +177,53 @@ func TestSubmit_TimeoutTerminatesWithJobTimeoutError(t *testing.T) {
 	}
 }
 
-func TestSubmit_ProgressTeeWritesToReporterAndJob(t *testing.T) {
-	parentCtx, parentCancel := context.WithCancel(context.Background())
-	defer parentCancel()
-	var (
-		mu   sync.Mutex
-		seen []progress.Event
-	)
-	parentCtx = progress.With(parentCtx, func(_ context.Context, e progress.Event) {
-		mu.Lock()
-		seen = append(seen, e)
-		mu.Unlock()
-	})
-	r := jobs.NewRegistry(parentCtx, jobs.Config{}, nil)
-	t.Cleanup(func() { r.Shutdown(2 * time.Second) })
-
+func TestSubmit_ProgressCapturedOnJob(t *testing.T) {
+	r := newTestRegistry(t, jobs.Config{})
 	j := jobs.Submit(r, jobs.KindScan, mustSeries(t, "show-g"), func(ctx context.Context) (int, error) {
 		progress.Update(ctx, "scan", "midway", 5, 10)
 		return 1, nil
 	})
 	j.Wait(context.Background())
 
-	mu.Lock()
-	got := append([]progress.Event(nil), seen...)
-	mu.Unlock()
-	if len(got) == 0 {
-		t.Fatalf("parent reporter saw no events")
+	got := j.LatestProgress()
+	if got == nil {
+		t.Fatalf("Job.LatestProgress() == nil; want captured event")
 	}
-	last := got[len(got)-1]
-	if last.Stage != "scan" || last.Current != 5 || last.Total != 10 {
-		t.Fatalf("parent reporter last event = %+v", last)
+	if got.Stage != "scan" || got.Current != 5 || got.Total != 10 {
+		t.Fatalf("Job.LatestProgress() = %+v; want stage=scan current=5 total=10", got)
+	}
+
+	view, err := r.Get(j.ID())
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	vGot := view.Progress()
+	if vGot == nil || vGot.Stage != "scan" || vGot.Current != 5 {
+		t.Fatalf("UntypedJob.Progress() = %+v; want captured event", vGot)
+	}
+}
+
+func TestSubmit_ProgressNotForwardedToCallerReporter(t *testing.T) {
+	// Verifies the capture-only contract: a reporter installed in the
+	// caller's parent ctx does NOT see job-goroutine emissions.
+	// Consumers must poll Job.LatestProgress / UntypedJob.Progress.
+	parentCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var seen int32
+	parentCtx = progress.With(parentCtx, func(_ context.Context, _ progress.Event) {
+		atomic.AddInt32(&seen, 1)
+	})
+	r := jobs.NewRegistry(parentCtx, jobs.Config{}, nil)
+	t.Cleanup(func() { r.Shutdown(2 * time.Second) })
+
+	j := jobs.Submit(r, jobs.KindScan, mustSeries(t, "show-i"), func(ctx context.Context) (int, error) {
+		progress.Update(ctx, "scan", "midway", 1, 1)
+		return 0, nil
+	})
+	j.Wait(context.Background())
+
+	if got := atomic.LoadInt32(&seen); got != 0 {
+		t.Fatalf("parent reporter saw %d events; capture-only contract violated", got)
 	}
 }
 

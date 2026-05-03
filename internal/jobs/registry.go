@@ -140,9 +140,12 @@ func (r *Registry) Shutdown(grace time.Duration) int {
 //
 //   - No existing job for series: a fresh tracked Job is created and
 //     returned. The goroutine runs fn with a derived ctx that carries
-//     the per-job timeout (KURA_JOB_TIMEOUT) and a progress tee that
-//     mirrors events into the entry while forwarding to whatever
-//     reporter the caller's ctx had installed.
+//     the per-job timeout (KURA_JOB_TIMEOUT) and a capture-only
+//     progress reporter that records the latest event into the job
+//     and entry. Consumers (CLI, MCP, REST) poll for progress via
+//     Job.LatestProgress / UntypedJob.Progress; the registry does
+//     NOT forward events to whatever reporter the caller's ctx had
+//     installed.
 //   - Existing job for the same series with the same kind: the
 //     existing typed *Job[T] is returned (de-dupe). No new goroutine.
 //   - Existing job for the same series with a different kind: a
@@ -156,8 +159,6 @@ func Submit[T any](
 	series refs.Series,
 	fn func(ctx context.Context) (T, error),
 ) *Job[T] {
-	parentReporter := progress.From(r.parentCtx)
-
 	r.mu.Lock()
 	if existing, ok := r.bySeries[series]; ok {
 		existingKind := existing.kind
@@ -209,7 +210,7 @@ func Submit[T any](
 	r.wg.Add(1)
 	r.mu.Unlock()
 
-	go runJob(r, j, e, fn, parentReporter)
+	go runJob(r, j, e, fn)
 	return j
 }
 
@@ -221,25 +222,27 @@ func runJob[T any](
 	j *Job[T],
 	e *entry,
 	fn func(ctx context.Context) (T, error),
-	parentReporter progress.Reporter,
 ) {
 	defer r.wg.Done()
 
 	jobCtx, cancelJob := r.deriveJobCtx()
 	defer cancelJob()
 
-	tee := teeReporter(parentReporter, func(ev progress.Event) {
+	// Capture-only reporter: writes the latest event into both the
+	// entry (for UntypedJob.Progress polling) and the typed Job
+	// (for Job.LatestProgress polling). Does not forward; consumers
+	// poll for progress instead of receiving events directly.
+	jobCtx = progress.With(jobCtx, func(_ context.Context, ev progress.Event) {
 		e.mu.Lock()
-		copyEv := ev
-		e.progress = &copyEv
+		entryCopy := ev
+		e.progress = &entryCopy
 		e.mu.Unlock()
 
 		j.mu.Lock()
-		jcopy := ev
-		j.progress = &jcopy
+		jobCopy := ev
+		j.progress = &jobCopy
 		j.mu.Unlock()
 	})
-	jobCtx = progress.With(jobCtx, tee)
 
 	result, runErr := safeRun(jobCtx, fn)
 
@@ -406,16 +409,4 @@ func generateID() string {
 		panic("jobs: crypto/rand failed: " + err.Error())
 	}
 	return hex.EncodeToString(buf[:])
-}
-
-// teeReporter returns a progress.Reporter that writes each event to
-// capture and then forwards to parent (if non-nil). Caller invariants:
-// capture must not block; parent may be nil.
-func teeReporter(parent progress.Reporter, capture func(progress.Event)) progress.Reporter {
-	return func(ctx context.Context, e progress.Event) {
-		capture(e)
-		if parent != nil {
-			parent(ctx, e)
-		}
-	}
 }
