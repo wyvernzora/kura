@@ -11,8 +11,11 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/wyvernzora/kura/internal/coord"
+	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/jobs"
 	mcpserver "github.com/wyvernzora/kura/internal/server/mcp"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -30,13 +33,17 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 		return errors.New("kura serve requires at least one transport flag (--mcp-stdio or --mcp-http=ADDR)")
 	}
 
-	deps, registry, err := buildServeDeps(rt)
+	deps, registry, watcher, err := buildServeDeps(rt)
 	if err != nil {
 		return err
 	}
 
 	ctx, stop := signal.NotifyContext(rt.Context, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if watcher != nil {
+		watcher.Run(ctx)
+	}
 
 	server := mcpserver.NewServer(mcpserver.Deps{Workflow: deps})
 
@@ -64,12 +71,14 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 
 // buildServeDeps wraps buildDeps and swaps the in-process serializer
 // (CLI no-op → MCP per-series mutex) plus a long-lived jobs registry
-// configured from KURA_JOB_* envs. The CLI registry from buildDeps is
+// configured from KURA_JOB_* envs. Constructs the index Watcher
+// (KURA_INDEX_*) over the same *Index workflows mutate so external
+// peer writes get picked up. The CLI registry from buildDeps is
 // discarded; it never received a Submit so no goroutines leak.
-func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, error) {
+func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, *indexfile.Watcher, error) {
 	deps, err := buildDeps(rt)
 	if err != nil {
-		return workflow.Deps{}, nil, err
+		return workflow.Deps{}, nil, nil, err
 	}
 	attempts := envInt(rt.Getenv, "KURA_CONFLICT_RETRIES", 1) + 1
 	deps.Coordinator = coord.NewMCPCoordinator(coord.MaxAttempts(attempts))
@@ -80,7 +89,17 @@ func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, error) {
 		ReaperInterval: envDuration(rt.Getenv, "KURA_JOB_REAPER_INTERVAL", 5*time.Minute),
 	}, nil)
 	deps.Jobs = registry
-	return deps, registry, nil
+
+	libRoot := deps.LibRoot
+	reader := func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+		return seriesfile.ReadMetadataRef(libRoot, ref)
+	}
+	watcher := indexfile.NewWatcher(deps.Index, reader, indexfile.WatcherConfig{
+		ProbeInterval:   envDuration(rt.Getenv, "KURA_INDEX_PROBE_INTERVAL", 2*time.Second),
+		RefreshInterval: envDuration(rt.Getenv, "KURA_INDEX_REFRESH_INTERVAL", 5*time.Minute),
+		RebuildInterval: envDuration(rt.Getenv, "KURA_INDEX_REBUILD_INTERVAL", time.Hour),
+	}, nil)
+	return deps, registry, watcher, nil
 }
 
 func envDuration(getenv func(string) string, key string, fallback time.Duration) time.Duration {

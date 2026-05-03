@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"sync"
 
 	"github.com/google/renameio/v2/maybe"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -34,8 +35,14 @@ func (e DuplicateRefError) Error() string {
 // Index is the in-memory map of metadata refs to series refs. It is
 // constructed empty by New, populated by Load or Rebuild, and persisted by
 // Save.
+//
+// Methods are safe for concurrent use: kura serve has multiple
+// goroutines (request handlers + the Watcher's refresh loops) reading
+// and writing the same Index.
 type Index struct {
 	root string
+
+	mu   sync.RWMutex
 	refs map[refs.Metadata]refs.Series
 }
 
@@ -120,6 +127,8 @@ func (i *Index) Get(ref refs.Metadata) (refs.Series, bool, error) {
 	if ref == "" {
 		return refs.Series{}, false, errors.New("indexfile: metadata ref is required")
 	}
+	i.mu.RLock()
+	defer i.mu.RUnlock()
 	seriesRef, ok := i.refs[ref]
 	return seriesRef, ok, nil
 }
@@ -131,6 +140,8 @@ func (i *Index) Put(metadataRef refs.Metadata, seriesRef refs.Series) error {
 	if seriesRef.IsZero() {
 		return errors.New("indexfile: series ref is required")
 	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	existing, exists := i.refs[metadataRef]
 	if exists && existing != seriesRef {
 		return DuplicateRefError{Ref: metadataRef, Existing: existing, Next: seriesRef}
@@ -140,6 +151,8 @@ func (i *Index) Put(metadataRef refs.Metadata, seriesRef refs.Series) error {
 }
 
 func (i *Index) Remove(seriesRef refs.Series) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	for metadataRef, existing := range i.refs {
 		if existing == seriesRef {
 			delete(i.refs, metadataRef)
@@ -150,6 +163,8 @@ func (i *Index) Remove(seriesRef refs.Series) {
 // Entries returns the in-memory entries as a sorted slice. Convenience
 // for callers building a CAS-write input from the cached state.
 func (i *Index) Entries() []Entry {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
 	out := make([]Entry, 0, len(i.refs))
 	for metadataRef, seriesRef := range i.refs {
 		out = append(out, Entry{Metadata: metadataRef, Series: seriesRef})
@@ -169,27 +184,31 @@ func (i *Index) ReplaceEntries(entries []Entry) {
 	for _, entry := range entries {
 		next[entry.Metadata] = entry.Series
 	}
+	i.mu.Lock()
 	i.refs = next
+	i.mu.Unlock()
 }
 
 func (i *Index) Save() error {
 	if err := os.MkdirAll(paths.LibraryKuraDir(i.root), 0o755); err != nil {
 		return err
 	}
+	i.mu.RLock()
 	keys := make([]string, 0, len(i.refs))
 	for ref := range i.refs {
 		keys = append(keys, ref.String())
 	}
 	sort.Strings(keys)
-
 	var data bytes.Buffer
 	writer := csv.NewWriter(&data)
 	writer.Comma = '\t'
 	for _, key := range keys {
 		if err := writer.Write([]string{key, i.refs[refs.Metadata(key)].String()}); err != nil {
+			i.mu.RUnlock()
 			return err
 		}
 	}
+	i.mu.RUnlock()
 	writer.Flush()
 	if err := writer.Error(); err != nil {
 		return err
