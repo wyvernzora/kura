@@ -10,22 +10,19 @@ func TestSourceDisplayAndRank(t *testing.T) {
 	if source.Display() != "Web-DL" {
 		t.Fatalf("Display = %q, want Web-DL", source.Display())
 	}
-	if ParseSource("bdrip").Rank() <= source.Rank() {
-		t.Fatal("BDRip rank should be above Web-DL rank")
+	if ParseSource("bluray").Rank() <= source.Rank() {
+		t.Fatal("BluRay rank should be above Web-DL rank")
 	}
 }
 
-func TestParseSourceAliases(t *testing.T) {
-	cases := map[string]Source{
-		"BD":     SourceBDRip,
-		"bd":     SourceBDRip,
-		"BD-Rip": SourceBDRip,
-		"BDMV":   SourceBluRay,
-		"BDISO":  SourceBluRay,
-	}
-	for in, want := range cases {
-		if got := ParseSource(in); got != want {
-			t.Fatalf("ParseSource(%q) = %q, want %q", in, got, want)
+func TestParseSourceCollapsesBluRayFamily(t *testing.T) {
+	for _, in := range []string{"BD", "bd", "BD-Rip", "BDRip", "bdrip", "BluRay", "Blu-Ray", "BDMV", "BDISO"} {
+		got := ParseSource(in)
+		if got != SourceBluRay {
+			t.Fatalf("ParseSource(%q) = %q, want %q", in, got, SourceBluRay)
+		}
+		if got.Display() != "BluRay" {
+			t.Fatalf("ParseSource(%q).Display() = %q, want BluRay", in, got.Display())
 		}
 	}
 }

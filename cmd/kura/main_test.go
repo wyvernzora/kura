@@ -1426,9 +1426,9 @@ func TestReconcileApplySelfRefreshRenamesInPlace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apply: %v\nstderr:\n%s", err, stderr.String())
 	}
-	canonicalAbs := filepath.Join(seasonDir, "Bookworm - S01E01 (BDRip 1080p).mkv")
+	canonicalAbs := filepath.Join(seasonDir, "Bookworm - S01E01 (BluRay 1080p).mkv")
 	if _, err := os.Stat(canonicalAbs); err != nil {
-		t.Fatalf("canonical (BDRip) file missing after rename: %v", err)
+		t.Fatalf("canonical (BluRay) file missing after rename: %v", err)
 	}
 	if _, err := os.Stat(originalAbs); !os.IsNotExist(err) {
 		t.Fatalf("original LoliHouse file still present after rename: err=%v", err)

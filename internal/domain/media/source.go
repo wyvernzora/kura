@@ -9,10 +9,13 @@ const (
 	SourceTVRip   Source = "tvrip"
 	SourceWebRip  Source = "webrip"
 	SourceWebDL   Source = "web-dl"
-	SourceBDRip   Source = "bdrip"
-	SourceBluRay  Source = "bluray"
-	SourceHDTV    Source = "hdtv"
-	SourceDVDRip  Source = "dvdrip"
+	// SourceBluRay covers anything sourced from a Blu-ray disc:
+	// BDMV/BDISO raw rips, BDRip re-encodes, BD shorthand. Quality
+	// bucket is the same — disc-sourced 1080p+ — so kura collapses
+	// the distinction.
+	SourceBluRay Source = "bluray"
+	SourceHDTV   Source = "hdtv"
+	SourceDVDRip Source = "dvdrip"
 )
 
 func ParseSource(source string) Source {
@@ -25,11 +28,7 @@ func ParseSource(source string) Source {
 		return SourceWebRip
 	case "web-dl", "webdl":
 		return SourceWebDL
-	case "bdrip", "bd-rip", "bd":
-		// "BD" in release filenames is colloquial for BDRip
-		// (re-encoded from a Blu-ray); raw disc rips use bdmv / bdiso.
-		return SourceBDRip
-	case "bluray", "blu-ray", "bdmv", "bdiso":
+	case "bluray", "blu-ray", "bdrip", "bd-rip", "bd", "bdmv", "bdiso":
 		return SourceBluRay
 	case "hdtv":
 		return SourceHDTV
@@ -57,8 +56,6 @@ func (s Source) Display() string {
 		return "WebRip"
 	case SourceWebDL:
 		return "Web-DL"
-	case SourceBDRip:
-		return "BDRip"
 	case SourceBluRay:
 		return "BluRay"
 	case SourceHDTV:
@@ -72,7 +69,7 @@ func (s Source) Display() string {
 
 func (s Source) Rank() int {
 	switch ParseSource(s.String()) {
-	case SourceBDRip, SourceBluRay:
+	case SourceBluRay:
 		return 3
 	case SourceWebRip, SourceWebDL:
 		return 2
