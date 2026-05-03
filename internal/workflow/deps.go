@@ -15,6 +15,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
@@ -54,6 +55,12 @@ type Deps struct {
 
 	// Now returns the current time. Tests inject a fixed clock.
 	Now func() time.Time
+
+	// Jobs is the registry that backs long workflows (Scan,
+	// ApplyReconcile). Constructed once per process; CLI uses a
+	// per-invocation registry, kura serve uses a long-lived one
+	// shared by all transports.
+	Jobs *jobs.Registry
 }
 
 // ProviderFactory constructs a provider.Source on demand. Wrap the actual

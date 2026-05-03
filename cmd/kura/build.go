@@ -10,6 +10,7 @@ import (
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
@@ -52,6 +53,10 @@ func buildDeps(rt *runContext) (workflow.Deps, error) {
 	}
 	attempts := envInt(rt.Getenv, "KURA_CONFLICT_RETRIES", 1) + 1
 	coordImpl := coord.NewCLICoordinator(coord.MaxAttempts(attempts))
+	// CLI registry: parent ctx is the CLI invocation's ctx. Goroutines
+	// die with the process; no Shutdown needed. Reaper / retention
+	// disabled — invocation is short-lived, nothing accumulates.
+	registry := jobs.NewRegistry(rt.Context, jobs.Config{}, nil)
 	return workflow.Deps{
 		LibRoot:     libRoot,
 		Index:       index,
@@ -60,6 +65,7 @@ func buildDeps(rt *runContext) (workflow.Deps, error) {
 		Provider:    provider,
 		Inspector:   inspector,
 		Now:         time.Now,
+		Jobs:        registry,
 	}, nil
 }
 
