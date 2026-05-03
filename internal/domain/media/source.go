@@ -67,6 +67,24 @@ func (s Source) Display() string {
 	}
 }
 
+// IsKnown reports whether ParseSource recognizes raw as one of the
+// canonical Source constants (vs. a free-form fallthrough). Used by
+// filename inference to skip over fields like "1280x720" that ParseSource
+// would otherwise pass through as a Source string.
+func IsKnown(raw string) bool {
+	switch ParseSource(raw) {
+	case SourceUnknown,
+		SourceTVRip,
+		SourceWebRip,
+		SourceWebDL,
+		SourceBluRay,
+		SourceHDTV,
+		SourceDVDRip:
+		return true
+	}
+	return false
+}
+
 func (s Source) Rank() int {
 	switch ParseSource(s.String()) {
 	case SourceBluRay:

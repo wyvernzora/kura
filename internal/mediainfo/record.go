@@ -94,19 +94,22 @@ func statFileFacts(path string) (int64, time.Time, error) {
 }
 
 // InferSourceFromFilename pulls the source token out of a canonical
-// filename like "Foo - S01E01 (WebRip 1080p).mkv". Returns "unknown"
-// when the canonical "(<source> <res>)" suffix is missing.
+// filename like "Foo - S01E01 (WebRip 1080p).mkv". Walks the suffix
+// tokens and returns the first one media.IsKnown recognizes; falls
+// back to "unknown" when the suffix has only a resolution / codec /
+// other non-source token (e.g. "(1280x720)" → unknown).
 func InferSourceFromFilename(path string) string {
 	name := filepath.ToSlash(path)
 	matches := mediaFactsPattern.FindStringSubmatch(name)
 	if len(matches) != 2 {
 		return "unknown"
 	}
-	fields := strings.Fields(matches[1])
-	if len(fields) == 0 {
-		return "unknown"
+	for field := range strings.FieldsSeq(matches[1]) {
+		if media.IsKnown(field) {
+			return field
+		}
 	}
-	return fields[0]
+	return "unknown"
 }
 
 // RecognizedVideoFile reports whether path's extension is a video format
