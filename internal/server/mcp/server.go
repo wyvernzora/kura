@@ -24,19 +24,31 @@ const (
 // jobs registry shutdown grace; this only covers the HTTP listener.
 const httpShutdownGrace = 5 * time.Second
 
+// hintTrue / hintFalse are addressable bool literals shared by tool
+// registrations; ToolAnnotations takes *bool for fields whose default
+// matters and these saves a per-tool helper.
+var (
+	hintTrue  = true
+	hintFalse = false
+)
+
 // Deps bundles everything the MCP transport needs to construct its
 // tool handlers. Tools land in later commits and consume Workflow.
 type Deps struct {
 	Workflow workflow.Deps
 }
 
-// NewServer constructs the MCP server with kura's capabilities. No
-// tools are registered yet; later commits add them via mcp.AddTool.
-func NewServer(_ Deps) *sdkmcp.Server {
-	return sdkmcp.NewServer(&sdkmcp.Implementation{
+// NewServer constructs the MCP server with kura's capabilities and
+// registers the tool surface. Each tool lives in its own file
+// (tool_*.go) and exposes an addXxxTool helper that wires its handler
+// into the server.
+func NewServer(deps Deps) *sdkmcp.Server {
+	s := sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
 		Version: serverVersion,
 	}, nil)
+	addResolveTool(s, deps)
+	return s
 }
 
 // ServeStdio runs the MCP server over stdin/stdout. Returns when the

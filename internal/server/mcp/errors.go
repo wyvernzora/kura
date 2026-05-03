@@ -9,6 +9,28 @@ import (
 	"github.com/wyvernzora/kura/internal/errkind"
 )
 
+// invalidInputError is the generic input-validation error tool
+// handlers raise when the SDK schema can't express the constraint
+// (e.g. minItems on a slice, mutually-exclusive fields). It
+// implements errkind.Coded so the standard mapper renders it.
+type invalidInputError struct {
+	kind    string
+	message string
+}
+
+func (e *invalidInputError) Error() string        { return e.message }
+func (e *invalidInputError) Kind() string         { return e.kind }
+func (e *invalidInputError) Category() string     { return errkind.CategoryInvalidParams }
+func (e *invalidInputError) Data() map[string]any { return map[string]any{} }
+
+// errEmptyTerms is raised by kura_resolve when the input array is
+// present but empty. The schema marks `terms` required but cannot
+// express minItems on a slice.
+var errEmptyTerms = &invalidInputError{
+	kind:    errkind.KindInvalidRef,
+	message: "kura_resolve: terms must contain at least one entry",
+}
+
 // toolErrorResult turns any error into a CallToolResult with
 // IsError=true and a structured payload describing kind, category,
 // and any error-specific data. Coded errors expose taxonomy via
