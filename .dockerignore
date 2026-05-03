@@ -13,3 +13,7 @@ coverage.out
 .DS_Store
 .idea
 .vscode
+.claude
+scratch
+testlib
+tools/inspector/README.md
