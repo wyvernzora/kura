@@ -76,6 +76,20 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, plan reco
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), 0, 0)
 		return response.ReconcileApply{}, err
 	}
+	preLoaded, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		_ = log.AppendResult(deps.Now(), "failure", 0, err)
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), 0, 0)
+		return response.ReconcileApply{}, err
+	}
+	// Write trash meta.json for every replace before any file moves run.
+	// A crash mid-move then leaves a self-describing trash entry rather
+	// than orphan files in a ULID dir without metadata.
+	if err := writeAllReconcileTrash(deps, ref, plan, preLoaded); err != nil {
+		_ = log.AppendResult(deps.Now(), "failure", 0, err)
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), 0, 0)
+		return response.ReconcileApply{}, err
+	}
 	moves := plan.Moves()
 	for index, move := range moves {
 		progress.Update(ctx, "reconcile", fmt.Sprintf("Moving %s", filepath.Base(move.To)), index+1, len(moves))
@@ -134,11 +148,9 @@ func applyPlanToSeries(deps Deps, ref refs.Series, plan reconcile.Plan) (*domain
 			if episode.Staged == nil {
 				return nil, fmt.Errorf("workflow: %s has no staged media", change.Episode)
 			}
-			if change.Replaced != nil && episode.Active != nil {
-				if err := writeReconcileTrash(deps, ref, change.Episode, *episode.Active, *change.Replaced); err != nil {
-					return nil, err
-				}
-			}
+			// Trash meta.json is already on disk (written by
+			// writeAllReconcileTrash before any file move); only metadata
+			// promotion remains.
 			episode.Staged.Path = change.To
 			for index := range episode.Staged.Companions {
 				if index < len(change.Companions) {
@@ -165,6 +177,25 @@ func applyPlanToSeries(deps Deps, ref refs.Series, plan reconcile.Plan) (*domain
 		}
 	}
 	return series, nil
+}
+
+// writeAllReconcileTrash writes meta.json for every Replaced change in
+// the plan before any file move runs. Idempotent across retries: the
+// underlying renameio.WriteFile overwrites whatever was there.
+func writeAllReconcileTrash(deps Deps, ref refs.Series, plan reconcile.Plan, series *domainseries.Series) error {
+	for _, change := range plan.Changes {
+		if change.Replaced == nil {
+			continue
+		}
+		episode, ok := series.Episodes[change.Episode]
+		if !ok || episode.Active == nil {
+			continue
+		}
+		if err := writeReconcileTrash(deps, ref, change.Episode, *episode.Active, *change.Replaced); err != nil {
+			return fmt.Errorf("workflow: pre-write trash for %s: %w", change.Episode, err)
+		}
+	}
+	return nil
 }
 
 func writeReconcileTrash(deps Deps, ref refs.Series, episode refs.Episode, record media.Record, replaced reconcile.Replaced) error {
