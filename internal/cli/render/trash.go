@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/wyvernzora/kura/internal/cli/style"
@@ -37,7 +38,7 @@ func TrashList(w io.Writer, result response.TrashList, asJSON bool) error {
 				entry.ID,
 				entry.Episode.Marker(),
 				entry.TrashedAt.Format("2006-01-02 15:04Z"),
-				entry.MediaPath,
+				path.Base(entry.MediaPath),
 				formatBytes(entry.Size),
 			})
 		}
