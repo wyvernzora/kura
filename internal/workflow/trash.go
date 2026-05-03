@@ -48,8 +48,10 @@ type TrashRestoreInput struct {
 // the whole library (All). OlderThan filters to entries trashed at
 // least that long before Now (or deps.Now()).
 func TrashList(ctx context.Context, deps Deps, in TrashListInput) (response.TrashList, error) {
+	progress.Start(ctx, "trash-list", "Scanning trash", 0)
 	refsList, err := trashTargetSeries(ctx, deps, in.Ref, in.All)
 	if err != nil {
+		progress.Failure(ctx, "trash-list", "Failed to list trash", 0, 0)
 		return response.TrashList{}, err
 	}
 	now := in.Now
@@ -82,6 +84,7 @@ func TrashList(ctx context.Context, deps Deps, in TrashListInput) (response.Tras
 		out.TotalEntries += len(entry.Entries)
 		out.TotalBytes += entry.Bytes
 	}
+	progress.Success(ctx, "trash-list", fmt.Sprintf("Listed trash (%d entries)", out.TotalEntries), len(refsList))
 	return out, nil
 }
 
@@ -89,8 +92,10 @@ func TrashList(ctx context.Context, deps Deps, in TrashListInput) (response.Tras
 // whole library (All). OlderThan filters to entries trashed at least
 // that long before Now (or deps.Now()).
 func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.TrashEmpty, error) {
+	progress.Start(ctx, "trash-empty", "Scanning trash", 0)
 	refsList, err := trashTargetSeries(ctx, deps, in.Ref, in.All)
 	if err != nil {
+		progress.Failure(ctx, "trash-empty", "Failed to empty trash", 0, 0)
 		return response.TrashEmpty{}, err
 	}
 	now := in.Now
@@ -123,6 +128,7 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 		out.TotalEntries += len(series.Removed)
 		out.ReclaimedBytes += series.ReclaimedBytes
 	}
+	progress.Success(ctx, "trash-empty", fmt.Sprintf("Emptied trash (%d entries)", out.TotalEntries), len(refsList))
 	return out, nil
 }
 
@@ -181,7 +187,6 @@ func TrashRestore(ctx context.Context, deps Deps, in TrashRestoreInput) (respons
 }
 
 func trashTargetSeries(ctx context.Context, deps Deps, ref refs.Series, all bool) ([]refs.Series, error) {
-	_ = ctx
 	if all && !ref.IsZero() {
 		return nil, errors.New("workflow: trash invocation cannot pass both Ref and All")
 	}
@@ -197,6 +202,7 @@ func trashTargetSeries(ctx context.Context, deps Deps, ref refs.Series, all bool
 	}
 	defer dir.Close()
 	var out []refs.Series
+	scanned := 0
 	for {
 		entries, readErr := dir.ReadDir(64)
 		if readErr != nil && !errors.Is(readErr, io.EOF) {
@@ -207,6 +213,8 @@ func trashTargetSeries(ctx context.Context, deps Deps, ref refs.Series, all bool
 			if !entry.IsDir() || strings.HasPrefix(name, ".") {
 				continue
 			}
+			scanned++
+			progress.Update(ctx, "trash-walk", fmt.Sprintf("Scanning %s", name), scanned, 0)
 			parsed, err := refs.ParseSeries(name)
 			if err != nil {
 				continue
