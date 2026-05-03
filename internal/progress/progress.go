@@ -30,6 +30,14 @@ func With(ctx context.Context, reporter Reporter) context.Context {
 	return context.WithValue(ctx, progressReporterKey{}, reporter)
 }
 
+// From returns the Reporter installed in ctx, or nil if none. Useful
+// for adapters that wrap the parent reporter (e.g. teeing one event
+// stream into two sinks while preserving the parent path).
+func From(ctx context.Context) Reporter {
+	r, _ := ctx.Value(progressReporterKey{}).(Reporter)
+	return r
+}
+
 func Report(ctx context.Context, event Event) {
 	reporter, ok := ctx.Value(progressReporterKey{}).(Reporter)
 	if !ok || reporter == nil {
