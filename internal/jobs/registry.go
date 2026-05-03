@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -68,9 +69,10 @@ type entry struct {
 	endedAt  time.Time
 	progress *progress.Event
 
-	// resultJSON is populated on terminal-success by registry-side
-	// encoding (commit 3); kept zero until then.
-	// resultJSON json.RawMessage  // added in commit 3
+	// resultJSON is populated on terminal-success by the goroutine
+	// that runs the workflow. UntypedJob.Result() reads it for
+	// polling clients.
+	resultJSON json.RawMessage
 
 	doneCh chan struct{}
 
@@ -96,6 +98,7 @@ func NewRegistry(parentCtx context.Context, cfg Config, log Logger) *Registry {
 		cfg:       cfg,
 		log:       log,
 	}
+	r.startReaper()
 	return r
 }
 
@@ -247,6 +250,20 @@ func runJob[T any](
 		state = StatusFailed
 	}
 
+	var resultJSON json.RawMessage
+	if state == StatusSucceeded {
+		encoded, encErr := json.Marshal(result)
+		if encErr != nil {
+			// Marshal failure: treat as workflow failure with the
+			// marshal error. Don't lose the goroutine.
+			state = StatusFailed
+			terminalErr = &resultEncodeError{Inner: encErr}
+			r.log.Error("job result marshal failed", "id", j.id, "kind", j.kind, "err", encErr)
+		} else {
+			resultJSON = encoded
+		}
+	}
+
 	// Order: typed Job state first, then entry state, then close
 	// doneCh. Close-after-state ensures Wait readers see populated
 	// fields. Both mutexes protect their own copies of the fields.
@@ -263,6 +280,7 @@ func runJob[T any](
 	e.state = state
 	e.err = terminalErr
 	e.endedAt = endedAt
+	e.resultJSON = resultJSON
 	e.mu.Unlock()
 
 	// Remove from bySeries so the next submission can spawn.
@@ -322,6 +340,19 @@ func classifyTerminalError(jobCtx context.Context, err error, id string, kind Jo
 	}
 	return err
 }
+
+// resultEncodeError signals the goroutine returned a value that
+// json.Marshal could not encode. Surfaces as a terminal failure so
+// the goroutine doesn't leak.
+type resultEncodeError struct {
+	Inner error
+}
+
+func (e *resultEncodeError) Error() string {
+	return "result encode failed: " + e.Inner.Error()
+}
+
+func (e *resultEncodeError) Unwrap() error { return e.Inner }
 
 // errShutdown signals a job terminated because the registry's parent
 // ctx was cancelled (server SIGTERM / CLI Ctrl-C cancelling the
