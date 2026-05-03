@@ -13,7 +13,13 @@ GOPLS ?= $(shell if command -v gopls >/dev/null 2>&1; then \
 		fi; \
 	fi)
 
-.PHONY: build check fmt lint test vet
+.PHONY: build check fmt install lint test vet
+
+build:
+	go build -o bin/kura ./cmd/kura
+
+install: build
+	go install ./cmd/kura
 
 fmt:
 	gofmt -w $(GOFMT_DIRS)
@@ -38,8 +44,5 @@ lint:
 
 test:
 	go test $(GO_PACKAGES)
-
-build:
-	go build -o bin/kura ./cmd/kura
 
 check: fmt vet lint test build
