@@ -51,30 +51,6 @@ func Load(libRoot string, ref refs.Series) (*series.Series, error) {
 	return model, nil
 }
 
-// Save writes m to <libRoot>/<m.Ref>/.kura/series.json. Active record paths
-// are relativized on disk; the in-memory *Series is not mutated. m.Ref must
-// be set.
-//
-// Save does NOT do hash CAS — it unconditionally overwrites whatever is on
-// disk. Prefer SaveCAS for new code; Save is retained for the migration
-// window only.
-func Save(libRoot string, m *series.Series) error {
-	if m == nil {
-		return errors.New("seriesfile: Save called with nil Series")
-	}
-	if m.Ref.IsZero() {
-		return errors.New("seriesfile: Save called with zero Ref")
-	}
-	data, err := encodeForSeries(libRoot, m)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(paths.SeriesKuraDir(libRoot, m.Ref), 0o755); err != nil {
-		return err
-	}
-	return renameio.WriteFile(paths.SeriesMetadata(libRoot, m.Ref), data, 0o644)
-}
-
 // SaveCAS atomically writes m iff the on-disk file still hashes to m.Hash.
 // Stamps mutator into LastMutated. Sets/clears InProgress as present in m.
 //
@@ -251,7 +227,7 @@ func Exists(libRoot string, ref refs.Series) (bool, error) {
 }
 
 // NewFromMetadata builds a fresh *Series from provider metadata. Ref is left
-// unset; callers must assign before Save.
+// unset; callers must assign before SaveCAS.
 func NewFromMetadata(metadataRef refs.Metadata, m provider.Series) (*series.Series, error) {
 	out := &series.Series{
 		Metadata:       metadataRef,
@@ -277,13 +253,3 @@ func NewFromMetadata(metadataRef refs.Metadata, m provider.Series) (*series.Seri
 	return out, nil
 }
 
-// Initialize is a convenience for "build from metadata + save." Sets Ref and
-// writes to disk.
-func Initialize(libRoot string, ref refs.Series, metadataRef refs.Metadata, m provider.Series) error {
-	model, err := NewFromMetadata(metadataRef, m)
-	if err != nil {
-		return err
-	}
-	model.Ref = ref
-	return Save(libRoot, model)
-}

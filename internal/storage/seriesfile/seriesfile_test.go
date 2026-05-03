@@ -1,20 +1,15 @@
 package seriesfile_test
 
 import (
-	"bytes"
-	"flag"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
-
-var update = flag.Bool("update", false, "regenerate golden test fixtures")
 
 const fixtureName = "sample_series.json"
 
@@ -65,52 +60,6 @@ func TestLoadDecodesFixture(t *testing.T) {
 	}
 }
 
-func TestSaveRoundTripBytes(t *testing.T) {
-	libRoot, ref := setupFixtureLibrary(t)
-	original, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-
-	model, err := seriesfile.Load(libRoot, ref)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if err := seriesfile.Save(libRoot, model); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	saved, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
-	if err != nil {
-		t.Fatalf("ReadFile after Save: %v", err)
-	}
-
-	if *update {
-		if err := os.WriteFile(filepath.Join("testdata", fixtureName), saved, 0o644); err != nil {
-			t.Fatalf("update fixture: %v", err)
-		}
-		return
-	}
-	if !bytes.Equal(original, saved) {
-		t.Fatalf("round-trip mismatch\n--- want ---\n%s\n--- got ---\n%s", original, saved)
-	}
-}
-
-func TestSaveErrorsOnZeroRef(t *testing.T) {
-	libRoot := t.TempDir()
-	model := &series.Series{
-		Metadata: refs.Metadata("tvdb:1"),
-	}
-	err := seriesfile.Save(libRoot, model)
-	if err == nil || !strings.Contains(err.Error(), "zero Ref") {
-		t.Fatalf("Save error = %v, want zero Ref error", err)
-	}
-}
-
-func TestSaveErrorsOnNil(t *testing.T) {
-	if err := seriesfile.Save(t.TempDir(), nil); err == nil {
-		t.Fatal("Save(nil) returned nil error")
-	}
-}
 
 func TestExistsReportsPresence(t *testing.T) {
 	libRoot, ref := setupFixtureLibrary(t)
