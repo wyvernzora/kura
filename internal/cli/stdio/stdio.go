@@ -24,10 +24,11 @@ type Stdio struct {
 
 	InIsTTY  bool
 	OutIsTTY bool
+	ErrIsTTY bool
 }
 
 // New builds a Stdio from the given streams, detecting terminal-ness for
-// stdin and stdout.
+// each of stdin, stdout, and stderr.
 func New(in io.Reader, out io.Writer, err io.Writer) Stdio {
 	return Stdio{
 		In:       in,
@@ -35,6 +36,7 @@ func New(in io.Reader, out io.Writer, err io.Writer) Stdio {
 		Err:      err,
 		InIsTTY:  isTerminalReader(in),
 		OutIsTTY: isTerminalWriter(out),
+		ErrIsTTY: isTerminalWriter(err),
 	}
 }
 
@@ -54,9 +56,27 @@ func From(ctx context.Context) Stdio {
 	return s
 }
 
-// IsInteractive reports whether both stdin and stdout are TTYs.
+// IsInteractive reports whether the user can be prompted: stdin must
+// be a TTY (so they can type) and at least one of stdout/stderr must
+// be a TTY (so the prompt is visible). Pipelines like
+// `kura import --json | jq` capture stdout but leave stderr on the
+// terminal; callers route the prompt to stderr in that case.
 func (s Stdio) IsInteractive() bool {
-	return s.InIsTTY && s.OutIsTTY
+	return s.InIsTTY && (s.OutIsTTY || s.ErrIsTTY)
+}
+
+// PromptWriter returns the writer the disambiguation prompt should
+// render to: prefer stdout when it is a TTY (prompt + result feel
+// co-located), otherwise stderr (so a piped --json stdout stays
+// machine-readable). Returns nil if neither is a TTY.
+func (s Stdio) PromptWriter() io.Writer {
+	if s.OutIsTTY {
+		return s.Out
+	}
+	if s.ErrIsTTY {
+		return s.Err
+	}
+	return nil
 }
 
 // IsTerminal reports whether file is a character-device terminal.

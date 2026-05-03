@@ -43,7 +43,11 @@ func SelectCandidate(io stdio.Stdio, terms []string, candidates []response.Candi
 	if !ok {
 		return response.Candidate{}, ErrNonInteractive
 	}
-	stdout, ok := io.Out.(*os.File)
+	// Render the prompt on stdout when it is a TTY; fall back to
+	// stderr so pipelines that capture stdout (e.g. `kura import
+	// --json | jq`) keep the JSON channel clean while the prompt
+	// stays visible.
+	promptOut, ok := io.PromptWriter().(*os.File)
 	if !ok {
 		return response.Candidate{}, ErrNonInteractive
 	}
@@ -65,7 +69,7 @@ func SelectCandidate(io stdio.Stdio, terms []string, candidates []response.Candi
 		Options:  options,
 		PageSize: len(options),
 	}
-	if err := survey.AskOne(q, &selected, survey.WithStdio(stdin, stdout, io.Err)); err != nil {
+	if err := survey.AskOne(q, &selected, survey.WithStdio(stdin, promptOut, io.Err)); err != nil {
 		return response.Candidate{}, err
 	}
 	if selected == noneOption {
