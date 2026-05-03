@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/series"
@@ -49,7 +50,67 @@ func fromWire(in seriesV1) (*series.Series, error) {
 		}
 		out.Episodes[ref] = series.Episode{AirDate: air, Active: active, Staged: staged}
 	}
+	if in.InProgress != nil {
+		holder, err := holderFromWire(*in.InProgress)
+		if err != nil {
+			return nil, err
+		}
+		out.InProgress = &holder
+	}
+	if in.LastMutated != nil {
+		mutator, err := mutatorFromWire(*in.LastMutated)
+		if err != nil {
+			return nil, err
+		}
+		out.LastMutated = &mutator
+	}
 	return out, nil
+}
+
+func holderFromWire(in holderV1) (coord.Holder, error) {
+	started, err := time.Parse(time.RFC3339, in.Started)
+	if err != nil {
+		return coord.Holder{}, fmt.Errorf("seriesfile: invalid in_progress.started %q: %w", in.Started, err)
+	}
+	return coord.Holder{
+		Op:      in.Op,
+		Token:   in.Token,
+		PID:     in.PID,
+		Host:    in.Host,
+		Started: started.UTC(),
+	}, nil
+}
+
+func mutatorFromWire(in mutatorV1) (coord.Mutator, error) {
+	at, err := time.Parse(time.RFC3339, in.At)
+	if err != nil {
+		return coord.Mutator{}, fmt.Errorf("seriesfile: invalid last_mutated.at %q: %w", in.At, err)
+	}
+	return coord.Mutator{
+		Op:   in.Op,
+		PID:  in.PID,
+		Host: in.Host,
+		At:   at.UTC(),
+	}, nil
+}
+
+func holderToWire(in coord.Holder) holderV1 {
+	return holderV1{
+		Op:      in.Op,
+		Token:   in.Token,
+		PID:     in.PID,
+		Host:    in.Host,
+		Started: in.Started.UTC().Format(time.RFC3339),
+	}
+}
+
+func mutatorToWire(in coord.Mutator) mutatorV1 {
+	return mutatorV1{
+		Op:   in.Op,
+		PID:  in.PID,
+		Host: in.Host,
+		At:   in.At.UTC().Format(time.RFC3339),
+	}
 }
 
 func toWire(in *series.Series) seriesV1 {
@@ -79,6 +140,14 @@ func toWire(in *series.Series) seriesV1 {
 			Active:  mediaToWire(ep.Active),
 			Staged:  mediaToWire(ep.Staged),
 		}
+	}
+	if in.InProgress != nil {
+		wire := holderToWire(*in.InProgress)
+		out.InProgress = &wire
+	}
+	if in.LastMutated != nil {
+		wire := mutatorToWire(*in.LastMutated)
+		out.LastMutated = &wire
 	}
 	return out
 }

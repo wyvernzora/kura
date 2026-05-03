@@ -14,6 +14,23 @@ type seriesV1 struct {
 	CanonicalTitle string               `json:"canonicalTitle,omitempty"`
 	LastScanned    string               `json:"lastScanned,omitempty"`
 	Episodes       map[string]episodeV1 `json:"episodes"`
+	InProgress     *holderV1            `json:"in_progress,omitempty"`
+	LastMutated    *mutatorV1           `json:"last_mutated,omitempty"`
+}
+
+type holderV1 struct {
+	Op      string `json:"op"`
+	Token   string `json:"token,omitempty"`
+	PID     int    `json:"pid"`
+	Host    string `json:"host"`
+	Started string `json:"started"`
+}
+
+type mutatorV1 struct {
+	Op   string `json:"op"`
+	PID  int    `json:"pid"`
+	Host string `json:"host"`
+	At   string `json:"at"`
 }
 
 type episodeV1 struct {

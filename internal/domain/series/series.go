@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/civil"
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/textnorm"
@@ -30,6 +31,18 @@ func ParseAirDate(value string) (civil.Date, error) {
 // Ref is the series filesystem ref the loader read this Series from. It is
 // not part of the wire format; seriesfile.Load populates it after successful
 // decode so call sites do not need to track the ref alongside *Series.
+//
+// InProgress is set when a claim-holding workflow (currently only
+// reconcile apply) is mid-flight against this series. Claim-respecting
+// workflows refuse to mutate when InProgress is non-nil and not stale.
+//
+// LastMutated is stamped by every successful CAS write for diagnostics;
+// surfaces include the winning side's identity in ConflictError messages.
+//
+// Hash is the SHA-256 of the file bytes this Series was loaded from.
+// seriesfile.Load populates it; seriesfile.SaveCAS uses it as the
+// expected on-disk hash for the optimistic check. Empty means "no prior
+// load; create new file via O_EXCL".
 type Series struct {
 	Ref            refs.Series
 	Metadata       refs.Metadata
@@ -37,6 +50,9 @@ type Series struct {
 	CanonicalTitle textnorm.NFCString
 	LastScanned    time.Time
 	Episodes       map[refs.Episode]Episode
+	InProgress     *coord.Holder
+	LastMutated    *coord.Mutator
+	Hash           string
 }
 
 // Episode is the persisted shape for one episode slot.

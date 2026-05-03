@@ -15,9 +15,34 @@
         "pattern": "^S[0-9]{2,}E[0-9]{4,}$"
       },
       "additionalProperties": { "$ref": "#/$defs/episode" }
-    }
+    },
+    "in_progress": { "$ref": "#/$defs/holder" },
+    "last_mutated": { "$ref": "#/$defs/mutator" }
   },
   "$defs": {
+    "holder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "pid", "host", "started"],
+      "properties": {
+        "op": { "type": "string", "minLength": 1 },
+        "token": { "type": "string" },
+        "pid": { "type": "integer" },
+        "host": { "type": "string", "minLength": 1 },
+        "started": { "type": "string", "minLength": 1 }
+      }
+    },
+    "mutator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "pid", "host", "at"],
+      "properties": {
+        "op": { "type": "string", "minLength": 1 },
+        "pid": { "type": "integer" },
+        "host": { "type": "string", "minLength": 1 },
+        "at": { "type": "string", "minLength": 1 }
+      }
+    },
     "episode": {
       "type": "object",
       "additionalProperties": false,
