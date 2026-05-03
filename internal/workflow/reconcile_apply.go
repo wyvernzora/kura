@@ -14,6 +14,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/fsop"
+	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -33,20 +34,24 @@ type ApplyReconcileInput struct {
 // series state, acquires the in_progress claim, executes the moves, appends
 // per-move events to the plan log, and updates series.json on success.
 //
-// Wrapped in coord.WithSeries (no retry) since the side effects (file moves,
-// trash population) are not safely re-runnable. Conflicts surface as
+// Returns a tracked *jobs.Job; CLI callers Wait for the typed result, MCP
+// long-tool callers hand the ID off to a polling client. Wrapped in
+// coord.WithSeries (no retry) since the side effects (file moves, trash
+// population) are not safely re-runnable. Conflicts surface as
 // BusyError / ReconcileInProgressError; the caller decides what to do.
-func ApplyReconcile(ctx context.Context, deps Deps, in ApplyReconcileInput) (response.ReconcileApply, error) {
-	var out response.ReconcileApply
-	err := deps.Coordinator.WithSeries(in.Ref, func() error {
-		result, runErr := applyReconcileLocked(ctx, deps, in)
-		if runErr != nil {
-			return runErr
-		}
-		out = result
-		return nil
+func ApplyReconcile(ctx context.Context, deps Deps, in ApplyReconcileInput) *jobs.Job[response.ReconcileApply] {
+	return jobs.Submit(deps.Jobs, jobs.KindReconcileApply, in.Ref, func(jobCtx context.Context) (response.ReconcileApply, error) {
+		var out response.ReconcileApply
+		err := deps.Coordinator.WithSeries(in.Ref, func() error {
+			result, runErr := applyReconcileLocked(jobCtx, deps, in)
+			if runErr != nil {
+				return runErr
+			}
+			out = result
+			return nil
+		})
+		return out, err
 	})
-	return out, err
 }
 
 func applyReconcileLocked(ctx context.Context, deps Deps, in ApplyReconcileInput) (response.ReconcileApply, error) {

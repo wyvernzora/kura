@@ -73,7 +73,8 @@ func (cmd *reconcileApplyCmd) Run(rt *runContext) error {
 		if !ok {
 			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
 		}
-		result, err := workflow.ApplyReconcile(rt.Context, deps, workflow.ApplyReconcileInput{Ref: seriesRef, Token: token})
+		j := workflow.ApplyReconcile(rt.Context, deps, workflow.ApplyReconcileInput{Ref: seriesRef, Token: token})
+		result, err := j.Wait(rt.Context)
 		if err != nil {
 			return err
 		}
