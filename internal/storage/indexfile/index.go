@@ -47,38 +47,17 @@ func New(root string) *Index {
 }
 
 func Load(root string) (*Index, error) {
-	path := paths.IndexFile(root)
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, ErrNotFound
-	}
+	loaded, err := LoadCAS(root)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
-	defer file.Close()
-
 	index := New(root)
-	reader := csv.NewReader(file)
-	reader.Comma = '\t'
-	reader.FieldsPerRecord = 2
-	for {
-		record, err := reader.Read()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
-		}
-		metadataRef, err := refs.ParseMetadata(record[0])
-		if err != nil {
-			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
-		}
-		seriesRef, err := refs.ParseSeries(record[1])
-		if err != nil {
-			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
-		}
-		if err := index.Put(metadataRef, seriesRef); err != nil {
-			return nil, fmt.Errorf("indexfile: read %s: %w", path, err)
+	for _, entry := range loaded.Entries {
+		if err := index.Put(entry.Metadata, entry.Series); err != nil {
+			return nil, fmt.Errorf("indexfile: load: %w", err)
 		}
 	}
 	return index, nil
@@ -166,6 +145,31 @@ func (i *Index) Remove(seriesRef refs.Series) {
 			delete(i.refs, metadataRef)
 		}
 	}
+}
+
+// Entries returns the in-memory entries as a sorted slice. Convenience
+// for callers building a CAS-write input from the cached state.
+func (i *Index) Entries() []Entry {
+	out := make([]Entry, 0, len(i.refs))
+	for metadataRef, seriesRef := range i.refs {
+		out = append(out, Entry{Metadata: metadataRef, Series: seriesRef})
+	}
+	sort.Slice(out, func(a, b int) bool {
+		return out[a].Metadata.String() < out[b].Metadata.String()
+	})
+	return out
+}
+
+// ReplaceEntries swaps the in-memory map with the given entry list.
+// Used after a successful CAS write to keep the cached read view in
+// sync with what was just persisted. The CAS write itself is the
+// source of truth; this just refreshes the read cache.
+func (i *Index) ReplaceEntries(entries []Entry) {
+	next := make(map[refs.Metadata]refs.Series, len(entries))
+	for _, entry := range entries {
+		next[entry.Metadata] = entry.Series
+	}
+	i.refs = next
 }
 
 func (i *Index) Save() error {

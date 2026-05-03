@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
@@ -65,22 +67,37 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 		return response.AddResult{}, err
 	}
 	if in.Force {
-		deps.Index.Remove(ref)
 		if err := os.Remove(metadataPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
 			return response.AddResult{}, err
 		}
 	}
 	progress.Update(ctx, "import", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)
-	if err := seriesfile.Initialize(deps.LibRoot, ref, metadataRef, metadataSeries); err != nil {
+	model, err := seriesfile.NewFromMetadata(metadataRef, metadataSeries)
+	if err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err
 	}
-	if err := deps.Index.Put(metadataRef, ref); err != nil {
+	model.Ref = ref
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err
 	}
-	if err := deps.Index.Save(); err != nil {
+	if err := withIndexCAS(deps, "import", func(loaded indexfile.Loaded) ([]indexfile.Entry, error) {
+		// Drop any prior entry pointing at this series ref (Force-replace
+		// path) and any conflicting entry for the same metadataRef.
+		filtered := make([]indexfile.Entry, 0, len(loaded.Entries))
+		for _, entry := range loaded.Entries {
+			if entry.Series == ref {
+				continue
+			}
+			if entry.Metadata == metadataRef && entry.Series != ref {
+				return nil, &MetadataRefConflictError{Ref: metadataRef, Existing: entry.Series, Next: ref}
+			}
+			filtered = append(filtered, entry)
+		}
+		return append(filtered, indexfile.Entry{Metadata: metadataRef, Series: ref}), nil
+	}); err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err
 	}

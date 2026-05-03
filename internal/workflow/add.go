@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/filename"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
@@ -71,15 +73,26 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 		return response.AddResult{}, err
 	}
 	progress.Update(ctx, "add", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)
-	if err := seriesfile.Initialize(deps.LibRoot, ref, metadataRef, metadataSeries); err != nil {
+	model, err := seriesfile.NewFromMetadata(metadataRef, metadataSeries)
+	if err != nil {
 		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
 	}
-	if err := deps.Index.Put(metadataRef, ref); err != nil {
+	model.Ref = ref
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("add")); err != nil {
 		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
 	}
-	if err := deps.Index.Save(); err != nil {
+	if err := withIndexCAS(deps, "add", func(loaded indexfile.Loaded) ([]indexfile.Entry, error) {
+		// Re-check after fresh load: a peer add could have landed for
+		// the same metadataRef between our pre-check and our load here.
+		for _, entry := range loaded.Entries {
+			if entry.Metadata == metadataRef && entry.Series != ref {
+				return nil, &MetadataRefConflictError{Ref: metadataRef, Existing: entry.Series, Next: ref}
+			}
+		}
+		return appendOrReplaceEntry(loaded.Entries, indexfile.Entry{Metadata: metadataRef, Series: ref}), nil
+	}); err != nil {
 		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
 	}
@@ -90,6 +103,16 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 		Root:           target,
 		PreferredTitle: metadataSeries.PreferredTitle.String(),
 	}, nil
+}
+
+func appendOrReplaceEntry(entries []indexfile.Entry, entry indexfile.Entry) []indexfile.Entry {
+	for i := range entries {
+		if entries[i].Metadata == entry.Metadata {
+			entries[i] = entry
+			return entries
+		}
+	}
+	return append(entries, entry)
 }
 
 // fetchSeriesMetadata pulls a full Series view from the provider for

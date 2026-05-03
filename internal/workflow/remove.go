@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
@@ -44,12 +46,13 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 		}
 		return response.Remove{}, err
 	}
-	if !in.Purge {
-		if err := refuseIfStaged(deps, in.Ref); err != nil {
-			progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
-			return response.Remove{}, err
-		}
+	// Pre-check series.json: refuse on active claim and (default mode)
+	// on staged records. This happens before any mutation.
+	if err := preCheckRemove(deps, in); err != nil {
+		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
+		return response.Remove{}, err
 	}
+
 	mode := response.RemoveModeUntrack
 	target := paths.SeriesKuraDir(deps.LibRoot, in.Ref)
 	if in.Purge {
@@ -61,25 +64,49 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
 		return response.Remove{}, err
 	}
+
+	// Drop the index entry first (CAS); only after success do we touch
+	// the filesystem. CAS rejection on the index leaves the series fully
+	// tracked exactly as before.
+	if err := withIndexCAS(deps, "remove", func(loaded indexfile.Loaded) ([]indexfile.Entry, error) {
+		filtered := make([]indexfile.Entry, 0, len(loaded.Entries))
+		for _, entry := range loaded.Entries {
+			if entry.Series == in.Ref {
+				continue
+			}
+			filtered = append(filtered, entry)
+		}
+		return filtered, nil
+	}); err != nil {
+		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
+		return response.Remove{}, err
+	}
+
 	if err := os.RemoveAll(target); err != nil {
 		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
 		return response.Remove{}, err
 	}
-	deps.Index.Remove(in.Ref)
-	if err := deps.Index.Save(); err != nil {
-		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
-		return response.Remove{}, err
-	}
+
 	progress.Success(ctx, "remove", fmt.Sprintf("Removed %s", in.Ref), 0)
 	return response.Remove{Ref: in.Ref, Mode: mode, ReclaimedBytes: bytes}, nil
 }
 
-func refuseIfStaged(deps Deps, ref refs.Series) error {
-	model, err := seriesfile.Load(deps.LibRoot, ref)
+func preCheckRemove(deps Deps, in RemoveInput) error {
+	model, err := seriesfile.Load(deps.LibRoot, in.Ref)
 	if err != nil {
-		// If series.json is unreadable, the series is already half-broken;
-		// surface the underlying error rather than the staged-records gate.
+		// If series.json is missing or unreadable, the series is already
+		// half-broken; let the dir delete proceed (no claim to honor).
+		// Other read errors surface.
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
+	}
+	if model.InProgress != nil {
+		return &coord.BusyError{Scope: coord.SeriesScope(in.Ref), Holder: *model.InProgress}
+	}
+	if in.Purge {
+		return nil
 	}
 	var staged []refs.Episode
 	for ep, episode := range model.Episodes {
@@ -91,7 +118,7 @@ func refuseIfStaged(deps Deps, ref refs.Series) error {
 		return nil
 	}
 	sort.Slice(staged, func(i, j int) bool { return staged[i].String() < staged[j].String() })
-	return &RemoveStagedRecordsExistError{Ref: ref, Episodes: staged}
+	return &RemoveStagedRecordsExistError{Ref: in.Ref, Episodes: staged}
 }
 
 // dirSize recursively totals file sizes inside dir. Returns 0 with nil
