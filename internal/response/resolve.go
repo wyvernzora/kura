@@ -26,4 +26,16 @@ type Candidate struct {
 	FirstAired       string        `json:"firstAired,omitempty"`
 	OriginalLanguage string        `json:"originalLanguage,omitempty"`
 	OriginalCountry  string        `json:"originalCountry,omitempty"`
+	Evidence         []Evidence    `json:"evidence,omitempty"`
+}
+
+// Evidence is one term's contribution to a candidate. Surfaces use
+// it for ranking heuristics: which term matched, where in the
+// provider record, and any qualifying annotations (e.g. full_match
+// vs partial_match).
+type Evidence struct {
+	Term        string   `json:"term"`
+	Rank        int      `json:"rank"`
+	MatchSource string   `json:"matchSource,omitempty"`
+	Annotations []string `json:"annotations,omitempty"`
 }

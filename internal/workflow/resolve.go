@@ -43,6 +43,15 @@ func Resolve(ctx context.Context, deps Deps, in ResolveInput) (response.Resoluti
 		Candidates: make([]response.Candidate, 0, len(res.Results)),
 	}
 	for _, r := range res.Results {
+		evidence := make([]response.Evidence, 0, len(r.Evidence))
+		for _, e := range r.Evidence {
+			evidence = append(evidence, response.Evidence{
+				Term:        e.Term,
+				Rank:        e.Rank,
+				MatchSource: e.MatchSource,
+				Annotations: e.Annotations,
+			})
+		}
 		out.Candidates = append(out.Candidates, response.Candidate{
 			Ref:              r.Summary.MetadataRef,
 			PreferredTitle:   r.Summary.PreferredTitle.String(),
@@ -51,6 +60,7 @@ func Resolve(ctx context.Context, deps Deps, in ResolveInput) (response.Resoluti
 			FirstAired:       r.Summary.FirstAired,
 			OriginalLanguage: r.Summary.OriginalLanguage,
 			OriginalCountry:  r.Summary.OriginalCountry,
+			Evidence:         evidence,
 		})
 	}
 	return out, nil
