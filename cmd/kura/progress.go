@@ -23,7 +23,12 @@ func newSpinnerProgress(stderr io.Writer) *spinnerProgress {
 	if !ok || !stdio.IsTerminal(file) {
 		return &spinnerProgress{}
 	}
-	s := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriter(stderr))
+	// WithWriterFile (vs WithWriter) sets the *os.File the spinner
+	// uses for its internal isatty check. Without it the lib defaults
+	// to os.Stdout for the check and silently disables the spinner
+	// whenever stdout is piped, even though we write the spinner to
+	// stderr.
+	s := spinner.New(spinner.CharSets[11], 100*time.Millisecond, spinner.WithWriterFile(file))
 	s.FinalMSG = ""
 	return &spinnerProgress{enabled: true, spinner: s, stderr: stderr}
 }
