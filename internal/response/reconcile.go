@@ -3,6 +3,7 @@ package response
 import (
 	"time"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
@@ -51,4 +52,13 @@ type ReconcileReplaced struct {
 type ReconcileApply struct {
 	Series       refs.Series `json:"series"`
 	AppliedMoves int         `json:"appliedMoves"`
+}
+
+// RecoverReconcile is workflow.RecoverReconcile's response. Cleared is
+// true when an in_progress claim was actually removed; PriorHolder
+// identifies who was holding it.
+type RecoverReconcile struct {
+	Ref         refs.Series   `json:"ref"`
+	Cleared     bool          `json:"cleared"`
+	PriorHolder *coord.Holder `json:"priorHolder,omitempty"`
 }

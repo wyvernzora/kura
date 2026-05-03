@@ -62,6 +62,26 @@ func ApplyReconcile(w io.Writer, result response.ReconcileApply, asJSON bool) er
 	return err
 }
 
+func RecoverReconcile(w io.Writer, result response.RecoverReconcile, asJSON bool) error {
+	if asJSON {
+		encoder := json.NewEncoder(w)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(result)
+	}
+	if !result.Cleared {
+		_, err := fmt.Fprintf(w, "No in_progress claim on %s; nothing to recover\n", result.Ref)
+		return err
+	}
+	holder := result.PriorHolder
+	if holder == nil {
+		_, err := fmt.Fprintf(w, "Cleared in_progress claim on %s\n", result.Ref)
+		return err
+	}
+	_, err := fmt.Fprintf(w, "Cleared in_progress claim on %s (was %s on host=%s pid=%d since %s)\n",
+		result.Ref, holder.Op, holder.Host, holder.PID, holder.Started.Format("2006-01-02 15:04:05Z"))
+	return err
+}
+
 func flattenPlanMoves(changes []response.ReconcileChange) []response.ReconcileMove {
 	var moves []response.ReconcileMove
 	for _, change := range changes {
