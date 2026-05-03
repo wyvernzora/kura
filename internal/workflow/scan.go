@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/scan"
@@ -19,7 +20,9 @@ type ScanInput struct {
 
 // Scan walks a tracked series's filesystem, refreshes its
 // metadata-derived spine from the provider, applies the discovered
-// files to the in-memory model, and persists the updated series.json.
+// files to the in-memory model, and persists the updated series.json
+// via hash CAS. Conflicts (peer mutated mid-walk) trigger one silent
+// retry; second conflict surfaces.
 //
 // Provider-needing: invokes deps.Provider() lazily at the start.
 func Scan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult, error) {
@@ -28,11 +31,22 @@ func Scan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult, er
 		return response.ScanResult{}, err
 	}
 	runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now)
-	internal, err := runner.Scan(ctx, scan.Input{Replace: in.Replace})
+	var out response.ScanResult
+	err = deps.Coordinator.WithSeriesRetry(in.Ref, func() error {
+		internal, runErr := runner.Scan(ctx, scan.Input{
+			Replace: in.Replace,
+			Mutator: coord.NewMutator("scan"),
+		})
+		if runErr != nil {
+			return translateScanError(runErr)
+		}
+		out = toScanResponse(internal)
+		return nil
+	})
 	if err != nil {
-		return response.ScanResult{}, translateScanError(err)
+		return response.ScanResult{}, err
 	}
-	return toScanResponse(internal), nil
+	return out, nil
 }
 
 func toScanResponse(in scan.Result) response.ScanResult {

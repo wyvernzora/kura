@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/config"
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/provider"
@@ -44,13 +46,33 @@ func buildDeps(rt *runContext) (workflow.Deps, error) {
 	provider := workflow.NewProviderFactory(func() (provider.Source, error) {
 		return buildSourceFromFlags(rt, rt.flags)
 	})
+	hostName, err := os.Hostname()
+	if err != nil {
+		hostName = "unknown"
+	}
+	attempts := envInt(rt.Getenv, "KURA_CONFLICT_RETRIES", 1) + 1
+	coordImpl := coord.NewCLICoordinator(coord.MaxAttempts(attempts))
 	return workflow.Deps{
-		LibRoot:   libRoot,
-		Index:     index,
-		Provider:  provider,
-		Inspector: inspector,
-		Now:       time.Now,
+		LibRoot:     libRoot,
+		Index:       index,
+		Coordinator: coordImpl,
+		HostName:    hostName,
+		Provider:    provider,
+		Inspector:   inspector,
+		Now:         time.Now,
 	}, nil
+}
+
+func envInt(getenv func(string) string, key string, fallback int) int {
+	value := getenv(key)
+	if value == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(value)
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return n
 }
 
 func validateLibraryRoot(root string) error {

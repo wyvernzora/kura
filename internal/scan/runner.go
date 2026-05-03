@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
@@ -69,6 +70,9 @@ func (s *scanner) run(ctx context.Context) (err error) {
 	if err = s.loadLocal(); err != nil {
 		return err
 	}
+	if s.model.InProgress != nil {
+		return &coord.BusyError{Scope: coord.SeriesScope(s.ref), Holder: *s.model.InProgress}
+	}
 	if err = s.rejectStagedRecords(); err != nil {
 		return err
 	}
@@ -87,7 +91,7 @@ func (s *scanner) run(ctx context.Context) (err error) {
 	}
 	s.model.LastScanned = s.now().UTC()
 	s.model.Ref = s.ref
-	if err = seriesfile.Save(s.root, &s.model); err != nil {
+	if err = seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
 		return err
 	}
 	progress.Success(ctx, "scan", fmt.Sprintf("Scanned %s", s.ref), len(discovered))

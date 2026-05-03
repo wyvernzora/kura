@@ -3,11 +3,15 @@ package scan
 import (
 	"fmt"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
 type Input struct {
 	Replace bool
+	// Mutator stamps the series.json write at the end of a successful
+	// scan. Required.
+	Mutator coord.Mutator
 }
 
 type Result struct {

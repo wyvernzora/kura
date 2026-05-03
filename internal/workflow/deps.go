@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
@@ -25,9 +26,22 @@ type Deps struct {
 	// LibRoot is the absolute filesystem path to the Kura library root.
 	LibRoot string
 
-	// Index is the in-memory metadata-ref → series-ref cache, loaded at
-	// startup. Workflows mutate it via Put/Remove and persist via Save.
+	// Index is the in-memory metadata-ref → series-ref cache loaded at
+	// startup. Workflows resolve refs through it; mutations go through
+	// indexfile.SaveCAS and may leave Index stale (acceptable for the
+	// CLI, which exits at end of command).
 	Index *indexfile.Index
+
+	// Coordinator serializes mutations against the same series (and the
+	// library index) within this process and bundles the standard CAS
+	// retry policy. CLI uses the no-op variant; long-running consumers
+	// (MCP) use the real one.
+	Coordinator coord.Coordinator
+
+	// HostName is os.Hostname() captured once at startup. Used by
+	// coord.NewHolder / NewMutator stamps so workflows don't reach into
+	// os each call.
+	HostName string
 
 	// Provider yields a provider.Source on first call and caches the
 	// result. Local-only workflows never invoke it; provider-needing
