@@ -2318,3 +2318,154 @@ func TestTrashRestoreRefusesIfTargetExists(t *testing.T) {
 		t.Fatalf("trash entry removed despite refusal: %v", err)
 	}
 }
+
+func TestRemoveDefaultUntracksSeries(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	ref := setupTrashSeries(t, root, "Bookworm", "370070")
+	seriesDir := filepath.Join(root, ref.String())
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mediaPath := filepath.Join(seasonDir, "Bookworm - S01E01 (WebRip 1080p).mkv")
+	writeFile(t, mediaPath, "episode")
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"remove", "--json", "--tvdb-base-url", server.URL, "tvdb:370070"},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
+	}
+	if result["mode"] != "untrack" {
+		t.Fatalf("mode = %v, want untrack", result["mode"])
+	}
+	if _, err := os.Stat(filepath.Join(seriesDir, ".kura")); !os.IsNotExist(err) {
+		t.Fatalf(".kura still present after untrack: err=%v", err)
+	}
+	if _, err := os.Stat(mediaPath); err != nil {
+		t.Fatalf("media file missing after untrack: %v", err)
+	}
+	if _, err := os.Stat(seriesDir); err != nil {
+		t.Fatalf("series dir missing after untrack: %v", err)
+	}
+}
+
+func TestRemovePurgeRequiresConfirm(t *testing.T) {
+	root := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"remove", "--purge", "tvdb:370070"},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	if err == nil || !strings.Contains(err.Error(), "--confirm") {
+		t.Fatalf("err = %v, want --confirm message", err)
+	}
+}
+
+func TestRemovePurgeDeletesEverything(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	ref := setupTrashSeries(t, root, "Bookworm", "370070")
+	seriesDir := filepath.Join(root, ref.String())
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(seasonDir, "episode.mkv"), "episode")
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"remove", "--purge", "--confirm", "--json", "--tvdb-base-url", server.URL, "tvdb:370070"},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
+	}
+	if result["mode"] != "purge" {
+		t.Fatalf("mode = %v, want purge", result["mode"])
+	}
+	if _, err := os.Stat(seriesDir); !os.IsNotExist(err) {
+		t.Fatalf("series dir still present after purge: err=%v", err)
+	}
+}
+
+func TestRemoveDefaultRefusesIfStaged(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"staged": {
+					"path": "/inbox/Bookworm S01E01.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+
+	var stdout, stderr bytes.Buffer
+	err := run([]string{"remove", "--tvdb-base-url", server.URL, "tvdb:370070"},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root))
+	var stagedErr *workflow.RemoveStagedRecordsExistError
+	if !errors.As(err, &stagedErr) {
+		t.Fatalf("err = %v, want RemoveStagedRecordsExistError", err)
+	}
+	if _, err := os.Stat(filepath.Join(seriesDir, ".kura", "series.json")); err != nil {
+		t.Fatalf(".kura removed despite staged-records gate: %v", err)
+	}
+}
+
+func TestRemovePurgeBypassesStagedGate(t *testing.T) {
+	server := newCLITestServer(t)
+	defer server.Close()
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Bookworm")
+	if err := os.MkdirAll(seriesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSeriesJSON(t, seriesDir, `{
+		"schemaVersion": 1,
+		"metadataRef": "tvdb:370070",
+		"episodes": {
+			"S01E0001": {
+				"airDate": "2019-10-03",
+				"staged": {
+					"path": "/inbox/Bookworm S01E01.mkv",
+					"source": "webrip",
+					"resolution": "1920x1080",
+					"codec": "HEVC",
+					"size": 7,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				}
+			}
+		}
+	}`)
+
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"remove", "--purge", "--confirm", "--tvdb-base-url", server.URL, "tvdb:370070"},
+		testRunContextWithLibraryRoot(&stdout, &stderr, root)); err != nil {
+		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
+	}
+	if _, err := os.Stat(seriesDir); !os.IsNotExist(err) {
+		t.Fatalf("series dir still present after purge: err=%v", err)
+	}
+}

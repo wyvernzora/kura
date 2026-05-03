@@ -16,6 +16,7 @@ type cli struct {
 	Show      showCmd      `cmd:"" help:"Show tracked series library state."`
 	Reindex   reindexCmd   `cmd:"" help:"Rebuild the library metadata index."`
 	Reconcile reconcileCmd `cmd:"" help:"Plan and apply filesystem reconciliation for tracked files."`
+	Remove    removeCmd    `cmd:"" help:"Untrack a series; with --purge wholesale delete its directory."`
 	Reset     resetCmd     `cmd:"" help:"Remove staged media from a tracked episode."`
 	Stage     stageCmd     `cmd:"" help:"Stage an external episode file for a series."`
 	Trash     trashCmd     `cmd:"" help:"Manage per-series trash entries."`

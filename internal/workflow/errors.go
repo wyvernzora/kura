@@ -165,3 +165,18 @@ func (e *TrashRestoreTargetExistsError) Error() string {
 	}
 	return fmt.Sprintf("workflow: trash restore %s for %q blocked: %d target paths already exist", e.ID, e.Ref, len(e.Targets))
 }
+
+// RemoveStagedRecordsExistError signals the series has staged records
+// blocking a default (non-purge) remove. Caller must reconcile or reset
+// --all first; --purge bypasses the gate.
+type RemoveStagedRecordsExistError struct {
+	Ref      refs.Series
+	Episodes []refs.Episode
+}
+
+func (e *RemoveStagedRecordsExistError) Error() string {
+	if len(e.Episodes) == 1 {
+		return fmt.Sprintf("workflow: remove %q blocked: staged record %s exists; reset/reconcile first or use --purge", e.Ref, e.Episodes[0].Marker())
+	}
+	return fmt.Sprintf("workflow: remove %q blocked: %d staged records exist; reset/reconcile first or use --purge", e.Ref, len(e.Episodes))
+}
