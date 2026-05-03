@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -60,7 +61,42 @@ func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []
 		return nil, nil, err
 	}
 	sortDiscoveredEpisodes(episodes)
-	return episodes, skipped, nil
+	return rejectDuplicateSlots(episodes, skipped)
+}
+
+// rejectDuplicateSlots removes any DiscoveredFile whose Ref collides
+// with another file in the same scan and re-emits both as ImportSkips
+// with SkipCodeDuplicateSlot. Kura does not auto-pick which file wins.
+func rejectDuplicateSlots(episodes []DiscoveredFile, skipped []ImportSkip) ([]DiscoveredFile, []ImportSkip, error) {
+	byRef := map[refs.Episode][]int{}
+	for index, episode := range episodes {
+		byRef[episode.Ref] = append(byRef[episode.Ref], index)
+	}
+	if len(byRef) == len(episodes) {
+		return episodes, skipped, nil
+	}
+	dropped := map[int]struct{}{}
+	for ref, indices := range byRef {
+		if len(indices) < 2 {
+			continue
+		}
+		for _, index := range indices {
+			dropped[index] = struct{}{}
+			skipped = append(skipped, ImportSkip{
+				Path:   episodes[index].Path,
+				Code:   SkipCodeDuplicateSlot,
+				Reason: fmt.Sprintf("multiple files claim %s; resolve manually", ref.Marker()),
+			})
+		}
+	}
+	out := episodes[:0]
+	for index, episode := range episodes {
+		if _, drop := dropped[index]; drop {
+			continue
+		}
+		out = append(out, episode)
+	}
+	return out, skipped, nil
 }
 
 // classifyDirectory decides whether discovery should descend into a

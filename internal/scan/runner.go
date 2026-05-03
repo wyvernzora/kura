@@ -119,6 +119,15 @@ func (s *scanner) refreshMetadata(ctx context.Context) error {
 		return err
 	}
 	s.model.RefreshSpine(spine)
+	known := make(map[refs.Episode]struct{}, len(spine))
+	for _, entry := range spine {
+		known[entry.Ref] = struct{}{}
+	}
+	orphans := s.model.PruneSpine(known)
+	if len(orphans) > 0 {
+		sort.Slice(orphans, func(i, j int) bool { return orphans[i].String() < orphans[j].String() })
+		s.result.OrphanSlots = orphans
+	}
 	return nil
 }
 

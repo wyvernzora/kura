@@ -183,3 +183,35 @@ func writeScanTestFile(t *testing.T, path string) {
 		t.Fatalf("WriteFile %s: %v", path, err)
 	}
 }
+
+func TestDiscoverSeasonEpisodesRejectsDuplicateSlots(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Frieren")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeScanTestFile(t, filepath.Join(seasonDir, "Frieren - S01E01 (WebRip 1080p).mkv"))
+	writeScanTestFile(t, filepath.Join(seasonDir, "[SubsPlease] Frieren - 01 (1080p).mkv"))
+
+	dir, err := seriesdir.Parse(seriesDir)
+	if err != nil {
+		t.Fatalf("seriesdir.Parse: %v", err)
+	}
+	episodes, skipped, err := DiscoverSeriesEpisodes(dir)
+	if err != nil {
+		t.Fatalf("DiscoverSeriesEpisodes: %v", err)
+	}
+	if len(episodes) != 0 {
+		t.Fatalf("episodes = %v, want both files dropped", episodes)
+	}
+	dups := 0
+	for _, skip := range skipped {
+		if skip.Code == SkipCodeDuplicateSlot {
+			dups++
+		}
+	}
+	if dups != 2 {
+		t.Fatalf("duplicate-slot skips = %d, want 2; skipped = %v", dups, skipped)
+	}
+}

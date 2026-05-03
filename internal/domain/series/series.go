@@ -66,6 +66,25 @@ func (s *Series) RefreshSpine(spine []SpineEntry) {
 	}
 }
 
+// PruneSpine removes empty orphan slots that the provider no longer
+// knows about (i.e. refs absent from known). Slots with active or
+// staged records are kept and returned in the orphan slice so callers
+// can surface the conflict.
+func (s *Series) PruneSpine(known map[refs.Episode]struct{}) []refs.Episode {
+	var orphans []refs.Episode
+	for ref, episode := range s.Episodes {
+		if _, ok := known[ref]; ok {
+			continue
+		}
+		if episode.Active != nil || episode.Staged != nil {
+			orphans = append(orphans, ref)
+			continue
+		}
+		delete(s.Episodes, ref)
+	}
+	return orphans
+}
+
 func (s *Series) SetStaged(ref refs.Episode, record media.Record) error {
 	episode, ok := s.Episodes[ref]
 	if !ok {

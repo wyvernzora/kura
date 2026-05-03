@@ -15,11 +15,14 @@ const (
 
 // ScanResult is workflow.Scan's response. Synced is the per-episode
 // reconciliation log (what changed); Skipped is the list of files /
-// directories the scan ignored with reasons.
+// directories the scan ignored with reasons; OrphanSlots are episode
+// refs the local model still tracks (because they hold active or
+// staged records) but the provider no longer knows about.
 type ScanResult struct {
-	Series  refs.Series      `json:"series"`
-	Synced  []ScannedEpisode `json:"synced"`
-	Skipped []ScanSkip       `json:"skipped"`
+	Series      refs.Series      `json:"series"`
+	Synced      []ScannedEpisode `json:"synced"`
+	Skipped     []ScanSkip       `json:"skipped"`
+	OrphanSlots []refs.Episode   `json:"orphanSlots"`
 }
 
 // ScannedEpisode mirrors what changed for one episode slot during a
@@ -49,4 +52,5 @@ const (
 	SkipCodeEpisodeNumberNotInferred = "episode_number_not_inferred"
 	SkipCodeSeasonMismatch           = "season_mismatch"
 	SkipCodeIgnoredDirectory         = "ignored_directory"
+	SkipCodeDuplicateSlot            = "duplicate_slot"
 )

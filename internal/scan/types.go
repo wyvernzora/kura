@@ -11,9 +11,10 @@ type Input struct {
 }
 
 type Result struct {
-	Series  refs.Series      `json:"series"`
-	Synced  []ScannedEpisode `json:"synced"`
-	Skipped []ImportSkip     `json:"skipped"`
+	Series      refs.Series      `json:"series"`
+	Synced      []ScannedEpisode `json:"synced"`
+	Skipped     []ImportSkip     `json:"skipped"`
+	OrphanSlots []refs.Episode   `json:"orphanSlots"`
 }
 
 type ImportSkip struct {
@@ -27,6 +28,7 @@ const (
 	SkipCodeEpisodeNumberNotInferred = "episode_number_not_inferred"
 	SkipCodeSeasonMismatch           = "season_mismatch"
 	SkipCodeIgnoredDirectory         = "ignored_directory"
+	SkipCodeDuplicateSlot            = "duplicate_slot"
 )
 
 type ScannedEpisode struct {
