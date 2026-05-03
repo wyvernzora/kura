@@ -42,9 +42,10 @@ const (
 
 // Coded is the interface every typed error that wants to be rendered
 // as a structured surface error implements. Surfaces walk the error
-// chain via errors.As(err, &Coded) and use Kind / Category / Data to
-// build the response.
+// chain via errors.AsType[Coded](err) and use Kind / Category / Data
+// to build the response.
 type Coded interface {
+	error
 	Kind() string
 	Category() string
 	Data() map[string]any
