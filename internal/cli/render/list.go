@@ -45,7 +45,7 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 		}
 		tw.AppendRow(table.Row{
 			renderListStatus(statusText, styled),
-			row.Title,
+			titleCell(row),
 			countCell(row.SeasonCount, row.Status),
 			countCell(row.EpisodeCount, row.Status),
 			scannedCell(row.LastScanned, row.Status, now),
@@ -53,6 +53,16 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 		})
 	}
 	return style.WriteStyledTable(w, tw, nil)
+}
+
+// titleCell renders the row title for the table. Untracked rows have
+// no provider-derived title; mark with `*` to make clear the value
+// is inferred from the directory name rather than from metadata.
+func titleCell(row response.ListRow) string {
+	if row.Status == response.ListStatusUntracked {
+		return row.Title + "*"
+	}
+	return row.Title
 }
 
 func countCell(count int, status response.ListStatus) string {

@@ -101,7 +101,6 @@ func buildListRow(libRoot string, name string, now time.Time) response.ListRow {
 	}
 	if !exists {
 		row.Status = response.ListStatusUntracked
-		row.Title = name + "*"
 		return row
 	}
 	model, err := seriesfile.Load(libRoot, ref)

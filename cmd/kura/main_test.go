@@ -764,8 +764,8 @@ func TestListCommandPrintsLibraryInventoryJSON(t *testing.T) {
 	if got := byRoot["Complete"]["episodeCount"]; got != float64(2) {
 		t.Fatalf("Complete episodeCount = %v, want 2", got)
 	}
-	if got := byRoot["Untracked"]["title"]; got != "Untracked*" {
-		t.Fatalf("Untracked title = %v, want Untracked*", got)
+	if got := byRoot["Untracked"]["title"]; got != "Untracked" {
+		t.Fatalf("Untracked title = %v, want Untracked", got)
 	}
 }
 
