@@ -32,7 +32,8 @@ ENV KURA_LIBRARY_ROOT=/mnt/library \
     HOST=0.0.0.0 \
     CLIENT_PORT=6274 \
     SERVER_PORT=6277 \
-    MCP_AUTO_OPEN_ENABLED=false
+    MCP_AUTO_OPEN_ENABLED=false \
+    ALLOWED_ORIGINS=http://localhost:6274,http://127.0.0.1:6274
 
 # 6274 = inspector UI, 6277 = inspector proxy. Both must be published.
 EXPOSE 6274 6277

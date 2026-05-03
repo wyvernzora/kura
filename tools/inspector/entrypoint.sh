@@ -1,6 +1,10 @@
 #!/bin/sh
 # Launch kura HTTP transport in the background, then run mcp-inspector
 # in the foreground. tini (PID 1) reaps both when the container stops.
+#
+# We pin a session token up front (instead of letting inspector mint a
+# random one) so the entrypoint can print a copy-paste URL with the
+# token + UI prefill query params (transport + serverUrl).
 
 set -e
 
@@ -14,11 +18,18 @@ if [ ! -d "${KURA_LIBRARY_ROOT}" ]; then
 fi
 
 KURA_HTTP_ADDR="${KURA_HTTP_ADDR:-127.0.0.1:8080}"
+CLIENT_PORT="${CLIENT_PORT:-6274}"
+
+# Pin token so we can print the prefill URL. /dev/urandom + tr is more
+# portable than openssl rand.
+if [ -z "${MCP_PROXY_AUTH_TOKEN}" ]; then
+  MCP_PROXY_AUTH_TOKEN="$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)"
+  export MCP_PROXY_AUTH_TOKEN
+fi
 
 kura serve --mcp-http="${KURA_HTTP_ADDR}" &
 KURA_PID=$!
 
-# Trap so SIGINT/SIGTERM from tini propagates to kura before we exit.
 trap 'kill -TERM "${KURA_PID}" 2>/dev/null; wait "${KURA_PID}" 2>/dev/null' INT TERM
 
 # Wait briefly for kura to bind. mcp-inspector will fail-fast on the
@@ -34,10 +45,14 @@ while ! nc -z "${KURA_HTTP_ADDR%:*}" "${KURA_HTTP_ADDR#*:}" 2>/dev/null; do
   sleep 0.1
 done
 
-echo "entrypoint: kura serving MCP over http://${KURA_HTTP_ADDR}"
-echo "entrypoint: starting inspector UI on http://0.0.0.0:${CLIENT_PORT:-6274}"
+cat <<EOF >&2
+entrypoint: kura serving MCP at http://${KURA_HTTP_ADDR}
+entrypoint: open the inspector UI at:
+  http://localhost:${CLIENT_PORT}/?MCP_PROXY_AUTH_TOKEN=${MCP_PROXY_AUTH_TOKEN}&transport=streamable-http&serverUrl=http%3A%2F%2F${KURA_HTTP_ADDR%:*}%3A${KURA_HTTP_ADDR#*:}
+EOF
 
-# Inspector picks up server URL from --server-url; the UI prefills the
-# connection form with this. User still clicks "Connect" once the page
-# loads.
-exec mcp-inspector --transport http --server-url "http://${KURA_HTTP_ADDR}"
+# Inspector reads MCP_PROXY_AUTH_TOKEN, HOST, CLIENT_PORT, SERVER_PORT,
+# ALLOWED_ORIGINS, MCP_AUTO_OPEN_ENABLED from env. UI prefill comes
+# from query params on the URL above; CLI args here would only matter
+# in --cli mode.
+exec mcp-inspector

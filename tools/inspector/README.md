@@ -27,10 +27,14 @@ make inspector-run LIBRARY_ROOT=/path/to/library
 `LIBRARY_ROOT` defaults to `./testlib` if not set; create the directory
 or override.
 
-The container prints an inspector URL with an embedded session token on
-startup. Open it in a browser; the connection form will be prefilled
-with `http://127.0.0.1:8080` (the in-container kura HTTP transport).
-Click **Connect** to attach.
+The container prints a copy-paste inspector URL on startup. The URL
+embeds the session auth token plus query params that prefill the UI's
+connection form (`transport=streamable-http`, `serverUrl=...`). Open
+it in a browser, click **Connect**.
+
+The connection's `serverUrl` points at `http://127.0.0.1:8080` —
+that's the proxy's view of the in-container kura HTTP transport, not
+yours. Don't change it.
 
 ## Pass-through env vars
 
