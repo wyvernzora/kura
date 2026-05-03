@@ -49,6 +49,7 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	}, nil)
 	addResolveTool(s, deps)
 	addListTool(s, deps)
+	addShowTool(s, deps)
 	return s
 }
 
