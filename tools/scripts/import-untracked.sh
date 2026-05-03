@@ -17,7 +17,10 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 127
 fi
 
-mapfile -t dirs < <(kura list --status untracked --json | jq -r '.[].root' | head -n "$LIMIT")
+dirs=()
+while IFS= read -r line; do
+  dirs+=("$line")
+done < <(kura list --status untracked --json | jq -r '.[].root' | head -n "$LIMIT")
 
 if [ "${#dirs[@]}" -eq 0 ]; then
   echo "No untracked series under \$KURA_LIBRARY_ROOT."
