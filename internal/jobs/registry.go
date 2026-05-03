@@ -335,7 +335,7 @@ func classifyTerminalError(jobCtx context.Context, err error, id string, kind Jo
 	// Distinguish timeout vs shutdown by inspecting ctx.Err type.
 	if ctxErr := jobCtx.Err(); ctxErr != nil {
 		if ctxErr == context.DeadlineExceeded {
-			return &JobTimeoutError{JobID: id, Kind: kind, Elapsed: elapsed}
+			return &JobTimeoutError{JobID: id, JobKind: kind, Elapsed: elapsed}
 		}
 		// context.Canceled: parent ctx cancelled, e.g. shutdown.
 		// Return a sentinel so the error mapper can render kind="shutdown".

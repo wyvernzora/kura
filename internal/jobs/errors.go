@@ -31,12 +31,12 @@ func (e *JobNotFoundError) Error() string {
 // fired before the workflow returned.
 type JobTimeoutError struct {
 	JobID   string
-	Kind    JobKind
+	JobKind JobKind
 	Elapsed time.Duration
 }
 
 func (e *JobTimeoutError) Error() string {
-	return fmt.Sprintf("job %s (%s) timed out after %s", e.JobID, e.Kind, e.Elapsed)
+	return fmt.Sprintf("job %s (%s) timed out after %s", e.JobID, e.JobKind, e.Elapsed)
 }
 
 // JobBusyError indicates a cross-kind submission was rejected because

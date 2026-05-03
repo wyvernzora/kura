@@ -169,8 +169,8 @@ func TestSubmit_TimeoutTerminatesWithJobTimeoutError(t *testing.T) {
 	if !errors.As(err, &timeout) {
 		t.Fatalf("Wait err = %v, want *JobTimeoutError", err)
 	}
-	if timeout.Kind != jobs.KindScan {
-		t.Fatalf("Timeout.Kind = %q, want %q", timeout.Kind, jobs.KindScan)
+	if timeout.JobKind != jobs.KindScan {
+		t.Fatalf("Timeout.JobKind = %q, want %q", timeout.JobKind, jobs.KindScan)
 	}
 	if timeout.Elapsed < 40*time.Millisecond {
 		t.Fatalf("Timeout.Elapsed = %v, want >= 40ms", timeout.Elapsed)

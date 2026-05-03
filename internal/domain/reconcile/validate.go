@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/errkind"
 )
 
 // Snapshot returns the hex sha256 of the input bytes. Workflows compute this
@@ -33,4 +34,10 @@ type StaleSnapshotError struct {
 
 func (e StaleSnapshotError) Error() string {
 	return fmt.Sprintf("reconcile: snapshot for %s is stale", e.Series)
+}
+
+func (e StaleSnapshotError) Kind() string     { return errkind.KindStaleSnapshot }
+func (e StaleSnapshotError) Category() string { return errkind.CategoryInternalError }
+func (e StaleSnapshotError) Data() map[string]any {
+	return map[string]any{"series": e.Series.String()}
 }

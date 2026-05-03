@@ -44,3 +44,32 @@ type Mutator struct {
 	Host string    `json:"host"`
 	At   time.Time `json:"at"`
 }
+
+// HolderData renders a Holder into the map shape used by structured
+// surface error payloads (errkind.Data).
+func HolderData(h Holder) map[string]any {
+	out := map[string]any{
+		"op":      h.Op,
+		"pid":     h.PID,
+		"host":    h.Host,
+		"started": h.Started.UTC().Format(time.RFC3339),
+	}
+	if h.Token != "" {
+		out["token"] = h.Token
+	}
+	return out
+}
+
+// MutatorData renders a Mutator into the map shape used by structured
+// surface error payloads (errkind.Data).
+func MutatorData(m Mutator) map[string]any {
+	if m.Op == "" {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"op":   m.Op,
+		"pid":  m.PID,
+		"host": m.Host,
+		"at":   m.At.UTC().Format(time.RFC3339),
+	}
+}
