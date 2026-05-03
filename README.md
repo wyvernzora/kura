@@ -6,10 +6,13 @@ The project is designed around anime as the primary use case. Other series types
 
 The intended shape is deliberately lean:
 
-- CLI tools for direct manual use.
-- MCP tools for agentic workflows (planned).
+- Single `kura` binary hosts every surface.
+- CLI verbs for direct manual use (shipped).
+- `kura serve --mcp-stdio` / `--mcp-http=:port` for agentic workflows (planned).
+- `kura serve --rest=:port` for a future WebUI (planned).
 - Docker-first distribution.
-- A UI only if it becomes clearly worth building later.
+
+Kura ships **no authentication**. For HTTP transports (MCP-over-HTTP, REST), front `kura serve` with an authenticating proxy (Traefik+Authelia, nginx+oauth2-proxy, Caddy+forward_auth, etc.) or trust the network.
 
 ## CLI
 
