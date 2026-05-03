@@ -5,9 +5,11 @@ package render
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/ttacon/chalk"
@@ -25,7 +27,7 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 	}
 	styled := style.ShouldStyle(w)
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"STATUS", "TITLE", "SEASONS", "EPISODES", "ROOT"})
+	tw.AppendHeader(table.Row{"STATUS", "TITLE", "SEASONS", "EPISODES", "SCANNED", "ROOT"})
 	tw.SetStyle(style.BorderlessTableStyle())
 	tw.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1},
@@ -33,7 +35,9 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 		{Number: 3},
 		{Number: 4},
 		{Number: 5},
+		{Number: 6},
 	})
+	now := time.Now()
 	for _, row := range result.Rows {
 		statusText := string(row.Status)
 		if row.Staged {
@@ -44,6 +48,7 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 			row.Title,
 			countCell(row.SeasonCount, row.Status),
 			countCell(row.EpisodeCount, row.Status),
+			scannedCell(row.LastScanned, row.Status, now),
 			row.Root,
 		})
 	}
@@ -55,6 +60,38 @@ func countCell(count int, status response.ListStatus) string {
 		return "-"
 	}
 	return strconv.Itoa(count)
+}
+
+func scannedCell(lastScanned string, status response.ListStatus, now time.Time) string {
+	if status == response.ListStatusUntracked || status == response.ListStatusError {
+		return "-"
+	}
+	if lastScanned == "" {
+		return "-"
+	}
+	t, err := time.Parse(time.RFC3339, lastScanned)
+	if err != nil {
+		return "-"
+	}
+	return relativeAge(now.Sub(t))
+}
+
+func relativeAge(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	default:
+		return fmt.Sprintf("%dw", int(d.Hours()/(24*7)))
+	}
 }
 
 func renderListStatus(status string, styled bool) string {

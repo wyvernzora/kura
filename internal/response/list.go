@@ -39,6 +39,7 @@ type ListRow struct {
 	EpisodeCount   int           `json:"episodeCount"`
 	Root           string        `json:"root"`
 	MetadataRef    refs.Metadata `json:"metadataRef,omitempty"`
+	LastScanned    string        `json:"lastScanned,omitempty"`
 	Error          string        `json:"error,omitempty"`
 }
 

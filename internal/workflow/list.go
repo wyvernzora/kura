@@ -118,6 +118,7 @@ func buildListRow(libRoot string, name string, now time.Time) response.ListRow {
 	row.SeasonCount = summary.seasons
 	row.EpisodeCount = summary.episodes
 	row.MetadataRef = model.Metadata
+	row.LastScanned = formatOptionalTime(model.LastScanned)
 	row.Staged = summary.hasStaged
 	row.Status = listStatusFor(summary)
 	return row
