@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/filename"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/reconcile"
@@ -41,6 +42,9 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 	series, err := seriesfile.Load(deps.LibRoot, in.Ref)
 	if err != nil {
 		return response.ReconcilePlan{}, err
+	}
+	if series.InProgress != nil {
+		return response.ReconcilePlan{}, &coord.BusyError{Scope: coord.SeriesScope(in.Ref), Holder: *series.InProgress}
 	}
 	rawSeries, err := os.ReadFile(paths.SeriesMetadata(deps.LibRoot, in.Ref))
 	if err != nil {
@@ -154,8 +158,8 @@ func stagedReconcileChange(ref refs.Series, seriesDirPath string, episodeRef ref
 		// Self-refresh: staged points at the same physical file as active
 		// (typically a metadata-only update such as changing Source). Skip
 		// the trash step entirely; the move loop renames in place if the
-		// canonical filename changed, and applyPlanToSeries promotes the
-		// staged record over active.
+		// canonical filename changed, and computePostApplyState promotes
+		// the staged record over active.
 		if episode.Active.Path == episode.Staged.Path {
 			return change, nil
 		}

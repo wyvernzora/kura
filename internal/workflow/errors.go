@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
@@ -148,6 +149,19 @@ type ReconcilePlanAlreadyAppliedError struct {
 
 func (e *ReconcilePlanAlreadyAppliedError) Error() string {
 	return fmt.Sprintf("workflow: reconcile plan %s was already applied", e.Token)
+}
+
+// ReconcileInProgressError signals an apply is already running for the
+// same plan token (same caller retry, or duplicate request). The Holder
+// identifies the original apply.
+type ReconcileInProgressError struct {
+	Token  string
+	Holder coord.Holder
+}
+
+func (e *ReconcileInProgressError) Error() string {
+	return fmt.Sprintf("workflow: reconcile apply for token %s is already in progress on host=%s pid=%d since %s",
+		e.Token, e.Holder.Host, e.Holder.PID, e.Holder.Started.Format(time.RFC3339))
 }
 
 // TrashRestoreTargetExistsError signals one or more recorded paths in

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -29,9 +30,26 @@ type ApplyReconcileInput struct {
 }
 
 // ApplyReconcile loads the persisted plan, validates it against the current
-// series state, executes the moves, appends per-move events to the plan log,
-// and updates series.json on success.
+// series state, acquires the in_progress claim, executes the moves, appends
+// per-move events to the plan log, and updates series.json on success.
+//
+// Wrapped in coord.WithSeries (no retry) since the side effects (file moves,
+// trash population) are not safely re-runnable. Conflicts surface as
+// BusyError / ReconcileInProgressError; the caller decides what to do.
 func ApplyReconcile(ctx context.Context, deps Deps, in ApplyReconcileInput) (response.ReconcileApply, error) {
+	var out response.ReconcileApply
+	err := deps.Coordinator.WithSeries(in.Ref, func() error {
+		result, runErr := applyReconcileLocked(ctx, deps, in)
+		if runErr != nil {
+			return runErr
+		}
+		out = result
+		return nil
+	})
+	return out, err
+}
+
+func applyReconcileLocked(ctx context.Context, deps Deps, in ApplyReconcileInput) (response.ReconcileApply, error) {
 	record, applied, err := planfile.ReadPlan(deps.LibRoot, in.Ref, in.Token)
 	if err != nil {
 		return response.ReconcileApply{}, err
@@ -52,10 +70,10 @@ func ApplyReconcile(ctx context.Context, deps Deps, in ApplyReconcileInput) (res
 		_ = log.AppendResult(deps.Now(), "failure", 0, expiredErr)
 		return response.ReconcileApply{}, expiredErr
 	}
-	return executeReconcile(ctx, deps, in.Ref, record.Plan, log)
+	return executeReconcile(ctx, deps, in.Ref, in.Token, record.Plan, log)
 }
 
-func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, plan reconcile.Plan, log *planfile.Log) (response.ReconcileApply, error) {
+func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, token string, plan reconcile.Plan, log *planfile.Log) (response.ReconcileApply, error) {
 	progress.Start(ctx, "reconcile", fmt.Sprintf("Applying reconcile for %s", ref), 0)
 	if err := validateAppliedPlan(deps.LibRoot, ref, plan); err != nil {
 		_ = log.AppendResult(deps.Now(), "failure", 0, err)
@@ -76,12 +94,37 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, plan reco
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), 0, 0)
 		return response.ReconcileApply{}, err
 	}
+
+	// Acquire the in_progress claim. Loaded carries the hash for the
+	// final CAS write at the end. preLoaded captures pre-claim state
+	// for trash meta.json (active records).
 	preLoaded, err := seriesfile.Load(deps.LibRoot, ref)
 	if err != nil {
 		_ = log.AppendResult(deps.Now(), "failure", 0, err)
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), 0, 0)
 		return response.ReconcileApply{}, err
 	}
+	holder, claimErr := acquireReconcileClaim(deps, preLoaded, token)
+	if claimErr != nil {
+		_ = log.AppendResult(deps.Now(), "failure", 0, claimErr)
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), 0, 0)
+		return response.ReconcileApply{}, claimErr
+	}
+	claimedHash := preLoaded.Hash
+
+	// Defer claim release: best-effort clear on any error path. The
+	// release uses CAS expecting our own hash; if a peer broke our
+	// claim and updated the file (cross-host stale break, manual
+	// recovery, etc.) the release silently fails — that's the right
+	// outcome (don't undo someone else's recovery).
+	released := false
+	defer func() {
+		if released {
+			return
+		}
+		_ = releaseReconcileClaim(deps, ref, holder, claimedHash)
+	}()
+
 	// Write trash meta.json for every replace before any file moves run.
 	// A crash mid-move then leaves a self-describing trash entry rather
 	// than orphan files in a ULID dir without metadata.
@@ -109,17 +152,34 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, plan reco
 			return response.ReconcileApply{}, moveErr
 		}
 	}
-	updated, err := applyPlanToSeries(deps, ref, plan)
+
+	// Reload to verify our claim is still ours, then compute the
+	// post-apply state, clear the claim, and CAS-write.
+	postLoaded, err := seriesfile.Load(deps.LibRoot, ref)
 	if err != nil {
 		_ = log.AppendResult(deps.Now(), "failure", len(moves), err)
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))
 		return response.ReconcileApply{}, err
 	}
-	if err := seriesfile.Save(deps.LibRoot, updated); err != nil {
+	if !claimMatches(postLoaded.InProgress, holder) {
+		stolen := &coord.ClaimStolenError{Scope: coord.SeriesScope(ref), Expected: holder, Found: postLoaded.InProgress}
+		_ = log.AppendResult(deps.Now(), "failure", len(moves), stolen)
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))
+		return response.ReconcileApply{}, stolen
+	}
+	updated, err := computePostApplyState(postLoaded, plan)
+	if err != nil {
 		_ = log.AppendResult(deps.Now(), "failure", len(moves), err)
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))
 		return response.ReconcileApply{}, err
 	}
+	updated.InProgress = nil
+	if err := seriesfile.SaveCAS(deps.LibRoot, updated, coord.NewMutator("reconcile_apply")); err != nil {
+		_ = log.AppendResult(deps.Now(), "failure", len(moves), err)
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))
+		return response.ReconcileApply{}, err
+	}
+	released = true
 	if err := log.AppendResult(deps.Now(), "success", len(moves), nil); err != nil {
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))
 		return response.ReconcileApply{}, err
@@ -128,37 +188,69 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, plan reco
 	return response.ReconcileApply{Series: ref, AppliedMoves: len(moves)}, nil
 }
 
-func validateAppliedPlan(root string, ref refs.Series, plan reconcile.Plan) error {
-	data, err := os.ReadFile(paths.SeriesMetadata(root, ref))
+// acquireReconcileClaim sets in_progress on the series and CAS-writes.
+// Surfaces ReconcileInProgressError for live same-token holders,
+// BusyError for live cross-token / cross-host holders, and silently
+// breaks stale same-host claims.
+func acquireReconcileClaim(deps Deps, loaded *domainseries.Series, token string) (coord.Holder, error) {
+	if existing := loaded.InProgress; existing != nil {
+		if !coord.IsStaleHolder(*existing) {
+			if existing.Op == "reconcile_apply" && existing.Token == token {
+				return coord.Holder{}, &ReconcileInProgressError{Token: token, Holder: *existing}
+			}
+			return coord.Holder{}, &coord.BusyError{Scope: coord.SeriesScope(loaded.Ref), Holder: *existing}
+		}
+		// Stale; fall through to overwrite.
+	}
+	holder := coord.NewHolder("reconcile_apply", token)
+	loaded.InProgress = &holder
+	if err := seriesfile.SaveCAS(deps.LibRoot, loaded, coord.NewMutator("reconcile_apply_claim")); err != nil {
+		return coord.Holder{}, err
+	}
+	return holder, nil
+}
+
+func releaseReconcileClaim(deps Deps, ref refs.Series, holder coord.Holder, expectedHash string) error {
+	loaded, err := seriesfile.Load(deps.LibRoot, ref)
 	if err != nil {
 		return err
 	}
-	return reconcile.ValidateSnapshot(plan, data)
+	if !claimMatches(loaded.InProgress, holder) {
+		return nil
+	}
+	loaded.InProgress = nil
+	// Use the hash we just loaded; if a peer races we surface the
+	// conflict to the caller (which is logging best-effort already).
+	_ = expectedHash
+	return seriesfile.SaveCAS(deps.LibRoot, loaded, coord.NewMutator("reconcile_apply_release"))
 }
 
-func applyPlanToSeries(deps Deps, ref refs.Series, plan reconcile.Plan) (*domainseries.Series, error) {
-	series, err := seriesfile.Load(deps.LibRoot, ref)
-	if err != nil {
-		return nil, err
+func claimMatches(found *coord.Holder, want coord.Holder) bool {
+	if found == nil {
+		return false
 	}
+	return found.PID == want.PID && found.Host == want.Host && found.Started.Equal(want.Started) && found.Token == want.Token
+}
+
+// computePostApplyState mutates loaded in place to reflect the plan's
+// changes (path promotions, staged → active transitions). Returns the
+// same pointer for clarity.
+func computePostApplyState(loaded *domainseries.Series, plan reconcile.Plan) (*domainseries.Series, error) {
 	for _, change := range plan.Changes {
-		episode := series.Episodes[change.Episode]
+		episode := loaded.Episodes[change.Episode]
 		switch change.Kind {
 		case reconcile.ChangeAdd, reconcile.ChangeReplace:
 			if episode.Staged == nil {
 				return nil, fmt.Errorf("workflow: %s has no staged media", change.Episode)
 			}
-			// Trash meta.json is already on disk (written by
-			// writeAllReconcileTrash before any file move); only metadata
-			// promotion remains.
 			episode.Staged.Path = change.To
 			for index := range episode.Staged.Companions {
 				if index < len(change.Companions) {
 					episode.Staged.Companions[index].Path = change.Companions[index].To
 				}
 			}
-			series.Episodes[change.Episode] = episode
-			if _, err := series.PromoteStaged(change.Episode); err != nil {
+			loaded.Episodes[change.Episode] = episode
+			if _, err := loaded.PromoteStaged(change.Episode); err != nil {
 				return nil, err
 			}
 		case reconcile.ChangeMove:
@@ -171,12 +263,20 @@ func applyPlanToSeries(deps Deps, ref refs.Series, plan reconcile.Plan) (*domain
 					episode.Active.Companions[index].Path = change.Companions[index].To
 				}
 			}
-			series.Episodes[change.Episode] = episode
+			loaded.Episodes[change.Episode] = episode
 		default:
 			return nil, fmt.Errorf("workflow: unsupported reconcile change kind %q", change.Kind)
 		}
 	}
-	return series, nil
+	return loaded, nil
+}
+
+func validateAppliedPlan(root string, ref refs.Series, plan reconcile.Plan) error {
+	data, err := os.ReadFile(paths.SeriesMetadata(root, ref))
+	if err != nil {
+		return err
+	}
+	return reconcile.ValidateSnapshot(plan, data)
 }
 
 // writeAllReconcileTrash writes meta.json for every Replaced change in

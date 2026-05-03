@@ -25,22 +25,25 @@ func currentHost() string {
 }
 
 // NewHolder captures pid/host/now/token for a claim acquisition.
+// Started is truncated to second precision so the in-memory value
+// round-trips through the RFC3339 wire format without loss.
 func NewHolder(op, token string) Holder {
 	return Holder{
 		Op:      op,
 		Token:   token,
 		PID:     os.Getpid(),
 		Host:    currentHost(),
-		Started: nowFunc().UTC(),
+		Started: nowFunc().UTC().Truncate(time.Second),
 	}
 }
 
 // NewMutator captures pid/host/now for a successful CAS write stamp.
+// At is truncated to second precision; same rationale as NewHolder.
 func NewMutator(op string) Mutator {
 	return Mutator{
 		Op:   op,
 		PID:  os.Getpid(),
 		Host: currentHost(),
-		At:   nowFunc().UTC(),
+		At:   nowFunc().UTC().Truncate(time.Second),
 	}
 }

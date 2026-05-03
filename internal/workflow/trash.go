@@ -12,11 +12,13 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/fsop"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/storage/trashfile"
 )
 
@@ -105,21 +107,36 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 	out := response.TrashEmpty{Series: make([]response.TrashSeriesEmpty, 0, len(refsList))}
 	for index, ref := range refsList {
 		progress.Update(ctx, "trash-empty", fmt.Sprintf("Emptying trash for %s", ref), index+1, len(refsList))
-		metas, err := trashfile.List(deps.LibRoot, ref)
-		if err != nil {
-			return response.TrashEmpty{}, err
-		}
-		series := response.TrashSeriesEmpty{Ref: ref, Removed: make([]string, 0, len(metas))}
-		for _, meta := range metas {
-			if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
+		series := response.TrashSeriesEmpty{Ref: ref, Removed: make([]string, 0)}
+		emptyErr := deps.Coordinator.WithSeries(ref, func() error {
+			if err := refuseIfClaimed(deps, ref); err != nil {
+				return err
+			}
+			metas, err := trashfile.List(deps.LibRoot, ref)
+			if err != nil {
+				return err
+			}
+			for _, meta := range metas {
+				if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
+					continue
+				}
+				bytes, err := trashfile.Delete(deps.LibRoot, ref, meta.ID)
+				if err != nil {
+					return fmt.Errorf("workflow: trash empty %s/%s: %w", ref, meta.ID, err)
+				}
+				series.Removed = append(series.Removed, meta.ID.String())
+				series.ReclaimedBytes += bytes
+			}
+			return nil
+		})
+		if emptyErr != nil {
+			if in.All {
+				// Best-effort under --all: skip this series and continue.
+				// Surface attempts as zero-removed entries via the
+				// existing list shape.
 				continue
 			}
-			bytes, err := trashfile.Delete(deps.LibRoot, ref, meta.ID)
-			if err != nil {
-				return response.TrashEmpty{}, fmt.Errorf("workflow: trash empty %s/%s: %w", ref, meta.ID, err)
-			}
-			series.Removed = append(series.Removed, meta.ID.String())
-			series.ReclaimedBytes += bytes
+			return response.TrashEmpty{}, emptyErr
 		}
 		if len(series.Removed) == 0 {
 			continue
@@ -133,10 +150,28 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 }
 
 // TrashRestore moves files from a trash entry back to their recorded
-// paths. Refuses if any target path already exists. Filesystem-only;
-// caller runs scan afterward to re-adopt the files into series.json.
+// paths. Refuses if any target path already exists OR if a reconcile
+// apply (or any other claim-holder) is mid-flight on the series.
+// Filesystem-only; caller runs scan afterward to re-adopt the files
+// into series.json.
 func TrashRestore(ctx context.Context, deps Deps, in TrashRestoreInput) (response.TrashRestore, error) {
 	_ = ctx
+	var out response.TrashRestore
+	err := deps.Coordinator.WithSeries(in.Ref, func() error {
+		if err := refuseIfClaimed(deps, in.Ref); err != nil {
+			return err
+		}
+		result, runErr := trashRestoreLocked(deps, in)
+		if runErr != nil {
+			return runErr
+		}
+		out = result
+		return nil
+	})
+	return out, err
+}
+
+func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore, error) {
 	meta, err := trashfile.Read(deps.LibRoot, in.Ref, in.ID)
 	if err != nil {
 		return response.TrashRestore{}, err
@@ -184,6 +219,23 @@ func TrashRestore(ctx context.Context, deps Deps, in TrashRestoreInput) (respons
 		Episode:  meta.Episode,
 		Restored: restored,
 	}, nil
+}
+
+// refuseIfClaimed loads the series.json (if present) and returns a
+// BusyError when an in_progress claim is set. Missing series.json is
+// not an error — it means there's no claim to honor.
+func refuseIfClaimed(deps Deps, ref refs.Series) error {
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if model.InProgress != nil {
+		return &coord.BusyError{Scope: coord.SeriesScope(ref), Holder: *model.InProgress}
+	}
+	return nil
 }
 
 func trashTargetSeries(ctx context.Context, deps Deps, ref refs.Series, all bool) ([]refs.Series, error) {
