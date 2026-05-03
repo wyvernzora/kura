@@ -60,7 +60,6 @@ func TestLoadDecodesFixture(t *testing.T) {
 	}
 }
 
-
 func TestExistsReportsPresence(t *testing.T) {
 	libRoot, ref := setupFixtureLibrary(t)
 	present, err := seriesfile.Exists(libRoot, ref)

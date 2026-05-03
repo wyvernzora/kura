@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/renameio/v2"
+	"github.com/google/renameio/v2/maybe"
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -128,7 +128,7 @@ func SaveCAS(root string, expected string, entries []Entry, mutator coord.Mutato
 	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
 		return err
 	}
-	if err := renameio.WriteFile(path, data, 0o644); err != nil {
+	if err := maybe.WriteFile(path, data, 0o644); err != nil {
 		return err
 	}
 
@@ -243,7 +243,7 @@ func parseLastMutatedLine(line string) (coord.Mutator, bool) {
 // don't contain spaces in our format (host is escaped).
 func splitHeaderFields(s string) map[string]string {
 	out := map[string]string{}
-	for _, token := range strings.Fields(s) {
+	for token := range strings.FieldsSeq(s) {
 		eq := strings.IndexByte(token, '=')
 		if eq <= 0 {
 			continue

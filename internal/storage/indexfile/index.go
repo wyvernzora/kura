@@ -13,7 +13,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/google/renameio/v2"
+	"github.com/google/renameio/v2/maybe"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -194,5 +194,5 @@ func (i *Index) Save() error {
 	if err := writer.Error(); err != nil {
 		return err
 	}
-	return renameio.WriteFile(paths.IndexFile(i.root), data.Bytes(), 0o644)
+	return maybe.WriteFile(paths.IndexFile(i.root), data.Bytes(), 0o644)
 }

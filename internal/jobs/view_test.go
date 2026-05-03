@@ -125,8 +125,7 @@ func TestReaper_EvictsTerminalPastRetention(t *testing.T) {
 	deadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deadline) {
 		if _, err := r.Get(j.ID()); err != nil {
-			var nf *jobs.JobNotFoundError
-			if errors.As(err, &nf) {
+			if _, ok := errors.AsType[*jobs.JobNotFoundError](err); ok {
 				return
 			}
 			t.Fatalf("Get err = %v", err)

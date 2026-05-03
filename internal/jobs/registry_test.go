@@ -207,10 +207,8 @@ func TestSubmit_ProgressNotForwardedToCallerReporter(t *testing.T) {
 	// Verifies the capture-only contract: a reporter installed in the
 	// caller's parent ctx does NOT see job-goroutine emissions.
 	// Consumers must poll Job.LatestProgress / UntypedJob.Progress.
-	parentCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	var seen int32
-	parentCtx = progress.With(parentCtx, func(_ context.Context, _ progress.Event) {
+	parentCtx := progress.With(t.Context(), func(_ context.Context, _ progress.Event) {
 		atomic.AddInt32(&seen, 1)
 	})
 	r := jobs.NewRegistry(parentCtx, jobs.Config{}, nil)

@@ -12,7 +12,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/google/renameio/v2"
+	"github.com/google/renameio/v2/maybe"
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -88,7 +88,7 @@ func Write(root string, ref refs.Series, m Meta) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	return renameio.WriteFile(paths.TrashMeta(root, ref, m.ID.String()), data, 0o644)
+	return maybe.WriteFile(paths.TrashMeta(root, ref, m.ID.String()), data, 0o644)
 }
 
 func Read(root string, ref refs.Series, id ulid.ULID) (Meta, error) {

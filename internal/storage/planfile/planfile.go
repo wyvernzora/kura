@@ -19,7 +19,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/renameio/v2"
+	"github.com/google/renameio/v2/maybe"
 	"github.com/wyvernzora/kura/internal/domain/reconcile"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -52,7 +52,7 @@ func WritePlan(root string, ref refs.Series, p PlanRecord) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return renameio.WriteFile(path, data, 0o644)
+	return maybe.WriteFile(path, data, 0o644)
 }
 
 // ReadPlan returns the plan from line 1 plus a flag reporting whether any

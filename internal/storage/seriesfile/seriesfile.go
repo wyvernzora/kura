@@ -17,7 +17,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/google/renameio/v2"
+	"github.com/google/renameio/v2/maybe"
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/series"
@@ -140,7 +140,7 @@ func saveCASUpdate(libRoot string, m *series.Series, mutator coord.Mutator, path
 	if err := os.MkdirAll(paths.SeriesKuraDir(libRoot, m.Ref), 0o755); err != nil {
 		return err
 	}
-	if err := renameio.WriteFile(path, data, 0o644); err != nil {
+	if err := maybe.WriteFile(path, data, 0o644); err != nil {
 		return err
 	}
 	finalHash, err := readAndHash(path)
@@ -252,4 +252,3 @@ func NewFromMetadata(metadataRef refs.Metadata, m provider.Series) (*series.Seri
 	out.RefreshSpine(spine)
 	return out, nil
 }
-
