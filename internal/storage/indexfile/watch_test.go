@@ -19,7 +19,6 @@ func writeIndexEntries(t *testing.T, root string, entries []indexfile.Entry) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	if err := indexfile.SaveCAS(root, "", entries, coord.NewMutator("test")); err != nil {
-		// SaveCAS uses "" only for create. If file exists, read+rewrite.
 		loaded, lerr := indexfile.LoadCAS(root)
 		if lerr != nil {
 			t.Fatalf("seed savecas: %v / %v", err, lerr)
@@ -30,14 +29,13 @@ func writeIndexEntries(t *testing.T, root string, entries []indexfile.Entry) {
 	}
 }
 
-func TestWatcher_GetServesFromMemory(t *testing.T) {
+func TestIndexWatch_GetServesFromMemory(t *testing.T) {
 	root := t.TempDir()
 	idx := indexfile.New(root)
 	if err := idx.Put(refs.Metadata("tvdb:1"), mustSeries(t, "A")); err != nil {
 		t.Fatal(err)
 	}
-	w := indexfile.NewWatcher(idx, nil, indexfile.WatcherConfig{}, nil)
-	got, ok, err := w.Index().Get(refs.Metadata("tvdb:1"))
+	got, ok, err := idx.Get(refs.Metadata("tvdb:1"))
 	if err != nil || !ok {
 		t.Fatalf("Get = (%v, %v, %v); want hit", got, ok, err)
 	}
@@ -46,25 +44,19 @@ func TestWatcher_GetServesFromMemory(t *testing.T) {
 	}
 }
 
-func TestWatcher_ProbeDetectsExternalWrite(t *testing.T) {
+func TestIndexWatch_ProbeDetectsExternalWrite(t *testing.T) {
 	root := t.TempDir()
 	writeIndexEntries(t, root, []indexfile.Entry{
 		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
 	})
-	loaded, err := indexfile.Load(root)
+	idx, err := indexfile.Load(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	w := indexfile.NewWatcher(loaded, nil, indexfile.WatcherConfig{
-		ProbeInterval: 20 * time.Millisecond,
-	}, nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	w.Run(ctx)
+	idx.Watch(ctx, indexfile.WatchConfig{ProbeInterval: 20 * time.Millisecond})
 
-	// External peer rewrites the index with a second entry. Bump
-	// mtime explicitly so the probe sees a change even on filesystems
-	// with coarse mtime granularity.
 	loaded2, _ := indexfile.LoadCAS(root)
 	if err := indexfile.SaveCAS(root, loaded2.Hash, []indexfile.Entry{
 		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
@@ -79,18 +71,17 @@ func TestWatcher_ProbeDetectsExternalWrite(t *testing.T) {
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		got, ok, _ := w.Index().Get(refs.Metadata("tvdb:2"))
+		got, ok, _ := idx.Get(refs.Metadata("tvdb:2"))
 		if ok && got == mustSeries(t, "B") {
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	t.Fatal("watcher did not pick up external write within 2s")
+	t.Fatal("watch did not pick up external write within 2s")
 }
 
-func TestWatcher_RebuildCallsInjectedReader(t *testing.T) {
+func TestIndexWatch_RebuildCallsInjectedReader(t *testing.T) {
 	root := t.TempDir()
-	// Seed two series directories so Rebuild visits them.
 	for _, name := range []string{"A", "B"} {
 		if err := os.MkdirAll(filepath.Join(root, name), 0o755); err != nil {
 			t.Fatal(err)
@@ -105,17 +96,17 @@ func TestWatcher_RebuildCallsInjectedReader(t *testing.T) {
 		}
 		return refs.Metadata("tvdb:200"), nil
 	}
-	w := indexfile.NewWatcher(idx, reader, indexfile.WatcherConfig{
-		RebuildInterval: 30 * time.Millisecond,
-	}, nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	w.Run(ctx)
+	idx.Watch(ctx, indexfile.WatchConfig{
+		RebuildInterval: 30 * time.Millisecond,
+		Reader:          reader,
+	})
 
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		if got, ok, _ := w.Index().Get(refs.Metadata("tvdb:100")); ok && got == mustSeries(t, "A") {
-			if got2, ok, _ := w.Index().Get(refs.Metadata("tvdb:200")); ok && got2 == mustSeries(t, "B") {
+		if got, ok, _ := idx.Get(refs.Metadata("tvdb:100")); ok && got == mustSeries(t, "A") {
+			if got2, ok, _ := idx.Get(refs.Metadata("tvdb:200")); ok && got2 == mustSeries(t, "B") {
 				return
 			}
 		}
@@ -124,23 +115,16 @@ func TestWatcher_RebuildCallsInjectedReader(t *testing.T) {
 	t.Fatalf("rebuild did not populate index; reader called %d times", called)
 }
 
-func TestWatcher_DisabledLoopsRespected(t *testing.T) {
+func TestIndexWatch_DisabledLoopsRespected(t *testing.T) {
 	root := t.TempDir()
 	writeIndexEntries(t, root, []indexfile.Entry{
 		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
 	})
-	loaded, _ := indexfile.Load(root)
-	w := indexfile.NewWatcher(loaded, nil, indexfile.WatcherConfig{
-		ProbeInterval:   0,
-		RefreshInterval: 0,
-		RebuildInterval: 0,
-	}, nil)
+	idx, _ := indexfile.Load(root)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	w.Run(ctx)
+	idx.Watch(ctx, indexfile.WatchConfig{})
 
-	// External peer adds a second entry. With all loops disabled the
-	// in-memory Index must remain stale.
 	cur, _ := indexfile.LoadCAS(root)
 	if err := indexfile.SaveCAS(root, cur.Hash, []indexfile.Entry{
 		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
@@ -149,7 +133,7 @@ func TestWatcher_DisabledLoopsRespected(t *testing.T) {
 		t.Fatalf("peer write: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	if _, ok, _ := w.Index().Get(refs.Metadata("tvdb:2")); ok {
-		t.Fatal("disabled watcher must not refresh; saw external entry")
+	if _, ok, _ := idx.Get(refs.Metadata("tvdb:2")); ok {
+		t.Fatal("disabled watch must not refresh; saw external entry")
 	}
 }

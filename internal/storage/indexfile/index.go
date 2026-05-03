@@ -13,6 +13,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/google/renameio/v2/maybe"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -33,17 +34,31 @@ func (e DuplicateRefError) Error() string {
 }
 
 // Index is the in-memory map of metadata refs to series refs. It is
-// constructed empty by New, populated by Load or Rebuild, and persisted by
-// Save.
+// constructed empty by New, populated by Load or Rebuild, and persisted
+// by Save. A long-lived process (`kura serve`) calls Watch to attach
+// background freshness loops that re-read the file on peer mutations
+// and periodically rebuild it from per-series state.
 //
 // Methods are safe for concurrent use: kura serve has multiple
-// goroutines (request handlers + the Watcher's refresh loops) reading
-// and writing the same Index.
+// goroutines (request handlers + the Watch loops) reading and writing
+// the same Index.
 type Index struct {
 	root string
 
 	mu   sync.RWMutex
 	refs map[refs.Metadata]refs.Series
+
+	// Watch baseline. Tracks the on-disk file state so the probe loop
+	// can detect peer mutations without re-reading the file every tick.
+	// Zero values are fine; the first probe will populate them.
+	cachedHash  string
+	cachedMTime time.Time
+	cachedSize  int64
+
+	// log + reader are set by Watch before any loop starts, then
+	// read-only thereafter. No locking needed for reads.
+	log    Logger
+	reader MetadataReader
 }
 
 func New(root string) *Index {

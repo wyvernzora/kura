@@ -33,7 +33,7 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 		return errors.New("kura serve requires at least one transport flag (--mcp-stdio or --mcp-http=ADDR)")
 	}
 
-	deps, registry, watcher, err := buildServeDeps(rt)
+	deps, registry, watch, err := buildServeDeps(rt)
 	if err != nil {
 		return err
 	}
@@ -41,9 +41,7 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 	ctx, stop := signal.NotifyContext(rt.Context, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if watcher != nil {
-		watcher.Run(ctx)
-	}
+	deps.Index.Watch(ctx, watch)
 
 	server := mcpserver.NewServer(mcpserver.Deps{Workflow: deps})
 
@@ -71,14 +69,14 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 
 // buildServeDeps wraps buildDeps and swaps the in-process serializer
 // (CLI no-op → MCP per-series mutex) plus a long-lived jobs registry
-// configured from KURA_JOB_* envs. Constructs the index Watcher
-// (KURA_INDEX_*) over the same *Index workflows mutate so external
-// peer writes get picked up. The CLI registry from buildDeps is
-// discarded; it never received a Submit so no goroutines leak.
-func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, *indexfile.Watcher, error) {
+// configured from KURA_JOB_* envs. Returns the WatchConfig the caller
+// should pass to deps.Index.Watch under the signal-cancellable ctx.
+// The CLI registry from buildDeps is discarded; it never received a
+// Submit so no goroutines leak.
+func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, indexfile.WatchConfig, error) {
 	deps, err := buildDeps(rt)
 	if err != nil {
-		return workflow.Deps{}, nil, nil, err
+		return workflow.Deps{}, nil, indexfile.WatchConfig{}, err
 	}
 	attempts := envInt(rt.Getenv, "KURA_CONFLICT_RETRIES", 1) + 1
 	deps.Coordinator = coord.NewMCPCoordinator(coord.MaxAttempts(attempts))
@@ -91,15 +89,15 @@ func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, *indexfile.W
 	deps.Jobs = registry
 
 	libRoot := deps.LibRoot
-	reader := func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
-		return seriesfile.ReadMetadataRef(libRoot, ref)
-	}
-	watcher := indexfile.NewWatcher(deps.Index, reader, indexfile.WatcherConfig{
+	watch := indexfile.WatchConfig{
 		ProbeInterval:   envDuration(rt.Getenv, "KURA_INDEX_PROBE_INTERVAL", 2*time.Second),
 		RefreshInterval: envDuration(rt.Getenv, "KURA_INDEX_REFRESH_INTERVAL", 5*time.Minute),
 		RebuildInterval: envDuration(rt.Getenv, "KURA_INDEX_REBUILD_INTERVAL", time.Hour),
-	}, nil)
-	return deps, registry, watcher, nil
+		Reader: func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+			return seriesfile.ReadMetadataRef(libRoot, ref)
+		},
+	}
+	return deps, registry, watch, nil
 }
 
 func envDuration(getenv func(string) string, key string, fallback time.Duration) time.Duration {
