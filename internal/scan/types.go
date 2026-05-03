@@ -33,6 +33,12 @@ const (
 	SkipCodeSeasonMismatch           = "season_mismatch"
 	SkipCodeIgnoredDirectory         = "ignored_directory"
 	SkipCodeDuplicateSlot            = "duplicate_slot"
+	// SkipCodeMetadataSlotMissing: filename inferred to a season+
+	// episode slot the provider's spine has no entry for (e.g.
+	// "S01E11" where the provider has only 10 episodes in S01).
+	// Soft skip; operator decides whether to stage to a different
+	// slot, rename, or remove.
+	SkipCodeMetadataSlotMissing = "metadata_slot_missing"
 )
 
 type ScannedEpisode struct {
@@ -60,14 +66,6 @@ type EpisodeAlreadyExistsError struct {
 
 func (err EpisodeAlreadyExistsError) Error() string {
 	return fmt.Sprintf("episode %s already exists; pass replace to replace it", err.Episode.Marker())
-}
-
-type MetadataMissingEpisodeError struct {
-	Episode refs.Episode
-}
-
-func (err MetadataMissingEpisodeError) Error() string {
-	return fmt.Sprintf("metadata has no %s", err.Episode.Marker())
 }
 
 type ScanStagedRecordsError struct {

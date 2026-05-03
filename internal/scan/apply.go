@@ -36,6 +36,19 @@ func (s *scanner) apply(ctx context.Context, discovered []DiscoveredFile) error 
 	}
 	for index, file := range discovered {
 		progress.Update(ctx, "scan", fmt.Sprintf("Inspecting %s", filepath.Base(file.Path)), index+1, len(discovered))
+		if _, ok := s.model.Episodes[file.Ref]; !ok {
+			// Filename parsed cleanly but the provider's spine has no
+			// such slot (commonly a multi-cour release split into
+			// "Season 2" subdir on disk while the provider treats it
+			// as one continuous season). Soft skip; operator decides
+			// how to map the file.
+			s.result.Skipped = append(s.result.Skipped, ImportSkip{
+				Path:   file.Path,
+				Code:   SkipCodeMetadataSlotMissing,
+				Reason: fmt.Sprintf("metadata has no %s", file.Ref.Marker()),
+			})
+			continue
+		}
 		if err := s.applyFile(ctx, file); err != nil {
 			return err
 		}
@@ -44,10 +57,7 @@ func (s *scanner) apply(ctx context.Context, discovered []DiscoveredFile) error 
 }
 
 func (s *scanner) applyFile(ctx context.Context, file DiscoveredFile) error {
-	episode, ok := s.model.Episodes[file.Ref]
-	if !ok {
-		return MetadataMissingEpisodeError{Episode: file.Ref}
-	}
+	episode := s.model.Episodes[file.Ref]
 	absolutePath := s.absRel(file.Path)
 	status := ScanStatusAdded
 	if episode.Active != nil {

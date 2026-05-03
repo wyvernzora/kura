@@ -90,8 +90,5 @@ func translateScanError(err error) error {
 	if alreadyExists, ok := errors.AsType[scan.EpisodeAlreadyExistsError](err); ok {
 		return &EpisodeAlreadyExistsError{Episode: alreadyExists.Episode}
 	}
-	if missingEpisode, ok := errors.AsType[scan.MetadataMissingEpisodeError](err); ok {
-		return &MetadataMissingEpisodeError{Episode: missingEpisode.Episode}
-	}
 	return err
 }

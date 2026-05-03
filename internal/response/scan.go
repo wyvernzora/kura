@@ -53,4 +53,5 @@ const (
 	SkipCodeSeasonMismatch           = "season_mismatch"
 	SkipCodeIgnoredDirectory         = "ignored_directory"
 	SkipCodeDuplicateSlot            = "duplicate_slot"
+	SkipCodeMetadataSlotMissing      = "metadata_slot_missing"
 )
