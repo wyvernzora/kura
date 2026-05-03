@@ -6,6 +6,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/scan"
 )
@@ -24,29 +25,35 @@ type ScanInput struct {
 // via hash CAS. Conflicts (peer mutated mid-walk) trigger one silent
 // retry; second conflict surfaces.
 //
-// Provider-needing: invokes deps.Provider() lazily at the start.
-func Scan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult, error) {
-	source, err := deps.Provider()
-	if err != nil {
-		return response.ScanResult{}, err
-	}
-	runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now)
-	var out response.ScanResult
-	err = deps.Coordinator.WithSeriesRetry(in.Ref, func() error {
-		internal, runErr := runner.Scan(ctx, scan.Input{
-			Replace: in.Replace,
-			Mutator: coord.NewMutator("scan"),
-		})
-		if runErr != nil {
-			return translateScanError(runErr)
+// Returns a tracked *jobs.Job; callers either Wait for the typed
+// result (CLI) or hand the job's ID off to a polling client (long
+// MCP tool, future REST). Provider construction and the runner walk
+// happen inside the Submit closure so the goroutine, not the caller,
+// pays for I/O.
+func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanResult] {
+	return jobs.Submit(deps.Jobs, jobs.KindScan, in.Ref, func(jobCtx context.Context) (response.ScanResult, error) {
+		source, err := deps.Provider()
+		if err != nil {
+			return response.ScanResult{}, err
 		}
-		out = toScanResponse(internal)
-		return nil
+		runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now)
+		var out response.ScanResult
+		err = deps.Coordinator.WithSeriesRetry(in.Ref, func() error {
+			internal, runErr := runner.Scan(jobCtx, scan.Input{
+				Replace: in.Replace,
+				Mutator: coord.NewMutator("scan"),
+			})
+			if runErr != nil {
+				return translateScanError(runErr)
+			}
+			out = toScanResponse(internal)
+			return nil
+		})
+		if err != nil {
+			return response.ScanResult{}, err
+		}
+		return out, nil
 	})
-	if err != nil {
-		return response.ScanResult{}, err
-	}
-	return out, nil
 }
 
 func toScanResponse(in scan.Result) response.ScanResult {

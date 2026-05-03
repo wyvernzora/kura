@@ -28,7 +28,8 @@ func (cmd *scanCmd) Run(rt *runContext) error {
 		if !ok {
 			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
 		}
-		result, err := workflow.Scan(rt.Context, deps, workflow.ScanInput{Ref: seriesRef, Replace: cmd.Replace})
+		j := workflow.Scan(rt.Context, deps, workflow.ScanInput{Ref: seriesRef, Replace: cmd.Replace})
+		result, err := j.Wait(rt.Context)
 		if err != nil {
 			return err
 		}
