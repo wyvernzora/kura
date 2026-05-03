@@ -228,11 +228,16 @@ func runJob[T any](
 	jobCtx, cancelJob := r.deriveJobCtx()
 	defer cancelJob()
 
-	// Capture-only reporter: writes the latest event into both the
-	// entry (for UntypedJob.Progress polling) and the typed Job
-	// (for Job.LatestProgress polling). Does not forward; consumers
-	// poll for progress instead of receiving events directly.
-	jobCtx = progress.With(jobCtx, func(_ context.Context, ev progress.Event) {
+	// Capture + relay reporter. Captures the latest event onto the
+	// entry (UntypedJob.Progress polling) and the typed Job
+	// (Job.LatestProgress polling) so async consumers can poll, AND
+	// forwards to the registry's parent reporter when one is
+	// installed. The CLI installs its spinner reporter on rt.Context
+	// (the registry's parent), so synchronous CLI callers blocked on
+	// j.Wait still get the spinner. MCP installs no reporter on the
+	// parent ctx, so async tools see only the capture path.
+	parentReporter := progress.From(jobCtx)
+	jobCtx = progress.With(jobCtx, func(ctx context.Context, ev progress.Event) {
 		e.mu.Lock()
 		entryCopy := ev
 		e.progress = &entryCopy
@@ -242,6 +247,10 @@ func runJob[T any](
 		jobCopy := ev
 		j.progress = &jobCopy
 		j.mu.Unlock()
+
+		if parentReporter != nil {
+			parentReporter(ctx, ev)
+		}
 	})
 
 	result, runErr := safeRun(jobCtx, fn)

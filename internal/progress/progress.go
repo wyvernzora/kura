@@ -30,6 +30,16 @@ func With(ctx context.Context, reporter Reporter) context.Context {
 	return context.WithValue(ctx, progressReporterKey{}, reporter)
 }
 
+// From returns the reporter installed on ctx (or nil). Used by code
+// that needs to chain its own reporter over the caller's, e.g. the
+// jobs registry teeing capture-for-polling alongside the CLI spinner.
+func From(ctx context.Context) Reporter {
+	if r, ok := ctx.Value(progressReporterKey{}).(Reporter); ok {
+		return r
+	}
+	return nil
+}
+
 func Report(ctx context.Context, event Event) {
 	reporter, ok := ctx.Value(progressReporterKey{}).(Reporter)
 	if !ok || reporter == nil {

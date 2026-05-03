@@ -203,10 +203,11 @@ func TestSubmit_ProgressCapturedOnJob(t *testing.T) {
 	}
 }
 
-func TestSubmit_ProgressNotForwardedToCallerReporter(t *testing.T) {
-	// Verifies the capture-only contract: a reporter installed in the
-	// caller's parent ctx does NOT see job-goroutine emissions.
-	// Consumers must poll Job.LatestProgress / UntypedJob.Progress.
+func TestSubmit_ProgressForwardedToParentReporter(t *testing.T) {
+	// Capture + relay contract: a reporter installed on the registry's
+	// parent ctx receives every job-goroutine emission, alongside the
+	// per-job capture for polling. CLI synchronous callers blocked on
+	// j.Wait rely on this for the spinner.
 	var seen int32
 	parentCtx := progress.With(t.Context(), func(_ context.Context, _ progress.Event) {
 		atomic.AddInt32(&seen, 1)
@@ -220,8 +221,8 @@ func TestSubmit_ProgressNotForwardedToCallerReporter(t *testing.T) {
 	})
 	j.Wait(context.Background())
 
-	if got := atomic.LoadInt32(&seen); got != 0 {
-		t.Fatalf("parent reporter saw %d events; capture-only contract violated", got)
+	if got := atomic.LoadInt32(&seen); got == 0 {
+		t.Fatal("parent reporter saw 0 events; relay should forward job-goroutine emissions")
 	}
 }
 
