@@ -15,6 +15,21 @@ func TestSourceDisplayAndRank(t *testing.T) {
 	}
 }
 
+func TestParseSourceAliases(t *testing.T) {
+	cases := map[string]Source{
+		"BD":     SourceBDRip,
+		"bd":     SourceBDRip,
+		"BD-Rip": SourceBDRip,
+		"BDMV":   SourceBluRay,
+		"BDISO":  SourceBluRay,
+	}
+	for in, want := range cases {
+		if got := ParseSource(in); got != want {
+			t.Fatalf("ParseSource(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestResolution(t *testing.T) {
 	resolution, err := ParseResolution("1920x1080")
 	if err != nil {

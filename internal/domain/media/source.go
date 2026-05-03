@@ -25,9 +25,11 @@ func ParseSource(source string) Source {
 		return SourceWebRip
 	case "web-dl", "webdl":
 		return SourceWebDL
-	case "bdrip":
+	case "bdrip", "bd-rip", "bd":
+		// "BD" in release filenames is colloquial for BDRip
+		// (re-encoded from a Blu-ray); raw disc rips use bdmv / bdiso.
 		return SourceBDRip
-	case "bluray", "blu-ray":
+	case "bluray", "blu-ray", "bdmv", "bdiso":
 		return SourceBluRay
 	case "hdtv":
 		return SourceHDTV
