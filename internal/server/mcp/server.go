@@ -51,6 +51,7 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	addListTool(s, deps)
 	addShowTool(s, deps)
 	addAddTool(s, deps)
+	addImportTool(s, deps)
 	addStageTool(s, deps)
 	addResetTool(s, deps)
 	addReconcilePlanTool(s, deps)
