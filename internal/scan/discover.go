@@ -23,7 +23,24 @@ type DiscoveredFile struct {
 	Companions []string
 }
 
+// DiscoverSeriesEpisodes walks seriesDir and returns the per-episode
+// discovery result. Same as WalkSeriesEpisodes plus a duplicate-slot
+// pass that drops colliding files from the kept list (re-emitting
+// each as a SkipCodeDuplicateSlot entry). Use WalkSeriesEpisodes when
+// you need to see every video including dupes.
 func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []ImportSkip, error) {
+	episodes, skipped, err := WalkSeriesEpisodes(seriesDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rejectDuplicateSlots(seriesDir, episodes, skipped)
+}
+
+// WalkSeriesEpisodes returns every recognized video under seriesDir
+// with its parsed slot, source hint, and companions. Duplicate-slot
+// detection is the caller's job — group via GroupBySlot if needed.
+// Also returns ImportSkips for files / dirs the walk declined.
+func WalkSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []ImportSkip, error) {
 	var episodes []DiscoveredFile
 	var skipped []ImportSkip
 	err := fs.WalkDir(os.DirFS(seriesDir.Path()), ".", func(relPath string, entry fs.DirEntry, walkErr error) error {
@@ -61,7 +78,18 @@ func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []
 		return nil, nil, err
 	}
 	sortDiscoveredEpisodes(episodes)
-	return rejectDuplicateSlots(seriesDir, episodes, skipped)
+	return episodes, skipped, nil
+}
+
+// GroupBySlot indexes a discovery result by episode ref. Useful for
+// callers that need the per-slot file list (e.g. agents picking a
+// winner among duplicates).
+func GroupBySlot(files []DiscoveredFile) map[refs.Episode][]DiscoveredFile {
+	out := make(map[refs.Episode][]DiscoveredFile, len(files))
+	for _, f := range files {
+		out[f.Ref] = append(out[f.Ref], f)
+	}
+	return out
 }
 
 // rejectDuplicateSlots removes any DiscoveredFile whose Ref collides
