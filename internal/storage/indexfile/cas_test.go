@@ -3,13 +3,13 @@ package indexfile_test
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
@@ -26,11 +26,11 @@ func mustParseSeries(t *testing.T, name string) refs.Series {
 func TestSaveCASCreateThenLoad(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Date(2026, 5, 2, 19, 14, 0, 0, time.UTC)}
-	entries := []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:42"), Series: mustParseSeries(t, "Show A")},
-		{Metadata: refs.Metadata("tvdb:7"), Series: mustParseSeries(t, "Show B")},
+	rows := []indexfile.Row{
+		{Series: mustParseSeries(t, "Show A"), Metadata: refs.Metadata("tvdb:42"), Title: "Show A", Status: response.ListStatusComplete},
+		{Series: mustParseSeries(t, "Show B"), Metadata: refs.Metadata("tvdb:7"), Title: "Show B", Status: response.ListStatusComplete},
 	}
-	if err := indexfile.SaveCAS(root, "", entries, mutator); err != nil {
+	if err := indexfile.SaveCAS(root, "", rows, mutator); err != nil {
 		t.Fatalf("SaveCAS create: %v", err)
 	}
 
@@ -38,31 +38,65 @@ func TestSaveCASCreateThenLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCAS: %v", err)
 	}
-	if len(loaded.Entries) != 2 {
-		t.Fatalf("entries = %d, want 2", len(loaded.Entries))
+	if len(loaded.Rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(loaded.Rows))
 	}
 	if loaded.Hash == "" {
 		t.Fatal("Hash empty")
 	}
-	if loaded.LastMutated == nil {
+	if loaded.Header.SchemaVersion != indexfile.SchemaVersion {
+		t.Fatalf("Header.SchemaVersion = %d, want %d", loaded.Header.SchemaVersion, indexfile.SchemaVersion)
+	}
+	if loaded.Header.LastMutated == nil {
 		t.Fatal("LastMutated not parsed from header")
 	}
-	if loaded.LastMutated.Op != "add" || loaded.LastMutated.PID != 1 {
-		t.Fatalf("LastMutated = %+v", loaded.LastMutated)
+	if loaded.Header.LastMutated.Op != "add" || loaded.Header.LastMutated.PID != 1 {
+		t.Fatalf("LastMutated = %+v", loaded.Header.LastMutated)
 	}
 
-	// Entries should be sorted by metadata ref.
-	if loaded.Entries[0].Metadata.String() != "tvdb:42" {
-		// Lexical sort: "tvdb:42" < "tvdb:7" because "4" < "7".
-		t.Fatalf("Entries[0] = %s, want tvdb:42", loaded.Entries[0].Metadata)
+	// Rows are sorted by series ref.
+	if loaded.Rows[0].Series.String() != "Show A" {
+		t.Fatalf("Rows[0] = %s, want Show A", loaded.Rows[0].Series)
+	}
+}
+
+func TestSaveCASRoundTripIsByteStable(t *testing.T) {
+	root := t.TempDir()
+	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Date(2026, 5, 2, 19, 14, 0, 0, time.UTC)}
+	rows := []indexfile.Row{
+		{Series: mustParseSeries(t, "Show A"), Metadata: refs.Metadata("tvdb:42"), Title: "Show A", Status: response.ListStatusComplete},
+		{Series: mustParseSeries(t, "Show B"), Metadata: refs.Metadata("tvdb:7"), Title: "Show B", Status: response.ListStatusAiring},
+	}
+	if err := indexfile.SaveCAS(root, "", rows, mutator); err != nil {
+		t.Fatalf("first save: %v", err)
+	}
+	first, err := os.ReadFile(paths.IndexFile(root))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if err := os.Remove(paths.IndexFile(root)); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	// Reorder rows; output should still be byte-identical because encode
+	// sorts by series ref before writing.
+	reordered := []indexfile.Row{rows[1], rows[0]}
+	if err := indexfile.SaveCAS(root, "", reordered, mutator); err != nil {
+		t.Fatalf("second save: %v", err)
+	}
+	second, err := os.ReadFile(paths.IndexFile(root))
+	if err != nil {
+		t.Fatalf("read 2: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Fatalf("byte-stable round-trip violated:\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
 }
 
 func TestSaveCASUpdatePreservesHashRoundtrip(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Now().UTC()}
-	if err := indexfile.SaveCAS(root, "", []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:1"), Series: mustParseSeries(t, "A")},
+	if err := indexfile.SaveCAS(root, "", []indexfile.Row{
+		{Series: mustParseSeries(t, "A"), Metadata: refs.Metadata("tvdb:1"), Title: "A", Status: response.ListStatusComplete},
 	}, mutator); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -71,8 +105,8 @@ func TestSaveCASUpdatePreservesHashRoundtrip(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 
-	// Append entry via CAS.
-	updated := append(first.Entries, indexfile.Entry{Metadata: refs.Metadata("tvdb:2"), Series: mustParseSeries(t, "B")})
+	// Append row via CAS.
+	updated := append(first.Rows, indexfile.Row{Series: mustParseSeries(t, "B"), Metadata: refs.Metadata("tvdb:2"), Title: "B", Status: response.ListStatusComplete})
 	if err := indexfile.SaveCAS(root, first.Hash, updated, mutator); err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -84,30 +118,30 @@ func TestSaveCASUpdatePreservesHashRoundtrip(t *testing.T) {
 	if second.Hash == first.Hash {
 		t.Fatal("hash unchanged after update")
 	}
-	if len(second.Entries) != 2 {
-		t.Fatalf("entries = %d", len(second.Entries))
+	if len(second.Rows) != 2 {
+		t.Fatalf("rows = %d", len(second.Rows))
 	}
 }
 
 func TestSaveCASDetectsPreWriteDrift(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Now().UTC()}
-	if err := indexfile.SaveCAS(root, "", []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:1"), Series: mustParseSeries(t, "A")},
+	if err := indexfile.SaveCAS(root, "", []indexfile.Row{
+		{Series: mustParseSeries(t, "A"), Metadata: refs.Metadata("tvdb:1"), Title: "A", Status: response.ListStatusComplete},
 	}, mutator); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	first, _ := indexfile.LoadCAS(root)
 
 	// Peer mutation lands.
-	peer := append(first.Entries, indexfile.Entry{Metadata: refs.Metadata("tvdb:peer"), Series: mustParseSeries(t, "Peer")})
+	peer := append(first.Rows, indexfile.Row{Series: mustParseSeries(t, "Peer"), Metadata: refs.Metadata("tvdb:peer"), Title: "Peer", Status: response.ListStatusComplete})
 	peerMutator := coord.Mutator{Op: "add", PID: 999, Host: "ws", At: time.Now().UTC()}
 	if err := indexfile.SaveCAS(root, first.Hash, peer, peerMutator); err != nil {
 		t.Fatalf("peer SaveCAS: %v", err)
 	}
 
 	// Our save with stale hash should conflict, surfacing peer mutator.
-	err := indexfile.SaveCAS(root, first.Hash, first.Entries, mutator)
+	err := indexfile.SaveCAS(root, first.Hash, first.Rows, mutator)
 	var conflict *coord.ConflictError
 	if !errors.As(err, &conflict) {
 		t.Fatalf("err = %v, want ConflictError", err)
@@ -120,10 +154,10 @@ func TestSaveCASDetectsPreWriteDrift(t *testing.T) {
 func TestSaveCASCreateConflictsIfFileExists(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Now().UTC()}
-	if err := indexfile.SaveCAS(root, "", []indexfile.Entry{}, mutator); err != nil {
+	if err := indexfile.SaveCAS(root, "", []indexfile.Row{}, mutator); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
-	err := indexfile.SaveCAS(root, "", []indexfile.Entry{}, mutator)
+	err := indexfile.SaveCAS(root, "", []indexfile.Row{}, mutator)
 	var conflict *coord.ConflictError
 	if !errors.As(err, &conflict) {
 		t.Fatalf("err = %v, want ConflictError", err)
@@ -133,40 +167,68 @@ func TestSaveCASCreateConflictsIfFileExists(t *testing.T) {
 func TestSaveCASUpdateOnMissingFileReportsConflict(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Now().UTC()}
-	err := indexfile.SaveCAS(root, "deadbeef", []indexfile.Entry{}, mutator)
+	err := indexfile.SaveCAS(root, "deadbeef", []indexfile.Row{}, mutator)
 	var conflict *coord.ConflictError
 	if !errors.As(err, &conflict) {
 		t.Fatalf("err = %v, want ConflictError when file missing", err)
 	}
 }
 
-func TestParseCASLegacyFileWithoutHeader(t *testing.T) {
+func TestParseCASRejectsLegacyTSV(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
+	// Old TSV format (no JSON header) must not parse as v2 JSONL.
 	legacy := []byte("tvdb:1\tShow A\ntvdb:2\tShow B\n")
 	if err := os.WriteFile(paths.IndexFile(root), legacy, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	loaded, err := indexfile.LoadCAS(root)
-	if err != nil {
-		t.Fatalf("LoadCAS: %v", err)
+	_, err := indexfile.LoadCAS(root)
+	if err == nil {
+		t.Fatal("LoadCAS on TSV bytes should fail")
 	}
-	if len(loaded.Entries) != 2 {
-		t.Fatalf("entries = %d, want 2", len(loaded.Entries))
+	if !strings.Contains(err.Error(), "indexfile: parse") {
+		t.Fatalf("err = %v, want parse error", err)
 	}
-	if loaded.LastMutated != nil {
-		t.Fatalf("LastMutated = %+v, want nil for legacy file", loaded.LastMutated)
+}
+
+func TestParseCASRejectsSchemaMismatch(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	bogus := []byte(`{"$schema":99,"indexAsOf":"2026-01-01T00:00:00Z"}` + "\n")
+	if err := os.WriteFile(paths.IndexFile(root), bogus, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_, err := indexfile.LoadCAS(root)
+	if !errors.Is(err, indexfile.ErrSchemaMismatch) {
+		t.Fatalf("err = %v, want ErrSchemaMismatch", err)
+	}
+}
+
+func TestParseCASRejectsMalformedRows(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	bad := []byte(`{"$schema":2,"indexAsOf":"2026-01-01T00:00:00Z"}` + "\n" + `not-json` + "\n")
+	if err := os.WriteFile(paths.IndexFile(root), bad, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_, err := indexfile.LoadCAS(root)
+	if err == nil || !strings.Contains(err.Error(), "indexfile: parse row") {
+		t.Fatalf("err = %v, want parse-row error", err)
 	}
 }
 
 func TestReadHashOnly(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Now().UTC()}
-	if err := indexfile.SaveCAS(root, "", []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:1"), Series: mustParseSeries(t, "A")},
+	if err := indexfile.SaveCAS(root, "", []indexfile.Row{
+		{Series: mustParseSeries(t, "A"), Metadata: refs.Metadata("tvdb:1"), Title: "A", Status: response.ListStatusComplete},
 	}, mutator); err != nil {
 		t.Fatalf("SaveCAS: %v", err)
 	}
@@ -183,29 +245,14 @@ func TestReadHashOnly(t *testing.T) {
 func TestSaveCASMutatorHostWithSpaces(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "my host", At: time.Now().UTC()}
-	if err := indexfile.SaveCAS(root, "", []indexfile.Entry{}, mutator); err != nil {
+	if err := indexfile.SaveCAS(root, "", []indexfile.Row{}, mutator); err != nil {
 		t.Fatalf("SaveCAS: %v", err)
 	}
 	loaded, err := indexfile.LoadCAS(root)
 	if err != nil {
 		t.Fatalf("LoadCAS: %v", err)
 	}
-	if loaded.LastMutated == nil || loaded.LastMutated.Host != "my host" {
-		t.Fatalf("Host = %v", loaded.LastMutated)
-	}
-}
-
-func TestParseCASRejectsMalformedRows(t *testing.T) {
-	root := t.TempDir()
-	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	bad := []byte("only-one-field\n")
-	if err := os.WriteFile(filepath.Join(paths.LibraryKuraDir(root), "index.tsv"), bad, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	_, err := indexfile.LoadCAS(root)
-	if err == nil || !strings.Contains(err.Error(), "indexfile: parse") {
-		t.Fatalf("err = %v, want parse error", err)
+	if loaded.Header.LastMutated == nil || loaded.Header.LastMutated.Host != "my host" {
+		t.Fatalf("Host = %v", loaded.Header.LastMutated)
 	}
 }

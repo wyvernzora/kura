@@ -66,13 +66,13 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 	// Drop the index entry first (CAS); only after success do we touch
 	// the filesystem. CAS rejection on the index leaves the series fully
 	// tracked exactly as before.
-	if err := withIndexCAS(deps, "remove", func(loaded indexfile.Loaded) ([]indexfile.Entry, error) {
-		filtered := make([]indexfile.Entry, 0, len(loaded.Entries))
-		for _, entry := range loaded.Entries {
-			if entry.Series == in.Ref {
+	if err := withIndexCAS(deps, "remove", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
+		filtered := make([]indexfile.Row, 0, len(loaded.Rows))
+		for _, row := range loaded.Rows {
+			if row.Series == in.Ref {
 				continue
 			}
-			filtered = append(filtered, entry)
+			filtered = append(filtered, row)
 		}
 		return filtered, nil
 	}); err != nil {

@@ -83,20 +83,20 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err
 	}
-	if err := withIndexCAS(deps, "import", func(loaded indexfile.Loaded) ([]indexfile.Entry, error) {
-		// Drop any prior entry pointing at this series ref (Force-replace
-		// path) and any conflicting entry for the same metadataRef.
-		filtered := make([]indexfile.Entry, 0, len(loaded.Entries))
-		for _, entry := range loaded.Entries {
-			if entry.Series == ref {
+	if err := withIndexCAS(deps, "import", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
+		// Drop any prior row pointing at this series ref (Force-replace
+		// path) and any conflicting row for the same metadataRef.
+		filtered := make([]indexfile.Row, 0, len(loaded.Rows))
+		for _, row := range loaded.Rows {
+			if row.Series == ref {
 				continue
 			}
-			if entry.Metadata == metadataRef && entry.Series != ref {
-				return nil, &MetadataRefConflictError{Ref: metadataRef, Existing: entry.Series, Next: ref}
+			if row.Metadata == metadataRef && row.Series != ref {
+				return nil, &MetadataRefConflictError{Ref: metadataRef, Existing: row.Series, Next: ref}
 			}
-			filtered = append(filtered, entry)
+			filtered = append(filtered, row)
 		}
-		return append(filtered, indexfile.Entry{Metadata: metadataRef, Series: ref}), nil
+		return append(filtered, indexfile.Row{Series: ref, Metadata: metadataRef}), nil
 	}); err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err

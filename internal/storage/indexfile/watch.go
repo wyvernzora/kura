@@ -29,7 +29,7 @@ func (nopLogger) Warn(string, ...any) {}
 type MetadataReader func(context.Context, refs.Series) (refs.Metadata, error)
 
 // WatchConfig controls how aggressively Watch refreshes the in-memory
-// index against <library>/.kura/index.tsv. Each interval set to 0
+// index against <library>/.kura/index.jsonl. Each interval set to 0
 // disables the corresponding loop. At least one must be enabled or
 // the cache goes stale forever after the first peer mutation.
 type WatchConfig struct {
@@ -42,7 +42,7 @@ type WatchConfig struct {
 	// (touch) that left the contents unchanged.
 	RefreshInterval time.Duration
 	// RebuildInterval gates the periodic full library rebuild.
-	// Catches drift between index.tsv and per-series state.
+	// Catches drift between index.jsonl and per-series state.
 	// Reader must be non-nil if this is > 0.
 	RebuildInterval time.Duration
 
@@ -59,10 +59,10 @@ type WatchConfig struct {
 // reader/logger silently overwrite the first and an extra set of
 // goroutines is spawned.
 //
-// Workflows continue to call ReplaceEntries directly after a
-// successful CAS write; the next probe tick will detect the post-
-// write mtime change and re-read the file (a no-op overwrite of the
-// same map). Future commits may add a hook to skip the redundant read.
+// Workflows continue to call ReplaceRows directly after a successful
+// CAS write; the next probe tick will detect the post-write mtime
+// change and re-read the file (a no-op overwrite of the same map).
+// Future commits may add a hook to skip the redundant read.
 func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
 	if cfg.Logger == nil {
 		cfg.Logger = nopLogger{}
@@ -178,7 +178,7 @@ func (i *Index) fullRefresh() error {
 	if err != nil {
 		return err
 	}
-	i.ReplaceEntries(parsed.Entries)
+	i.ReplaceRows(parsed.Rows)
 	i.mu.Lock()
 	i.cachedHash = newHash
 	i.cachedMTime = mtime
@@ -221,14 +221,14 @@ func (i *Index) rebuildOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	entries := rebuilt.Entries()
+	rows := rebuilt.Rows()
 
 	i.mu.RLock()
 	expected := i.cachedHash
 	priorEntries := len(i.refs)
 	i.mu.RUnlock()
 
-	if err := SaveCAS(i.root, expected, entries, coord.NewMutator("indexfile-rebuild")); err != nil {
+	if err := SaveCAS(i.root, expected, rows, coord.NewMutator("indexfile-rebuild")); err != nil {
 		if _, ok := errors.AsType[*coord.ConflictError](err); ok {
 			i.log.Info("indexfile: rebuild conflicted with peer; deferring to next probe",
 				"duration_ms", time.Since(started).Milliseconds(),
@@ -237,7 +237,7 @@ func (i *Index) rebuildOnce(ctx context.Context) error {
 		}
 		return err
 	}
-	i.ReplaceEntries(entries)
+	i.ReplaceRows(rows)
 	if data, mtime, size, err := readIndexBytes(i.root); err == nil {
 		i.mu.Lock()
 		i.cachedHash = hashHex(data)

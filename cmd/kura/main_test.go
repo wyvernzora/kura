@@ -15,6 +15,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -1895,7 +1896,7 @@ func writeLibraryIndex(t *testing.T, rootPath string, entries map[string]string)
 			t.Fatalf("Put: %v", err)
 		}
 	}
-	if err := idx.Save(); err != nil {
+	if err := idx.Save(coord.NewMutator("test-bootstrap")); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 }

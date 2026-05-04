@@ -20,7 +20,8 @@ func TestLibraryAndSeriesPaths(t *testing.T) {
 		want string
 	}{
 		{"LibraryKuraDir", paths.LibraryKuraDir(root), filepath.Join("/library", ".kura")},
-		{"IndexFile", paths.IndexFile(root), filepath.Join("/library", ".kura", "index.tsv")},
+		{"IndexFile", paths.IndexFile(root), filepath.Join("/library", ".kura", "index.jsonl")},
+		{"LegacyIndexFile", paths.LegacyIndexFile(root), filepath.Join("/library", ".kura", "index.tsv")},
 		{"SeriesDir", paths.SeriesDir(root, ref), filepath.Join("/library", "Bookworm")},
 		{"SeriesKuraDir", paths.SeriesKuraDir(root, ref), filepath.Join("/library", "Bookworm", ".kura")},
 		{"SeriesMetadata", paths.SeriesMetadata(root, ref), filepath.Join("/library", "Bookworm", ".kura", "series.json")},

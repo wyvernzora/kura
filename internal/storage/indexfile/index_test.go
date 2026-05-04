@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
@@ -27,7 +28,7 @@ func TestIndexSaveLoad(t *testing.T) {
 	if err := idx.Put(refs.Metadata("tvdb:370070"), honzuki); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Save(); err != nil {
+	if err := idx.Save(coord.NewMutator("test")); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := indexfile.Load(root)

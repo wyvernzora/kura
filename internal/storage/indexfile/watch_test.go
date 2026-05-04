@@ -13,17 +13,17 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
-func writeIndexEntries(t *testing.T, root string, entries []indexfile.Entry) {
+func writeIndexRows(t *testing.T, root string, rows []indexfile.Row) {
 	t.Helper()
 	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := indexfile.SaveCAS(root, "", entries, coord.NewMutator("test")); err != nil {
+	if err := indexfile.SaveCAS(root, "", rows, coord.NewMutator("test")); err != nil {
 		loaded, lerr := indexfile.LoadCAS(root)
 		if lerr != nil {
 			t.Fatalf("seed savecas: %v / %v", err, lerr)
 		}
-		if err := indexfile.SaveCAS(root, loaded.Hash, entries, coord.NewMutator("test")); err != nil {
+		if err := indexfile.SaveCAS(root, loaded.Hash, rows, coord.NewMutator("test")); err != nil {
 			t.Fatalf("seed savecas2: %v", err)
 		}
 	}
@@ -46,8 +46,8 @@ func TestIndexWatch_GetServesFromMemory(t *testing.T) {
 
 func TestIndexWatch_ProbeDetectsExternalWrite(t *testing.T) {
 	root := t.TempDir()
-	writeIndexEntries(t, root, []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
+	writeIndexRows(t, root, []indexfile.Row{
+		{Series: mustSeries(t, "A"), Metadata: refs.Metadata("tvdb:1")},
 	})
 	idx, err := indexfile.Load(root)
 	if err != nil {
@@ -58,14 +58,14 @@ func TestIndexWatch_ProbeDetectsExternalWrite(t *testing.T) {
 	idx.Watch(ctx, indexfile.WatchConfig{ProbeInterval: 20 * time.Millisecond})
 
 	loaded2, _ := indexfile.LoadCAS(root)
-	if err := indexfile.SaveCAS(root, loaded2.Hash, []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
-		{Metadata: refs.Metadata("tvdb:2"), Series: mustSeries(t, "B")},
+	if err := indexfile.SaveCAS(root, loaded2.Hash, []indexfile.Row{
+		{Series: mustSeries(t, "A"), Metadata: refs.Metadata("tvdb:1")},
+		{Series: mustSeries(t, "B"), Metadata: refs.Metadata("tvdb:2")},
 	}, coord.NewMutator("peer")); err != nil {
 		t.Fatalf("peer write: %v", err)
 	}
 	future := time.Now().Add(2 * time.Second)
-	if err := os.Chtimes(filepath.Join(paths.LibraryKuraDir(root), "index.tsv"), future, future); err != nil {
+	if err := os.Chtimes(filepath.Join(paths.LibraryKuraDir(root), "index.jsonl"), future, future); err != nil {
 		t.Fatalf("chtimes: %v", err)
 	}
 
@@ -117,8 +117,8 @@ func TestIndexWatch_RebuildCallsInjectedReader(t *testing.T) {
 
 func TestIndexWatch_DisabledLoopsRespected(t *testing.T) {
 	root := t.TempDir()
-	writeIndexEntries(t, root, []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
+	writeIndexRows(t, root, []indexfile.Row{
+		{Series: mustSeries(t, "A"), Metadata: refs.Metadata("tvdb:1")},
 	})
 	idx, _ := indexfile.Load(root)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -126,14 +126,14 @@ func TestIndexWatch_DisabledLoopsRespected(t *testing.T) {
 	idx.Watch(ctx, indexfile.WatchConfig{})
 
 	cur, _ := indexfile.LoadCAS(root)
-	if err := indexfile.SaveCAS(root, cur.Hash, []indexfile.Entry{
-		{Metadata: refs.Metadata("tvdb:1"), Series: mustSeries(t, "A")},
-		{Metadata: refs.Metadata("tvdb:2"), Series: mustSeries(t, "B")},
+	if err := indexfile.SaveCAS(root, cur.Hash, []indexfile.Row{
+		{Series: mustSeries(t, "A"), Metadata: refs.Metadata("tvdb:1")},
+		{Series: mustSeries(t, "B"), Metadata: refs.Metadata("tvdb:2")},
 	}, coord.NewMutator("peer")); err != nil {
 		t.Fatalf("peer write: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
 	if _, ok, _ := idx.Get(refs.Metadata("tvdb:2")); ok {
-		t.Fatal("disabled watch must not refresh; saw external entry")
+		t.Fatal("disabled watch must not refresh; saw external row")
 	}
 }

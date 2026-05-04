@@ -1,8 +1,8 @@
 // Package paths owns canonical path construction for every Kura-managed
 // directory and file. Other packages call into paths/ instead of building
 // layout strings themselves; only this package knows that series.json lives
-// at <library>/<series>/.kura/series.json, that the index TSV lives at
-// <library>/.kura/index.tsv, and so on.
+// at <library>/<series>/.kura/series.json, that the library index lives at
+// <library>/.kura/index.jsonl, and so on.
 //
 // Generic absolute+relative joins (e.g. resolving a user-supplied relative
 // path inside a known absolute series directory) are NOT in scope and stay
@@ -19,14 +19,15 @@ import (
 // On-disk layout constants. Exported so callers that need to compare or
 // log them have one source of truth.
 const (
-	KuraDir        = ".kura"
-	SeriesFileName = "series.json"
-	IndexFileName  = "index.tsv"
-	TrashDirName   = "trash"
-	TrashMetaName  = "meta.json"
-	PlanDirName    = "reconcile"
-	PlanExtension  = ".jsonl"
-	ExtraDirName   = "Extra"
+	KuraDir             = ".kura"
+	SeriesFileName      = "series.json"
+	IndexFileName       = "index.jsonl"
+	LegacyIndexFileName = "index.tsv"
+	TrashDirName        = "trash"
+	TrashMetaName       = "meta.json"
+	PlanDirName         = "reconcile"
+	PlanExtension       = ".jsonl"
+	ExtraDirName        = "Extra"
 )
 
 // LibraryKuraDir returns <libRoot>/.kura/.
@@ -34,9 +35,16 @@ func LibraryKuraDir(libRoot string) string {
 	return filepath.Join(libRoot, KuraDir)
 }
 
-// IndexFile returns <libRoot>/.kura/index.tsv.
+// IndexFile returns <libRoot>/.kura/index.jsonl.
 func IndexFile(libRoot string) string {
 	return filepath.Join(LibraryKuraDir(libRoot), IndexFileName)
+}
+
+// LegacyIndexFile returns <libRoot>/.kura/index.tsv. The TSV format predates
+// Index v2 and is no longer read or written; bootstrap removes it after the
+// first JSONL save so a single command run sweeps the artifact.
+func LegacyIndexFile(libRoot string) string {
+	return filepath.Join(LibraryKuraDir(libRoot), LegacyIndexFileName)
 }
 
 // SeriesDir returns <libRoot>/<ref>/.

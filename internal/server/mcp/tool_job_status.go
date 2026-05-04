@@ -142,9 +142,9 @@ func projectJobError(err error) *mcpJobError {
 // tracking series. Empty string when the series isn't (or no longer
 // is) tracked — happens if the series got removed mid-job.
 func lookupMetadataRef(idx *indexfile.Index, series refs.Series) string {
-	for _, entry := range idx.Entries() {
-		if entry.Series == series {
-			return entry.Metadata.String()
+	for _, row := range idx.Rows() {
+		if row.Series == series {
+			return row.Metadata.String()
 		}
 	}
 	return ""
