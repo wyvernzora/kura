@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log/slog"
 	"os/signal"
 	"syscall"
 	"time"
@@ -13,6 +13,7 @@ import (
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/jobs"
+	"github.com/wyvernzora/kura/internal/progress"
 	mcpserver "github.com/wyvernzora/kura/internal/server/mcp"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
@@ -33,10 +34,19 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 		return errors.New("kura serve requires at least one transport flag (--mcp-stdio or --mcp-http=ADDR)")
 	}
 
-	deps, registry, watch, err := buildServeDeps(rt)
+	logger := newServerLogger(rt.Stderr, rt.Getenv)
+
+	deps, registry, watch, err := buildServeDeps(rt, logger)
 	if err != nil {
+		logger.Error("server bootstrap failed", "err", err)
 		return err
 	}
+
+	// Suppress the CLI spinner globally for the server lifetime —
+	// progress events fire from inside long workflows and would
+	// otherwise emit ANSI control sequences into the log stream.
+	// Lifecycle visibility comes from structured logs instead.
+	rt.Context = progress.With(rt.Context, func(context.Context, progress.Event) {})
 
 	ctx, stop := signal.NotifyContext(rt.Context, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -44,6 +54,12 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 	deps.Index.Watch(ctx, watch)
 
 	server := mcpserver.NewServer(mcpserver.Deps{Workflow: deps})
+
+	logger.Info("kura serve starting",
+		"version", serveVersion,
+		"libRoot", deps.LibRoot,
+		"transports", serverTransports(cmd),
+	)
 
 	g, gctx := errgroup.WithContext(ctx)
 	if cmd.MCPStdio {
@@ -56,15 +72,40 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 
 	runErr := g.Wait()
 
+	if ctx.Err() != nil {
+		logger.Info("shutdown signal received")
+	}
+
 	grace := envDuration(rt.Getenv, "KURA_SHUTDOWN_TIMEOUT", defaultShutdownTimeout)
 	if stuck := registry.Shutdown(grace); stuck > 0 {
-		fmt.Fprintf(rt.Stderr, "kura serve: %d job(s) did not shut down within %s\n", stuck, grace)
+		logger.Warn("jobs did not shut down within grace period", "stuck", stuck, "grace", grace)
+	} else {
+		logger.Info("jobs registry drained", "grace", grace)
 	}
 
 	if runErr != nil && !errors.Is(runErr, context.Canceled) {
+		logger.Error("kura serve exited with error", "err", runErr)
 		return runErr
 	}
+	logger.Info("kura serve stopped cleanly")
 	return nil
+}
+
+// serveVersion is the human-readable version embedded in the boot
+// log. Mirrors the constant inside the MCP server package.
+const serveVersion = "0.1.0"
+
+// serverTransports returns the transport names enabled by the CLI
+// flags, for inclusion in the boot log.
+func serverTransports(cmd *serveCmd) []string {
+	var out []string
+	if cmd.MCPStdio {
+		out = append(out, "mcp-stdio")
+	}
+	if cmd.MCPHTTP != "" {
+		out = append(out, "mcp-http="+cmd.MCPHTTP)
+	}
+	return out
 }
 
 // buildServeDeps wraps buildDeps and swaps the in-process serializer
@@ -73,7 +114,11 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 // should pass to deps.Index.Watch under the signal-cancellable ctx.
 // The CLI registry from buildDeps is discarded; it never received a
 // Submit so no goroutines leak.
-func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, indexfile.WatchConfig, error) {
+//
+// The supplied logger is bound to the jobs registry so job lifecycle
+// events ("job submitted", "job terminal", "reaper evicted") flow
+// into the same structured log stream as the boot/transport events.
+func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.Registry, indexfile.WatchConfig, error) {
 	deps, err := buildDeps(rt)
 	if err != nil {
 		return workflow.Deps{}, nil, indexfile.WatchConfig{}, err
@@ -85,7 +130,7 @@ func buildServeDeps(rt *runContext) (workflow.Deps, *jobs.Registry, indexfile.Wa
 		JobTimeout:     envDuration(rt.Getenv, "KURA_JOB_TIMEOUT", 0),
 		Retention:      envDuration(rt.Getenv, "KURA_JOB_RETENTION", 30*time.Minute),
 		ReaperInterval: envDuration(rt.Getenv, "KURA_JOB_REAPER_INTERVAL", 5*time.Minute),
-	}, nil)
+	}, logger)
 	deps.Jobs = registry
 
 	libRoot := deps.LibRoot
