@@ -93,19 +93,29 @@ func (s *scanner) applyFile(ctx context.Context, file DiscoveredFile) error {
 	return nil
 }
 
-// mergeSourceFromExisting preserves a non-Unknown source on the prior
-// active record when a re-probed record came back with Unknown. Source
-// inference is filename-only and lossy: a file that was once correctly
-// labelled "BluRay" by the operator (or by a richer prior filename)
-// can degrade to "Unknown" if the filename loses its source token. The
-// reverse — Unknown → known — is always allowed since new info trumps
-// no info. Other media facts (resolution, codec, size, mtime) are
-// authoritative from mediainfo and overwrite freely.
+// mergeSourceFromExisting preserves a known-canonical source on the
+// prior active record when a re-probed record came back with Unknown.
+// Source inference is filename-only and lossy: a file that was once
+// correctly labelled "BluRay" by the operator (or by a richer prior
+// filename) can degrade to "Unknown" if the filename loses its source
+// token. The reverse — Unknown → known — is always allowed since new
+// info trumps no info. Other media facts (resolution, codec, size,
+// mtime) are authoritative from mediainfo and overwrite freely.
+//
+// Garbage prior values (e.g. "1920x1080" left over from before the
+// InferSourceFromFilename fix that stopped recording resolution
+// strings as source) are NOT preserved — media.ParseSource passes
+// non-canonical strings through as free-form Source values, so the
+// "prior != Unknown" check alone wasn't enough to filter them out.
+// We require media.IsKnown so only canonical labels survive.
 func mergeSourceFromExisting(record *media.Record, prior media.Record) {
 	if record.Source != media.SourceUnknown {
 		return
 	}
 	if prior.Source == media.SourceUnknown {
+		return
+	}
+	if !media.IsKnown(prior.Source.String()) {
 		return
 	}
 	record.Source = prior.Source
