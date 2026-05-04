@@ -27,9 +27,11 @@ func (nopLogger) Warn(string, ...any) {}
 // disables the corresponding loop. At least one must be enabled or
 // the cache goes stale forever after the first peer mutation.
 type WatchConfig struct {
-	// ProbeInterval gates the open+fstat+close fast probe. Catches
-	// mtime+size changes from any peer mutation; the open() round-
-	// trip bypasses NFS attribute-cache lag.
+	// ProbeInterval gates the combined libRoot + index.jsonl fast
+	// probe. A libRoot mtime change (mkdir / rmdir under the library)
+	// triggers an async rebuild; an index.jsonl mtime / size change
+	// (peer mutation) triggers a fullRefresh. The probe skips entirely
+	// while a rebuild is already in flight.
 	ProbeInterval time.Duration
 	// RefreshInterval gates the unconditional read+hash refresh.
 	// Catches mtime+size collisions and any cosmetic mtime bump
@@ -40,8 +42,9 @@ type WatchConfig struct {
 	// Builder must be non-nil if this is > 0.
 	RebuildInterval time.Duration
 
-	// Builder is the row builder used by the rebuild loop. Required if
-	// RebuildInterval > 0; ignored otherwise.
+	// Builder is the row builder used by the rebuild loop and the
+	// libRoot-trigger rebuild. Required if RebuildInterval > 0 or
+	// ProbeInterval > 0; ignored otherwise.
 	Builder RowBuilder
 	// Logger receives lifecycle warnings. nil means silent.
 	Logger Logger
@@ -56,7 +59,6 @@ type WatchConfig struct {
 // Workflows continue to call ReplaceRows directly after a successful
 // CAS write; the next probe tick will detect the post-write mtime
 // change and re-read the file (a no-op overwrite of the same map).
-// Future commits may add a hook to skip the redundant read.
 func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
 	if cfg.Logger == nil {
 		cfg.Logger = nopLogger{}
@@ -64,12 +66,19 @@ func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
 	i.log = cfg.Logger
 	i.builder = cfg.Builder
 
-	// Seed baseline so the first probe tick doesn't falsely fire.
+	// Seed the index baseline so the first probe tick doesn't falsely fire.
 	if data, mtime, size, err := readIndexBytes(i.root); err == nil {
 		i.mu.Lock()
 		i.cachedHash = hashHex(data)
 		i.cachedMTime = mtime
 		i.cachedSize = size
+		i.mu.Unlock()
+	}
+	// Seed the libRoot baseline. Errors are non-fatal: probe will
+	// pick up the first observed mtime as a baseline on the next tick.
+	if stat, err := os.Stat(i.root); err == nil {
+		i.mu.Lock()
+		i.cachedLibRootMTime = stat.ModTime()
 		i.mu.Unlock()
 	}
 
@@ -92,12 +101,41 @@ func (i *Index) probeLoop(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			i.probeOnce()
+			i.probeOnce(ctx)
 		}
 	}
 }
 
-func (i *Index) probeOnce() {
+// probeOnce checks the libRoot mtime first (cheap stat). A bump fires
+// an async rebuild and skips the index probe — the rebuild will rewrite
+// the JSONL anyway. Otherwise the existing open+fstat fast probe on
+// index.jsonl detects peer mutations.
+//
+// Skips entirely while a rebuild is in flight: the probe would race
+// with the goroutine writing the JSONL, and rebuild covers anything
+// the probe would have caught.
+func (i *Index) probeOnce(ctx context.Context) {
+	if i.Rebuilding() {
+		return
+	}
+
+	if libStat, err := os.Stat(i.root); err == nil {
+		i.mu.RLock()
+		cached := i.cachedLibRootMTime
+		i.mu.RUnlock()
+		if !libStat.ModTime().Equal(cached) {
+			i.mu.Lock()
+			i.cachedLibRootMTime = libStat.ModTime()
+			i.mu.Unlock()
+			if i.builder != nil {
+				i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("indexfile-libroot-probe"))
+			}
+			return
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		i.log.Warn("indexfile: probe libroot stat", "err", err)
+	}
+
 	path := paths.IndexFile(i.root)
 	f, err := os.Open(path)
 	if err != nil {
@@ -137,6 +175,9 @@ func (i *Index) refreshLoop(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if i.Rebuilding() {
+				continue
+			}
 			if err := i.fullRefresh(); err != nil {
 				i.log.Warn("indexfile: refresh", "err", err)
 			}
@@ -194,57 +235,12 @@ func (i *Index) rebuildLoop(ctx context.Context, interval time.Duration) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := i.rebuildOnce(ctx); err != nil {
-				i.log.Warn("indexfile: rebuild", "err", err)
+			if i.builder == nil {
+				continue
 			}
+			i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("indexfile-rebuild"))
 		}
 	}
-}
-
-// rebuildOnce walks the library, rebuilds the index from per-series
-// metadata, and CAS-writes the result. A pre_write conflict means a
-// peer wrote during the walk; skip and let the probe pick up the
-// peer's version on the next tick.
-func (i *Index) rebuildOnce(ctx context.Context) error {
-	if i.builder == nil {
-		return errors.New("indexfile: rebuild builder not set")
-	}
-	started := time.Now()
-	i.log.Info("indexfile: rebuild starting")
-	rebuilt, err := Rebuild(ctx, i.root, i.builder)
-	if err != nil {
-		return err
-	}
-	rows := rebuilt.Rows()
-
-	i.mu.RLock()
-	expected := i.cachedHash
-	priorEntries := len(i.bySeries)
-	i.mu.RUnlock()
-
-	if err := SaveCAS(i.root, expected, rows, coord.NewMutator("indexfile-rebuild")); err != nil {
-		if _, ok := errors.AsType[*coord.ConflictError](err); ok {
-			i.log.Info("indexfile: rebuild conflicted with peer; deferring to next probe",
-				"duration_ms", time.Since(started).Milliseconds(),
-			)
-			return nil
-		}
-		return err
-	}
-	i.ReplaceRows(rows)
-	if data, mtime, size, err := readIndexBytes(i.root); err == nil {
-		i.mu.Lock()
-		i.cachedHash = hashHex(data)
-		i.cachedMTime = mtime
-		i.cachedSize = size
-		i.mu.Unlock()
-	}
-	i.log.Info("indexfile: rebuild complete",
-		"priorEntries", priorEntries,
-		"newEntries", len(rows),
-		"duration_ms", time.Since(started).Milliseconds(),
-	)
-	return nil
 }
 
 // readIndexBytes reads the index file plus the stat fields the

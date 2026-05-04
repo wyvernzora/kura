@@ -42,8 +42,17 @@ const (
 
 // List returns rows for tracked + untracked entries from the in-memory
 // index, optionally filtered and paginated. The disk is not walked.
+//
+// Returns ServerNotReadyError when the index is rebuilding from a cold
+// start (or corruption recovery) and has nothing to serve yet.
 func List(_ context.Context, deps Deps, in ListInput) (response.ListResult, error) {
-	rows := deps.Index.Rows()
+	rows, err := deps.Index.Snapshot()
+	if errors.Is(err, indexfile.ErrNotReady) {
+		return response.ListResult{}, &ServerNotReadyError{Reason: "library index is rebuilding"}
+	}
+	if err != nil {
+		return response.ListResult{}, err
+	}
 
 	if len(in.Statuses) > 0 {
 		filtered := rows[:0]

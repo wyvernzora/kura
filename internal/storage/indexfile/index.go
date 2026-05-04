@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
@@ -31,6 +32,11 @@ import (
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
+
+// ErrNotReady is returned by Snapshot when a rebuild is in flight and
+// the in-memory map is empty (cold start / corruption recovery). Read
+// callers translate this to a surface-specific not-ready error.
+var ErrNotReady = errors.New("indexfile: not ready")
 
 var ErrNotFound = errors.New("indexfile: not found")
 
@@ -59,9 +65,16 @@ type Index struct {
 
 	// Watch baseline. Tracks the on-disk file state so the probe loop
 	// can detect peer mutations without re-reading the file every tick.
-	cachedHash  string
-	cachedMTime time.Time
-	cachedSize  int64
+	cachedHash         string
+	cachedMTime        time.Time
+	cachedSize         int64
+	cachedLibRootMTime time.Time
+
+	// rebuilding flips true while a TriggerRebuild goroutine is in
+	// flight. rebuildWG lets callers (CLI bootstrap) block on the
+	// in-flight rebuild via WaitReady.
+	rebuilding atomic.Bool
+	rebuildWG  sync.WaitGroup
 
 	// log + reader are set by Watch before any loop starts, then
 	// read-only thereafter. No locking needed for reads.
@@ -310,6 +323,125 @@ func (i *Index) ReplaceRows(rows []Row) {
 func (i *Index) Save(mutator coord.Mutator) error {
 	rows := i.Rows()
 	return SaveCAS(i.root, "", rows, mutator)
+}
+
+// Snapshot returns a sorted slice of every row in memory. While a
+// rebuild is in flight AND the map is empty (cold start, corruption
+// recovery), returns ErrNotReady so read callers can surface a
+// not-ready response. Once any prior snapshot exists, reads keep
+// flowing through it during the rebuild.
+func (i *Index) Snapshot() ([]Row, error) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	if i.rebuilding.Load() && len(i.bySeries) == 0 {
+		return nil, ErrNotReady
+	}
+	out := make([]Row, 0, len(i.order))
+	for _, ref := range i.order {
+		out = append(out, i.bySeries[ref])
+	}
+	return out, nil
+}
+
+// Rebuilding reports whether a background rebuild is currently in flight.
+func (i *Index) Rebuilding() bool {
+	return i.rebuilding.Load()
+}
+
+// WaitReady blocks until any in-flight rebuild completes or ctx is
+// cancelled. Used by CLI bootstrap to keep its sync semantics on top
+// of the unified async rebuild mechanism.
+func (i *Index) WaitReady(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		i.rebuildWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// TriggerRebuild kicks off a background rebuild + SaveCAS + Replace.
+// Idempotent: if a rebuild is already in flight, returns immediately
+// without spawning another. The builder + mutator are captured by the
+// in-flight goroutine; subsequent calls during a rebuild use the
+// already-captured values.
+//
+// On success the in-memory rows are replaced and the watcher baseline
+// is refreshed. On failure (rebuild error, parse error, peer-write
+// conflict) the goroutine logs and exits without panicking; the next
+// trigger will retry.
+func (i *Index) TriggerRebuild(ctx context.Context, root string, builder RowBuilder, mutator coord.Mutator) {
+	if !i.rebuilding.CompareAndSwap(false, true) {
+		return
+	}
+	i.rebuildWG.Go(func() {
+		defer i.rebuilding.Store(false)
+
+		started := time.Now()
+		if i.log != nil {
+			i.log.Info("indexfile: rebuild starting", "op", mutator.Op)
+		}
+
+		rebuilt, err := Rebuild(ctx, root, builder)
+		if err != nil {
+			if i.log != nil {
+				i.log.Warn("indexfile: rebuild", "err", err)
+			}
+			return
+		}
+		rows := rebuilt.Rows()
+
+		i.mu.RLock()
+		expected := i.cachedHash
+		priorEntries := len(i.bySeries)
+		i.mu.RUnlock()
+
+		if err := SaveCAS(root, expected, rows, mutator); err != nil {
+			if _, ok := errors.AsType[*coord.ConflictError](err); !ok {
+				if i.log != nil {
+					i.log.Warn("indexfile: rebuild save", "err", err)
+				}
+				return
+			}
+			// Peer wrote during the walk; their state is on disk.
+			// Adopt it via the probe path on the next tick. Don't
+			// Replace our stale view here.
+			if i.log != nil {
+				i.log.Info("indexfile: rebuild conflicted with peer; deferring to next probe",
+					"duration_ms", time.Since(started).Milliseconds(),
+				)
+			}
+			return
+		}
+
+		if err := i.Replace(rows); err != nil {
+			if i.log != nil {
+				i.log.Warn("indexfile: rebuild replace", "err", err)
+			}
+			return
+		}
+
+		if data, mtime, size, err := readIndexBytes(root); err == nil {
+			i.mu.Lock()
+			i.cachedHash = hashHex(data)
+			i.cachedMTime = mtime
+			i.cachedSize = size
+			i.mu.Unlock()
+		}
+
+		if i.log != nil {
+			i.log.Info("indexfile: rebuild complete",
+				"priorEntries", priorEntries,
+				"newEntries", len(rows),
+				"duration_ms", time.Since(started).Milliseconds(),
+			)
+		}
+	})
 }
 
 // recomputeOrderLocked rebuilds the sorted order slice. Sort key is

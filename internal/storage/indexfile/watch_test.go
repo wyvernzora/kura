@@ -115,6 +115,57 @@ func TestIndexWatch_RebuildCallsInjectedReader(t *testing.T) {
 	t.Fatalf("rebuild did not populate index; reader called %d times", called)
 }
 
+func TestIndexWatch_LibRootMTimeTriggersRebuild(t *testing.T) {
+	root := t.TempDir()
+	// Seed an empty index.jsonl so Load doesn't fail.
+	writeIndexRows(t, root, []indexfile.Row{
+		{Series: mustSeries(t, "Existing"), Metadata: refs.Metadata("tvdb:1"), Title: "Existing"},
+	})
+	idx, err := indexfile.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	calls := make(chan refs.Series, 8)
+	builder := func(_ string, ref refs.Series, now time.Time) (indexfile.Row, error) {
+		select {
+		case calls <- ref:
+		default:
+		}
+		return indexfile.Row{Series: ref, Metadata: refs.Metadata("tvdb:" + ref.String()), Title: ref.String()}, nil
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	idx.Watch(ctx, indexfile.WatchConfig{
+		ProbeInterval: 30 * time.Millisecond,
+		Builder:       builder,
+	})
+
+	// mkdir under libRoot — should bump libRoot mtime within the
+	// next probe tick, triggering a rebuild that walks the new dir.
+	// Force an artificially-old baseline first so the Stat() bump is
+	// guaranteed to differ.
+	past := time.Now().Add(-time.Hour)
+	_ = os.Chtimes(root, past, past)
+	if err := os.Mkdir(filepath.Join(root, "BrandNew"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case ref := <-calls:
+			if ref == mustSeries(t, "BrandNew") {
+				return
+			}
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	t.Fatal("libRoot probe never triggered a rebuild that walked BrandNew within 2s")
+}
+
 func TestIndexWatch_DisabledLoopsRespected(t *testing.T) {
 	root := t.TempDir()
 	writeIndexRows(t, root, []indexfile.Row{

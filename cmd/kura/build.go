@@ -13,6 +13,7 @@ import (
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -26,10 +27,29 @@ func buildSourceFromFlags(rt *runContext, flags *cli) (provider.Source, error) {
 }
 
 // buildDeps constructs the workflow.Deps used by every workflow call.
+// CLI commands need a ready index before any workflow runs, so this
+// blocks on any in-flight rebuild via WaitReady. buildServeDeps uses
+// buildDepsAsyncIndex to skip the wait and let transports come up
+// while the rebuild proceeds in the background.
+//
 // The metadata provider is wrapped in a sync.Once factory so local-only
 // commands run without KURA_TVDB_KEY; provider-needing workflows surface
 // the missing-key error only when actually required.
 func buildDeps(rt *runContext) (workflow.Deps, error) {
+	deps, err := buildDepsAsyncIndex(rt)
+	if err != nil {
+		return deps, err
+	}
+	if err := deps.Index.WaitReady(rt.Context); err != nil {
+		return workflow.Deps{}, err
+	}
+	return deps, nil
+}
+
+// buildDepsAsyncIndex constructs Deps without blocking on the index
+// rebuild. Used by serve to surface KindServerNotReady to early
+// requests instead of delaying transport startup.
+func buildDepsAsyncIndex(rt *runContext) (workflow.Deps, error) {
 	libRoot := rt.Getenv("KURA_LIBRARY_ROOT")
 	if err := validateLibraryRoot(libRoot); err != nil {
 		return workflow.Deps{}, err
@@ -96,10 +116,20 @@ func validateLibraryRoot(root string) error {
 	return nil
 }
 
+// loadOrRebuildIndex returns an Index for libRoot. If index.jsonl is
+// present, it's loaded synchronously and returned ready. Otherwise a
+// fresh Index is returned with a background rebuild already triggered;
+// callers that need the rebuild to finish before returning (CLI) call
+// idx.WaitReady. After a successful path either way, the legacy
+// index.tsv is removed best-effort so the artifact doesn't linger.
 func loadOrRebuildIndex(ctx context.Context, libRoot string) (*indexfile.Index, error) {
 	index, err := indexfile.Load(libRoot)
 	if errors.Is(err, indexfile.ErrNotFound) {
-		return indexfile.Rebuild(ctx, libRoot, indexfile.BuildRow)
+		index = indexfile.New(libRoot)
+		index.TriggerRebuild(ctx, libRoot, indexfile.BuildRow, coord.NewMutator("bootstrap"))
+	} else if err != nil {
+		return nil, err
 	}
-	return index, err
+	_ = os.Remove(paths.LegacyIndexFile(libRoot))
+	return index, nil
 }

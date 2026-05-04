@@ -131,7 +131,10 @@ func serverTransports(cmd *serveCmd) []string {
 // events ("job submitted", "job terminal", "reaper evicted") flow
 // into the same structured log stream as the boot/transport events.
 func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.Registry, indexfile.WatchConfig, error) {
-	deps, err := buildDeps(rt)
+	// Async index path: any cold-start rebuild proceeds in the
+	// background. kura_list returns server_not_ready until the rebuild
+	// completes; transports come up immediately.
+	deps, err := buildDepsAsyncIndex(rt)
 	if err != nil {
 		return workflow.Deps{}, nil, indexfile.WatchConfig{}, err
 	}
