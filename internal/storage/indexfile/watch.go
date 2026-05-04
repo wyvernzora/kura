@@ -124,6 +124,12 @@ func (i *Index) probeOnce() {
 	if stat.ModTime().Equal(cachedMTime) && stat.Size() == cachedSize {
 		return
 	}
+	i.log.Info("indexfile: probe detected change, reloading",
+		"oldMTime", cachedMTime,
+		"newMTime", stat.ModTime(),
+		"oldSize", cachedSize,
+		"newSize", stat.Size(),
+	)
 	if err := i.fullRefresh(); err != nil {
 		i.log.Warn("indexfile: probe refresh", "err", err)
 	}
@@ -159,6 +165,7 @@ func (i *Index) fullRefresh() error {
 	newHash := hashHex(data)
 	i.mu.RLock()
 	same := newHash == i.cachedHash
+	priorEntries := len(i.refs)
 	i.mu.RUnlock()
 	if same {
 		i.mu.Lock()
@@ -177,6 +184,11 @@ func (i *Index) fullRefresh() error {
 	i.cachedMTime = mtime
 	i.cachedSize = size
 	i.mu.Unlock()
+	i.log.Info("indexfile: reloaded from disk",
+		"priorEntries", priorEntries,
+		"newEntries", len(parsed.Entries),
+		"size", size,
+	)
 	return nil
 }
 
@@ -203,6 +215,8 @@ func (i *Index) rebuildOnce(ctx context.Context) error {
 	if i.reader == nil {
 		return errors.New("indexfile: rebuild reader not set")
 	}
+	started := time.Now()
+	i.log.Info("indexfile: rebuild starting")
 	rebuilt, err := Rebuild(ctx, i.root, i.reader)
 	if err != nil {
 		return err
@@ -211,10 +225,14 @@ func (i *Index) rebuildOnce(ctx context.Context) error {
 
 	i.mu.RLock()
 	expected := i.cachedHash
+	priorEntries := len(i.refs)
 	i.mu.RUnlock()
 
 	if err := SaveCAS(i.root, expected, entries, coord.NewMutator("indexfile-rebuild")); err != nil {
 		if _, ok := errors.AsType[*coord.ConflictError](err); ok {
+			i.log.Info("indexfile: rebuild conflicted with peer; deferring to next probe",
+				"duration_ms", time.Since(started).Milliseconds(),
+			)
 			return nil
 		}
 		return err
@@ -227,6 +245,11 @@ func (i *Index) rebuildOnce(ctx context.Context) error {
 		i.cachedSize = size
 		i.mu.Unlock()
 	}
+	i.log.Info("indexfile: rebuild complete",
+		"priorEntries", priorEntries,
+		"newEntries", len(entries),
+		"duration_ms", time.Since(started).Milliseconds(),
+	)
 	return nil
 }
 

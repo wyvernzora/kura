@@ -154,6 +154,7 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 		Reader: func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
 			return seriesfile.ReadMetadataRef(libRoot, ref)
 		},
+		Logger: logger,
 	}
 	return deps, registry, watch, nil
 }
