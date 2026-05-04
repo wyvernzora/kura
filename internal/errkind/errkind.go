@@ -34,9 +34,11 @@ const (
 	KindStaleSnapshot       = "stale_snapshot"
 	KindUnsupportedProvider = "unsupported_provider"
 	KindInvalidRef          = "invalid_ref"
+	KindInvalidCursor       = "invalid_cursor"
 	KindProviderUnavailable = "provider_unavailable"
 	KindBusy                = "busy"
 	KindClaimStolen         = "claim_stolen"
+	KindServerNotReady      = "server_not_ready"
 	KindInternal            = "internal"
 )
 

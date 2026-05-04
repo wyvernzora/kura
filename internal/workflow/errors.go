@@ -210,6 +210,31 @@ func (e *TrashAddTargetUnparseableError) Error() string {
 	return fmt.Sprintf("workflow: trash add %q: filename does not parse to a season/episode; manual cleanup required", e.Path)
 }
 
+// InvalidCursorError signals the pagination cursor passed to List is
+// malformed (wrong length, bad encoding, or anchor missing despite a
+// matching view hash). Surfaces as KindInvalidCursor.
+type InvalidCursorError struct {
+	Reason string
+}
+
+func (e *InvalidCursorError) Error() string {
+	return fmt.Sprintf("workflow: invalid cursor: %s", e.Reason)
+}
+
+// ServerNotReadyError signals the in-memory index is rebuilding from a
+// cold start (or corruption recovery) and has nothing to serve. Clients
+// should retry shortly. Surfaces as KindServerNotReady.
+type ServerNotReadyError struct {
+	Reason string
+}
+
+func (e *ServerNotReadyError) Error() string {
+	if e.Reason == "" {
+		return "workflow: index is rebuilding; retry shortly"
+	}
+	return fmt.Sprintf("workflow: index is rebuilding (%s); retry shortly", e.Reason)
+}
+
 // RemoveStagedRecordsExistError signals the series has staged records
 // blocking a default (non-purge) remove. Caller must reconcile or reset
 // --all first; --purge bypasses the gate.

@@ -157,3 +157,23 @@ func (e *ReconcileInProgressError) Data() map[string]any {
 		"holder": coord.HolderData(e.Holder),
 	}
 }
+
+// --- list pagination + lifecycle ---------------------------------------
+
+func (e *InvalidCursorError) Kind() string     { return errkind.KindInvalidCursor }
+func (e *InvalidCursorError) Category() string { return errkind.CategoryInvalidParams }
+func (e *InvalidCursorError) Data() map[string]any {
+	if e.Reason == "" {
+		return nil
+	}
+	return map[string]any{"reason": e.Reason}
+}
+
+func (e *ServerNotReadyError) Kind() string     { return errkind.KindServerNotReady }
+func (e *ServerNotReadyError) Category() string { return errkind.CategoryInternalError }
+func (e *ServerNotReadyError) Data() map[string]any {
+	if e.Reason == "" {
+		return nil
+	}
+	return map[string]any{"reason": e.Reason}
+}

@@ -55,7 +55,14 @@ type ListRow struct {
 }
 
 // ListResult is the full library-list response. Rows are sorted by
-// the on-disk directory name (computed at workflow time, not surfaced).
+// title (lower-cased) and tie-broken on series ref.
+//
+// NextCursor is non-empty when MaxResults capped the page; pass it back
+// as the next request's Cursor to fetch the following page. DataChanged
+// is true when the index changed between pages — clients should re-render
+// from the start of the current page if they care about strict ordering.
 type ListResult struct {
-	Rows []ListRow `json:"rows"`
+	Rows        []ListRow `json:"rows"`
+	NextCursor  string    `json:"nextCursor,omitempty"`
+	DataChanged bool      `json:"dataChanged,omitempty"`
 }
