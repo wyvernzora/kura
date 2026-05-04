@@ -8,7 +8,14 @@ import (
 )
 
 type Input struct {
-	Replace bool
+	// Refresh forces every active record's mediainfo and source
+	// detection to re-run, overwriting fields like resolution / codec
+	// / size with the latest probe even when the file's mtime + size
+	// are unchanged. Source merging is one-way: a freshly detected
+	// "Unknown" never overwrites an existing non-Unknown source, so
+	// callers can re-run scan to fix bad inferences without losing
+	// good ones.
+	Refresh bool
 	// Mutator stamps the series.json write at the end of a successful
 	// scan. Required.
 	Mutator coord.Mutator
@@ -63,7 +70,6 @@ type ScanStatus string
 
 const (
 	ScanStatusAdded     ScanStatus = "added"
-	ScanStatusReplaced  ScanStatus = "replaced"
 	ScanStatusUpdated   ScanStatus = "updated"
 	ScanStatusUnchanged ScanStatus = "unchanged"
 	ScanStatusRemoved   ScanStatus = "removed"
@@ -74,7 +80,7 @@ type EpisodeAlreadyExistsError struct {
 }
 
 func (err EpisodeAlreadyExistsError) Error() string {
-	return fmt.Sprintf("episode %s already exists; pass replace to replace it", err.Episode.Marker())
+	return fmt.Sprintf("episode %s already has an active record at a different path; use kura_stage with replace=true to install the new file", err.Episode.Marker())
 }
 
 type ScanStagedRecordsError struct {

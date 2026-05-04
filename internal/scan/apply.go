@@ -61,29 +61,54 @@ func (s *scanner) applyFile(ctx context.Context, file DiscoveredFile) error {
 	absolutePath := s.absRel(file.Path)
 	status := ScanStatusAdded
 	if episode.Active != nil {
+		// Different path: scan refuses to silently replace a tracked
+		// active record. Caller must explicitly stage the new file.
 		if episode.Active.Path != absolutePath {
-			if !s.input.Replace {
-				return EpisodeAlreadyExistsError{Episode: file.Ref}
-			}
-			status = ScanStatusReplaced
-		} else if unchanged, err := s.unchanged(*episode.Active, file); err != nil {
+			return EpisodeAlreadyExistsError{Episode: file.Ref}
+		}
+		// Same path: skip the rebuild when the file is byte-equal to
+		// the recorded fingerprint (size + mtime + companion set),
+		// unless --refresh forces a full re-probe.
+		unchanged, err := s.unchanged(*episode.Active, file)
+		if err != nil {
 			return err
-		} else if unchanged {
+		}
+		if unchanged && !s.input.Refresh {
 			s.result.Synced = append(s.result.Synced, existingScannedEpisode(file, *episode.Active))
 			return nil
-		} else {
-			status = ScanStatusUpdated
 		}
+		status = ScanStatusUpdated
 	}
 	record, err := s.mediaRecord(ctx, file)
 	if err != nil {
 		return err
+	}
+	if episode.Active != nil {
+		mergeSourceFromExisting(&record, *episode.Active)
 	}
 	if err := s.model.SetActive(file.Ref, record); err != nil {
 		return err
 	}
 	s.result.Synced = append(s.result.Synced, scannedEpisode(status, file, record))
 	return nil
+}
+
+// mergeSourceFromExisting preserves a non-Unknown source on the prior
+// active record when a re-probed record came back with Unknown. Source
+// inference is filename-only and lossy: a file that was once correctly
+// labelled "BluRay" by the operator (or by a richer prior filename)
+// can degrade to "Unknown" if the filename loses its source token. The
+// reverse — Unknown → known — is always allowed since new info trumps
+// no info. Other media facts (resolution, codec, size, mtime) are
+// authoritative from mediainfo and overwrite freely.
+func mergeSourceFromExisting(record *media.Record, prior media.Record) {
+	if record.Source != media.SourceUnknown {
+		return
+	}
+	if prior.Source == media.SourceUnknown {
+		return
+	}
+	record.Source = prior.Source
 }
 
 func (s *scanner) unchanged(active media.Record, file DiscoveredFile) (bool, error) {

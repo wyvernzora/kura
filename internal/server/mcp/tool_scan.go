@@ -12,7 +12,8 @@ import (
 )
 
 type scanInput struct {
-	Ref string `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Ref     string `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Refresh bool   `json:"refresh,omitempty" jsonschema:"Force re-run of mediainfo and source detection on every active record, even when size and mtime are unchanged. A freshly detected Unknown source will not overwrite an existing non-Unknown one. Use after fixing filename source tokens or when the on-disk record's source/resolution looks wrong."`
 }
 
 type jobHandleOutput struct {
@@ -53,7 +54,7 @@ func addScanTool(s *sdkmcp.Server, deps Deps) {
 		if !ok {
 			return toolErrorResult(&workflow.MetadataRefNotIndexedError{Ref: metaRef}), nil, nil
 		}
-		j := workflow.Scan(ctx, deps.Workflow, workflow.ScanInput{Ref: seriesRef})
+		j := workflow.Scan(ctx, deps.Workflow, workflow.ScanInput{Ref: seriesRef, Refresh: in.Refresh})
 		// Three-branch IsTracked handler per design/async-job.md § 11.b.
 		if !j.IsTracked() {
 			_, waitErr := j.Wait(ctx)

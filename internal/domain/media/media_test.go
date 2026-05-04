@@ -50,12 +50,12 @@ func TestResolution(t *testing.T) {
 		// 4:3 variants fold by height — operator can't acquire 16:9.
 		"1440x1080": "1080p",
 		"960x720":   "720p",
-		// Letterboxed crops fold by width — vertical was cropped.
-		"1920x800":  "1080p",
+		// Cinemascope / ultrawide bucket by reduced height.
+		"1920x800":  "720p",
 		"2560x1080": "1080p",
 		// Near-standard ±5% encodes fold via tolerant boundaries.
-		"1328x720": "720p",
-		"1272x712": "720p",
+		"1328x720":  "720p",
+		"1272x712":  "720p",
 		"1916x1076": "1080p",
 		// Below the 360p floor falls through to raw WxH.
 		"320x240": "320x240",

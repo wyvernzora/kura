@@ -10,7 +10,7 @@ import (
 
 type scanCmd struct {
 	JSON    bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
-	Replace bool     `name:"replace" help:"Replace existing episode records, moving old records to trash."`
+	Refresh bool     `name:"refresh" help:"Force re-run of mediainfo and source detection on every active record, even when size and mtime are unchanged. A freshly detected Unknown source will not overwrite an existing non-Unknown one."`
 	Terms   []string `arg:"" required:"" help:"Resolver terms. Plain text or metadata refs such as tvdb:370070."`
 }
 
@@ -28,7 +28,7 @@ func (cmd *scanCmd) Run(rt *runContext) error {
 		if !ok {
 			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
 		}
-		j := workflow.Scan(rt.Context, deps, workflow.ScanInput{Ref: seriesRef, Replace: cmd.Replace})
+		j := workflow.Scan(rt.Context, deps, workflow.ScanInput{Ref: seriesRef, Refresh: cmd.Refresh})
 		result, err := j.Wait(rt.Context)
 		if err != nil {
 			return err

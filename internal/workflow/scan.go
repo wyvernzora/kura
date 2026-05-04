@@ -12,12 +12,14 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
-// ScanInput parameters for the Scan workflow. Replace=true allows the
-// scan to overwrite an existing active record at a different path on
-// the same episode slot.
+// ScanInput parameters for the Scan workflow. Refresh=true forces
+// every active record's mediainfo and source detection to re-run
+// even when the file's size + mtime are unchanged. Source merging
+// preserves a non-Unknown source when the new probe yields Unknown,
+// so re-running scan to fix bad data does not lose good data.
 type ScanInput struct {
 	Ref     refs.Series
-	Replace bool
+	Refresh bool
 }
 
 // Scan walks a tracked series's filesystem, refreshes its
@@ -42,7 +44,7 @@ func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanR
 		var out response.ScanResult
 		err = deps.Coordinator.WithSeriesRetry(in.Ref, func() error {
 			internal, runErr := runner.Scan(jobCtx, scan.Input{
-				Replace: in.Replace,
+				Refresh: in.Refresh,
 				Mutator: coord.NewMutator("scan"),
 			})
 			if runErr != nil {

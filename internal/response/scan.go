@@ -7,7 +7,6 @@ type ScanStatus string
 
 const (
 	ScanStatusAdded     ScanStatus = "added"
-	ScanStatusReplaced  ScanStatus = "replaced"
 	ScanStatusUpdated   ScanStatus = "updated"
 	ScanStatusUnchanged ScanStatus = "unchanged"
 	ScanStatusRemoved   ScanStatus = "removed"

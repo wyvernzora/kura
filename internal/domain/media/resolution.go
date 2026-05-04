@@ -72,106 +72,70 @@ func (r *Resolution) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Display returns the human-friendly label for the resolution. Folds
-// non-canonical dimensions into the nearest standard tier so the
-// operator sees actionable labels rather than raw pixel counts. Three
-// fold cases motivate the bucketing:
+// Display returns the human-friendly label for the resolution. Two
+// tiers of folding apply:
 //
-//   - 4:3 variants (1440x1080, 960x720): operator can't get 16:9, so
-//     the height carries the tier.
-//   - Cinemascope / letterboxed crops (1920x800, 2560x1080): the
-//     vertical was cropped from a higher source, so the width carries
-//     the tier.
-//   - Near-standard ±5% encodes (1328x720, 1272x712, 1916x1076):
-//     loose bucket boundaries absorb the variation.
+//  1. Exact lookup in knownResolutionLabels for canonical and common
+//     non-canonical aspect ratios — covers ultrawide cases the height
+//     range can't handle on its own (2560x1080 is 1080p, not 1440p).
+//  2. Height-range fallback for everything else — folds 4:3 variants
+//     (1440x1080 → 1080p, 960x720 → 720p) and near-standard ±5%
+//     encodes (1328x720, 1916x1076, …) into the closest tier.
 //
-// Bucket assignment is the higher of the height-derived and
-// width-derived tier. Raw WxH stays available via String() / the JSON
-// serialization for callers that need exact dimensions.
-//
-// Anything below 340 lines AND 600 wide falls through to raw WxH —
+// Anything below the 360p height floor falls through to raw WxH —
 // SD-PAL / VHS-tier sources are rare enough to deserve the literal
 // number rather than a misleading shorthand.
+//
+// Raw WxH stays available via String() / the JSON serialization for
+// callers that need the exact dimensions.
 func (r Resolution) Display() string {
 	if !r.Known() {
 		return ""
 	}
-	tier := heightTier(r.height)
-	if widthTier(r.width) > tier {
-		tier = widthTier(r.width)
+	if label, ok := knownResolutionLabels[r.String()]; ok {
+		return label
 	}
-	if tier == 0 {
-		return r.String()
-	}
-	return tierLabel(tier)
-}
-
-// Resolution tiers, ordered low → high so max() picks the higher
-// tier when height and width disagree (e.g. cinemascope crops where
-// width signals 1080p but height signals 720p).
-const (
-	tierBelow360 = 0
-	tier360p     = 1
-	tier480p     = 2
-	tier720p     = 3
-	tier1080p    = 4
-	tier1440p    = 5
-	tier4K       = 6
-)
-
-func heightTier(h int) int {
 	switch {
-	case h >= 2050:
-		return tier4K
-	case h >= 1400:
-		return tier1440p
-	case h >= 1040:
-		return tier1080p
-	case h >= 700:
-		return tier720p
-	case h >= 460:
-		return tier480p
-	case h >= 340:
-		return tier360p
-	default:
-		return tierBelow360
-	}
-}
-
-func widthTier(w int) int {
-	switch {
-	case w >= 3700:
-		return tier4K
-	case w >= 2400:
-		return tier1440p
-	case w >= 1800:
-		return tier1080p
-	case w >= 1200:
-		return tier720p
-	case w >= 800:
-		return tier480p
-	case w >= 600:
-		return tier360p
-	default:
-		return tierBelow360
-	}
-}
-
-func tierLabel(t int) string {
-	switch t {
-	case tier4K:
+	case r.height >= 2050:
 		return "4K"
-	case tier1440p:
+	case r.height >= 1400:
 		return "1440p"
-	case tier1080p:
+	case r.height >= 1040:
 		return "1080p"
-	case tier720p:
+	case r.height >= 700:
 		return "720p"
-	case tier480p:
+	case r.height >= 460:
 		return "480p"
-	case tier360p:
+	case r.height >= 340:
 		return "360p"
 	default:
-		return ""
+		return r.String()
 	}
+}
+
+// knownResolutionLabels short-circuits the height-range fallback for
+// dimensions whose tier is not what their height alone would imply.
+// Primarily covers ultrawide and DCI / cinema variants where the
+// width is the deciding signal. 4:3 and near-standard cases are left
+// to the range fallback since their heights already match the right
+// tier.
+var knownResolutionLabels = map[string]string{
+	// 4K / DCI 4K.
+	"3840x2160": "4K",
+	"4096x2160": "4K",
+	// QHD.
+	"2560x1440": "1440p",
+	// FHD + ultrawide variants.
+	"1920x1080": "1080p",
+	"2560x1080": "1080p", // 21:9 ultrawide
+	"3440x1440": "1440p", // 21:9 ultrawide QHD
+	// HD.
+	"1280x720": "720p",
+	// SD common variants (NTSC anamorphic, PAL, 16:9 anamorphic).
+	"854x480": "480p",
+	"720x480": "480p",
+	"640x480": "480p",
+	"720x576": "480p",
+	// Low-res streaming defaults.
+	"640x360": "360p",
 }
