@@ -12,12 +12,10 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/progress"
 	mcpserver "github.com/wyvernzora/kura/internal/server/mcp"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -148,15 +146,12 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 	deps.Jobs = registry
 	deps.Logger = logger
 
-	libRoot := deps.LibRoot
 	watch := indexfile.WatchConfig{
 		ProbeInterval:   envDuration(rt.Getenv, "KURA_INDEX_PROBE_INTERVAL", 2*time.Second),
 		RefreshInterval: envDuration(rt.Getenv, "KURA_INDEX_REFRESH_INTERVAL", 5*time.Minute),
 		RebuildInterval: envDuration(rt.Getenv, "KURA_INDEX_REBUILD_INTERVAL", time.Hour),
-		Reader: func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
-			return seriesfile.ReadMetadataRef(libRoot, ref)
-		},
-		Logger: logger,
+		Builder:         indexfile.BuildRow,
+		Logger:          logger,
 	}
 	return deps, registry, watch, nil
 }

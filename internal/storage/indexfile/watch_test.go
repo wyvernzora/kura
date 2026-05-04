@@ -89,18 +89,18 @@ func TestIndexWatch_RebuildCallsInjectedReader(t *testing.T) {
 	}
 	idx := indexfile.New(root)
 	called := 0
-	reader := func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
+	builder := func(_ string, ref refs.Series, _ time.Time) (indexfile.Row, error) {
 		called++
 		if ref == mustSeries(t, "A") {
-			return refs.Metadata("tvdb:100"), nil
+			return indexfile.Row{Series: ref, Metadata: refs.Metadata("tvdb:100"), Title: ref.String()}, nil
 		}
-		return refs.Metadata("tvdb:200"), nil
+		return indexfile.Row{Series: ref, Metadata: refs.Metadata("tvdb:200"), Title: ref.String()}, nil
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	idx.Watch(ctx, indexfile.WatchConfig{
 		RebuildInterval: 30 * time.Millisecond,
-		Reader:          reader,
+		Builder:         builder,
 	})
 
 	deadline := time.Now().Add(2 * time.Second)

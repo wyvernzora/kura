@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
@@ -22,11 +21,6 @@ type nopLogger struct{}
 
 func (nopLogger) Info(string, ...any) {}
 func (nopLogger) Warn(string, ...any) {}
-
-// MetadataReader returns the metadata ref recorded under the named
-// series directory. Used by the rebuild loop. Same shape as the
-// function passed to Rebuild.
-type MetadataReader func(context.Context, refs.Series) (refs.Metadata, error)
 
 // WatchConfig controls how aggressively Watch refreshes the in-memory
 // index against <library>/.kura/index.jsonl. Each interval set to 0
@@ -43,12 +37,12 @@ type WatchConfig struct {
 	RefreshInterval time.Duration
 	// RebuildInterval gates the periodic full library rebuild.
 	// Catches drift between index.jsonl and per-series state.
-	// Reader must be non-nil if this is > 0.
+	// Builder must be non-nil if this is > 0.
 	RebuildInterval time.Duration
 
-	// Reader is the metadata-ref accessor used by the rebuild loop.
-	// Required if RebuildInterval > 0; ignored otherwise.
-	Reader MetadataReader
+	// Builder is the row builder used by the rebuild loop. Required if
+	// RebuildInterval > 0; ignored otherwise.
+	Builder RowBuilder
 	// Logger receives lifecycle warnings. nil means silent.
 	Logger Logger
 }
@@ -68,7 +62,7 @@ func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
 		cfg.Logger = nopLogger{}
 	}
 	i.log = cfg.Logger
-	i.reader = cfg.Reader
+	i.builder = cfg.Builder
 
 	// Seed baseline so the first probe tick doesn't falsely fire.
 	if data, mtime, size, err := readIndexBytes(i.root); err == nil {
@@ -165,7 +159,7 @@ func (i *Index) fullRefresh() error {
 	newHash := hashHex(data)
 	i.mu.RLock()
 	same := newHash == i.cachedHash
-	priorEntries := len(i.refs)
+	priorEntries := len(i.bySeries)
 	i.mu.RUnlock()
 	if same {
 		i.mu.Lock()
@@ -186,7 +180,7 @@ func (i *Index) fullRefresh() error {
 	i.mu.Unlock()
 	i.log.Info("indexfile: reloaded from disk",
 		"priorEntries", priorEntries,
-		"newEntries", len(parsed.Entries),
+		"newEntries", len(parsed.Rows),
 		"size", size,
 	)
 	return nil
@@ -212,12 +206,12 @@ func (i *Index) rebuildLoop(ctx context.Context, interval time.Duration) {
 // peer wrote during the walk; skip and let the probe pick up the
 // peer's version on the next tick.
 func (i *Index) rebuildOnce(ctx context.Context) error {
-	if i.reader == nil {
-		return errors.New("indexfile: rebuild reader not set")
+	if i.builder == nil {
+		return errors.New("indexfile: rebuild builder not set")
 	}
 	started := time.Now()
 	i.log.Info("indexfile: rebuild starting")
-	rebuilt, err := Rebuild(ctx, i.root, i.reader)
+	rebuilt, err := Rebuild(ctx, i.root, i.builder)
 	if err != nil {
 		return err
 	}
@@ -225,7 +219,7 @@ func (i *Index) rebuildOnce(ctx context.Context) error {
 
 	i.mu.RLock()
 	expected := i.cachedHash
-	priorEntries := len(i.refs)
+	priorEntries := len(i.bySeries)
 	i.mu.RUnlock()
 
 	if err := SaveCAS(i.root, expected, rows, coord.NewMutator("indexfile-rebuild")); err != nil {
@@ -247,7 +241,7 @@ func (i *Index) rebuildOnce(ctx context.Context) error {
 	}
 	i.log.Info("indexfile: rebuild complete",
 		"priorEntries", priorEntries,
-		"newEntries", len(entries),
+		"newEntries", len(rows),
 		"duration_ms", time.Since(started).Milliseconds(),
 	)
 	return nil

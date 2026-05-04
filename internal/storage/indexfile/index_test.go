@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -88,8 +89,8 @@ func TestRebuildReportsProgress(t *testing.T) {
 	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
 		events = append(events, event)
 	})
-	_, err := indexfile.Rebuild(ctx, root, func(context.Context, refs.Series) (refs.Metadata, error) {
-		return refs.Metadata("tvdb:370070"), nil
+	_, err := indexfile.Rebuild(ctx, root, func(_ string, ref refs.Series, _ time.Time) (indexfile.Row, error) {
+		return indexfile.Row{Series: ref, Metadata: refs.Metadata("tvdb:370070"), Title: ref.String()}, nil
 	})
 	if err != nil {
 		t.Fatal(err)

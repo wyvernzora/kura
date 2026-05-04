@@ -11,12 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"cloud.google.com/go/civil"
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 // ListInput parameters for the List workflow. An empty Statuses slice
@@ -26,8 +24,12 @@ type ListInput struct {
 	Now      time.Time
 }
 
-// List walks the library root, builds one row per series subdirectory,
+// List walks the library root, builds one row per series subdirectory
+// via indexfile.BuildRow (single source of truth for row shape),
 // optionally filters by status, and returns a sorted ListResult.
+//
+// Phase 2 still walks the disk on every call. Phase 5 swaps this for
+// an in-memory read against deps.Index.
 func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, error) {
 	info, err := os.Stat(deps.LibRoot)
 	if errors.Is(err, os.ErrNotExist) {
@@ -40,13 +42,6 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 		return response.ListResult{}, ErrLibraryRootNotDirectory
 	}
 
-	// Approximate the walk total from the in-memory index: counts
-	// tracked series under the library root, which is a strict subset
-	// of the directories the walk will visit (untracked dirs are
-	// missing). Close enough for a progress hint; the operator sees
-	// the count overshoot by the untracked count, never undershoot
-	// past the total. Falls back to TotalIndeterminate when the
-	// index is empty (fresh library, pre-reindex).
 	estimatedTotal := deps.Index.Len()
 	if estimatedTotal == 0 {
 		estimatedTotal = progress.TotalIndeterminate
@@ -93,150 +88,45 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 	return response.ListResult{Rows: rows}, nil
 }
 
+// buildListRow turns one library subdirectory name into a response row.
+// Parse failures on the directory name surface as ListStatusError; all
+// other shape decisions live in indexfile.BuildRow.
 func buildListRow(libRoot string, name string, now time.Time) response.ListRow {
-	row := response.ListRow{
-		Title: name,
-	}
 	ref, err := refs.ParseSeries(name)
 	if err != nil {
-		row.Status = response.ListStatusError
-		row.Error = err.Error()
-		return row
+		return response.ListRow{
+			Title:  name,
+			Status: response.ListStatusError,
+			Error:  err.Error(),
+		}
 	}
-	exists, err := seriesfile.Exists(libRoot, ref)
+	row, err := indexfile.BuildRow(libRoot, ref, now)
 	if err != nil {
-		row.Status = response.ListStatusError
-		row.Error = err.Error()
-		return row
+		return response.ListRow{
+			Title:  name,
+			Status: response.ListStatusError,
+			Error:  err.Error(),
+		}
 	}
-	if !exists {
-		row.Status = response.ListStatusUntracked
-		return row
-	}
-	model, err := seriesfile.Load(libRoot, ref)
-	if err != nil {
-		row.Status = response.ListStatusError
-		row.Error = err.Error()
-		return row
-	}
-	summary := summarizeSeries(model, now)
-	if !model.PreferredTitle.IsZero() {
-		row.Title = model.PreferredTitle.String()
-	}
-	row.CanonicalTitle = model.CanonicalTitle.String()
-	row.SeasonsAvailable = summary.seasonsActive
-	row.SeasonCount = summary.seasons
-	row.EpisodesAvailable = summary.episodesActive
-	row.EpisodeCount = summary.episodes
-	row.MetadataRef = model.Metadata
-	row.LastScanned = formatOptionalTime(model.LastScanned)
-	row.Staged = summary.hasStaged
-	row.Status = listStatusFor(summary)
-	row.Resolutions, row.Sources = collectActiveQuality(model)
-	return row
+	return rowToListRow(row)
 }
 
-// collectActiveQuality walks active records on non-special episodes
-// and returns the distinct resolutions and sources, sorted high-
-// quality-first via media.Source.Rank / by pixel count for resolutions.
-func collectActiveQuality(model *domainseries.Series) (resolutions, sources []string) {
-	resSeen := map[string]int{}
-	srcSeen := map[string]int{}
-	for episodeRef, episode := range model.Episodes {
-		if episodeRef.IsSpecial() {
-			continue
-		}
-		if episode.Active == nil {
-			continue
-		}
-		if r := episode.Active.Resolution.Display(); r != "" {
-			resSeen[r] = episode.Active.Resolution.Width() * episode.Active.Resolution.Height()
-		}
-		if s := episode.Active.Source.Display(); s != "" {
-			srcSeen[s] = episode.Active.Source.Rank()
-		}
+func rowToListRow(row indexfile.Row) response.ListRow {
+	return response.ListRow{
+		Status:            row.Status,
+		Staged:            row.Staged,
+		Title:             row.Title,
+		CanonicalTitle:    row.CanonicalTitle,
+		SeasonsAvailable:  row.SeasonsAvailable,
+		SeasonCount:       row.SeasonCount,
+		EpisodesAvailable: row.EpisodesAvailable,
+		EpisodeCount:      row.EpisodeCount,
+		MetadataRef:       row.Metadata,
+		Resolutions:       row.Resolutions,
+		Sources:           row.Sources,
+		LastScanned:       row.LastScanned,
+		Error:             row.Error,
 	}
-	resolutions = sortByValueDesc(resSeen)
-	sources = sortByValueDesc(srcSeen)
-	return resolutions, sources
-}
-
-// sortByValueDesc returns the keys of m sorted by their integer
-// values in descending order, with ties broken alphabetically for
-// determinism.
-func sortByValueDesc(m map[string]int) []string {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if m[out[i]] != m[out[j]] {
-			return m[out[i]] > m[out[j]]
-		}
-		return out[i] < out[j]
-	})
-	return out
-}
-
-type seriesSummary struct {
-	seasons        int
-	seasonsActive  int
-	episodes       int
-	episodesActive int
-	missing        int
-	pending        int
-	hasStaged      bool
-}
-
-// summarizeSeries derives the row's observed-state inputs from a
-// loaded series model. Specials (season 0) are excluded from every
-// counter and from hasStaged — they do not factor into series
-// observed state per Product.md.
-func summarizeSeries(model *domainseries.Series, now time.Time) seriesSummary {
-	var s seriesSummary
-	seasons := map[int]struct{}{}
-	seasonsActive := map[int]struct{}{}
-	for episodeRef, episode := range model.Episodes {
-		if episodeRef.IsSpecial() {
-			continue
-		}
-		if episode.Staged != nil {
-			s.hasStaged = true
-		}
-		s.episodes++
-		seasons[episodeRef.Season()] = struct{}{}
-		if episode.Active != nil {
-			s.episodesActive++
-			seasonsActive[episodeRef.Season()] = struct{}{}
-		}
-		if episode.Active != nil || episode.Staged != nil {
-			continue
-		}
-		if isPending(episode.AirDate, now) {
-			s.pending++
-			continue
-		}
-		s.missing++
-	}
-	s.seasons = len(seasons)
-	s.seasonsActive = len(seasonsActive)
-	return s
-}
-
-func listStatusFor(summary seriesSummary) response.ListStatus {
-	if summary.episodes == 0 {
-		return response.ListStatusIncomplete
-	}
-	if summary.missing > 0 {
-		return response.ListStatusIncomplete
-	}
-	if summary.pending > 0 {
-		return response.ListStatusAiring
-	}
-	return response.ListStatusComplete
 }
 
 func listStatusAllowed(status response.ListStatus, allowed []response.ListStatus) bool {
@@ -244,11 +134,4 @@ func listStatusAllowed(status response.ListStatus, allowed []response.ListStatus
 		return true
 	}
 	return slices.Contains(allowed, status)
-}
-
-func isPending(aired civil.Date, now time.Time) bool {
-	if !aired.IsValid() {
-		return false
-	}
-	return aired.After(civil.DateOf(now))
 }

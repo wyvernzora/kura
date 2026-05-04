@@ -4,21 +4,17 @@ import (
 	"context"
 
 	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
-// Reindex walks the library root, gathers metadata refs from each
+// Reindex walks the library root, materializes a row per series from
 // per-series series.json, and rewrites index.jsonl via hash CAS.
 // Conflict (peer mutated mid-walk) triggers retry per coord policy.
 //
 // Local-only: never invokes the metadata provider.
 func Reindex(ctx context.Context, deps Deps) error {
 	return deps.Coordinator.WithIndexRetry(func() error {
-		rebuilt, err := indexfile.Rebuild(ctx, deps.LibRoot, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
-			return seriesfile.ReadMetadataRef(deps.LibRoot, ref)
-		})
+		rebuilt, err := indexfile.Rebuild(ctx, deps.LibRoot, indexfile.BuildRow)
 		if err != nil {
 			return err
 		}

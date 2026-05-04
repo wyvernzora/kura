@@ -9,12 +9,10 @@ import (
 
 	"github.com/wyvernzora/kura/internal/config"
 	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/provider"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -101,9 +99,7 @@ func validateLibraryRoot(root string) error {
 func loadOrRebuildIndex(ctx context.Context, libRoot string) (*indexfile.Index, error) {
 	index, err := indexfile.Load(libRoot)
 	if errors.Is(err, indexfile.ErrNotFound) {
-		return indexfile.Rebuild(ctx, libRoot, func(_ context.Context, ref refs.Series) (refs.Metadata, error) {
-			return seriesfile.ReadMetadataRef(libRoot, ref)
-		})
+		return indexfile.Rebuild(ctx, libRoot, indexfile.BuildRow)
 	}
 	return index, err
 }

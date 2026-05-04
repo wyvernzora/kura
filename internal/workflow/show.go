@@ -5,6 +5,7 @@ import (
 	"sort"
 	"time"
 
+	"cloud.google.com/go/civil"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
@@ -153,6 +154,13 @@ func formatOptionalTime(value time.Time) string {
 		return ""
 	}
 	return value.UTC().Format(time.RFC3339)
+}
+
+func isPending(aired civil.Date, now time.Time) bool {
+	if !aired.IsValid() {
+		return false
+	}
+	return aired.After(civil.DateOf(now))
 }
 
 func formatAirDate(value interface {
