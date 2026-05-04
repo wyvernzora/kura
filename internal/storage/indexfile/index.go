@@ -89,7 +89,11 @@ func Load(root string) (*Index, error) {
 // metadata ref. Series whose metadata is missing on disk are silently
 // skipped. Progress events are reported under the "reindex" stage.
 func Rebuild(ctx context.Context, root string, read func(context.Context, refs.Series) (refs.Metadata, error)) (*Index, error) {
-	progress.Start(ctx, "reindex", "Rebuilding library index", 0)
+	// Reindex walks the library root from scratch — no upfront count
+	// is available (we don't yet know which dirs parse, which have
+	// metadata, etc.), so progress runs in indeterminate mode and
+	// the spinner renders as `[N/?]`.
+	progress.Start(ctx, "reindex", "Rebuilding library index", progress.TotalIndeterminate)
 	dir, err := os.Open(root)
 	if err != nil {
 		progress.Failure(ctx, "reindex", "Failed to rebuild library index", 0, 0)
@@ -102,7 +106,7 @@ func Rebuild(ctx context.Context, root string, read func(context.Context, refs.S
 	for {
 		entries, err := dir.ReadDir(64)
 		if err != nil && !errors.Is(err, io.EOF) {
-			progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
+			progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
 			return nil, err
 		}
 		for _, entry := range entries {
@@ -111,11 +115,11 @@ func Rebuild(ctx context.Context, root string, read func(context.Context, refs.S
 			}
 			seriesRef, err := refs.ParseSeries(entry.Name())
 			if err != nil {
-				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
 				return nil, err
 			}
 			scanned++
-			progress.Update(ctx, "reindex", fmt.Sprintf("Indexing %s", seriesRef), scanned, 0)
+			progress.Update(ctx, "reindex", fmt.Sprintf("Indexing %s", seriesRef), scanned, progress.TotalIndeterminate)
 			metadataRef, err := read(ctx, seriesRef)
 			if err != nil {
 				// Series with missing or unreadable metadata are skipped
@@ -126,7 +130,7 @@ func Rebuild(ctx context.Context, root string, read func(context.Context, refs.S
 				continue
 			}
 			if err := index.Put(metadataRef, seriesRef); err != nil {
-				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, 0)
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
 				return nil, err
 			}
 		}
