@@ -208,7 +208,7 @@ func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore,
 		if err := fsop.SafeMoveFile(move.from, move.to); err != nil {
 			return response.TrashRestore{}, fmt.Errorf("workflow: trash restore move %q -> %q: %w", move.from, move.to, err)
 		}
-		restored = append(restored, move.to)
+		restored = append(restored, relativeToSeries(seriesRoot, move.to))
 	}
 	if _, err := trashfile.Delete(deps.LibRoot, in.Ref, in.ID); err != nil {
 		return response.TrashRestore{}, fmt.Errorf("workflow: trash restore cleanup %s: %w", in.ID, err)

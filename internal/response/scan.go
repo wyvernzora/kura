@@ -29,7 +29,9 @@ type ScanResult struct {
 
 // ScannedEpisode mirrors what changed for one episode slot during a
 // scan pass: what status (added/updated/...), which episode, and the
-// media facts of the new (or removed) record.
+// media facts of the new (or removed) record. Path/Companions are
+// series-relative slash form when the file lives under the series
+// root; paths outside (rare here) remain absolute.
 type ScannedEpisode struct {
 	Status     ScanStatus   `json:"status"`
 	Episode    refs.Episode `json:"episode"`

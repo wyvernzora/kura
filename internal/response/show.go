@@ -32,7 +32,8 @@ type EpisodeShow struct {
 }
 
 // MediaShow is one media file's display fields for the show view. Paths
-// here are absolute (the in-memory invariant after seriesfile.Load).
+// inside the series root are series-relative slash form; paths outside
+// (e.g. staged-from-inbox files) stay absolute.
 type MediaShow struct {
 	Source     string          `json:"source"`
 	Resolution string          `json:"resolution,omitempty"`

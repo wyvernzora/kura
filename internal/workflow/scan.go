@@ -9,6 +9,7 @@ import (
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/scan"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 // ScanInput parameters for the Scan workflow. Replace=true allows the
@@ -31,6 +32,7 @@ type ScanInput struct {
 // happen inside the Submit closure so the goroutine, not the caller,
 // pays for I/O.
 func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanResult] {
+	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	return jobs.Submit(deps.Jobs, jobs.KindScan, in.Ref, func(jobCtx context.Context) (response.ScanResult, error) {
 		source, err := deps.Provider()
 		if err != nil {
@@ -46,7 +48,7 @@ func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanR
 			if runErr != nil {
 				return translateScanError(runErr)
 			}
-			out = toScanResponse(internal)
+			out = toScanResponse(seriesRoot, internal)
 			return nil
 		})
 		if err != nil {
@@ -56,25 +58,29 @@ func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanR
 	})
 }
 
-func toScanResponse(in scan.Result) response.ScanResult {
+func toScanResponse(seriesRoot string, in scan.Result) response.ScanResult {
 	out := response.ScanResult{
 		Synced:      make([]response.ScannedEpisode, 0, len(in.Synced)),
 		Skipped:     make([]response.ScanSkip, 0, len(in.Skipped)),
 		OrphanSlots: append([]refs.Episode(nil), in.OrphanSlots...),
 	}
 	for _, ep := range in.Synced {
+		companions := make([]string, 0, len(ep.Companions))
+		for _, c := range ep.Companions {
+			companions = append(companions, relativeToSeries(seriesRoot, c))
+		}
 		out.Synced = append(out.Synced, response.ScannedEpisode{
 			Status:     response.ScanStatus(ep.Status),
 			Episode:    ep.Episode,
 			Source:     ep.Source,
 			Resolution: ep.Resolution,
-			Path:       ep.Path,
-			Companions: ep.Companions,
+			Path:       relativeToSeries(seriesRoot, ep.Path),
+			Companions: companions,
 		})
 	}
 	for _, skip := range in.Skipped {
 		out.Skipped = append(out.Skipped, response.ScanSkip{
-			Path:   skip.Path,
+			Path:   relativeToSeries(seriesRoot, skip.Path),
 			Code:   skip.Code,
 			Reason: skip.Reason,
 		})

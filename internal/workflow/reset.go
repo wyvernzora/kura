@@ -9,6 +9,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -25,6 +26,7 @@ type ResetInput struct {
 // surface what was undone.
 func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult, error) {
 	_ = ctx
+	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	var out response.ResetResult
 	err := deps.Coordinator.WithSeriesRetry(in.Ref, func() error {
 		model, err := seriesfile.Load(deps.LibRoot, in.Ref)
@@ -35,7 +37,7 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 			return &coord.BusyError{Scope: coord.SeriesScope(in.Ref), Holder: *model.InProgress}
 		}
 		if in.All {
-			result, err := resetAllInPlace(deps, in.Ref, model)
+			result, err := resetAllInPlace(deps, in.Ref, seriesRoot, model)
 			if err != nil {
 				return err
 			}
@@ -56,7 +58,7 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {
 			return err
 		}
-		view := mediaShow(dropped)
+		view := mediaShow(seriesRoot, dropped)
 		out = response.ResetResult{Record: &view}
 		return nil
 	})
@@ -66,7 +68,7 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 	return out, nil
 }
 
-func resetAllInPlace(deps Deps, _ refs.Series, model *domainseries.Series) (response.ResetResult, error) {
+func resetAllInPlace(deps Deps, _ refs.Series, seriesRoot string, model *domainseries.Series) (response.ResetResult, error) {
 	refsWithStaged := make([]refs.Episode, 0, len(model.Episodes))
 	for r, episode := range model.Episodes {
 		if episode.Staged != nil {
@@ -80,7 +82,7 @@ func resetAllInPlace(deps Deps, _ refs.Series, model *domainseries.Series) (resp
 		if err := model.ClearStaged(r); err != nil {
 			return response.ResetResult{}, err
 		}
-		records = append(records, response.ResetRecord{Episode: r, Record: mediaShow(dropped)})
+		records = append(records, response.ResetRecord{Episode: r, Record: mediaShow(seriesRoot, dropped)})
 	}
 	if len(records) > 0 {
 		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {

@@ -40,36 +40,37 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 	if preferredTitle == "" {
 		preferredTitle = in.Ref.String()
 	}
-	seriesDir, err := seriesdir.Parse(paths.SeriesDir(deps.LibRoot, in.Ref))
+	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
+	seriesDir, err := seriesdir.Parse(seriesRoot)
 	if err != nil {
 		return response.Show{}, err
 	}
 	return response.Show{
 		MetadataRef:    model.Metadata,
 		Ref:            in.Ref,
-		Root:           paths.SeriesDir(deps.LibRoot, in.Ref),
+		Root:           seriesRoot,
 		LastScanned:    formatOptionalTime(model.LastScanned),
 		PreferredTitle: preferredTitle,
 		CanonicalTitle: model.CanonicalTitle.String(),
-		Seasons:        buildSeasons(seriesDir, model, now),
+		Seasons:        buildSeasons(seriesDir, seriesRoot, model, now),
 	}, nil
 }
 
-func buildSeasons(seriesDir seriesdir.SeriesDir, model *domainseries.Series, now time.Time) []response.SeasonShow {
+func buildSeasons(seriesDir seriesdir.SeriesDir, seriesRoot string, model *domainseries.Series, now time.Time) []response.SeasonShow {
 	bySeason := map[int][]response.EpisodeShow{}
 	for ref, episode := range model.Episodes {
 		view := response.EpisodeShow{
 			Episode:         ref,
 			Aired:           formatAirDate(episode.AirDate),
 			Status:          computeEpisodeStatus(seriesDir, episode, now),
-			Inconsistencies: episodeIssues(seriesDir, episode),
+			Inconsistencies: episodeIssues(seriesDir, seriesRoot, episode),
 		}
 		if episode.Active != nil {
-			m := mediaShow(*episode.Active)
+			m := mediaShow(seriesRoot, *episode.Active)
 			view.Active = &m
 		}
 		if episode.Staged != nil {
-			m := mediaShow(*episode.Staged)
+			m := mediaShow(seriesRoot, *episode.Staged)
 			view.Staged = &m
 		}
 		bySeason[ref.Season()] = append(bySeason[ref.Season()], view)
@@ -108,7 +109,7 @@ func computeEpisodeStatus(seriesDir seriesdir.SeriesDir, episode domainseries.Ep
 	return response.StatusMissing
 }
 
-func episodeIssues(seriesDir seriesdir.SeriesDir, episode domainseries.Episode) []response.Issue {
+func episodeIssues(seriesDir seriesdir.SeriesDir, seriesRoot string, episode domainseries.Episode) []response.Issue {
 	raw := episodeFilesystemIssues(seriesDir, episode)
 	if len(raw) == 0 {
 		return nil
@@ -117,7 +118,7 @@ func episodeIssues(seriesDir seriesdir.SeriesDir, episode domainseries.Episode) 
 	for _, issue := range raw {
 		out = append(out, response.Issue{
 			Record: issue.Record,
-			Path:   issue.Path,
+			Path:   relativeToSeries(seriesRoot, issue.Path),
 			Code:   issue.Code,
 			Reason: issue.Reason,
 		})
@@ -125,11 +126,11 @@ func episodeIssues(seriesDir seriesdir.SeriesDir, episode domainseries.Episode) 
 	return out
 }
 
-func mediaShow(record media.Record) response.MediaShow {
+func mediaShow(seriesRoot string, record media.Record) response.MediaShow {
 	companions := make([]response.CompanionShow, 0, len(record.Companions))
 	for _, c := range record.Companions {
 		companions = append(companions, response.CompanionShow{
-			Path:     c.Path,
+			Path:     relativeToSeries(seriesRoot, c.Path),
 			Role:     c.Role,
 			Language: c.Language,
 			Label:    c.Label,
@@ -142,7 +143,7 @@ func mediaShow(record media.Record) response.MediaShow {
 		Resolution: record.Resolution.Display(),
 		Codec:      record.Codec.String(),
 		Size:       record.Size,
-		File:       record.Path,
+		File:       relativeToSeries(seriesRoot, record.Path),
 		Companions: companions,
 	}
 }

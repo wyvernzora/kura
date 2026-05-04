@@ -12,6 +12,7 @@ import (
 	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -46,6 +47,7 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		return response.StageResult{}, fmt.Errorf("episode path %q is not a recognized video file", mediaPath)
 	}
 
+	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	var out response.StageResult
 	err = deps.Coordinator.WithSeriesRetry(in.Ref, func() error {
 		model, err := seriesfile.Load(deps.LibRoot, in.Ref)
@@ -101,7 +103,7 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		}
 		out = response.StageResult{
 			Replaced: replaced,
-			Record:   mediaShow(record),
+			Record:   mediaShow(seriesRoot, record),
 		}
 		return nil
 	})

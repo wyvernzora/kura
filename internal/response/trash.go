@@ -55,7 +55,7 @@ type TrashSeriesEmpty struct {
 // TrashRestore is workflow.TrashRestore's response. Caller passed ref
 // + trash entry ID; the new info is which episode slot the entry came
 // from (recorded at trash time) and the list of paths that got moved
-// back into place.
+// back into place. Restored paths are series-relative slash form.
 type TrashRestore struct {
 	Episode  refs.Episode `json:"episode"`
 	Restored []string     `json:"restored"`
