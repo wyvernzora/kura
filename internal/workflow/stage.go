@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -16,9 +17,11 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
-// StageInput parameters for the Stage workflow. MediaPath and any
-// CompanionPaths must be absolute. Replace=true allows overwriting an
-// existing active or staged record on the same episode slot.
+// StageInput parameters for the Stage workflow. MediaPath and
+// CompanionPaths may be absolute or series-root-relative; relative
+// paths resolve against the series directory. Replace=true allows
+// overwriting an existing active or staged record on the same
+// episode slot.
 type StageInput struct {
 	Ref            refs.Series
 	Episode        refs.Episode
@@ -37,7 +40,8 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		progress.Failure(ctx, "stage", fmt.Sprintf("Failed to stage %s", in.Episode), 1, 0)
 	}
 
-	mediaPath, err := cleanAbsoluteFilePath(in.MediaPath)
+	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
+	mediaPath, err := resolveStageFilePath(seriesRoot, in.MediaPath)
 	if err != nil {
 		failProgress()
 		return response.StageResult{}, err
@@ -46,8 +50,6 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		failProgress()
 		return response.StageResult{}, fmt.Errorf("episode path %q is not a recognized video file", mediaPath)
 	}
-
-	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	var out response.StageResult
 	err = deps.Coordinator.WithSeriesRetry(in.Ref, func() error {
 		model, err := seriesfile.Load(deps.LibRoot, in.Ref)
@@ -81,7 +83,7 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 			Source:     in.Source,
 		}
 		for _, companion := range in.CompanionPaths {
-			path, err := cleanAbsoluteFilePath(companion)
+			path, err := resolveStageFilePath(seriesRoot, companion)
 			if err != nil {
 				return err
 			}
@@ -115,20 +117,28 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 	return out, nil
 }
 
-func cleanAbsoluteFilePath(path string) (string, error) {
-	path = filepath.Clean(path)
-	if path == "." {
+// resolveStageFilePath turns an absolute or series-root-relative input
+// into an absolute, validated file path. Slash-form relatives are
+// supported so MCP callers can pass "Season 2/foo.mkv" verbatim from
+// scan output. Errors when the path is empty, points at a missing
+// file, or resolves to a directory.
+func resolveStageFilePath(seriesRoot, raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
 		return "", errors.New("path is required")
 	}
-	if !filepath.IsAbs(path) {
-		return "", fmt.Errorf("path %q must be absolute", path)
+	var resolved string
+	if filepath.IsAbs(raw) {
+		resolved = filepath.Clean(raw)
+	} else {
+		resolved = filepath.Join(seriesRoot, filepath.FromSlash(raw))
 	}
-	info, err := os.Stat(path)
+	info, err := os.Stat(resolved)
 	if err != nil {
 		return "", err
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("path %q is a directory", path)
+		return "", fmt.Errorf("path %q is a directory", resolved)
 	}
-	return path, nil
+	return resolved, nil
 }

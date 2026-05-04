@@ -14,15 +14,15 @@ import (
 type stageInput struct {
 	Ref            string   `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
 	Episode        string   `json:"episode" jsonschema:"Episode marker (S01E03) or storage form (S01E0003)."`
-	MediaPath      string   `json:"mediaPath" jsonschema:"Absolute path to the media file on the server's filesystem."`
+	MediaPath      string   `json:"mediaPath" jsonschema:"Path to the media file. Absolute path, or series-root-relative slash form (e.g. \"Season 2/foo.mkv\") — the same form scan/show output uses."`
 	Source         string   `json:"source,omitempty" jsonschema:"Override for the source label. One of: BluRay, WebRip, Web-DL, HDTV, DVDRip, TVRip, Unknown. Otherwise inferred from the filename."`
-	CompanionPaths []string `json:"companionPaths,omitempty" jsonschema:"Sidecar paths (subtitles, cover art) to attach to the stage."`
+	CompanionPaths []string `json:"companionPaths,omitempty" jsonschema:"Sidecar paths (subtitles, cover art) to attach to the stage. Absolute or series-root-relative, same conventions as mediaPath."`
 	Replace        bool     `json:"replace,omitempty" jsonschema:"Allow staging over an existing active or staged record at this slot."`
 }
 
 const stageDescription = `Stage a media file for one episode slot. Records intent only — the file stays in place until ` + "`kura_reconcile_apply`" + ` runs and moves it into the series's canonical layout, archiving any prior file at that slot to trash.
 
-` + "`mediaPath`" + ` is an absolute path on the server's filesystem. ` + "`companionPaths`" + ` carries sidecar files (subtitles, cover art) to attach.
+` + "`mediaPath`" + ` accepts either an absolute path on the server's filesystem or a series-root-relative slash path (e.g. ` + "`\"Season 2/foo.mkv\"`" + `) — the latter is the same form ` + "`kura_scan`" + ` and ` + "`kura_show`" + ` emit, so paths from those tools can be passed back verbatim. ` + "`companionPaths`" + ` carries sidecar files (subtitles, cover art) under the same conventions.
 
 ` + "`source`" + ` overrides what kura would otherwise infer from the filename (BluRay, WebRip, Web-DL, HDTV, DVDRip, TVRip, Unknown). Resolution / codec / size are always probed from the file.
 
