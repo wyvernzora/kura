@@ -24,7 +24,9 @@ Returns a ` + "`candidates`" + ` array. Cardinality:
 - 1: unique.
 - 2+: ambiguous.
 
-Each candidate carries ` + "`evidence`" + ` (which term matched, where, with qualifying annotations like ` + "`full_match`" + `) for ranking heuristics. Empty for explicit-ref lookups.`
+Each candidate carries ` + "`evidence`" + ` (which term matched, where, with qualifying annotations like ` + "`full_match`" + `) for ranking heuristics. Empty for explicit-ref lookups.
+
+Use ` + "`genres`" + ` + ` + "`originalLanguage`" + ` + ` + "`originalCountry`" + ` to distinguish among candidates that share a title — e.g. an anime adaptation typically tags ` + "`Animation`" + ` (or ` + "`Anime`" + `) and ` + "`originalLanguage=ja`" + `, while a live-action adaptation of the same source omits the Animation genre.`
 
 func addResolveTool(s *sdkmcp.Server, deps Deps) {
 	sdkmcp.AddTool(s, &sdkmcp.Tool{

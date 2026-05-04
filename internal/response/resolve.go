@@ -26,6 +26,7 @@ type Candidate struct {
 	FirstAired       string        `json:"firstAired,omitempty"`
 	OriginalLanguage string        `json:"originalLanguage,omitempty"`
 	OriginalCountry  string        `json:"originalCountry,omitempty"`
+	Genres           []string      `json:"genres,omitempty"`
 	Evidence         []Evidence    `json:"evidence,omitempty"`
 }
 
