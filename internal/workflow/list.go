@@ -40,10 +40,21 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 		return response.ListResult{}, ErrLibraryRootNotDirectory
 	}
 
-	progress.Start(ctx, "list", "Listing library contents", 0)
+	// Approximate the walk total from the in-memory index: counts
+	// tracked series under the library root, which is a strict subset
+	// of the directories the walk will visit (untracked dirs are
+	// missing). Close enough for a progress hint; the operator sees
+	// the count overshoot by the untracked count, never undershoot
+	// past the total. Falls back to TotalIndeterminate when the
+	// index is empty (fresh library, pre-reindex).
+	estimatedTotal := deps.Index.Len()
+	if estimatedTotal == 0 {
+		estimatedTotal = progress.TotalIndeterminate
+	}
+	progress.Start(ctx, "list", "Listing library contents", estimatedTotal)
 	dir, err := os.Open(deps.LibRoot)
 	if err != nil {
-		progress.Failure(ctx, "list", "Failed to list library contents", 0, 0)
+		progress.Failure(ctx, "list", "Failed to list library contents", 0, estimatedTotal)
 		return response.ListResult{}, err
 	}
 	defer dir.Close()
@@ -58,7 +69,7 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 	for {
 		entries, readErr := dir.ReadDir(64)
 		if readErr != nil && !errors.Is(readErr, io.EOF) {
-			progress.Failure(ctx, "list", "Failed to list library contents", scanned, 0)
+			progress.Failure(ctx, "list", "Failed to list library contents", scanned, estimatedTotal)
 			return response.ListResult{}, readErr
 		}
 		for _, entry := range entries {
@@ -67,7 +78,7 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 				continue
 			}
 			scanned++
-			progress.Update(ctx, "list", fmt.Sprintf("Listing %s", name), scanned, 0)
+			progress.Update(ctx, "list", fmt.Sprintf("Listing %s", name), scanned, estimatedTotal)
 			row := buildListRow(deps.LibRoot, name, now)
 			if listStatusAllowed(row.Status, in.Statuses) {
 				rows = append(rows, row)

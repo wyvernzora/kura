@@ -138,6 +138,16 @@ func Rebuild(ctx context.Context, root string, read func(context.Context, refs.S
 	return index, nil
 }
 
+// Len returns the number of metadata-ref → series-ref entries in the
+// in-memory index. Useful as a coarse upfront estimate of "how many
+// tracked series live under the library root" — e.g. for sizing
+// progress-bar totals before a walk.
+func (i *Index) Len() int {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	return len(i.refs)
+}
+
 func (i *Index) Get(ref refs.Metadata) (refs.Series, bool, error) {
 	if ref == "" {
 		return refs.Series{}, false, errors.New("indexfile: metadata ref is required")

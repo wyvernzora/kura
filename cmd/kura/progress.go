@@ -51,10 +51,17 @@ func newProgressReporter(stderr io.Writer) progress.Reporter {
 }
 
 func progressMessage(event progress.Event) string {
-	if event.Total <= 0 || event.Current <= 0 {
+	if event.Current <= 0 {
 		return event.Message
 	}
-	return fmt.Sprintf("[%d/%d] %s", event.Current, event.Total, event.Message)
+	switch {
+	case event.Total > 0:
+		return fmt.Sprintf("[%d/%d] %s", event.Current, event.Total, event.Message)
+	case event.Total == progress.TotalIndeterminate:
+		return fmt.Sprintf("[%d/?] %s", event.Current, event.Message)
+	default:
+		return event.Message
+	}
 }
 
 func (p *spinnerProgress) start(format string, args ...any) {

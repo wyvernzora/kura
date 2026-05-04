@@ -11,6 +11,18 @@ const (
 	FailureStatus Status = "failure"
 )
 
+// TotalIndeterminate is the sentinel value emitters use for an
+// iterating operation whose total count is genuinely unknown ahead
+// of time (or only knowable after the loop ends — e.g. "scan trash
+// for the whole library", where the entry count per series is found
+// during the walk). Renderers display it as a `?` so the operator
+// sees `[42/?]` rather than no progress numbers at all.
+//
+// Distinguishes from the default total=0, which means "this is a
+// one-shot op, don't show progress numbers" (used by Resolve, Add,
+// and similar single-step workflows).
+const TotalIndeterminate = -1
+
 type Event struct {
 	Status  Status
 	Stage   string
