@@ -58,6 +58,9 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {
 			return err
 		}
+		if err := updateIndexRow(deps, model, "reset"); err != nil {
+			return err
+		}
 		view := mediaShow(seriesRoot, dropped)
 		out = response.ResetResult{Record: &view}
 		return nil
@@ -86,6 +89,9 @@ func resetAllInPlace(deps Deps, _ refs.Series, seriesRoot string, model *domains
 	}
 	if len(records) > 0 {
 		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {
+			return response.ResetResult{}, err
+		}
+		if err := updateIndexRow(deps, model, "reset"); err != nil {
 			return response.ResetResult{}, err
 		}
 	}

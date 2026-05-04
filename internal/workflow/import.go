@@ -83,6 +83,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err
 	}
+	indexRow := indexfile.BuildRowFromModel(model, deps.Now())
 	if err := withIndexCAS(deps, "import", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
 		// Drop any prior row pointing at this series ref (Force-replace
 		// path) and any conflicting row for the same metadataRef.
@@ -96,7 +97,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 			}
 			filtered = append(filtered, row)
 		}
-		return append(filtered, indexfile.Row{Series: ref, Metadata: metadataRef}), nil
+		return append(filtered, indexRow), nil
 	}); err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err

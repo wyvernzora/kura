@@ -191,6 +191,11 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, token str
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))
 		return response.ReconcileApply{}, err
 	}
+	if err := updateIndexRow(deps, updated, "reconcile_apply"); err != nil {
+		_ = log.AppendResult(deps.Now(), "failure", len(moves), err)
+		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))
+		return response.ReconcileApply{}, err
+	}
 	released = true
 	if err := log.AppendResult(deps.Now(), "success", len(moves), nil); err != nil {
 		progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), len(moves), len(moves))

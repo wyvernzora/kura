@@ -83,6 +83,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
 	}
+	indexRow := indexfile.BuildRowFromModel(model, deps.Now())
 	if err := withIndexCAS(deps, "add", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
 		// Re-check after fresh load: a peer add could have landed for
 		// the same metadataRef between our pre-check and our load here.
@@ -91,7 +92,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 				return nil, &MetadataRefConflictError{Ref: metadataRef, Existing: row.Series, Next: ref}
 			}
 		}
-		return appendOrReplaceRow(loaded.Rows, indexfile.Row{Series: ref, Metadata: metadataRef}), nil
+		return appendOrReplaceRow(loaded.Rows, indexRow), nil
 	}); err != nil {
 		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
@@ -102,16 +103,6 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 		Ref:            ref,
 		PreferredTitle: metadataSeries.PreferredTitle.String(),
 	}, nil
-}
-
-func appendOrReplaceRow(rows []indexfile.Row, row indexfile.Row) []indexfile.Row {
-	for i := range rows {
-		if rows[i].Series == row.Series {
-			rows[i] = row
-			return rows
-		}
-	}
-	return append(rows, row)
 }
 
 // fetchSeriesMetadata pulls a full Series view from the provider for

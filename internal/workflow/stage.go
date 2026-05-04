@@ -103,6 +103,9 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("stage")); err != nil {
 			return err
 		}
+		if err := updateIndexRow(deps, model, "stage"); err != nil {
+			return err
+		}
 		out = response.StageResult{
 			Replaced: replaced,
 			Record:   mediaShow(seriesRoot, record),
