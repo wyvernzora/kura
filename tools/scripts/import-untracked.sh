@@ -31,17 +31,17 @@ ok=0
 fail=0
 for dir in "${dirs[@]}"; do
   printf '\n=== %s ===\n' "$dir"
-  if ! kura import "$dir" --json >/dev/null; then
+  # Capture import's JSON to pull the resolved metadataRef and pass
+  # it to scan; otherwise an ambiguous dirname re-prompts for
+  # disambiguation on the second command.
+  if ! import_json=$(kura import "$dir" --json); then
     printf '  import failed; skipping scan\n'
     fail=$((fail + 1))
     continue
   fi
-  # AddResult no longer echoes metadataRef; look it up from the
-  # library index now that the series is tracked. Pass the resolved
-  # ref to scan so an ambiguous dirname doesn't re-prompt.
-  ref=$(kura list --json | jq -r --arg root "$dir" '.[] | select(.root == $root) | .metadataRef')
+  ref=$(printf '%s' "$import_json" | jq -r '.metadataRef')
   if [ -z "$ref" ] || [ "$ref" = "null" ]; then
-    printf '  could not look up metadataRef after import; skipping scan\n'
+    printf '  import returned no metadataRef; skipping scan\n'
     fail=$((fail + 1))
     continue
   fi
