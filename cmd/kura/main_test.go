@@ -819,6 +819,14 @@ func TestListCommandPrintsStagedStatusMarker(t *testing.T) {
 			t.Fatalf("stdout = %q, want %q", output, want)
 		}
 	}
+	header := strings.Split(strings.TrimSpace(output), "\n")[0]
+	idIndex := strings.Index(header, "ID")
+	seasonsIndex := strings.Index(header, "SEASONS")
+	episodesIndex := strings.Index(header, "EPISODES")
+	resolutionIndex := strings.Index(header, "RESOLUTION")
+	if !(idIndex < seasonsIndex && seasonsIndex < episodesIndex && episodesIndex < resolutionIndex) {
+		t.Fatalf("header = %q, want ID, SEASONS, EPISODES, RESOLUTION order", header)
+	}
 }
 
 func TestListCommandFiltersByStatus(t *testing.T) {

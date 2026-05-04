@@ -27,7 +27,7 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 	}
 	styled := style.ShouldStyle(w)
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"STATUS", "ID", "RESOLUTION", "SOURCE", "TITLE", "SEASONS", "EPISODES", "SCANNED"})
+	tw.AppendHeader(table.Row{"STATUS", "ID", "SEASONS", "EPISODES", "RESOLUTION", "SOURCE", "TITLE", "SCANNED"})
 	tw.SetStyle(style.BorderlessTableStyle())
 	tw.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1},
@@ -48,11 +48,11 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 		tw.AppendRow(table.Row{
 			renderListStatus(statusText, styled),
 			idCell(row),
+			progressCell(row.SeasonsAvailable, row.SeasonCount, row.Status, styled),
+			progressCell(row.EpisodesAvailable, row.EpisodeCount, row.Status, styled),
 			resolutionListCell(row.Resolutions, styled),
 			sourceListCell(row.Sources, styled),
 			titleCell(row),
-			progressCell(row.SeasonsAvailable, row.SeasonCount, row.Status, styled),
-			progressCell(row.EpisodesAvailable, row.EpisodeCount, row.Status, styled),
 			scannedCell(row.LastScanned, row.Status, now),
 		})
 	}
