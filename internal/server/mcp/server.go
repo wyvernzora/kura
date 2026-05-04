@@ -50,6 +50,7 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	addResolveTool(s, deps)
 	addListTool(s, deps)
 	addShowTool(s, deps)
+	addAddTool(s, deps)
 	return s
 }
 
