@@ -54,6 +54,6 @@ func addAddTool(s *sdkmcp.Server, deps Deps) {
 		if _, err := workflow.Add(ctx, deps.Workflow, workflow.AddInput{Metadata: metaRef, Ref: seriesRef}); err != nil {
 			return toolErrorResult(err), nil, nil
 		}
-		return nil, nil, nil
+		return nil, ackSuccess, nil
 	})
 }

@@ -31,6 +31,20 @@ var errEmptyTerms = &invalidInputError{
 	message: "kura_resolve: terms must contain at least one entry",
 }
 
+// successAck is the canonical "operation succeeded, no payload"
+// response for tools whose only useful signal is that the mutation
+// completed. Wire shape is `{"success": true}`. Required because the
+// SDK can't synthesize a structured response from (nil, nil) and
+// returns "Unexpected response type" to the caller; handlers must
+// emit something with a discoverable schema.
+type successAck struct {
+	Success bool `json:"success"`
+}
+
+// ackSuccess is the singleton successAck callers return when the
+// mutation has no other new info to surface.
+var ackSuccess = successAck{Success: true}
+
 // toolErrorResult turns any error into a CallToolResult with
 // IsError=true and a structured payload describing kind, category,
 // and any error-specific data. Coded errors expose taxonomy via

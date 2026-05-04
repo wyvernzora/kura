@@ -58,6 +58,6 @@ func addImportTool(s *sdkmcp.Server, deps Deps) {
 		}); err != nil {
 			return toolErrorResult(err), nil, nil
 		}
-		return nil, nil, nil
+		return nil, ackSuccess, nil
 	})
 }
