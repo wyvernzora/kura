@@ -88,16 +88,19 @@ func toolCallLoggingMiddleware(logger *slog.Logger) sdkmcp.Middleware {
 			started := time.Now()
 			var (
 				toolName string
-				args     json.RawMessage
+				argsRaw  json.RawMessage
 			)
 			if params, ok := req.GetParams().(*sdkmcp.CallToolParamsRaw); ok && params != nil {
 				toolName = params.Name
-				args = params.Arguments
+				argsRaw = params.Arguments
 			}
 			result, err := next(ctx, method, req)
+			// argsRaw is json.RawMessage ([]byte). slog renders byte
+			// slices as decimal arrays unless cast to string; cast
+			// here so the log line is readable JSON text.
 			attrs := []any{
 				"tool", toolName,
-				"args", args,
+				"args", string(argsRaw),
 				"duration_ms", time.Since(started).Milliseconds(),
 			}
 			if err != nil {

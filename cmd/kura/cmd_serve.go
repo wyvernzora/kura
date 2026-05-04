@@ -37,17 +37,19 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 
 	logger := newServerLogger(rt.Stderr, rt.Getenv)
 
+	// Suppress the CLI spinner globally for the server lifetime BEFORE
+	// any registry / coordinator captures rt.Context. Otherwise the
+	// jobs registry's parentCtx retains the spinner reporter installed
+	// by run.go, and every async job's progress events tee back into
+	// the spinner — emitting ANSI control sequences into the log
+	// stream. Lifecycle visibility comes from structured logs instead.
+	rt.Context = progress.With(rt.Context, func(context.Context, progress.Event) {})
+
 	deps, registry, watch, err := buildServeDeps(rt, logger)
 	if err != nil {
 		logger.Error("server bootstrap failed", "err", err)
 		return err
 	}
-
-	// Suppress the CLI spinner globally for the server lifetime —
-	// progress events fire from inside long workflows and would
-	// otherwise emit ANSI control sequences into the log stream.
-	// Lifecycle visibility comes from structured logs instead.
-	rt.Context = progress.With(rt.Context, func(context.Context, progress.Event) {})
 
 	// Manual signal wiring (vs signal.NotifyContext) so the signal name
 	// can be logged at the moment it arrives — before transports start
