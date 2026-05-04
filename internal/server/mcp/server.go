@@ -55,6 +55,7 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	addResetTool(s, deps)
 	addReconcilePlanTool(s, deps)
 	addScanTool(s, deps)
+	addReconcileApplyTool(s, deps)
 	return s
 }
 
