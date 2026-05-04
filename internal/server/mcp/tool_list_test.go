@@ -84,3 +84,24 @@ func TestKuraList_EmptyReturnsNil(t *testing.T) {
 		t.Fatalf("parseListStatuses(nil) = (%v, %v); want (nil, nil)", got, err)
 	}
 }
+
+func TestKuraList_NegativeMaxResultsRejected(t *testing.T) {
+	cs := connectInMemoryWithList(t)
+	res, err := cs.CallTool(context.Background(), &sdkmcp.CallToolParams{
+		Name:      "kura_list",
+		Arguments: map[string]any{"maxResults": -1},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("IsError = false, want true")
+	}
+	body, err := decodeStructured(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body["kind"] != errkind.KindInvalidRef {
+		t.Fatalf("kind = %v, want %v", body["kind"], errkind.KindInvalidRef)
+	}
+}
