@@ -100,10 +100,7 @@ func Stage(ctx context.Context, deps Deps, in StageInput) (response.StageResult,
 			return err
 		}
 		out = response.StageResult{
-			Series:   in.Ref,
-			Applied:  true,
 			Replaced: replaced,
-			Episode:  in.Episode,
 			Record:   mediaShow(record),
 		}
 		return nil

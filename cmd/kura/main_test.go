@@ -1592,8 +1592,8 @@ func TestStageCommandWritesStagedEpisode(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
-	if got := result["series"]; got != "Bookworm" {
-		t.Fatalf("series = %v, want Bookworm", got)
+	if got, _ := result["replaced"].(bool); got {
+		t.Fatalf("replaced = %v, want false (slot was empty)", got)
 	}
 	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
 	if err != nil {
