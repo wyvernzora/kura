@@ -27,7 +27,7 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 	}
 	styled := style.ShouldStyle(w)
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"STATUS", "TITLE", "SEASONS", "EPISODES", "SCANNED", "ROOT"})
+	tw.AppendHeader(table.Row{"STATUS", "ID", "RESOLUTION", "SOURCE", "TITLE", "SEASONS", "EPISODES", "SCANNED"})
 	tw.SetStyle(style.BorderlessTableStyle())
 	tw.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1},
@@ -36,6 +36,8 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 		{Number: 4},
 		{Number: 5},
 		{Number: 6},
+		{Number: 7},
+		{Number: 8},
 	})
 	now := time.Now()
 	for _, row := range result.Rows {
@@ -45,14 +47,52 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 		}
 		tw.AppendRow(table.Row{
 			renderListStatus(statusText, styled),
+			idCell(row),
+			resolutionListCell(row.Resolutions, styled),
+			sourceListCell(row.Sources, styled),
 			titleCell(row),
 			countCell(row.SeasonCount, row.Status),
 			countCell(row.EpisodeCount, row.Status),
 			scannedCell(row.LastScanned, row.Status, now),
-			row.Root,
 		})
 	}
 	return style.WriteStyledTable(w, tw, nil)
+}
+
+// idCell renders the metadata ref ("ID" column). Single dash for
+// untracked / error rows that have no metadata ref.
+func idCell(row response.ListRow) string {
+	if row.MetadataRef == "" {
+		return "-"
+	}
+	return row.MetadataRef.String()
+}
+
+// resolutionListCell renders the per-series distinct-resolutions
+// roll-up. Each value styled via the shared MediaResolution helper
+// so colors match the show / scan tables.
+func resolutionListCell(values []string, styled bool) string {
+	if len(values) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		parts = append(parts, style.MediaResolution(v, styled))
+	}
+	return strings.Join(parts, " ")
+}
+
+// sourceListCell renders the per-series distinct-sources roll-up.
+// Each value styled via the shared MediaSource helper.
+func sourceListCell(values []string, styled bool) string {
+	if len(values) == 0 {
+		return "-"
+	}
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		parts = append(parts, style.MediaSource(v, styled))
+	}
+	return strings.Join(parts, " ")
 }
 
 // titleCell renders the row title for the table. Untracked rows have

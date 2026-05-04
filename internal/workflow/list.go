@@ -77,7 +77,7 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 			break
 		}
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Root < rows[j].Root })
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Title < rows[j].Title })
 	progress.Success(ctx, "list", fmt.Sprintf("Listed library contents (%d series)", len(rows)), scanned)
 	return response.ListResult{Rows: rows}, nil
 }
@@ -85,7 +85,6 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 func buildListRow(libRoot string, name string, now time.Time) response.ListRow {
 	row := response.ListRow{
 		Title: name,
-		Root:  name,
 	}
 	ref, err := refs.ParseSeries(name)
 	if err != nil {
@@ -120,7 +119,53 @@ func buildListRow(libRoot string, name string, now time.Time) response.ListRow {
 	row.LastScanned = formatOptionalTime(model.LastScanned)
 	row.Staged = summary.hasStaged
 	row.Status = listStatusFor(summary)
+	row.Resolutions, row.Sources = collectActiveQuality(model)
 	return row
+}
+
+// collectActiveQuality walks active records on non-special episodes
+// and returns the distinct resolutions and sources, sorted high-
+// quality-first via media.Source.Rank / by pixel count for resolutions.
+func collectActiveQuality(model *domainseries.Series) (resolutions, sources []string) {
+	resSeen := map[string]int{}
+	srcSeen := map[string]int{}
+	for episodeRef, episode := range model.Episodes {
+		if episodeRef.IsSpecial() {
+			continue
+		}
+		if episode.Active == nil {
+			continue
+		}
+		if r := episode.Active.Resolution.Display(); r != "" {
+			resSeen[r] = episode.Active.Resolution.Width() * episode.Active.Resolution.Height()
+		}
+		if s := episode.Active.Source.Display(); s != "" {
+			srcSeen[s] = episode.Active.Source.Rank()
+		}
+	}
+	resolutions = sortByValueDesc(resSeen)
+	sources = sortByValueDesc(srcSeen)
+	return resolutions, sources
+}
+
+// sortByValueDesc returns the keys of m sorted by their integer
+// values in descending order, with ties broken alphabetically for
+// determinism.
+func sortByValueDesc(m map[string]int) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if m[out[i]] != m[out[j]] {
+			return m[out[i]] > m[out[j]]
+		}
+		return out[i] < out[j]
+	})
+	return out
 }
 
 type seriesSummary struct {

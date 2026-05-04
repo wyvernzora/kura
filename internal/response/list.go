@@ -29,7 +29,9 @@ const (
 	ListStatusError ListStatus = "error"
 )
 
-// ListRow is one row in the library list response.
+// ListRow is one row in the library list response. Resolutions and
+// Sources roll up the distinct values across non-special episodes
+// with active records, sorted high-quality-first.
 type ListRow struct {
 	Status         ListStatus    `json:"status"`
 	Staged         bool          `json:"staged,omitempty"`
@@ -37,14 +39,15 @@ type ListRow struct {
 	CanonicalTitle string        `json:"canonicalTitle,omitempty"`
 	SeasonCount    int           `json:"seasonCount"`
 	EpisodeCount   int           `json:"episodeCount"`
-	Root           string        `json:"root"`
 	MetadataRef    refs.Metadata `json:"metadataRef,omitempty"`
+	Resolutions    []string      `json:"resolutions,omitempty"`
+	Sources        []string      `json:"sources,omitempty"`
 	LastScanned    string        `json:"lastScanned,omitempty"`
 	Error          string        `json:"error,omitempty"`
 }
 
-// ListResult is the full library-list response. Rows are sorted by Root
-// (the on-disk directory name).
+// ListResult is the full library-list response. Rows are sorted by
+// the on-disk directory name (computed at workflow time, not surfaced).
 type ListResult struct {
 	Rows []ListRow `json:"rows"`
 }

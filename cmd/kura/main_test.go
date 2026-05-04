@@ -726,46 +726,40 @@ func TestListCommandPrintsLibraryInventoryJSON(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
-	byRoot := map[string]map[string]any{}
+	byTitle := map[string]map[string]any{}
 	for _, row := range rows {
-		byRoot[row["root"].(string)] = row
+		byTitle[row["title"].(string)] = row
 	}
-	if _, ok := byRoot[".hidden"]; ok {
+	if _, ok := byTitle[".hidden"]; ok {
 		t.Fatalf("hidden directory listed: %#v", rows)
 	}
-	for rootName, want := range map[string]string{
-		"Airing":     "airing",
-		"Broken":     "error",
-		"Complete":   "complete",
-		"Empty":      "incomplete",
-		"Incomplete": "incomplete",
-		"Untracked":  "untracked",
+	for title, want := range map[string]string{
+		"Airing Title":     "airing",
+		"Broken":           "error",
+		"Complete Title":   "complete",
+		"Empty Title":      "incomplete",
+		"Incomplete Title": "incomplete",
+		"Untracked":        "untracked",
 	} {
-		row, ok := byRoot[rootName]
+		row, ok := byTitle[title]
 		if !ok {
-			t.Fatalf("missing row %q in %#v", rootName, rows)
+			t.Fatalf("missing row %q in %#v", title, rows)
 		}
 		if got := row["status"]; got != want {
-			t.Fatalf("%s status = %v, want %s", rootName, got, want)
+			t.Fatalf("%s status = %v, want %s", title, got, want)
 		}
 	}
-	if got := byRoot["Complete"]["title"]; got != "Complete Title" {
-		t.Fatalf("Complete title = %v, want Complete Title", got)
-	}
-	if got := byRoot["Complete"]["canonicalTitle"]; got != "Complete Canonical" {
+	if got := byTitle["Complete Title"]["canonicalTitle"]; got != "Complete Canonical" {
 		t.Fatalf("Complete canonicalTitle = %v, want Complete Canonical", got)
 	}
-	if got := byRoot["Complete"]["staged"]; got != true {
+	if got := byTitle["Complete Title"]["staged"]; got != true {
 		t.Fatalf("Complete staged = %v, want true", got)
 	}
-	if got := byRoot["Complete"]["seasonCount"]; got != float64(2) {
+	if got := byTitle["Complete Title"]["seasonCount"]; got != float64(2) {
 		t.Fatalf("Complete seasonCount = %v, want 2", got)
 	}
-	if got := byRoot["Complete"]["episodeCount"]; got != float64(2) {
+	if got := byTitle["Complete Title"]["episodeCount"]; got != float64(2) {
 		t.Fatalf("Complete episodeCount = %v, want 2", got)
-	}
-	if got := byRoot["Untracked"]["title"]; got != "Untracked" {
-		t.Fatalf("Untracked title = %v, want Untracked", got)
 	}
 }
 
@@ -809,7 +803,7 @@ func TestListCommandPrintsStagedStatusMarker(t *testing.T) {
 		t.Fatalf("run: %v\nstderr:\n%s", err, stderr.String())
 	}
 	output := stdout.String()
-	for _, want := range []string{"STATUS", "TITLE", "SEASONS", "EPISODES", "ROOT", "complete*", "Bookworm"} {
+	for _, want := range []string{"STATUS", "ID", "RESOLUTION", "SOURCE", "TITLE", "SEASONS", "EPISODES", "complete*", "Bookworm"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("stdout = %q, want %q", output, want)
 		}
@@ -868,15 +862,15 @@ func TestListCommandFiltersByStatus(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("len(rows) = %d, want 2: %#v", len(rows), rows)
 	}
-	roots := map[string]bool{}
+	titles := map[string]bool{}
 	for _, row := range rows {
-		roots[row["root"].(string)] = true
+		titles[row["title"].(string)] = true
 	}
-	if roots["Complete"] {
+	if titles["Complete Title"] {
 		t.Fatalf("filtered rows include staged-complete series: %#v", rows)
 	}
-	if !roots["Incomplete"] || !roots["Untracked"] {
-		t.Fatalf("filtered roots = %#v, want Incomplete and Untracked", roots)
+	if !titles["Incomplete Title"] || !titles["Untracked"] {
+		t.Fatalf("filtered titles = %#v, want Incomplete Title and Untracked", titles)
 	}
 }
 
