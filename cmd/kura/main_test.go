@@ -1658,8 +1658,8 @@ func TestResetCommandClearsStagedEpisode(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
 	}
-	if got := result["applied"]; got != true {
-		t.Fatalf("applied = %v, want true", got)
+	if _, ok := result["record"]; !ok {
+		t.Fatalf("expected dropped record in result, got: %v", result)
 	}
 	data, err := os.ReadFile(filepath.Join(seriesDir, ".kura", "series.json"))
 	if err != nil {
@@ -1731,9 +1731,6 @@ func TestResetCommandClearsAllStagedEpisodes(t *testing.T) {
 	var result map[string]any
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal stdout: %v\nstdout:\n%s", err, stdout.String())
-	}
-	if got := result["applied"]; got != true {
-		t.Fatalf("applied = %v, want true", got)
 	}
 	records := result["records"].([]any)
 	if len(records) != 2 {

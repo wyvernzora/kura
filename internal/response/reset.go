@@ -2,13 +2,12 @@ package response
 
 import "github.com/wyvernzora/kura/internal/domain/refs"
 
-// ResetResult is workflow.Reset's response. The Episode + Record fields
-// are populated when a single staged record is dropped; the Records
-// slice is populated when --all drops every staged record at once.
+// ResetResult is workflow.Reset's response. Single-mode (caller passed
+// one Episode) returns just the dropped Record; the episode is echoed
+// from the input. --all mode returns the per-episode list of dropped
+// records so the caller learns what got cleared. Empty Records on
+// --all means there was nothing staged.
 type ResetResult struct {
-	Series  refs.Series   `json:"series"`
-	Applied bool          `json:"applied"`
-	Episode *refs.Episode `json:"episode,omitempty"`
 	Record  *MediaShow    `json:"record,omitempty"`
 	Records []ResetRecord `json:"records,omitempty"`
 }

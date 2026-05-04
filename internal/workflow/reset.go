@@ -57,12 +57,7 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 			return err
 		}
 		view := mediaShow(dropped)
-		out = response.ResetResult{
-			Series:  in.Ref,
-			Applied: true,
-			Episode: &in.Episode,
-			Record:  &view,
-		}
+		out = response.ResetResult{Record: &view}
 		return nil
 	})
 	if err != nil {
@@ -71,7 +66,7 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 	return out, nil
 }
 
-func resetAllInPlace(deps Deps, ref refs.Series, model *domainseries.Series) (response.ResetResult, error) {
+func resetAllInPlace(deps Deps, _ refs.Series, model *domainseries.Series) (response.ResetResult, error) {
 	refsWithStaged := make([]refs.Episode, 0, len(model.Episodes))
 	for r, episode := range model.Episodes {
 		if episode.Staged != nil {
@@ -92,9 +87,5 @@ func resetAllInPlace(deps Deps, ref refs.Series, model *domainseries.Series) (re
 			return response.ResetResult{}, err
 		}
 	}
-	return response.ResetResult{
-		Series:  ref,
-		Applied: len(records) > 0,
-		Records: records,
-	}, nil
+	return response.ResetResult{Records: records}, nil
 }
