@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -48,8 +49,23 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 	// Lifecycle visibility comes from structured logs instead.
 	rt.Context = progress.With(rt.Context, func(context.Context, progress.Event) {})
 
-	ctx, stop := signal.NotifyContext(rt.Context, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	// Manual signal wiring (vs signal.NotifyContext) so the signal name
+	// can be logged at the moment it arrives — before transports start
+	// draining. Goroutine cancels ctx on first signal; subsequent
+	// signals are ignored (kernel default would force-kill).
+	ctx, cancel := context.WithCancel(rt.Context)
+	defer cancel()
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	go func() {
+		select {
+		case sig := <-sigCh:
+			logger.Info("shutdown signal received, draining", "signal", sig.String())
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 
 	deps.Index.Watch(ctx, watch)
 
@@ -71,10 +87,6 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 	}
 
 	runErr := g.Wait()
-
-	if ctx.Err() != nil {
-		logger.Info("shutdown signal received")
-	}
 
 	grace := envDuration(rt.Getenv, "KURA_SHUTDOWN_TIMEOUT", defaultShutdownTimeout)
 	if stuck := registry.Shutdown(grace); stuck > 0 {
