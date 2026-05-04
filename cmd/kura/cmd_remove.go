@@ -38,6 +38,6 @@ func (cmd *removeCmd) Run(rt *runContext) error {
 		if err != nil {
 			return err
 		}
-		return render.Remove(rt.Stdout, result, cmd.JSON)
+		return render.Remove(rt.Stdout, result, seriesRef.String(), cmd.Purge, cmd.JSON)
 	})
 }

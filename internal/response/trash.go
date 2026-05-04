@@ -52,10 +52,11 @@ type TrashSeriesEmpty struct {
 	ReclaimedBytes int64       `json:"reclaimedBytes"`
 }
 
-// TrashRestore is workflow.TrashRestore's response.
+// TrashRestore is workflow.TrashRestore's response. Caller passed ref
+// + trash entry ID; the new info is which episode slot the entry came
+// from (recorded at trash time) and the list of paths that got moved
+// back into place.
 type TrashRestore struct {
-	Ref      refs.Series  `json:"ref"`
-	ID       string       `json:"id"`
 	Episode  refs.Episode `json:"episode"`
 	Restored []string     `json:"restored"`
 }

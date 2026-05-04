@@ -91,7 +91,7 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, token str
 			return response.ReconcileApply{}, err
 		}
 		progress.Success(ctx, "reconcile", fmt.Sprintf("Reconciled %s", ref), 0)
-		return response.ReconcileApply{Series: ref}, nil
+		return response.ReconcileApply{}, nil
 	}
 	seriesDir, err := seriesdir.Parse(paths.SeriesDir(deps.LibRoot, ref))
 	if err != nil {
@@ -190,7 +190,7 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, token str
 		return response.ReconcileApply{}, err
 	}
 	progress.Success(ctx, "reconcile", fmt.Sprintf("Reconciled %s", ref), len(moves))
-	return response.ReconcileApply{Series: ref, AppliedMoves: len(moves)}, nil
+	return response.ReconcileApply{AppliedMoves: len(moves)}, nil
 }
 
 // acquireReconcileClaim sets in_progress on the series and CAS-writes.

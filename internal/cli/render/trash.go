@@ -65,13 +65,14 @@ func TrashEmpty(w io.Writer, result response.TrashEmpty, asJSON bool) error {
 	return err
 }
 
-// TrashRestore writes the trash-restore response.
-func TrashRestore(w io.Writer, result response.TrashRestore, asJSON bool) error {
+// TrashRestore writes the trash-restore response. Series ref is
+// passed by the caller since the response no longer echoes it.
+func TrashRestore(w io.Writer, result response.TrashRestore, ref string, asJSON bool) error {
 	if asJSON || !style.ShouldStyle(w) {
 		return writeJSON(w, result)
 	}
 	_, err := fmt.Fprintf(w, "Restored %d files for %s %s.\n",
-		len(result.Restored), result.Ref, result.Episode.Marker())
+		len(result.Restored), ref, result.Episode.Marker())
 	return err
 }
 

@@ -214,8 +214,6 @@ func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore,
 		return response.TrashRestore{}, fmt.Errorf("workflow: trash restore cleanup %s: %w", in.ID, err)
 	}
 	return response.TrashRestore{
-		Ref:      in.Ref,
-		ID:       in.ID.String(),
 		Episode:  meta.Episode,
 		Restored: restored,
 	}, nil

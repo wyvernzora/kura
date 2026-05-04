@@ -58,7 +58,6 @@ func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanR
 
 func toScanResponse(in scan.Result) response.ScanResult {
 	out := response.ScanResult{
-		Series:      in.Series,
 		Synced:      make([]response.ScannedEpisode, 0, len(in.Synced)),
 		Skipped:     make([]response.ScanSkip, 0, len(in.Skipped)),
 		OrphanSlots: append([]refs.Episode(nil), in.OrphanSlots...),

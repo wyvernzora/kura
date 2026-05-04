@@ -53,10 +53,8 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 		return response.Remove{}, err
 	}
 
-	mode := response.RemoveModeUntrack
 	target := paths.SeriesKuraDir(deps.LibRoot, in.Ref)
 	if in.Purge {
-		mode = response.RemoveModePurge
 		target = seriesDir
 	}
 	bytes, err := dirSize(target)
@@ -88,7 +86,7 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 	}
 
 	progress.Success(ctx, "remove", fmt.Sprintf("Removed %s", in.Ref), 0)
-	return response.Remove{Ref: in.Ref, Mode: mode, ReclaimedBytes: bytes}, nil
+	return response.Remove{ReclaimedBytes: bytes}, nil
 }
 
 func preCheckRemove(deps Deps, in RemoveInput) error {

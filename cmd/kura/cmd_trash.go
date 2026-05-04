@@ -139,7 +139,7 @@ func (cmd *trashRestoreCmd) Run(rt *runContext) error {
 		if err != nil {
 			return err
 		}
-		return render.TrashRestore(rt.Stdout, result, cmd.JSON)
+		return render.TrashRestore(rt.Stdout, result, seriesRef.String(), cmd.JSON)
 	})
 }
 

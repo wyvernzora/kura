@@ -2338,8 +2338,8 @@ func TestRemoveDefaultUntracksSeries(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
 	}
-	if result["mode"] != "untrack" {
-		t.Fatalf("mode = %v, want untrack", result["mode"])
+	if _, ok := result["reclaimedBytes"]; !ok {
+		t.Fatalf("reclaimedBytes missing from result: %v", result)
 	}
 	if _, err := os.Stat(filepath.Join(seriesDir, ".kura")); !os.IsNotExist(err) {
 		t.Fatalf(".kura still present after untrack: err=%v", err)
@@ -2383,8 +2383,8 @@ func TestRemovePurgeDeletesEverything(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("unmarshal: %v\n%s", err, stdout.String())
 	}
-	if result["mode"] != "purge" {
-		t.Fatalf("mode = %v, want purge", result["mode"])
+	if _, ok := result["reclaimedBytes"]; !ok {
+		t.Fatalf("reclaimedBytes missing from result: %v", result)
 	}
 	if _, err := os.Stat(seriesDir); !os.IsNotExist(err) {
 		t.Fatalf("series dir still present after purge: err=%v", err)

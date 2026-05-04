@@ -18,8 +18,10 @@ const (
 // directories the scan ignored with reasons; OrphanSlots are episode
 // refs the local model still tracks (because they hold active or
 // staged records) but the provider no longer knows about.
+// ScanResult is workflow.Scan's response. Caller knew the series ref;
+// only the discovered facts (synced episodes, skipped files, orphan
+// slots) are new info.
 type ScanResult struct {
-	Series      refs.Series      `json:"series"`
 	Synced      []ScannedEpisode `json:"synced"`
 	Skipped     []ScanSkip       `json:"skipped"`
 	OrphanSlots []refs.Episode   `json:"orphanSlots"`

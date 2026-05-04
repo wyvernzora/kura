@@ -58,7 +58,7 @@ func ApplyReconcile(w io.Writer, result response.ReconcileApply, asJSON bool) er
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(result)
 	}
-	_, err := fmt.Fprintf(w, "Applied %d reconcile moves for %s\n", result.AppliedMoves, result.Series)
+	_, err := fmt.Fprintf(w, "Applied %d reconcile moves\n", result.AppliedMoves)
 	return err
 }
 
