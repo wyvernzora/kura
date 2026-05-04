@@ -53,6 +53,7 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	addAddTool(s, deps)
 	addStageTool(s, deps)
 	addResetTool(s, deps)
+	addReconcilePlanTool(s, deps)
 	return s
 }
 
