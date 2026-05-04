@@ -55,13 +55,14 @@ func (b Builder) Build(ctx context.Context, in Input) (media.Record, error) {
 	if source == "" {
 		source = InferSourceFromFilename(in.RecordPath)
 	}
-	// Embedded-title heuristic: filename inference often comes back
-	// "unknown" (no parenthesized suffix or only a resolution token);
-	// the container's General.Title field sometimes carries the
-	// missing source token in free text. Only consult it when the
-	// stronger filename signal failed — never override.
+	// Mediainfo heuristic: filename inference often comes back
+	// "unknown" (no parenthesized suffix or only a resolution token).
+	// InferSourceFromMediainfo chains several mediainfo-derived
+	// signals (embedded title text, container extension, audio
+	// codec) to fill the gap. Only consults this fallback when
+	// the stronger filename signal failed — never overrides.
 	if source == "" || source == media.SourceUnknown.String() {
-		if hint := InferSourceFromText(info.Title); hint != "" {
+		if hint := InferSourceFromMediainfo(info, in.RecordPath); hint != "" {
 			source = hint
 		}
 	}
@@ -130,6 +131,73 @@ func InferSourceFromFilename(path string) string {
 // the surrounding dot in scene names like "1080p-Group", or are
 // harmlessly ignored when not IsKnown.
 var textTokenSplit = regexp.MustCompile(`[\s._\[\]()/+,]+`)
+
+// InferSourceFromMediainfo chains mediainfo-derived heuristics to
+// guess a source when filename inference fails. Signals are tried
+// in decreasing reliability order; the first match wins. Returns
+// "" when nothing matches.
+//
+//  1. Container's General.Title field (free-text scan).
+//  2. Container extension — only the unambiguous ones (m2ts, mts,
+//     webm). Generic containers (.mkv, .mp4, .ts, .avi) deliberately
+//     return nothing because they cross multiple sources.
+//  3. Audio codec — disc-only formats (TrueHD/MLP, DTS-HD MA, DTS:X)
+//     imply BluRay; web/broadcast codecs (AC-3, AAC, Opus) cross
+//     multiple sources and are not used.
+//
+// Used as a heuristic fallback only; caller must check stronger
+// signals (caller-provided override, filename suffix) first.
+func InferSourceFromMediainfo(info media.Info, mediaPath string) string {
+	if hint := InferSourceFromText(info.Title); hint != "" {
+		return hint
+	}
+	if hint := sourceFromContainerExt(mediaPath); hint != "" {
+		return hint
+	}
+	if hint := sourceFromAudioCodec(info.AudioCodec); hint != "" {
+		return hint
+	}
+	return ""
+}
+
+// sourceFromContainerExt maps unambiguous container extensions to
+// their implied source. Generic containers return "" — they say
+// nothing about source.
+func sourceFromContainerExt(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".m2ts", ".mts":
+		// BDAV stream files: only produced by BluRay rips / playback.
+		return media.SourceBluRay.String()
+	case ".webm":
+		// Web-native container; never appears off the open web.
+		return media.SourceWebRip.String()
+	}
+	return ""
+}
+
+// sourceFromAudioCodec maps disc-only audio formats to BluRay.
+// Conservative: only formats that are licensing-locked or
+// bitrate-prohibitive outside disc media are listed. Web releases
+// can carry Atmos via E-AC-3-JOC but the underlying stream type
+// is E-AC-3, not TrueHD/DTS-HD, so this stays disc-side.
+func sourceFromAudioCodec(codec string) string {
+	norm := strings.ToLower(strings.TrimSpace(codec))
+	norm = strings.ReplaceAll(norm, " ", "")
+	norm = strings.ReplaceAll(norm, "-", "")
+	switch {
+	// Dolby TrueHD (mediainfo emits "MLP FBA" for the underlying
+	// Meridian Lossless Packing stream, sometimes "TrueHD").
+	case strings.Contains(norm, "truehd"), strings.Contains(norm, "mlpfba"):
+		return media.SourceBluRay.String()
+	// DTS-HD MA / DTS:X variants.
+	case strings.Contains(norm, "dtshd"),
+		strings.Contains(norm, "dtsma"),
+		strings.Contains(norm, "dtsxll"),
+		strings.Contains(norm, "dtsx"):
+		return media.SourceBluRay.String()
+	}
+	return ""
+}
 
 // InferSourceFromText scans free text (typically the container's
 // General.Title field) for an *informative* source token — a
