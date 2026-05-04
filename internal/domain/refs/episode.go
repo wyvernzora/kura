@@ -42,6 +42,35 @@ func ParseEpisode(value string) (Episode, error) {
 	return NewEpisode(season, episode)
 }
 
+// markerPattern matches the relaxed display form (variable padding
+// 1-5 digits per side) accepted from human / agent input. Storage
+// always normalizes back to the strict 4-digit-episode form via
+// NewEpisode.
+var markerPattern = regexp.MustCompile(`^S([0-9]{1,5})E([0-9]{1,5})$`)
+
+// ParseEpisodeMarker accepts either the canonical storage form
+// (S<NN>E<NNNN>, e.g. "S01E0003") or the relaxed display marker
+// (S<N>E<N>, e.g. "S1E3" / "S01E03"). Both normalize to the same
+// Episode value via NewEpisode.
+func ParseEpisodeMarker(value string) (Episode, error) {
+	if ref, err := ParseEpisode(value); err == nil {
+		return ref, nil
+	}
+	match := markerPattern.FindStringSubmatch(value)
+	if match == nil {
+		return Episode{}, fmt.Errorf("invalid episode %q; expected marker S01E03 or storage form S01E0003", value)
+	}
+	season, err := strconv.Atoi(match[1])
+	if err != nil {
+		return Episode{}, err
+	}
+	episode, err := strconv.Atoi(match[2])
+	if err != nil {
+		return Episode{}, err
+	}
+	return NewEpisode(season, episode)
+}
+
 func (ref Episode) Season() int {
 	return ref.season
 }

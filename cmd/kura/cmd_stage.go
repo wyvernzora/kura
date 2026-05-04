@@ -2,10 +2,7 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"path/filepath"
-	"regexp"
-	"strconv"
 
 	clipkg "github.com/wyvernzora/kura/internal/cli"
 	"github.com/wyvernzora/kura/internal/cli/render"
@@ -73,26 +70,8 @@ func splitStageArgs(args []string) ([]string, string, error) {
 	return args[:len(args)-1], args[len(args)-1], nil
 }
 
-var stageEpisodePattern = regexp.MustCompile(`^S([0-9]{2,})E([0-9]{2,})$`)
-
 func parseStageEpisode(value string) (refs.Episode, error) {
-	ref, err := refs.ParseEpisode(value)
-	if err == nil {
-		return ref, nil
-	}
-	match := stageEpisodePattern.FindStringSubmatch(value)
-	if match == nil {
-		return refs.Episode{}, fmt.Errorf("invalid episode %q; expected marker S01E03 or episode ref S01E0003", value)
-	}
-	season, err := strconv.Atoi(match[1])
-	if err != nil {
-		return refs.Episode{}, err
-	}
-	episode, err := strconv.Atoi(match[2])
-	if err != nil {
-		return refs.Episode{}, err
-	}
-	return refs.NewEpisode(season, episode)
+	return refs.ParseEpisodeMarker(value)
 }
 
 func pathFromSeriesRoot(seriesRoot string, path string) string {
