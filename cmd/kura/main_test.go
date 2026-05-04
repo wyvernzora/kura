@@ -765,16 +765,19 @@ func TestListCommandPrintsLibraryInventoryJSON(t *testing.T) {
 
 func TestListCommandPrintsStagedStatusMarker(t *testing.T) {
 	root := t.TempDir()
+	// Series with a regular-episode staged record: confirms the `*`
+	// marker fires on non-special staged work. A special-only staged
+	// record would not (specials don't factor into observed state).
 	writeSeriesJSON(t, filepath.Join(root, "Bookworm"), `{
 		"schemaVersion": 1,
 		"metadataRef": "tvdb:370070",
 		"preferredTitle": "Bookworm",
 		"canonicalTitle": "Ascendance of a Bookworm",
 		"episodes": {
-			"S00E0001": {
+			"S01E0001": {
 				"airDate": "2019-01-01",
-				"staged": {
-					"path": "/inbox/special.mkv",
+				"active": {
+					"path": "Season 1/episode-1.mkv",
 					"source": "webrip",
 					"resolution": "1920x1080",
 					"size": 9,
@@ -782,11 +785,19 @@ func TestListCommandPrintsStagedStatusMarker(t *testing.T) {
 					"companions": []
 				}
 			},
-			"S01E0001": {
-				"airDate": "2019-01-01",
+			"S01E0002": {
+				"airDate": "2019-01-08",
 				"active": {
-					"path": "Season 1/episode-1.mkv",
+					"path": "Season 1/episode-2.mkv",
 					"source": "webrip",
+					"resolution": "1920x1080",
+					"size": 9,
+					"mtime": "2026-04-20T03:00:00Z",
+					"companions": []
+				},
+				"staged": {
+					"path": "/inbox/episode-2-bluray.mkv",
+					"source": "bluray",
 					"resolution": "1920x1080",
 					"size": 9,
 					"mtime": "2026-04-20T03:00:00Z",

@@ -113,7 +113,9 @@ func buildListRow(libRoot string, name string, now time.Time) response.ListRow {
 		row.Title = model.PreferredTitle.String()
 	}
 	row.CanonicalTitle = model.CanonicalTitle.String()
+	row.SeasonsAvailable = summary.seasonsActive
 	row.SeasonCount = summary.seasons
+	row.EpisodesAvailable = summary.episodesActive
 	row.EpisodeCount = summary.episodes
 	row.MetadataRef = model.Metadata
 	row.LastScanned = formatOptionalTime(model.LastScanned)
@@ -169,25 +171,36 @@ func sortByValueDesc(m map[string]int) []string {
 }
 
 type seriesSummary struct {
-	seasons   int
-	episodes  int
-	missing   int
-	pending   int
-	hasStaged bool
+	seasons        int
+	seasonsActive  int
+	episodes       int
+	episodesActive int
+	missing        int
+	pending        int
+	hasStaged      bool
 }
 
+// summarizeSeries derives the row's observed-state inputs from a
+// loaded series model. Specials (season 0) are excluded from every
+// counter and from hasStaged — they do not factor into series
+// observed state per Product.md.
 func summarizeSeries(model *domainseries.Series, now time.Time) seriesSummary {
 	var s seriesSummary
 	seasons := map[int]struct{}{}
+	seasonsActive := map[int]struct{}{}
 	for episodeRef, episode := range model.Episodes {
-		if episode.Staged != nil {
-			s.hasStaged = true
-		}
 		if episodeRef.IsSpecial() {
 			continue
 		}
+		if episode.Staged != nil {
+			s.hasStaged = true
+		}
 		s.episodes++
 		seasons[episodeRef.Season()] = struct{}{}
+		if episode.Active != nil {
+			s.episodesActive++
+			seasonsActive[episodeRef.Season()] = struct{}{}
+		}
 		if episode.Active != nil || episode.Staged != nil {
 			continue
 		}
@@ -198,6 +211,7 @@ func summarizeSeries(model *domainseries.Series, now time.Time) seriesSummary {
 		s.missing++
 	}
 	s.seasons = len(seasons)
+	s.seasonsActive = len(seasonsActive)
 	return s
 }
 

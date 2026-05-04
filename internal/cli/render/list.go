@@ -51,8 +51,8 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 			resolutionListCell(row.Resolutions, styled),
 			sourceListCell(row.Sources, styled),
 			titleCell(row),
-			countCell(row.SeasonCount, row.Status),
-			countCell(row.EpisodeCount, row.Status),
+			progressCell(row.SeasonsAvailable, row.SeasonCount, row.Status, styled),
+			progressCell(row.EpisodesAvailable, row.EpisodeCount, row.Status, styled),
 			scannedCell(row.LastScanned, row.Status, now),
 		})
 	}
@@ -105,11 +105,23 @@ func titleCell(row response.ListRow) string {
 	return row.Title
 }
 
-func countCell(count int, status response.ListStatus) string {
+// progressCell renders an "available/total" pair (e.g. "10/12").
+// Untracked / error rows return "-" since the model is unknown.
+// When styled, equal counts render green; mismatches render red so
+// incomplete series are visible at a glance. Specials are excluded
+// from both numerator and denominator at the workflow layer.
+func progressCell(available, total int, status response.ListStatus, styled bool) string {
 	if status == response.ListStatusUntracked || status == response.ListStatusError {
 		return "-"
 	}
-	return strconv.Itoa(count)
+	text := strconv.Itoa(available) + "/" + strconv.Itoa(total)
+	if !styled {
+		return text
+	}
+	if available == total {
+		return chalk.Green.Color(text)
+	}
+	return chalk.Red.Color(text)
 }
 
 func scannedCell(lastScanned string, status response.ListStatus, now time.Time) string {

@@ -29,21 +29,29 @@ const (
 	ListStatusError ListStatus = "error"
 )
 
-// ListRow is one row in the library list response. Resolutions and
-// Sources roll up the distinct values across non-special episodes
-// with active records, sorted high-quality-first.
+// ListRow is one row in the library list response. Counts and quality
+// rollups exclude specials (season 0) — they don't factor into series
+// observed state. Resolutions and Sources are the distinct values
+// across non-special episodes with active records, sorted high-
+// quality-first.
+//
+// SeasonsAvailable / EpisodesAvailable count slots populated by an
+// active record. SeasonCount / EpisodeCount are the totals. Renderers
+// surface them as "available/total".
 type ListRow struct {
-	Status         ListStatus    `json:"status"`
-	Staged         bool          `json:"staged,omitempty"`
-	Title          string        `json:"title"`
-	CanonicalTitle string        `json:"canonicalTitle,omitempty"`
-	SeasonCount    int           `json:"seasonCount"`
-	EpisodeCount   int           `json:"episodeCount"`
-	MetadataRef    refs.Metadata `json:"metadataRef,omitempty"`
-	Resolutions    []string      `json:"resolutions,omitempty"`
-	Sources        []string      `json:"sources,omitempty"`
-	LastScanned    string        `json:"lastScanned,omitempty"`
-	Error          string        `json:"error,omitempty"`
+	Status            ListStatus    `json:"status"`
+	Staged            bool          `json:"staged,omitempty"`
+	Title             string        `json:"title"`
+	CanonicalTitle    string        `json:"canonicalTitle,omitempty"`
+	SeasonsAvailable  int           `json:"seasonsAvailable"`
+	SeasonCount       int           `json:"seasonCount"`
+	EpisodesAvailable int           `json:"episodesAvailable"`
+	EpisodeCount      int           `json:"episodeCount"`
+	MetadataRef       refs.Metadata `json:"metadataRef,omitempty"`
+	Resolutions       []string      `json:"resolutions,omitempty"`
+	Sources           []string      `json:"sources,omitempty"`
+	LastScanned       string        `json:"lastScanned,omitempty"`
+	Error             string        `json:"error,omitempty"`
 }
 
 // ListResult is the full library-list response. Rows are sorted by
