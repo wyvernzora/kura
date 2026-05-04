@@ -5,7 +5,9 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -33,20 +35,30 @@ var (
 )
 
 // Deps bundles everything the MCP transport needs to construct its
-// tool handlers. Tools land in later commits and consume Workflow.
+// tool handlers. Tools consume Workflow; Logger is optional (nil →
+// no per-call logging).
 type Deps struct {
 	Workflow workflow.Deps
+	Logger   *slog.Logger
 }
 
 // NewServer constructs the MCP server with kura's capabilities and
 // registers the tool surface. Each tool lives in its own file
 // (tool_*.go) and exposes an addXxxTool helper that wires its handler
 // into the server.
+//
+// When Deps.Logger is non-nil, an inbound middleware logs every
+// `tools/call` with the tool name + raw arguments + duration + error
+// status. Other JSON-RPC methods (initialize, ping, etc.) are not
+// logged — only tool calls carry actionable application semantics.
 func NewServer(deps Deps) *sdkmcp.Server {
 	s := sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
 		Version: serverVersion,
 	}, nil)
+	if deps.Logger != nil {
+		s.AddReceivingMiddleware(toolCallLoggingMiddleware(deps.Logger))
+	}
 	addResolveTool(s, deps)
 	addListTool(s, deps)
 	addShowTool(s, deps)
@@ -60,6 +72,46 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	addJobStatusTool(s, deps)
 	addTrashTool(s, deps)
 	return s
+}
+
+// toolCallLoggingMiddleware emits one structured log line per
+// inbound `tools/call`. Captures tool name, raw JSON arguments,
+// duration, and error / IsError outcome. Skips other methods so
+// transport-level chatter (initialize, ping, list_tools) doesn't
+// flood the log.
+func toolCallLoggingMiddleware(logger *slog.Logger) sdkmcp.Middleware {
+	return func(next sdkmcp.MethodHandler) sdkmcp.MethodHandler {
+		return func(ctx context.Context, method string, req sdkmcp.Request) (sdkmcp.Result, error) {
+			if method != "tools/call" {
+				return next(ctx, method, req)
+			}
+			started := time.Now()
+			var (
+				toolName string
+				args     json.RawMessage
+			)
+			if params, ok := req.GetParams().(*sdkmcp.CallToolParamsRaw); ok && params != nil {
+				toolName = params.Name
+				args = params.Arguments
+			}
+			result, err := next(ctx, method, req)
+			attrs := []any{
+				"tool", toolName,
+				"args", args,
+				"duration_ms", time.Since(started).Milliseconds(),
+			}
+			if err != nil {
+				logger.Error("mcp tool call failed", append(attrs, "err", err)...)
+				return result, err
+			}
+			if cr, ok := result.(*sdkmcp.CallToolResult); ok && cr != nil && cr.IsError {
+				logger.Warn("mcp tool call returned error", attrs...)
+				return result, nil
+			}
+			logger.Info("mcp tool call", attrs...)
+			return result, nil
+		}
+	}
 }
 
 // ServeStdio runs the MCP server over stdin/stdout. Returns when the

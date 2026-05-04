@@ -156,6 +156,13 @@ func executeReconcile(ctx context.Context, deps Deps, ref refs.Series, token str
 			progress.Failure(ctx, "reconcile", fmt.Sprintf("Failed to reconcile %s", ref), index+1, len(moves))
 			return response.ReconcileApply{}, moveErr
 		}
+		logFileMove(deps, "reconcile_apply",
+			"ref", ref.String(),
+			"from", from,
+			"to", to,
+			"step", index+1,
+			"of", len(moves),
+		)
 	}
 
 	// Reload to verify our claim is still ours, then compute the

@@ -219,6 +219,12 @@ func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore,
 		if err := fsop.SafeMoveFile(move.from, move.to); err != nil {
 			return response.TrashRestore{}, fmt.Errorf("workflow: trash restore move %q -> %q: %w", move.from, move.to, err)
 		}
+		logFileMove(deps, "trash_restore",
+			"ref", in.Ref.String(),
+			"id", in.ID.String(),
+			"from", move.from,
+			"to", move.to,
+		)
 		restored = append(restored, relativeToSeries(seriesRoot, move.to))
 	}
 	if _, err := trashfile.Delete(deps.LibRoot, in.Ref, in.ID); err != nil {
@@ -344,15 +350,30 @@ func TrashAdd(ctx context.Context, deps Deps, in TrashAddInput) (response.TrashA
 		if err := os.MkdirAll(trashEntryDir, 0o755); err != nil {
 			return err
 		}
-		if err := fsop.SafeMoveFile(absPath, filepath.Join(trashEntryDir, filepath.Base(relPath))); err != nil {
+		mediaDest := filepath.Join(trashEntryDir, filepath.Base(relPath))
+		if err := fsop.SafeMoveFile(absPath, mediaDest); err != nil {
 			return fmt.Errorf("workflow: trash add move %q: %w", absPath, err)
 		}
+		logFileMove(deps, "trash_add",
+			"ref", in.Ref.String(),
+			"id", id.String(),
+			"role", "media",
+			"from", absPath,
+			"to", mediaDest,
+		)
 		for _, companionRel := range found.Companions {
 			cAbs := filepath.Join(seriesRoot, filepath.FromSlash(companionRel))
 			cDest := filepath.Join(trashEntryDir, filepath.Base(companionRel))
 			if err := fsop.SafeMoveFile(cAbs, cDest); err != nil {
 				return fmt.Errorf("workflow: trash add move companion %q: %w", cAbs, err)
 			}
+			logFileMove(deps, "trash_add",
+				"ref", in.Ref.String(),
+				"id", id.String(),
+				"role", "companion",
+				"from", cAbs,
+				"to", cDest,
+			)
 		}
 		if err := trashfile.Write(deps.LibRoot, in.Ref, meta); err != nil {
 			return fmt.Errorf("workflow: trash add write meta %s: %w", id, err)

@@ -210,6 +210,7 @@ func Submit[T any](
 	r.wg.Add(1)
 	r.mu.Unlock()
 
+	r.log.Info("job submitted", "id", id, "kind", kind, "series", series.String())
 	go runJob(r, j, e, fn)
 	return j
 }

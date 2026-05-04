@@ -53,7 +53,7 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 
 	deps.Index.Watch(ctx, watch)
 
-	server := mcpserver.NewServer(mcpserver.Deps{Workflow: deps})
+	server := mcpserver.NewServer(mcpserver.Deps{Workflow: deps, Logger: logger})
 
 	logger.Info("kura serve starting",
 		"version", serveVersion,
@@ -132,6 +132,7 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 		ReaperInterval: envDuration(rt.Getenv, "KURA_JOB_REAPER_INTERVAL", 5*time.Minute),
 	}, logger)
 	deps.Jobs = registry
+	deps.Logger = logger
 
 	libRoot := deps.LibRoot
 	watch := indexfile.WatchConfig{

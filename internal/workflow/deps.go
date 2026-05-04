@@ -10,6 +10,7 @@
 package workflow
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
@@ -61,6 +62,22 @@ type Deps struct {
 	// per-invocation registry, kura serve uses a long-lived one
 	// shared by all transports.
 	Jobs *jobs.Registry
+
+	// Logger is the structured logger workflows write to for audit
+	// events (file moves, etc.). Optional — nil disables logging.
+	// CLI runs leave it nil; kura serve sets it.
+	Logger *slog.Logger
+}
+
+// logFileMove emits one structured log line per filesystem move
+// performed by a workflow. Op identifies the workflow ("reconcile",
+// "trash_add", "trash_restore"); the remaining attrs identify the
+// move (typically ref/from/to/role). No-op when deps.Logger is nil.
+func logFileMove(deps Deps, op string, attrs ...any) {
+	if deps.Logger == nil {
+		return
+	}
+	deps.Logger.Info("file move", append([]any{"op", op}, attrs...)...)
 }
 
 // ProviderFactory constructs a provider.Source on demand. Wrap the actual
