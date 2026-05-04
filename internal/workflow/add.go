@@ -98,9 +98,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 	}
 	progress.Success(ctx, "add", fmt.Sprintf("Added %s", ref), 1)
 	return response.AddResult{
-		MetadataRef:    metadataRef,
 		Ref:            ref,
-		Root:           target,
 		PreferredTitle: metadataSeries.PreferredTitle.String(),
 	}, nil
 }

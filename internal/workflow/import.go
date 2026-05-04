@@ -103,9 +103,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 	}
 	progress.Success(ctx, "import", fmt.Sprintf("Imported %s", ref), 1)
 	return response.AddResult{
-		MetadataRef:    metadataRef,
 		Ref:            ref,
-		Root:           paths.SeriesDir(deps.LibRoot, ref),
 		PreferredTitle: metadataSeries.PreferredTitle.String(),
 	}, nil
 }

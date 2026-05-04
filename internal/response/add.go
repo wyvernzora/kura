@@ -2,13 +2,14 @@ package response
 
 import "github.com/wyvernzora/kura/internal/domain/refs"
 
-// AddResult is workflow.Add's response. The series is freshly created;
-// callers typically follow with kura_show for the full state.
+// AddResult is workflow.Add's response. The caller already supplied
+// the metadata ref and knows the library root; the only information
+// this surface adds is the sanitized on-disk directory basename and
+// the provider's preferred display title. Callers wanting full state
+// follow with workflow.Show.
 type AddResult struct {
-	MetadataRef    refs.Metadata `json:"metadataRef"`
-	Ref            refs.Series   `json:"ref"`
-	Root           string        `json:"root"`
-	PreferredTitle string        `json:"preferredTitle"`
+	Ref            refs.Series `json:"ref"`
+	PreferredTitle string      `json:"preferredTitle"`
 }
 
 // ImportResult is workflow.Import's response. Same shape as AddResult
