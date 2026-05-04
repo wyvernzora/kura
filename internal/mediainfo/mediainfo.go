@@ -87,6 +87,10 @@ func ParseJSON(data []byte) (media.Info, error) {
 	out := media.Info{}
 	for _, track := range doc.Media.Tracks {
 		switch strings.ToLower(track.Type) {
+		case "general":
+			if out.Title == "" {
+				out.Title = firstString(track.Title, track.Movie)
+			}
 		case "video":
 			if out.VideoCodec == "" {
 				out.VideoCodec = normalizeCodec(firstString(track.Format, track.CodecID))
@@ -119,6 +123,11 @@ type track struct {
 	CodecID value  `json:"CodecID"`
 	Width   value  `json:"Width"`
 	Height  value  `json:"Height"`
+	// Title / Movie are alternate keys mediainfo emits for the
+	// container's General-track title. mkvmerge writes Title; ffmpeg
+	// commonly writes Movie. firstString picks the first non-empty.
+	Title value `json:"Title"`
+	Movie value `json:"Movie"`
 }
 
 type value string

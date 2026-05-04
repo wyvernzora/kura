@@ -55,6 +55,16 @@ func (b Builder) Build(ctx context.Context, in Input) (media.Record, error) {
 	if source == "" {
 		source = InferSourceFromFilename(in.RecordPath)
 	}
+	// Embedded-title heuristic: filename inference often comes back
+	// "unknown" (no parenthesized suffix or only a resolution token);
+	// the container's General.Title field sometimes carries the
+	// missing source token in free text. Only consult it when the
+	// stronger filename signal failed — never override.
+	if source == "" || source == media.SourceUnknown.String() {
+		if hint := InferSourceFromText(info.Title); hint != "" {
+			source = hint
+		}
+	}
 	resolution, err := media.ParseResolution(info.Resolution)
 	if err != nil {
 		return media.Record{}, err
@@ -110,6 +120,46 @@ func InferSourceFromFilename(path string) string {
 		}
 	}
 	return "unknown"
+}
+
+// textTokenSplit splits free text on the punctuation common to
+// scene-style names ("Foo.S01E01.BluRay.1080p-Group", "Foo [BluRay
+// 1080p]", etc.) so each token can be tested against media.IsKnown.
+// Hyphen is intentionally NOT a separator: "WEB-DL" and "BD-Rip" are
+// single source tokens. Trailing -Group suffixes still split off via
+// the surrounding dot in scene names like "1080p-Group", or are
+// harmlessly ignored when not IsKnown.
+var textTokenSplit = regexp.MustCompile(`[\s._\[\]()/+,]+`)
+
+// InferSourceFromText scans free text (typically the container's
+// General.Title field) for an *informative* source token — a
+// media.IsKnown value that isn't itself "unknown". Returns the first
+// such match in token order, or "" when nothing useful is found.
+//
+// Used as a heuristic fallback only; caller must check stronger
+// signals (caller-provided override, filename suffix) first. The
+// "skip Unknown literal" rule matters because some encoders write
+// the literal string "Unknown" into General.Title and IsKnown's
+// switch happily matches SourceUnknown — without the skip, the
+// fallback would replace the incoming "unknown" with another
+// "unknown" and pretend something improved.
+func InferSourceFromText(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	for _, token := range textTokenSplit.Split(text, -1) {
+		if token == "" {
+			continue
+		}
+		if media.ParseSource(token) == media.SourceUnknown {
+			continue
+		}
+		if media.IsKnown(token) {
+			return token
+		}
+	}
+	return ""
 }
 
 var resolutionDimsPattern = regexp.MustCompile(`(?i)\b(\d{3,4})x(\d{3,4})\b`)
