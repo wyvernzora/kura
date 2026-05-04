@@ -180,6 +180,36 @@ func (e *TrashRestoreTargetExistsError) Error() string {
 	return fmt.Sprintf("workflow: trash restore %s for %q blocked: %d target paths already exist", e.ID, e.Ref, len(e.Targets))
 }
 
+// TrashAddTargetTrackedError signals the requested file is currently
+// referenced as the active or staged record for some episode in the
+// series. TrashAdd refuses to displace tracked records implicitly;
+// caller must use stage --replace + reconcile (active) or reset
+// (staged) to clear the record first.
+type TrashAddTargetTrackedError struct {
+	Ref        refs.Series
+	Path       string
+	Episode    refs.Episode
+	RecordKind string // "active" or "staged"
+}
+
+func (e *TrashAddTargetTrackedError) Error() string {
+	return fmt.Sprintf("workflow: trash add %q: file is the %s record for %s on %s; use stage/reset+reconcile to clear it first",
+		e.Path, e.RecordKind, e.Episode.Marker(), e.Ref)
+}
+
+// TrashAddTargetUnparseableError signals the requested file is not in
+// a recognized series-tree location or its filename cannot be parsed
+// to a (season, episode) slot. TrashAdd needs both to record a
+// trash-restorable entry; orphan files require manual fs cleanup.
+type TrashAddTargetUnparseableError struct {
+	Ref  refs.Series
+	Path string
+}
+
+func (e *TrashAddTargetUnparseableError) Error() string {
+	return fmt.Sprintf("workflow: trash add %q: filename does not parse to a season/episode; manual cleanup required", e.Path)
+}
+
 // RemoveStagedRecordsExistError signals the series has staged records
 // blocking a default (non-purge) remove. Caller must reconcile or reset
 // --all first; --purge bypasses the gate.

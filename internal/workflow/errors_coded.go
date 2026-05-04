@@ -77,6 +77,26 @@ func (e *TrashRestoreTargetExistsError) Data() map[string]any {
 	}
 }
 
+func (e *TrashAddTargetTrackedError) Kind() string     { return errkind.KindConflict }
+func (e *TrashAddTargetTrackedError) Category() string { return errkind.CategoryInvalidParams }
+func (e *TrashAddTargetTrackedError) Data() map[string]any {
+	return map[string]any{
+		"ref":        e.Ref.String(),
+		"path":       e.Path,
+		"episode":    e.Episode.String(),
+		"recordKind": e.RecordKind,
+	}
+}
+
+func (e *TrashAddTargetUnparseableError) Kind() string     { return errkind.KindInvalidEpisode }
+func (e *TrashAddTargetUnparseableError) Category() string { return errkind.CategoryInvalidParams }
+func (e *TrashAddTargetUnparseableError) Data() map[string]any {
+	return map[string]any{
+		"ref":  e.Ref.String(),
+		"path": e.Path,
+	}
+}
+
 func (e *RemoveStagedRecordsExistError) Kind() string     { return errkind.KindConflict }
 func (e *RemoveStagedRecordsExistError) Category() string { return errkind.CategoryInvalidParams }
 func (e *RemoveStagedRecordsExistError) Data() map[string]any {

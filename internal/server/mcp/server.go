@@ -58,6 +58,7 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	addScanTool(s, deps)
 	addReconcileApplyTool(s, deps)
 	addJobStatusTool(s, deps)
+	addTrashTool(s, deps)
 	return s
 }
 

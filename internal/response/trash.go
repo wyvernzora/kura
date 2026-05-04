@@ -60,3 +60,16 @@ type TrashRestore struct {
 	Episode  refs.Episode `json:"episode"`
 	Restored []string     `json:"restored"`
 }
+
+// TrashAdd is workflow.TrashAdd's response. ID is the trash entry's
+// ULID (passable to trash restore later). Episode is the slot inferred
+// from the filename. MediaPath + Companions are series-relative slash
+// paths the file lived at before the move (also restorable to those
+// paths). Caller knew the series ref; only the entry-level facts are
+// new info.
+type TrashAdd struct {
+	ID         string       `json:"id"`
+	Episode    refs.Episode `json:"episode"`
+	MediaPath  string       `json:"mediaPath"`
+	Companions []string     `json:"companions,omitempty"`
+}

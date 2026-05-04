@@ -15,9 +15,12 @@ import (
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/fsop"
+	"github.com/wyvernzora/kura/internal/mediainfo"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/scan"
 	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/storage/trashfile"
 )
@@ -44,6 +47,14 @@ type TrashEmptyInput struct {
 type TrashRestoreInput struct {
 	Ref refs.Series
 	ID  ulid.ULID
+}
+
+// TrashAddInput parameters for the TrashAdd workflow. Path may be
+// absolute or series-root-relative slash form (same conventions as
+// stage). The file must live under the series root.
+type TrashAddInput struct {
+	Ref  refs.Series
+	Path string
 }
 
 // TrashList enumerates trash entries for one series (Ref) or across
@@ -217,6 +228,149 @@ func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore,
 		Episode:  meta.Episode,
 		Restored: restored,
 	}, nil
+}
+
+// TrashAdd moves a single media file (and its filename-matched
+// companions) from the series directory into trash. Use cases:
+// trashing the loser of a duplicate-slot pair after staging the
+// winner, or removing a stray non-canonical file the operator wants
+// gone but recoverable.
+//
+// Refuses when:
+//   - the file does not exist or is outside the series root,
+//   - the filename does not parse to a (season, episode) slot —
+//     orphan files require manual cleanup,
+//   - the file is the active or staged record for an episode in
+//     series.json — caller must use stage --replace + reconcile or
+//     reset to clear the record first.
+//
+// Reusable via existing trash list / restore / empty workflows.
+func TrashAdd(ctx context.Context, deps Deps, in TrashAddInput) (response.TrashAdd, error) {
+	progress.Start(ctx, "trash-add", fmt.Sprintf("Trashing %s", in.Path), 0)
+	failProgress := func() {
+		progress.Failure(ctx, "trash-add", fmt.Sprintf("Failed to trash %s", in.Path), 1, 0)
+	}
+	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
+	absPath, err := resolveStageFilePath(seriesRoot, in.Path)
+	if err != nil {
+		failProgress()
+		return response.TrashAdd{}, err
+	}
+	relPath := relativeToSeries(seriesRoot, absPath)
+	if filepath.IsAbs(relPath) {
+		failProgress()
+		return response.TrashAdd{}, fmt.Errorf("workflow: trash add: path %q is not under series root", absPath)
+	}
+	if !mediainfo.RecognizedVideoFile(absPath) {
+		failProgress()
+		return response.TrashAdd{}, &TrashAddTargetUnparseableError{Ref: in.Ref, Path: relPath}
+	}
+
+	var out response.TrashAdd
+	err = deps.Coordinator.WithSeries(in.Ref, func() error {
+		if err := refuseIfClaimed(deps, in.Ref); err != nil {
+			return err
+		}
+		seriesDir, err := seriesdir.Parse(seriesRoot)
+		if err != nil {
+			return err
+		}
+		// Walk discovery (raw, including dupes) and find the entry for
+		// this path. Dedup-skipping rejectDuplicateSlots would lose
+		// loser-side files, which is precisely what the agent wants
+		// to trash here — so use WalkSeriesEpisodes directly.
+		files, _, err := scan.WalkSeriesEpisodes(seriesDir)
+		if err != nil {
+			return err
+		}
+		var found *scan.DiscoveredFile
+		for index := range files {
+			if files[index].Path == relPath {
+				found = &files[index]
+				break
+			}
+		}
+		if found == nil {
+			return &TrashAddTargetUnparseableError{Ref: in.Ref, Path: relPath}
+		}
+
+		model, err := seriesfile.Load(deps.LibRoot, in.Ref)
+		if err != nil {
+			return err
+		}
+		// Block trashing of currently-tracked files. seriesfile.Load
+		// absolutizes record paths, so compare against absPath.
+		for ref, ep := range model.Episodes {
+			if ep.Active != nil && ep.Active.Path == absPath {
+				return &TrashAddTargetTrackedError{Ref: in.Ref, Path: relPath, Episode: ref, RecordKind: "active"}
+			}
+			if ep.Staged != nil && ep.Staged.Path == absPath {
+				return &TrashAddTargetTrackedError{Ref: in.Ref, Path: relPath, Episode: ref, RecordKind: "staged"}
+			}
+		}
+
+		info, err := os.Stat(absPath)
+		if err != nil {
+			return err
+		}
+		id := ulid.Make()
+		meta := trashfile.Meta{
+			ID:        id,
+			Episode:   found.Ref,
+			TrashedAt: deps.Now().UTC(),
+			Record: trashfile.Record{
+				Path:       relPath,
+				Source:     found.Source,
+				Resolution: mediainfo.InferResolutionFromFilename(relPath),
+				Size:       info.Size(),
+				MTime:      info.ModTime().UTC().Truncate(time.Second),
+				Companions: make([]trashfile.Companion, 0, len(found.Companions)),
+			},
+		}
+		for _, companionRel := range found.Companions {
+			cAbs := filepath.Join(seriesRoot, filepath.FromSlash(companionRel))
+			cInfo, err := os.Stat(cAbs)
+			if err != nil {
+				return fmt.Errorf("workflow: trash add stat companion %q: %w", cAbs, err)
+			}
+			meta.Record.Companions = append(meta.Record.Companions, trashfile.Companion{
+				Path:  companionRel,
+				Size:  cInfo.Size(),
+				MTime: cInfo.ModTime().UTC().Truncate(time.Second),
+			})
+		}
+
+		trashEntryDir := paths.TrashEntry(deps.LibRoot, in.Ref, id.String())
+		if err := os.MkdirAll(trashEntryDir, 0o755); err != nil {
+			return err
+		}
+		if err := fsop.SafeMoveFile(absPath, filepath.Join(trashEntryDir, filepath.Base(relPath))); err != nil {
+			return fmt.Errorf("workflow: trash add move %q: %w", absPath, err)
+		}
+		for _, companionRel := range found.Companions {
+			cAbs := filepath.Join(seriesRoot, filepath.FromSlash(companionRel))
+			cDest := filepath.Join(trashEntryDir, filepath.Base(companionRel))
+			if err := fsop.SafeMoveFile(cAbs, cDest); err != nil {
+				return fmt.Errorf("workflow: trash add move companion %q: %w", cAbs, err)
+			}
+		}
+		if err := trashfile.Write(deps.LibRoot, in.Ref, meta); err != nil {
+			return fmt.Errorf("workflow: trash add write meta %s: %w", id, err)
+		}
+		out = response.TrashAdd{
+			ID:         id.String(),
+			Episode:    found.Ref,
+			MediaPath:  relPath,
+			Companions: append([]string(nil), found.Companions...),
+		}
+		return nil
+	})
+	if err != nil {
+		failProgress()
+		return response.TrashAdd{}, err
+	}
+	progress.Success(ctx, "trash-add", fmt.Sprintf("Trashed %s", relPath), 1)
+	return out, nil
 }
 
 // refuseIfClaimed loads the series.json (if present) and returns a
