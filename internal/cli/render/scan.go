@@ -63,15 +63,48 @@ func Scan(w io.Writer, result response.ScanResult, asJSON bool) error {
 		return nil
 	}
 	skippedTable := table.NewWriter()
-	skippedTable.AppendHeader(table.Row{"SKIPPED FILE", "CODE", "REASON"})
+	skippedTable.AppendHeader(table.Row{"SKIPPED FILE", "CODE", "SOURCE", "RESOLUTION", "SIZE", "REASON"})
 	skippedTable.SetStyle(style.BorderlessTableStyle())
 	skippedTable.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1},
 		{Number: 2},
 		{Number: 3},
+		{Number: 4},
+		{Number: 5},
+		{Number: 6},
 	})
 	for _, skip := range result.Skipped {
-		skippedTable.AppendRow(table.Row{skip.Path, skip.Code, skip.Reason})
+		skippedTable.AppendRow(table.Row{
+			skip.Path,
+			skip.Code,
+			style.MediaSource(skip.Source, tty),
+			style.MediaResolution(skip.Resolution, tty),
+			formatSkipSize(skip.Size),
+			skip.Reason,
+		})
 	}
 	return style.WriteStyledTable(w, skippedTable, nil)
+}
+
+// formatSkipSize renders bytes as a short human-friendly string. Empty
+// when size is zero (unknown).
+func formatSkipSize(bytes int64) string {
+	if bytes <= 0 {
+		return ""
+	}
+	const (
+		kib = 1024
+		mib = 1024 * kib
+		gib = 1024 * mib
+	)
+	switch {
+	case bytes >= gib:
+		return fmt.Sprintf("%.1f GiB", float64(bytes)/float64(gib))
+	case bytes >= mib:
+		return fmt.Sprintf("%.1f MiB", float64(bytes)/float64(mib))
+	case bytes >= kib:
+		return fmt.Sprintf("%.1f KiB", float64(bytes)/float64(kib))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
 }

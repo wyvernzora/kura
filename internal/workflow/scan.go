@@ -80,9 +80,12 @@ func toScanResponse(seriesRoot string, in scan.Result) response.ScanResult {
 	}
 	for _, skip := range in.Skipped {
 		out.Skipped = append(out.Skipped, response.ScanSkip{
-			Path:   relativeToSeries(seriesRoot, skip.Path),
-			Code:   skip.Code,
-			Reason: skip.Reason,
+			Path:       relativeToSeries(seriesRoot, skip.Path),
+			Code:       skip.Code,
+			Reason:     skip.Reason,
+			Source:     skip.Source,
+			Resolution: skip.Resolution,
+			Size:       skip.Size,
 		})
 	}
 	return out

@@ -25,6 +25,15 @@ type ImportSkip struct {
 	Path   string `json:"path"`
 	Code   string `json:"code"`
 	Reason string `json:"reason"`
+
+	// Quality hints, populated when the skipped path is a recognized
+	// video file (e.g. duplicate_slot entries). Other skip codes leave
+	// these zero. Source/Resolution come from the filename suffix; Size
+	// is the on-disk byte count. Sufficient signal for callers picking
+	// a winner among duplicates.
+	Source     string `json:"source,omitempty"`
+	Resolution string `json:"resolution,omitempty"`
+	Size       int64  `json:"size,omitempty"`
 }
 
 const (

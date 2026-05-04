@@ -61,13 +61,15 @@ func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []
 		return nil, nil, err
 	}
 	sortDiscoveredEpisodes(episodes)
-	return rejectDuplicateSlots(episodes, skipped)
+	return rejectDuplicateSlots(seriesDir, episodes, skipped)
 }
 
 // rejectDuplicateSlots removes any DiscoveredFile whose Ref collides
 // with another file in the same scan and re-emits both as ImportSkips
-// with SkipCodeDuplicateSlot. Kura does not auto-pick which file wins.
-func rejectDuplicateSlots(episodes []DiscoveredFile, skipped []ImportSkip) ([]DiscoveredFile, []ImportSkip, error) {
+// with SkipCodeDuplicateSlot. Each skip carries quality hints
+// (source, resolution, size) so callers can pick a winner without
+// re-walking the filesystem. Kura does not auto-pick.
+func rejectDuplicateSlots(seriesDir seriesdir.SeriesDir, episodes []DiscoveredFile, skipped []ImportSkip) ([]DiscoveredFile, []ImportSkip, error) {
 	byRef := map[refs.Episode][]int{}
 	for index, episode := range episodes {
 		byRef[episode.Ref] = append(byRef[episode.Ref], index)
@@ -82,11 +84,13 @@ func rejectDuplicateSlots(episodes []DiscoveredFile, skipped []ImportSkip) ([]Di
 		}
 		for _, index := range indices {
 			dropped[index] = struct{}{}
-			skipped = append(skipped, ImportSkip{
+			skip := ImportSkip{
 				Path:   episodes[index].Path,
 				Code:   SkipCodeDuplicateSlot,
 				Reason: fmt.Sprintf("multiple files claim %s; resolve manually", ref.Marker()),
-			})
+			}
+			enrichSkipQuality(seriesDir, &skip, episodes[index].Path, episodes[index].Source)
+			skipped = append(skipped, skip)
 		}
 	}
 	out := episodes[:0]
@@ -97,6 +101,27 @@ func rejectDuplicateSlots(episodes []DiscoveredFile, skipped []ImportSkip) ([]Di
 		out = append(out, episode)
 	}
 	return out, skipped, nil
+}
+
+// enrichSkipQuality fills source / resolution / size on a skip when
+// the path is a recognized video file. Source is taken from the
+// already-inferred DiscoveredFile.Source; resolution comes from the
+// filename; size is statted from disk (0 on stat failure — quality
+// hints are best-effort, never fatal).
+func enrichSkipQuality(seriesDir seriesdir.SeriesDir, skip *ImportSkip, relPath, sourceHint string) {
+	if !mediainfo.RecognizedVideoFile(relPath) {
+		return
+	}
+	if sourceHint != "" && sourceHint != media.SourceUnknown.String() {
+		skip.Source = sourceHint
+	}
+	if res := mediainfo.InferResolutionFromFilename(relPath); res != "" {
+		skip.Resolution = res
+	}
+	abs := filepath.Join(seriesDir.Path(), filepath.FromSlash(relPath))
+	if info, err := os.Stat(abs); err == nil && !info.IsDir() {
+		skip.Size = info.Size()
+	}
 }
 
 // classifyDirectory decides whether discovery should descend into a

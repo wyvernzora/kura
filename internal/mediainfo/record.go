@@ -112,6 +112,46 @@ func InferSourceFromFilename(path string) string {
 	return "unknown"
 }
 
+var resolutionDimsPattern = regexp.MustCompile(`(?i)\b(\d{3,4})x(\d{3,4})\b`)
+var resolutionTagPattern = regexp.MustCompile(`(?i)\b(2160p|1440p|1080p|720p|480p|360p|4k)\b`)
+
+// InferResolutionFromFilename pulls a resolution out of the parenthesized
+// suffix of a canonical filename. Returns the canonical "WxH" form
+// (e.g. "1920x1080") so callers can media.ParseResolution it. Empty
+// string when no recognized token is present.
+//
+// Recognizes both explicit dimensions ("1920x1080", "1280x720") and
+// shorthand tags ("1080p", "720p", "4K"). Shorthand maps to the
+// standard pixel counts media.Resolution.Display() emits.
+func InferResolutionFromFilename(path string) string {
+	name := filepath.ToSlash(path)
+	matches := mediaFactsPattern.FindStringSubmatch(name)
+	if len(matches) != 2 {
+		return ""
+	}
+	suffix := matches[1]
+	if dims := resolutionDimsPattern.FindStringSubmatch(suffix); len(dims) == 3 {
+		return dims[1] + "x" + dims[2]
+	}
+	if tag := resolutionTagPattern.FindString(suffix); tag != "" {
+		switch strings.ToLower(tag) {
+		case "4k", "2160p":
+			return "3840x2160"
+		case "1440p":
+			return "2560x1440"
+		case "1080p":
+			return "1920x1080"
+		case "720p":
+			return "1280x720"
+		case "480p":
+			return "854x480"
+		case "360p":
+			return "640x360"
+		}
+	}
+	return ""
+}
+
 // RecognizedVideoFile reports whether path's extension is a video format
 // Kura knows how to track.
 func RecognizedVideoFile(path string) bool {
