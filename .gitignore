@@ -24,6 +24,7 @@ docs/LOCAL.md
 .local/
 scratch
 .claude
+.codex
 
 # Editor and OS files
 .DS_Store
