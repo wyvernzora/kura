@@ -1,0 +1,194 @@
+package mcp
+
+import (
+	"context"
+	_ "embed"
+	"fmt"
+
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/selector"
+	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/internal/workflow"
+)
+
+type stageInput struct {
+	Ref      string                  `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Episodes []stageEpisodeInputItem `json:"episodes,omitempty" jsonschema:"Episode stages. One per spine slot. At least one of episodes/trash/extras is required."`
+	Trash    []stageTrashInputItem   `json:"trash,omitempty" jsonschema:"Files queued for trash on the next reconcile_apply."`
+	Extras   []stageExtraInputItem   `json:"extras,omitempty" jsonschema:"Files or directories queued for placement under Season N/Extra/[prefix]/ on next reconcile_apply."`
+}
+
+type stageEpisodeInputItem struct {
+	Episode    string   `json:"episode" jsonschema:"Episode marker (S01E03) or storage form (S01E0003)."`
+	Media      string   `json:"media" jsonschema:"Inbox selector (e.g. 'inbox:[BDrip] Show/E03.mkv'). Use kura_inbox_list to discover valid values."`
+	Source     string   `json:"source,omitempty" jsonschema:"Override for the source label (BluRay, WebRip, Web-DL, HDTV, DVDRip, TVRip, Unknown)."`
+	Companions []string `json:"companions,omitempty" jsonschema:"Sidecar inbox selectors (subtitles, art) — same shape as media."`
+	Replace    bool     `json:"replace,omitempty" jsonschema:"Allow staging over an existing active or staged record at this slot."`
+}
+
+type stageTrashInputItem struct {
+	Path       string   `json:"path" jsonschema:"Series selector for the file to queue (e.g. 'series:Season 1/foo.mkv'). Scoped to the series in the request's ref."`
+	Companions []string `json:"companions,omitempty" jsonschema:"Sidecar series: selectors to drag along into trash."`
+}
+
+type stageExtraInputItem struct {
+	Season int    `json:"season" jsonschema:"Season number under which the extra is placed."`
+	Source string `json:"source" jsonschema:"Inbox selector pointing at a file or directory under the inbox root (e.g. 'inbox:[BDrip] Show/Extras/'). Use kura_inbox_list to discover."`
+	Prefix string `json:"prefix,omitempty" jsonschema:"Optional sub-folder under Season N/Extra/."`
+}
+
+//go:embed tool_stage.md
+var toolStageDoc string
+
+// maxStageBatchSize caps each kura_stage input array. Realistic batches
+// (full-cour BD ≈ 13 episodes; full season ≤ 26) sit well under this;
+// the cap defends availability against a misbehaving agent that would
+// otherwise hold the per-series mutex for thousands of mediainfo probes
+// in one call.
+const maxStageBatchSize = 100
+
+func overCap(field string, n int) error {
+	if n <= maxStageBatchSize {
+		return nil
+	}
+	return &invalidInputError{
+		kind:    errkind.KindBatchTooLarge,
+		message: fmt.Sprintf("kura_stage: %s length %d exceeds cap of %d", field, n, maxStageBatchSize),
+	}
+}
+
+func addStageTool(s *sdkmcp.Server, deps Deps) {
+	sdkmcp.AddTool(s, &sdkmcp.Tool{
+		Name:        "kura_stage",
+		Title:       "Stage media batch for series",
+		Description: forLLM(toolStageDoc),
+		Annotations: &sdkmcp.ToolAnnotations{
+			ReadOnlyHint:    false,
+			IdempotentHint:  false,
+			OpenWorldHint:   &hintFalse,
+			DestructiveHint: &hintFalse,
+		},
+	}, func(ctx context.Context, _ *sdkmcp.CallToolRequest, in stageInput) (*sdkmcp.CallToolResult, any, error) {
+		metaRef, err := refs.ParseMetadata(in.Ref)
+		if err != nil {
+			return toolErrorResult(&invalidInputError{
+				kind:    errkind.KindInvalidRef,
+				message: fmt.Sprintf("kura_stage: %v", err),
+			}), nil, nil
+		}
+		if over := overCap("episodes", len(in.Episodes)); over != nil {
+			return toolErrorResult(over), nil, nil
+		}
+		if over := overCap("trash", len(in.Trash)); over != nil {
+			return toolErrorResult(over), nil, nil
+		}
+		if over := overCap("extras", len(in.Extras)); over != nil {
+			return toolErrorResult(over), nil, nil
+		}
+
+		// Parse episode markers and inbox selectors up front so
+		// malformed input rejects before any Index lookup or job
+		// submission.
+		episodes := make([]workflow.EpisodeStageItem, 0, len(in.Episodes))
+		for index, item := range in.Episodes {
+			episode, err := refs.ParseEpisodeMarker(item.Episode)
+			if err != nil {
+				return toolErrorResult(&invalidInputError{
+					kind:    errkind.KindInvalidRef,
+					message: fmt.Sprintf("kura_stage: episodes[%d].episode: %v", index, err),
+				}), nil, nil
+			}
+			mediaSel, perr := selector.ParseInbox(item.Media)
+			if perr != nil {
+				return toolErrorResult(&invalidInputError{
+					kind:    errkind.KindInvalidRef,
+					message: fmt.Sprintf("kura_stage: episodes[%d].media: %v (use kura_inbox_list to discover valid selectors)", index, perr),
+				}), nil, nil
+			}
+			companions := make([]selector.Path, 0, len(item.Companions))
+			for j, raw := range item.Companions {
+				sel, cerr := selector.ParseInbox(raw)
+				if cerr != nil {
+					return toolErrorResult(&invalidInputError{
+						kind:    errkind.KindInvalidRef,
+						message: fmt.Sprintf("kura_stage: episodes[%d].companions[%d]: %v", index, j, cerr),
+					}), nil, nil
+				}
+				companions = append(companions, sel)
+			}
+			episodes = append(episodes, workflow.EpisodeStageItem{
+				Episode:    episode,
+				Media:      mediaSel,
+				Source:     item.Source,
+				Companions: companions,
+				Replace:    item.Replace,
+			})
+		}
+
+		seriesRef, ok, err := deps.Workflow.Index.Get(metaRef)
+		if err != nil {
+			return toolErrorResult(err), nil, nil
+		}
+		if !ok {
+			return toolErrorResult(&workflow.MetadataRefNotIndexedError{Ref: metaRef}), nil, nil
+		}
+		trash := make([]workflow.TrashStageItem, 0, len(in.Trash))
+		for index, item := range in.Trash {
+			pathSel, perr := selector.ParseSeries(item.Path)
+			if perr != nil {
+				return toolErrorResult(&invalidInputError{
+					kind:    errkind.KindInvalidRef,
+					message: fmt.Sprintf("kura_stage: trash[%d].path: %v (use a series: selector relative to the series root)", index, perr),
+				}), nil, nil
+			}
+			companions := make([]selector.Path, 0, len(item.Companions))
+			for j, raw := range item.Companions {
+				sel, cerr := selector.ParseSeries(raw)
+				if cerr != nil {
+					return toolErrorResult(&invalidInputError{
+						kind:    errkind.KindInvalidRef,
+						message: fmt.Sprintf("kura_stage: trash[%d].companions[%d]: %v", index, j, cerr),
+					}), nil, nil
+				}
+				companions = append(companions, sel)
+			}
+			trash = append(trash, workflow.TrashStageItem{
+				Path:       pathSel,
+				Companions: companions,
+			})
+		}
+		extras := make([]workflow.ExtraStageItem, 0, len(in.Extras))
+		for index, item := range in.Extras {
+			sourceSel, perr := selector.ParseInbox(item.Source)
+			if perr != nil {
+				return toolErrorResult(&invalidInputError{
+					kind:    errkind.KindInvalidRef,
+					message: fmt.Sprintf("kura_stage: extras[%d].source: %v (use kura_inbox_list to discover valid selectors)", index, perr),
+				}), nil, nil
+			}
+			extras = append(extras, workflow.ExtraStageItem{
+				Season: item.Season,
+				Source: sourceSel,
+				Prefix: item.Prefix,
+			})
+		}
+
+		j := workflow.Stage(ctx, deps.Workflow, workflow.StageInput{
+			Ref:      seriesRef,
+			Episodes: episodes,
+			Trash:    trash,
+			Extras:   extras,
+		})
+		// Three-branch IsTracked handler per design/async-job.md § 11.b.
+		if !j.IsTracked() {
+			_, waitErr := j.Wait(ctx)
+			if waitErr != nil {
+				return toolErrorResult(waitErr), nil, nil
+			}
+			return toolErrorResult(fmt.Errorf("internal: kura_stage returned untracked success (workflow bug)")), nil, nil
+		}
+		return nil, jobHandleOutput{JobID: j.ID()}, nil
+	})
+}
