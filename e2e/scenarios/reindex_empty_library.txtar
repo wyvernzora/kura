@@ -1,0 +1,9 @@
+# reindex_empty_library: reindex a fresh library with no series → no error,
+# subsequent list returns empty rows.
+# Validates: #51 — Reindex on empty library is a clean no-op.
+
+kura_reindex
+stdout '"ok":true'
+
+kura_list
+! stdout '"title":'

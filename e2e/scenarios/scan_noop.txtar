@@ -1,0 +1,11 @@
+# scan_noop: scan a freshly-added series with no files in the directory.
+# No episodes are synced or removed.
+# Validates: #38 — PlanReconcile short-circuits on empty scan result.
+
+kura_add stub:1001
+
+kura_scan $KURA_LAST_REF
+# No episodes synced (no files on disk to adopt or prune).
+! stdout '"status":"added"'
+! stdout '"status":"removed"'
+! stdout '"status":"updated"'

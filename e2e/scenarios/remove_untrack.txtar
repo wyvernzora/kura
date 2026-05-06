@@ -1,0 +1,17 @@
+# remove_untrack: add a series, write a file into it, remove without purge →
+# series gone from list but file still on disk.
+# Validates: #7 — Remove(Purge=false) untracks series, files stay.
+
+kura_add stub:1001
+kura_series_dir $KURA_LAST_REF
+kura_write_series_file $KURA_LAST_REF survivor.mkv
+
+kura_remove $KURA_LAST_REF
+
+# Series no longer appears in list.
+kura_list
+! stdout '"title":"Stub Show"'
+
+# File still exists on disk.
+exec find $KURA_SERIES_DIR -name survivor.mkv
+stdout survivor.mkv

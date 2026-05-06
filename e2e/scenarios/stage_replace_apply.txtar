@@ -1,0 +1,34 @@
+# stage_replace_apply: stage and apply an episode (present), then stage
+# a replacement with replace=true, reconcile, and verify:
+#   - The new file is present.
+#   - The old file landed in trash.
+# Validates: replace-over-active flow, stagedTrash populated after
+# first apply, second apply moves old file to trash bucket.
+
+kura_add stub:1001
+
+# First: stage ep1 and apply → present.
+kura_mkfile ep1_v1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1_v1.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# Second: stage a replacement (replace=true handled by kura_stage_replace).
+kura_mkfile ep1_v2.mp4
+kura_stage_replace $KURA_LAST_REF S01E0001 ep1_v2.mp4
+stdout '"status":"replaced"'
+
+kura_show $KURA_LAST_REF
+stdout '"status":"staged_replacement"'
+
+# Apply: old file moves to trash, new file becomes active.
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# Trash list must contain the old file.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'

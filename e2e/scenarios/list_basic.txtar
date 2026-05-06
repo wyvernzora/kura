@@ -1,0 +1,7 @@
+# list_basic: add a series and list the library → series appears in rows.
+# Validates: #12 — List returns tracked series sorted by title.
+
+kura_add stub:1001
+kura_list
+stdout '"title":"Stub Show"'
+stdout '"episodeCount":3'

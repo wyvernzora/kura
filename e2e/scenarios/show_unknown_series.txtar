@@ -1,0 +1,4 @@
+# show_unknown_series: showing a series that was never added returns
+# an error. Validates the not-found path through Show.
+
+! kura_show does-not-exist

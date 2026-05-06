@@ -1,0 +1,19 @@
+# stage_source_override: stage an episode with an explicit source override
+# ("BluRay"), reconcile, verify source propagates to active record.
+# Validates: #26 — EpisodeStageItem.Source carried through to canonical record.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_stage_source $KURA_LAST_REF S01E0001 ep1.mp4 BluRay
+stdout '"source":"BluRay"'
+
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+
+kura_show $KURA_LAST_REF
+stdout '"source":"BluRay"'
+
+# Canonical filename must include the source string.
+kura_series_dir $KURA_LAST_REF
+exec find $KURA_SERIES_DIR -name *BluRay*
+stdout BluRay
