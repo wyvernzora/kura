@@ -1,0 +1,18 @@
+# stage_extra_with_prefix: stage an extra file with a Prefix ("Specials"),
+# reconcile → file lands in Season 1/Extra/Specials/.
+# Validates: #25 — ExtraStageItem.Prefix creates a sub-folder under Extra/.
+
+kura_add stub:1001
+kura_mkfile extra.mp4
+
+kura_stage_extra $KURA_LAST_REF 1 extra.mp4 Specials
+kura_plan $KURA_LAST_REF
+stdout '"token":'
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+
+kura_series_dir $KURA_LAST_REF
+exec find $KURA_SERIES_DIR -name extra.mp4
+stdout extra.mp4
+# Must be under the Specials prefix.
+stdout Specials

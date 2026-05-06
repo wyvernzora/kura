@@ -1,0 +1,19 @@
+# stage_companions: stage an episode with a subtitle companion, reconcile,
+# and verify both the media and companion are present after apply.
+# Validates: #21 — CompanionPaths wired through Stage → Apply → Show.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_mkfile ep1.srt
+
+kura_stage_companions $KURA_LAST_REF S01E0001 ep1.mp4 ep1.srt
+stdout '"companions":'
+
+kura_plan $KURA_LAST_REF
+stdout '"token":'
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":2'
+
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+stdout '"companions":'

@@ -1,0 +1,17 @@
+# trash_empty: stage a file for trash, reconcile (moves to .kura/trash/),
+# empty the trash, verify trash list is empty.
+# Validates: #48 — TrashEmpty removes all entries and files.
+
+kura_add stub:1001
+kura_write_series_file $KURA_LAST_REF unwanted.mkv
+kura_stage_trash $KURA_LAST_REF unwanted.mkv
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+kura_trash_empty $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":0'

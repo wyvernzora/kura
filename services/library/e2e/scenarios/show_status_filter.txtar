@@ -1,0 +1,13 @@
+# show_status_filter: stage (don't apply) S01E0001; show filtered by
+# "staged" → only staged episode appears, missing episodes excluded.
+# Validates: #17 — ShowInput.Status filter narrows episode list.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+
+# Filtered show: only staged episodes.
+kura_show_status $KURA_LAST_REF staged
+stdout '"status":"staged"'
+! stdout '"status":"missing"'
+! stdout '"status":"pending"'

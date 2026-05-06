@@ -1,0 +1,12 @@
+# stage_nonexistent_file_skipped: staging a file that does not exist on
+# disk fails Phase 1 validation (stat) and returns a hard error.
+# The command must fail (! kura_stage) — the slot is not recorded as staged.
+# Validates: non-existent file is rejected before any state is written.
+
+kura_add stub:1001
+
+! kura_stage $KURA_LAST_REF S01E0001 this-file-does-not-exist.mp4
+
+# The episode slot must not be recorded as staged.
+kura_show $KURA_LAST_REF
+! stdout '"status":"staged"'

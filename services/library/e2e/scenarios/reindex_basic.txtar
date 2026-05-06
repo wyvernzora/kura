@@ -1,0 +1,11 @@
+# reindex_basic: add a series and reindex → index rebuilt, series still
+# visible via show.
+# Validates: #50 — Reindex reconstructs the library index from series.json files.
+
+kura_add stub:1001
+kura_reindex
+stdout '"ok":true'
+
+kura_show $KURA_LAST_REF
+stdout '"preferredTitle":"Stub Show"'
+stdout '"episodeCount":3'

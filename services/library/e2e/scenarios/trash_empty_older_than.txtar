@@ -1,0 +1,21 @@
+# trash_empty_older_than: trash an entry, then empty with OlderThan=1h
+# (entry is fresh → nothing deleted), then empty without filter (all deleted).
+# Validates: #49 — OlderThan filter skips recent entries.
+
+kura_add stub:1001
+kura_write_series_file $KURA_LAST_REF unwanted.mkv
+kura_stage_trash $KURA_LAST_REF unwanted.mkv
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# OlderThan=1h: entry is fresh → nothing deleted.
+kura_trash_empty $KURA_LAST_REF 1h
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# No OlderThan filter: all entries deleted.
+kura_trash_empty $KURA_LAST_REF
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":0'

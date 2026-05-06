@@ -1,0 +1,17 @@
+# trash_restore_blocked: move a file to trash via reconcile, then re-create
+# a file at the original path, attempt restore → must fail.
+# Validates: #143 — TrashRestoreTargetExistsError when restore target occupied.
+
+kura_add stub:1001
+kura_write_series_file $KURA_LAST_REF unwanted.mkv
+kura_stage_trash $KURA_LAST_REF unwanted.mkv
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# Re-create the file at the original path to block the restore.
+kura_write_series_file $KURA_LAST_REF unwanted.mkv
+
+# Restore must fail: target path already exists.
+! kura_trash_restore $KURA_LAST_REF $KURA_TRASH_ID

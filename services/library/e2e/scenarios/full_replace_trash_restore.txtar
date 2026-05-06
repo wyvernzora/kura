@@ -1,0 +1,41 @@
+# full_replace_trash_restore: stage v1 → apply (present) → stage v2 (replace)
+# → apply (v1 goes to trash, v2 active) → restore v1 → trash empty.
+# Validates: #58 — full replace chain with trash roundtrip end-to-end.
+
+kura_add stub:1001
+
+# v1: stage and apply.
+kura_mkfile ep1_v1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1_v1.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# v2: stage as replacement → old file queued for trash.
+kura_mkfile ep1_v2.mp4
+kura_stage_replace_source $KURA_LAST_REF S01E0001 ep1_v2.mp4 BluRay
+stdout '"status":"replaced"'
+kura_show $KURA_LAST_REF
+stdout '"status":"staged_replacement"'
+
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# v1 must be in trash.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# Restore v1.
+kura_trash_restore $KURA_LAST_REF $KURA_TRASH_ID
+stdout '"restored":\['
+
+# Trash is now empty.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":0'
+
+# v2 is still the active episode.
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'

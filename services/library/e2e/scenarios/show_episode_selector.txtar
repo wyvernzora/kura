@@ -1,0 +1,21 @@
+# show_episode_selector: stage+apply two episodes, then show with an episode
+# selector that targets only S01E0001 → S01E0002 absent from result.
+# Validates: #16 — ShowInput.Episodes filter narrows episode list.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_mkfile ep2.mp4
+
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_stage $KURA_LAST_REF S01E0002 ep2.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+
+# Unfiltered show: both episodes present.
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# Filtered show: only S01E0001.
+kura_show_ep $KURA_LAST_REF S01E0001
+stdout '"status":"present"'
+! stdout 'S01E0002'

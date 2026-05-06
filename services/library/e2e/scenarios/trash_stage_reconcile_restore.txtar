@@ -1,0 +1,31 @@
+# trash_stage_reconcile_restore: stage a file inside the series dir for
+# trash, reconcile (moves file to .kura/trash/), then restore it.
+# Validates: trash staging, apply moves file to trash bucket, TrashList
+# returns the entry, TrashRestore moves it back.
+
+kura_add stub:1001
+
+# Create a file inside the series directory.
+kura_write_series_file $KURA_LAST_REF unwanted.mkv
+
+# Stage it for deletion.
+kura_stage_trash $KURA_LAST_REF unwanted.mkv
+stdout '"trash":\['
+
+# Plan + apply: file moves from series dir to .kura/trash/<ulid>/.
+kura_plan $KURA_LAST_REF
+stdout '"token":'
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+
+# Trash list: one entry present.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# Restore: file moves back to its original path.
+kura_trash_restore $KURA_LAST_REF $KURA_TRASH_ID
+stdout '"restored":\['
+
+# Trash list: now empty.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":0'

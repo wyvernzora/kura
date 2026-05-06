@@ -1,0 +1,21 @@
+# reconcile_canonical_rename: write a file at a non-canonical path into the
+# series dir, scan adopts it, plan detects path drift and renames it.
+# Validates: #44 — planActiveEpisode generates file_move for path mismatch.
+
+kura_add stub:1001
+
+# Write a file with a recognizable episode pattern but non-canonical name.
+kura_write_series_file $KURA_LAST_REF Season 1/show.s01e01.mp4
+kura_scan $KURA_LAST_REF
+stdout '"status":"added"'
+
+# Plan detects active is not at canonical path → generates rename step.
+kura_plan $KURA_LAST_REF
+stdout '"token":'
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+
+# Original non-canonical file must be gone.
+kura_series_dir $KURA_LAST_REF
+exec find $KURA_SERIES_DIR -name show.s01e01.mp4
+! stdout show.s01e01.mp4

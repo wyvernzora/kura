@@ -1,0 +1,21 @@
+# stage_replace_over_staged: stage ep1_v1 (not applied, stays staged), then
+# stage_replace with ep1_v2 over the staged slot → "replaced"; slot stays
+# staged (not staged_replacement, which is active+staged).
+# Validates: #111 — replace=true over existing staged record replaces it.
+
+kura_add stub:1001
+kura_mkfile ep1_v1.mp4
+kura_mkfile ep1_v2.mp4
+
+# First stage: slot is empty → status=staged.
+kura_stage $KURA_LAST_REF S01E0001 ep1_v1.mp4
+stdout '"status":"staged"'
+
+# Replace over the staged (not active) record.
+kura_stage_replace $KURA_LAST_REF S01E0001 ep1_v2.mp4
+stdout '"status":"replaced"'
+
+# Episode is still staged (no active record), not staged_replacement.
+kura_show $KURA_LAST_REF
+stdout '"status":"staged"'
+! stdout '"status":"staged_replacement"'

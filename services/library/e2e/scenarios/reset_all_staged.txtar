@@ -1,0 +1,20 @@
+# reset_all_staged: stage two episodes, then reset all (no episode arg).
+# Validates: #30 — kura_reset with no episode sets All=true, clears all staged.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_mkfile ep2.mp4
+
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_stage $KURA_LAST_REF S01E0002 ep2.mp4
+
+kura_show $KURA_LAST_REF
+stdout '"status":"staged"'
+
+# Reset all — no episode argument.
+kura_reset $KURA_LAST_REF
+stdout '"records":'
+
+# No staged episodes remain.
+kura_show $KURA_LAST_REF
+! stdout '"status":"staged"'

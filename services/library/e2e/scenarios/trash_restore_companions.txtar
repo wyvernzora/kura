@@ -1,0 +1,35 @@
+# trash_restore_companions: stage ep1 with a subtitle companion, apply, then
+# stage a replacement (sends ep1+companion to trash), apply again.
+# Restore the trash entry → both media and companion come back.
+# Validates: #147 — companions move atomically through trash roundtrip.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_mkfile ep1.srt
+
+# Stage ep1 with companion and apply.
+kura_stage_companions $KURA_LAST_REF S01E0001 ep1.mp4 ep1.srt
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# Stage replacement → ep1+companion queued for trash.
+kura_mkfile ep1_v2.mp4
+kura_stage_replace_source $KURA_LAST_REF S01E0001 ep1_v2.mp4 BluRay
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+
+# Trash should have one entry (ep1 media + companion folded into same bucket).
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# Restore: both media and companion come back.
+kura_trash_restore $KURA_LAST_REF $KURA_TRASH_ID
+stdout '"restored":\['
+# .srt companion must appear in restored list.
+stdout '\.srt'
+
+# Trash is now empty.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":0'

@@ -1,0 +1,11 @@
+# scan_adopt_new_file: write a media file directly into the series directory
+# (bypassing stage), then scan → file is adopted as an active record.
+# Validates: #33 — scan walks series dir and adopts untracked media files.
+
+kura_add stub:1001
+
+# Write a file with a recognizable episode pattern directly into the series dir.
+kura_write_series_file $KURA_LAST_REF Season 1/show.s01e01.mp4
+
+kura_scan $KURA_LAST_REF
+stdout '"status":"added"'

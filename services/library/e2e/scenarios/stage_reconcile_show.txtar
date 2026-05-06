@@ -1,0 +1,30 @@
+# stage_reconcile_show: full golden-path chain.
+# Add a series, stage a media file for S01E0001, reconcile (plan + apply),
+# then verify the episode shows as "present" with active media.
+# Validates: staging round-trip, plan generation, apply moves file to
+# canonical layout, Show reflects the new active record.
+
+kura_add stub:1001
+
+# Create a placeholder media file in the script workdir.
+kura_mkfile ep1.mp4
+
+# Stage S01E0001 from the workdir file.
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+stdout '"status":"staged"'
+
+# Show: episode should now be status=staged.
+kura_show $KURA_LAST_REF
+stdout '"status":"staged"'
+
+# Plan reconcile: generates the move plan and records the token.
+kura_plan $KURA_LAST_REF
+stdout '"token":'
+
+# Apply: moves ep1.mp4 from workdir to canonical series path.
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+
+# Show: episode must now be status=present.
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'

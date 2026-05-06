@@ -1,0 +1,10 @@
+# add_show: add a series via the stub provider, then show it.
+# Validates: add→show golden path, stub provider wiring, index write,
+# JSON shape, and series ref round-trip via $KURA_LAST_REF.
+
+kura_add stub:1001
+stdout '"preferredTitle":"Stub Show"'
+
+kura_show $KURA_LAST_REF
+stdout '"preferredTitle":"Stub Show"'
+stdout '"episodeCount":3'

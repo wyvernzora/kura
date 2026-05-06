@@ -1,0 +1,13 @@
+# reconcile_no_work: planning a reconcile when there is nothing staged
+# returns an empty plan with no token. Validates: PlanReconcile short-
+# circuits cleanly; no plan file is written; KURA_PLAN_TOKEN is empty.
+
+kura_add stub:1001
+
+# Plan with nothing staged.
+kura_plan $KURA_LAST_REF
+# Token is omitted from JSON (empty → omitempty).
+! stdout '"token"'
+
+# Attempting to apply an empty token must fail.
+! kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN

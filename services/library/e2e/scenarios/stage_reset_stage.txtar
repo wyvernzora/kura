@@ -1,0 +1,26 @@
+# stage_reset_stage: stage an episode, reset it, then stage again.
+# Validates: Reset correctly removes staged records; second Stage
+# succeeds on the now-empty slot.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+
+# First stage: slot was empty → status=staged.
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+stdout '"status":"staged"'
+
+# Show: episode is staged.
+kura_show $KURA_LAST_REF
+stdout '"status":"staged"'
+
+# Reset: drop the staged record.
+kura_reset $KURA_LAST_REF S01E0001
+stdout '"record":'
+
+# Show: episode is no longer staged.
+kura_show $KURA_LAST_REF
+! stdout '"status":"staged"'
+
+# Stage again: same file, same slot — succeeds.
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+stdout '"status":"staged"'

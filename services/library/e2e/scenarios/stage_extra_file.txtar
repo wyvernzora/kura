@@ -1,0 +1,17 @@
+# stage_extra_file: stage an extra file for Season 1, reconcile, verify
+# it lands in Season 1/Extra/.
+# Validates: #23/#42 — ExtraStageItem queued and applied.
+
+kura_add stub:1001
+kura_mkfile special_feature.mp4
+
+kura_stage_extra $KURA_LAST_REF 1 special_feature.mp4
+kura_plan $KURA_LAST_REF
+stdout '"token":'
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+
+# Verify file landed in Season 1/Extra/.
+kura_series_dir $KURA_LAST_REF
+exec find $KURA_SERIES_DIR -name special_feature.mp4
+stdout special_feature.mp4

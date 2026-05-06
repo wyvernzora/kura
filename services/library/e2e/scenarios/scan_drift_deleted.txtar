@@ -1,0 +1,22 @@
+# scan_drift_deleted: stage+apply an episode (active on disk), then delete
+# the file externally, then scan → active record pruned ("removed").
+# Validates: #81 — scan prunes active records whose files are gone.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# Delete the active file externally.
+kura_series_dir $KURA_LAST_REF
+exec find $KURA_SERIES_DIR -name *.mp4 -delete
+
+# Scan detects the file is gone → removes the active record.
+kura_scan $KURA_LAST_REF
+stdout '"status":"removed"'
+
+kura_show $KURA_LAST_REF
+! stdout '"status":"present"'

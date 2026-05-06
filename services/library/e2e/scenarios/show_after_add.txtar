@@ -1,0 +1,13 @@
+# show_after_add: immediately after kura_add, all spine episodes have
+# status "missing" or "pending" (no media scanned yet).
+# Validates: series.json is written with spine from provider; Show
+# returns the full episode list derived from stub metadata.
+
+kura_add stub:1001
+stdout '"preferredTitle":"Stub Show"'
+
+kura_show $KURA_LAST_REF
+stdout '"episodeCount":3'
+# No episode should be present or staged — all pending or missing.
+! stdout '"status":"present"'
+! stdout '"status":"staged"'

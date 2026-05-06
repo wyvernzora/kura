@@ -1,0 +1,20 @@
+# stage_collision_no_replace: stage+apply an episode (present), then try to
+# stage the same slot without replace=true → hard error; slot unchanged.
+# Validates: #110 — EpisodeAlreadyExistsError surfaced as command failure.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+
+# Create a different file; staging without replace=true must fail.
+kura_mkfile ep1_v2.mp4
+! kura_stage $KURA_LAST_REF S01E0001 ep1_v2.mp4
+
+# Slot must stay present, not staged_replacement.
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+! stdout '"status":"staged_replacement"'
