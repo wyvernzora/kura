@@ -1,6 +1,7 @@
 package seriesfile_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,8 +83,8 @@ func TestExistsReportsPresence(t *testing.T) {
 
 func TestLoadRejectsUnknownSchemaVersion(t *testing.T) {
 	libRoot, ref := setupFixtureLibrary(t)
-	// v3 is forward-incompatible; current binary supports up to v2.
-	bad := []byte(`{"schemaVersion":3,"metadataRef":"tvdb:1","episodes":{}}`)
+	// v4 is forward-incompatible; current binary supports up to v3.
+	bad := []byte(`{"schemaVersion":4,"metadataRef":"tvdb:1","episodes":{}}`)
 	if err := os.WriteFile(paths.SeriesMetadata(libRoot, ref), bad, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -92,15 +93,18 @@ func TestLoadRejectsUnknownSchemaVersion(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsLegacyV1(t *testing.T) {
-	libRoot, ref := setupFixtureLibrary(t)
-	// v1 is no longer supported; operators must re-scan to upgrade.
-	v1 := []byte(`{"schemaVersion":1,"metadataRef":"tvdb:1","episodes":{}}`)
-	if err := os.WriteFile(paths.SeriesMetadata(libRoot, ref), v1, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	if _, err := seriesfile.Load(libRoot, ref); err == nil || !strings.Contains(err.Error(), "schemaVersion") {
-		t.Fatalf("Load error = %v, want schemaVersion error", err)
+func TestLoadRejectsPreV3(t *testing.T) {
+	for _, version := range []int{1, 2} {
+		t.Run(fmt.Sprintf("v%d", version), func(t *testing.T) {
+			libRoot, ref := setupFixtureLibrary(t)
+			body := fmt.Sprintf(`{"schemaVersion":%d,"metadataRef":"tvdb:1","episodes":{}}`, version)
+			if err := os.WriteFile(paths.SeriesMetadata(libRoot, ref), []byte(body), 0o644); err != nil {
+				t.Fatalf("WriteFile: %v", err)
+			}
+			if _, err := seriesfile.Load(libRoot, ref); err == nil || !strings.Contains(err.Error(), "schemaVersion") {
+				t.Fatalf("Load error = %v, want schemaVersion error", err)
+			}
+		})
 	}
 }
 

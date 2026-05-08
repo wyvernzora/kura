@@ -10,45 +10,51 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-//go:embed schema/series_v2.json
+//go:embed schema/series_v3.json
 var schemaFS embed.FS
 
 var (
-	v2SchemaOnce sync.Once
-	v2Schema     *jsonschema.Schema
-	v2SchemaErr  error
+	v3SchemaOnce sync.Once
+	v3Schema     *jsonschema.Schema
+	v3SchemaErr  error
 )
 
-func loadV2Schema() (*jsonschema.Schema, error) {
-	v2SchemaOnce.Do(func() {
-		raw, err := schemaFS.ReadFile("schema/series_v2.json")
-		if err != nil {
-			v2SchemaErr = err
-			return
-		}
-		var schemaDoc any
-		decoder := json.NewDecoder(bytes.NewReader(raw))
-		decoder.UseNumber()
-		if v2SchemaErr = decoder.Decode(&schemaDoc); v2SchemaErr != nil {
-			return
-		}
-		compiler := jsonschema.NewCompiler()
-		if v2SchemaErr = compiler.AddResource("series_v2.json", schemaDoc); v2SchemaErr != nil {
-			return
-		}
-		v2Schema, v2SchemaErr = compiler.Compile("series_v2.json")
+// loadSchema returns the embedded schema for the requested version.
+// Only v3 is supported; pre-v3 files were soft-migrated through an
+// earlier release and are no longer accepted.
+func loadSchema(version int) (*jsonschema.Schema, error) {
+	if version != currentSchemaVersion {
+		return nil, fmt.Errorf("seriesfile: no embedded schema for v%d", version)
+	}
+	v3SchemaOnce.Do(func() {
+		v3Schema, v3SchemaErr = compileSchema("schema/series_v3.json")
 	})
-	return v2Schema, v2SchemaErr
+	return v3Schema, v3SchemaErr
 }
 
-// validateSeries validates data against the v2 schema. The version
-// parameter is retained for symmetry with prior multi-version support;
-// today only v2 is accepted, so any other value errors.
-func validateSeries(version int, data []byte) error {
-	if version != currentSchemaVersion {
-		return fmt.Errorf("seriesfile: unsupported schemaVersion %d", version)
+func compileSchema(path string) (*jsonschema.Schema, error) {
+	raw, err := schemaFS.ReadFile(path)
+	if err != nil {
+		return nil, err
 	}
-	schema, err := loadV2Schema()
+	var doc any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&doc); err != nil {
+		return nil, err
+	}
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(path, doc); err != nil {
+		return nil, err
+	}
+	return compiler.Compile(path)
+}
+
+// validateSeries validates data against the embedded v3 schema.
+// `version` is retained for symmetry with prior multi-version support;
+// any value other than currentSchemaVersion errors.
+func validateSeries(version int, data []byte) error {
+	schema, err := loadSchema(version)
 	if err != nil {
 		return err
 	}

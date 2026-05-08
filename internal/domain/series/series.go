@@ -13,6 +13,8 @@ import (
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/provider"
+	"github.com/wyvernzora/kura/internal/searchkey"
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
@@ -61,9 +63,19 @@ type Series struct {
 	// non-nil (decode initializes empty).
 	StagedExtras []StagedExtraItem
 	Artwork      Artwork
-	InProgress   *coord.Holder
-	LastMutated  *coord.Mutator
-	Hash         string
+	// UserAliases are hand-coined shorthands managed via the alias
+	// REST endpoints / `kura alias` CLI. Preserved across rescans;
+	// rescan-time TVDB aliases + translated titles land separately
+	// (transient, folded straight into SearchKey and discarded).
+	UserAliases []textnorm.NFCString
+	// SearchKey is the persisted output of `internal/searchkey.Compute`.
+	// The only search-related field we persist — provider aliases +
+	// translated titles flow in transiently per scan / add and never
+	// land on disk. Empty when no candidate produces a token.
+	SearchKey   string
+	InProgress  *coord.Holder
+	LastMutated *coord.Mutator
+	Hash        string
 }
 
 // StagedTrashItem represents one file (and its companions) queued for
@@ -292,4 +304,67 @@ func (s *Series) RemoveStagedExtra(id ulid.ULID) bool {
 // apply post-success.
 func (s *Series) ClearStagedExtras() {
 	s.StagedExtras = s.StagedExtras[:0]
+}
+
+// AddUserAlias appends alias to UserAliases if not already present
+// (case-sensitive against the NFC form). Empty / whitespace-only
+// values are ignored. Returns true when the slice grew.
+func (s *Series) AddUserAlias(alias textnorm.NFCString) bool {
+	if alias.IsZero() || strings.TrimSpace(alias.String()) == "" {
+		return false
+	}
+	for _, existing := range s.UserAliases {
+		if existing == alias {
+			return false
+		}
+	}
+	s.UserAliases = append(s.UserAliases, alias)
+	return true
+}
+
+// RemoveUserAlias drops the entry equal to alias. Returns true when
+// the slice shrunk.
+func (s *Series) RemoveUserAlias(alias textnorm.NFCString) bool {
+	for i, existing := range s.UserAliases {
+		if existing == alias {
+			s.UserAliases = append(s.UserAliases[:i], s.UserAliases[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// RecomputeSearchKey rebuilds SearchKey from the in-memory state
+// (titles + UserAliases) plus any transient TVDB aliases / translated
+// titles the caller has on hand from the provider response. The
+// Add / scan paths pass both transient slices; the CLI alias-mutate
+// path passes nil for both — TVDB material lands back on the next
+// scan.
+//
+// `prefs` is the user's KURA_PREFERRED_LANGUAGES (BCP-47 base form).
+// Empty list disables the translation channel.
+func (s *Series) RecomputeSearchKey(
+	prefs []string,
+	transientAliases []provider.TitleEntry,
+	transientTranslated []provider.TitleEntry,
+) {
+	tt := make([]searchkey.TranslatedTitle, 0, len(transientTranslated))
+	for _, entry := range transientTranslated {
+		tt = append(tt, searchkey.TranslatedTitle{
+			Language: entry.Language,
+			Value:    entry.Value,
+		})
+	}
+	users := make([]string, 0, len(s.UserAliases))
+	for _, alias := range s.UserAliases {
+		users = append(users, alias.String())
+	}
+	s.SearchKey = searchkey.Compute(searchkey.Inputs{
+		Canonical:        s.CanonicalTitle.String(),
+		Preferred:        s.PreferredTitle.String(),
+		TranslatedTitles: tt,
+		Aliases:          transientAliases,
+		UserAliases:      users,
+		PreferredLangs:   prefs,
+	})
 }

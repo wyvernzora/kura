@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "metadataRef": "tvdb:370070",
   "preferredTitle": "Bookworm",
   "lastScanned": "2026-04-20T03:00:00Z",
+  "searchKey": "ascendance\nbookworm\nhonzuki\ngekokujou",
   "episodes": {
     "S01E0001": {
       "airDate": "2019-10-02",
