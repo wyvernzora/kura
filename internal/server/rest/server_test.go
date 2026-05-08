@@ -39,7 +39,7 @@ func newTestServer(t *testing.T) *Server {
 
 func TestHandleHealth_Returns200(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -63,7 +63,7 @@ func TestHandleHealth_Returns200(t *testing.T) {
 
 func TestHandleList_EmptyLibrary(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -79,7 +79,7 @@ func TestHandleList_ETagShortCircuit(t *testing.T) {
 	srv := newTestServer(t)
 
 	// First request to capture ETag.
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -91,7 +91,7 @@ func TestHandleList_ETagShortCircuit(t *testing.T) {
 	}
 
 	// Second request with If-None-Match should 304.
-	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	req2.Header.Set(headerIfNoneMatch, etag)
 	rec2 := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec2, req2)
@@ -105,7 +105,7 @@ func TestHandleList_ETagShortCircuit(t *testing.T) {
 
 func TestHandleList_BadStatus(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series?status=bogus", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series?status=bogus", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -123,7 +123,7 @@ func TestHandleList_BadStatus(t *testing.T) {
 
 func TestHandleList_BadLimit(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series?limit=-5", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series?limit=-5", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -133,7 +133,7 @@ func TestHandleList_BadLimit(t *testing.T) {
 
 func TestHandleHealth_OptionsPreflightAnswered(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/health", nil)
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/health", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {

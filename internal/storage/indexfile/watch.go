@@ -320,9 +320,9 @@ func (i *Index) rebuildLoop(ctx context.Context, interval time.Duration) {
 
 // readIndexBytes reads the index file plus the stat fields the
 // Watch baseline tracks.
-func readIndexBytes(root string) ([]byte, time.Time, int64, error) {
+func readIndexBytes(root string) (data []byte, mtime time.Time, size int64, err error) {
 	path := paths.IndexFile(root)
-	data, err := os.ReadFile(path)
+	data, err = os.ReadFile(path)
 	if err != nil {
 		return nil, time.Time{}, 0, err
 	}

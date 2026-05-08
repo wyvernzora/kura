@@ -34,50 +34,43 @@ type AddInput struct {
 // path.
 //
 // Provider-needing.
-func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error) {
+func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult, err error) {
 	progress.Start(ctx, "add", "Fetching series metadata", 0)
+	// step tracks how far the workflow advanced before failing so the
+	// deferred Failure reports the right counter (0 = pre-write, 1 =
+	// post-Update). Mirrors the explicit progress.Failure calls the
+	// pre-defer version emitted at each step boundary.
+	step := 0
+	defer func() {
+		if err != nil {
+			progress.Failure(ctx, "add", "Failed to add series", step, 0)
+		}
+	}()
+
 	metadataSeries, metadataRef, err := fetchSeriesMetadata(ctx, deps, in.Metadata, in.Ordering)
 	if err != nil {
-		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
 		return response.AddResult{}, err
 	}
-	ref := in.Ref
-	if ref.IsZero() {
-		title, err := filename.ParseTitle(metadataSeries.PreferredTitle.String())
-		if err != nil {
-			progress.Failure(ctx, "add", "Failed to add series", 0, 0)
-			return response.AddResult{}, err
-		}
-		ref, err = refs.ParseSeries(title.String())
-		if err != nil {
-			progress.Failure(ctx, "add", "Failed to add series", 0, 0)
-			return response.AddResult{}, err
-		}
-	}
-	if _, err := refs.ParseSeries(ref.String()); err != nil {
-		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
+	ref, err := resolveAddRef(in.Ref, metadataSeries)
+	if err != nil {
 		return response.AddResult{}, err
 	}
 	target := paths.SeriesDir(deps.LibRoot, ref)
-	if _, err := os.Stat(target); err == nil {
-		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
+	if _, statErr := os.Stat(target); statErr == nil {
 		return response.AddResult{}, &SeriesAlreadyExistsError{Ref: ref}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
-		return response.AddResult{}, err
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return response.AddResult{}, statErr
 	}
 	if err := checkMetadataAvailable(deps, metadataRef, ref); err != nil {
-		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
 		return response.AddResult{}, err
 	}
 	if err := os.MkdirAll(target, 0o755); err != nil {
-		progress.Failure(ctx, "add", "Failed to add series", 0, 0)
 		return response.AddResult{}, err
 	}
 	progress.Update(ctx, "add", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)
+	step = 1
 	model, err := seriesfile.NewFromMetadata(metadataRef, in.Ordering, metadataSeries)
 	if err != nil {
-		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
 	}
 	model.Ref = ref
@@ -86,7 +79,6 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 	// from TVDB.
 	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("add")); err != nil {
-		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
 	}
 	indexRow := indexfile.BuildRowFromModel(model, deps.Now())
@@ -100,7 +92,6 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 		}
 		return appendOrReplaceRow(loaded.Rows, indexRow), nil
 	}); err != nil {
-		progress.Failure(ctx, "add", "Failed to add series", 1, 0)
 		return response.AddResult{}, err
 	}
 	progress.Success(ctx, "add", fmt.Sprintf("Added %s", ref), 1)
@@ -109,6 +100,24 @@ func Add(ctx context.Context, deps Deps, in AddInput) (response.AddResult, error
 		Ref:            ref,
 		PreferredTitle: metadataSeries.PreferredTitle.String(),
 	}, nil
+}
+
+// resolveAddRef returns the explicit caller-supplied ref when set,
+// otherwise derives it from the provider's preferred title via the
+// filename parser. Validates the resulting ref string roundtrips
+// through refs.ParseSeries either way.
+func resolveAddRef(explicit refs.Series, metadataSeries provider.Series) (refs.Series, error) {
+	if !explicit.IsZero() {
+		if _, err := refs.ParseSeries(explicit.String()); err != nil {
+			return refs.Series{}, err
+		}
+		return explicit, nil
+	}
+	title, err := filename.ParseTitle(metadataSeries.PreferredTitle.String())
+	if err != nil {
+		return refs.Series{}, err
+	}
+	return refs.ParseSeries(title.String())
 }
 
 // fetchSeriesMetadata pulls a full Series view from the provider for

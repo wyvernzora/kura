@@ -143,19 +143,9 @@ func applyLocked(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, er
 	startedAt := deps.Now()
 	log.Info("apply starting", "totalSteps", total)
 
-	if in.Plan.Header.Series != in.Ref {
-		return base, StaleSnapshotError{Series: in.Plan.Header.Series}
-	}
-	if deps.Now().UTC().After(in.Plan.Header.ExpiresAt) {
-		expiredErr := &PlanExpiredError{Token: in.Plan.Header.Token, ExpiresAt: in.Plan.Header.ExpiresAt}
-		recordFailure(log, in.Log, deps.Now(), 0, expiredErr)
-		return base, expiredErr
-	}
-	if err := validateAppliedSnapshot(deps.LibRoot, in.Ref, in.Plan); err != nil {
-		recordFailure(log, in.Log, deps.Now(), 0, err)
+	if err := validateApplyPreflight(deps, in, log); err != nil {
 		return base, err
 	}
-
 	if !in.Plan.HasWork() {
 		if err := in.Log.AppendResult(deps.Now(), "success", 0, nil); err != nil {
 			return base, err
@@ -170,7 +160,6 @@ func applyLocked(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, er
 		recordFailure(log, in.Log, deps.Now(), 0, err)
 		return base, err
 	}
-
 	preLoaded, err := seriesfile.Load(deps.LibRoot, in.Ref)
 	if err != nil {
 		recordFailure(log, in.Log, deps.Now(), 0, err)
@@ -182,7 +171,6 @@ func applyLocked(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, er
 		return base, claimErr
 	}
 	claimedHash := preLoaded.Hash
-
 	released := false
 	defer func() {
 		if released {
@@ -196,8 +184,8 @@ func applyLocked(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, er
 		in:        in,
 		seriesDir: seriesDir.Path(),
 		holder:    holder,
+		log:       log,
 	}
-
 	if err := exec.writeTrashMetas(); err != nil {
 		recordFailure(log, in.Log, deps.Now(), 0, err)
 		log.Error("apply failed", "phase", "trash-meta", "err", err)
@@ -205,85 +193,148 @@ func applyLocked(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, er
 	}
 	log.Debug("apply trash metas written")
 
-	exec.log = log
 	applied, failedStep, runErr := exec.runSteps(ctx)
-	progressed := func() ApplyResult {
-		out := base
-		out.AppliedSteps = len(applied)
-		if len(applied) > 0 {
-			out.AppliedStepIDs = append([]string(nil), applied...)
-		}
-		return out
-	}
 	if runErr != nil {
 		recordFailure(log, in.Log, deps.Now(), len(applied), runErr)
-		out := progressed()
-		if failedStep != nil {
-			out.FailedStep = &FailedStepRef{
-				ID:         failedStep.ID,
-				Kind:       failedStep.Kind,
-				OwnerKind:  failedStep.Owner.Kind,
-				From:       failedStep.From,
-				To:         failedStep.To,
-				Path:       failedStep.Path,
-				ErrMessage: runErr.Error(),
-			}
-			log.Error("apply failed",
-				"appliedSteps", len(applied),
-				"totalSteps", total,
-				"failedStepID", failedStep.ID,
-				"failedKind", string(failedStep.Kind),
-				"failedOwner", string(failedStep.Owner.Kind),
-				"err", runErr,
-			)
-		} else {
-			log.Error("apply failed",
-				"appliedSteps", len(applied),
-				"totalSteps", total,
-				"err", runErr,
-			)
-		}
-		return out, runErr
+		logApplyFailure(log, total, applied, failedStep, runErr)
+		return buildFailedApplyResult(base, applied, failedStep, runErr), runErr
 	}
 
-	postLoaded, err := seriesfile.Load(deps.LibRoot, in.Ref)
-	if err != nil {
-		recordFailure(log, in.Log, deps.Now(), len(applied), err)
-		return progressed(), err
-	}
-	if !claimMatches(postLoaded.InProgress, holder) {
-		stolen := &coord.ClaimStolenError{Scope: coord.SeriesScope(in.Ref), Expected: holder, Found: postLoaded.InProgress}
-		recordFailure(log, in.Log, deps.Now(), len(applied), stolen)
-		return progressed(), stolen
-	}
-	if err := exec.applyPostStateMutations(postLoaded); err != nil {
-		recordFailure(log, in.Log, deps.Now(), len(applied), err)
-		log.Error("apply failed", "phase", "post-state", "appliedSteps", len(applied), "err", err)
-		return progressed(), err
-	}
-	log.Debug("apply post-state mutations applied")
-	postLoaded.InProgress = nil
-	if err := seriesfile.SaveCAS(deps.LibRoot, postLoaded, coord.NewMutator("reconcile_apply")); err != nil {
-		recordFailure(log, in.Log, deps.Now(), len(applied), err)
-		return progressed(), err
-	}
-	if deps.UpdateIndex != nil {
-		if err := deps.UpdateIndex(ctx, postLoaded, "reconcile_apply"); err != nil {
-			recordFailure(log, in.Log, deps.Now(), len(applied), err)
-			return progressed(), err
-		}
-	}
-	released = true
-	log.Debug("apply releasing claim")
-	if err := in.Log.AppendResult(deps.Now(), "success", len(applied), nil); err != nil {
-		return progressed(), err
+	if err := finalizeApply(ctx, deps, in, exec, holder, applied, &released); err != nil {
+		return buildAppliedResult(base, applied), err
 	}
 	log.Info("apply complete",
 		"appliedSteps", len(applied),
 		"totalSteps", total,
 		"duration", deps.Now().Sub(startedAt),
 	)
-	return progressed(), nil
+	return buildAppliedResult(base, applied), nil
+}
+
+// validateApplyPreflight enforces the plan invariants apply expects to
+// hold before any CAS / I/O: the plan's series matches the apply
+// target, the plan hasn't expired, and the post-plan disk snapshot
+// still matches what the planner saw. recordFailure is invoked for
+// non-stale-snapshot failures (StaleSnapshot is logged by the caller
+// — the plan is unrecoverable, no apply log to write to).
+func validateApplyPreflight(deps Deps, in ApplyInput, log *slog.Logger) error {
+	if in.Plan.Header.Series != in.Ref {
+		return StaleSnapshotError{Series: in.Plan.Header.Series}
+	}
+	if deps.Now().UTC().After(in.Plan.Header.ExpiresAt) {
+		expiredErr := &PlanExpiredError{Token: in.Plan.Header.Token, ExpiresAt: in.Plan.Header.ExpiresAt}
+		recordFailure(log, in.Log, deps.Now(), 0, expiredErr)
+		return expiredErr
+	}
+	if err := validateAppliedSnapshot(deps.LibRoot, in.Ref, in.Plan); err != nil {
+		recordFailure(log, in.Log, deps.Now(), 0, err)
+		return err
+	}
+	return nil
+}
+
+// finalizeApply runs the post-runSteps phase: re-load the series, check
+// the claim wasn't stolen, apply post-state mutations, persist, update
+// the index, mark the claim as released, and append the success entry
+// to the apply log. Sets *released=true between SaveCAS and the final
+// AppendResult so the caller's defer skips the release call once the
+// claim has been cleared in series.json.
+func finalizeApply(
+	ctx context.Context,
+	deps Deps,
+	in ApplyInput,
+	exec *executor,
+	holder coord.Holder,
+	applied []string,
+	released *bool,
+) error {
+	postLoaded, err := seriesfile.Load(deps.LibRoot, in.Ref)
+	if err != nil {
+		recordFailure(exec.log, in.Log, deps.Now(), len(applied), err)
+		return err
+	}
+	if !claimMatches(postLoaded.InProgress, holder) {
+		stolen := &coord.ClaimStolenError{Scope: coord.SeriesScope(in.Ref), Expected: holder, Found: postLoaded.InProgress}
+		recordFailure(exec.log, in.Log, deps.Now(), len(applied), stolen)
+		return stolen
+	}
+	if err := exec.applyPostStateMutations(postLoaded); err != nil {
+		recordFailure(exec.log, in.Log, deps.Now(), len(applied), err)
+		exec.log.Error("apply failed", "phase", "post-state", "appliedSteps", len(applied), "err", err)
+		return err
+	}
+	exec.log.Debug("apply post-state mutations applied")
+	postLoaded.InProgress = nil
+	if err := seriesfile.SaveCAS(deps.LibRoot, postLoaded, coord.NewMutator("reconcile_apply")); err != nil {
+		recordFailure(exec.log, in.Log, deps.Now(), len(applied), err)
+		return err
+	}
+	if deps.UpdateIndex != nil {
+		if err := deps.UpdateIndex(ctx, postLoaded, "reconcile_apply"); err != nil {
+			recordFailure(exec.log, in.Log, deps.Now(), len(applied), err)
+			return err
+		}
+	}
+	*released = true
+	exec.log.Debug("apply releasing claim")
+	if err := in.Log.AppendResult(deps.Now(), "success", len(applied), nil); err != nil {
+		return err
+	}
+	return nil
+}
+
+// buildAppliedResult composes the success-side ApplyResult from the
+// caller's base + the applied step IDs. Used by both the
+// finalizeApply success path and the post-finalize-error path so the
+// response always carries the steps the executor managed to land.
+func buildAppliedResult(base ApplyResult, applied []string) ApplyResult {
+	out := base
+	out.AppliedSteps = len(applied)
+	if len(applied) > 0 {
+		out.AppliedStepIDs = append([]string(nil), applied...)
+	}
+	return out
+}
+
+// buildFailedApplyResult composes the runSteps-error ApplyResult,
+// including the FailedStepRef when the executor reported a specific
+// step at fault.
+func buildFailedApplyResult(base ApplyResult, applied []string, failedStep *Step, runErr error) ApplyResult {
+	out := buildAppliedResult(base, applied)
+	if failedStep != nil {
+		out.FailedStep = &FailedStepRef{
+			ID:         failedStep.ID,
+			Kind:       failedStep.Kind,
+			OwnerKind:  failedStep.Owner.Kind,
+			From:       failedStep.From,
+			To:         failedStep.To,
+			Path:       failedStep.Path,
+			ErrMessage: runErr.Error(),
+		}
+	}
+	return out
+}
+
+// logApplyFailure emits the structured "apply failed" line. With a
+// failedStep the line carries the step's id/kind/owner; without one,
+// only the running totals + the underlying error.
+func logApplyFailure(log *slog.Logger, total int, applied []string, failedStep *Step, runErr error) {
+	if failedStep != nil {
+		log.Error("apply failed",
+			"appliedSteps", len(applied),
+			"totalSteps", total,
+			"failedStepID", failedStep.ID,
+			"failedKind", string(failedStep.Kind),
+			"failedOwner", string(failedStep.Owner.Kind),
+			"err", runErr,
+		)
+		return
+	}
+	log.Error("apply failed",
+		"appliedSteps", len(applied),
+		"totalSteps", total,
+		"err", runErr,
+	)
 }
 
 // executor bundles the per-Apply state. Methods close over the bundle.
@@ -490,19 +541,10 @@ func (e *executor) pruneEmptyAncestors(start string) {
 	}
 	current := filepath.Clean(start)
 	for {
-		// Boundary roots: never remove these directories themselves.
-		if current == seriesRoot || current == libRoot || filepath.Dir(current) == current {
+		if isPruneBoundary(current, seriesRoot, libRoot, inboxRoot) {
 			return
 		}
-		if inboxRoot != "" && current == inboxRoot {
-			return
-		}
-		// Safety: only prune within a known root — prevents climbing
-		// out of the library or inbox into arbitrary host directories.
-		insideSeries := isDescendantOf(current, seriesRoot)
-		insideLib := isDescendantOf(current, libRoot)
-		insideInbox := inboxRoot != "" && isDescendantOf(current, inboxRoot)
-		if !insideSeries && !insideLib && !insideInbox {
+		if !isInsidePruneRoot(current, seriesRoot, libRoot, inboxRoot) {
 			return
 		}
 		removed, err := removeDirIfEmpty(current)
@@ -526,6 +568,40 @@ func (e *executor) pruneEmptyAncestors(start string) {
 		}
 		current = filepath.Dir(current)
 	}
+}
+
+// isPruneBoundary reports whether current sits at a directory the
+// auto-prune walk must never remove: a series root, the library root,
+// the inbox root (when configured), or the filesystem root. Returning
+// true tells the caller to stop walking.
+func isPruneBoundary(current, seriesRoot, libRoot, inboxRoot string) bool {
+	if current == seriesRoot || current == libRoot {
+		return true
+	}
+	if filepath.Dir(current) == current {
+		return true
+	}
+	if inboxRoot != "" && current == inboxRoot {
+		return true
+	}
+	return false
+}
+
+// isInsidePruneRoot reports whether current lives under any of the
+// three known roots. Used as a safety gate before removing a
+// directory — prevents climbing out of the library/inbox into
+// arbitrary host directories.
+func isInsidePruneRoot(current, seriesRoot, libRoot, inboxRoot string) bool {
+	if isDescendantOf(current, seriesRoot) {
+		return true
+	}
+	if isDescendantOf(current, libRoot) {
+		return true
+	}
+	if inboxRoot != "" && isDescendantOf(current, inboxRoot) {
+		return true
+	}
+	return false
 }
 
 // absolutize resolves a step path to an absolute filesystem path.
@@ -602,15 +678,30 @@ func removeDirIfEmpty(path string) (bool, error) {
 // owned by an episode/trash/extra completed (apply only reaches this
 // path on full success), the owner's effect lands on the model.
 func (e *executor) applyPostStateMutations(model *domainseries.Series) error {
-	episodeRefs := map[refs.Episode]struct{}{}
-	standaloneTrashIDs := map[string]struct{}{}
-	extraIDs := map[string]struct{}{}
+	episodeRefs, standaloneTrashIDs, extraIDs := collectPlanOwnerIDs(e.in.Plan)
+	if err := e.updateEpisodeRecordsAfterApply(model, episodeRefs); err != nil {
+		return err
+	}
+	removeStandaloneTrashByIDs(model, standaloneTrashIDs)
+	removeStandaloneExtrasByIDs(model, extraIDs)
+	return nil
+}
 
-	// Replaced-active episodes (OwnerTrash with non-zero OriginalEpisode)
-	// are intentionally not tracked: PromoteStaged for the paired episode
-	// owner step replaces the Active record in this same loop, so no
-	// further bookkeeping is required for them.
-	for _, step := range e.in.Plan.Steps {
+// collectPlanOwnerIDs walks plan.Steps once and partitions the touched
+// owners into per-axis sets. Replaced-active episodes (OwnerTrash with
+// non-zero OriginalEpisode) are intentionally not tracked here — the
+// paired OwnerEpisode step's PromoteStaged will replace the Active
+// record in updateEpisodeRecordsAfterApply, so no extra bookkeeping
+// is needed for them.
+func collectPlanOwnerIDs(plan Plan) (
+	episodeRefs map[refs.Episode]struct{},
+	standaloneTrashIDs map[string]struct{},
+	extraIDs map[string]struct{},
+) {
+	episodeRefs = map[refs.Episode]struct{}{}
+	standaloneTrashIDs = map[string]struct{}{}
+	extraIDs = map[string]struct{}{}
+	for _, step := range plan.Steps {
 		switch step.Owner.Kind {
 		case OwnerEpisode:
 			episodeRefs[step.Owner.EpisodeRef] = struct{}{}
@@ -622,17 +713,25 @@ func (e *executor) applyPostStateMutations(model *domainseries.Series) error {
 			extraIDs[step.Owner.ExtraID] = struct{}{}
 		}
 	}
+	return episodeRefs, standaloneTrashIDs, extraIDs
+}
 
-	// Update active/staged paths to their post-apply canonical
-	// destinations and, where applicable, promote staged → active.
-	//
-	// Three cases per touched episode:
-	//   - Staged-add / staged-replace: rewrite Staged paths to the
-	//     canonical To, then PromoteStaged.
-	//   - Active-only canonical move (intent="move"): no Staged
-	//     record; rewrite Active paths in place. Without this the
-	//     active.Path stored in series.json lags the filesystem
-	//     until the next scan re-derives.
+// updateEpisodeRecordsAfterApply rewrites active/staged record paths
+// to their post-apply canonical destinations and promotes staged →
+// active for episodes that had a staged record.
+//
+// Three cases per touched episode:
+//   - Staged-add / staged-replace: rewrite Staged paths to the
+//     canonical To, then PromoteStaged.
+//   - Active-only canonical move (intent="move"): no Staged record;
+//     rewrite Active paths in place. Without this the active.Path
+//     stored in series.json lags the filesystem until the next scan
+//     re-derives.
+//   - Episode missing from the model: skip (already pruned).
+func (e *executor) updateEpisodeRecordsAfterApply(
+	model *domainseries.Series,
+	episodeRefs map[refs.Episode]struct{},
+) error {
 	for ep := range episodeRefs {
 		episode, ok := model.Episodes[ep]
 		if !ok {
@@ -641,12 +740,7 @@ func (e *executor) applyPostStateMutations(model *domainseries.Series) error {
 		primary, companions := e.episodePathsAfter(ep)
 		switch {
 		case episode.Staged != nil:
-			episode.Staged.Path = primary
-			for i := range episode.Staged.Companions {
-				if i < len(companions) {
-					episode.Staged.Companions[i].Path = companions[i]
-				}
-			}
+			rewriteRecordPaths(episode.Staged, primary, companions)
 			// Refresh Size/MTime from the post-move file so the next
 			// scan's (size,mtime) fingerprint check matches and skips
 			// re-probing. Stage captured mtime at stage time; cross-FS
@@ -658,36 +752,50 @@ func (e *executor) applyPostStateMutations(model *domainseries.Series) error {
 				return fmt.Errorf("reconcile: promote staged for %s: %w", ep, err)
 			}
 		case episode.Active != nil && primary != "":
-			episode.Active.Path = primary
-			for i := range episode.Active.Companions {
-				if i < len(companions) {
-					episode.Active.Companions[i].Path = companions[i]
-				}
-			}
+			rewriteRecordPaths(episode.Active, primary, companions)
 			e.refreshRecordFacts(episode.Active)
 			model.Episodes[ep] = episode
 		}
 	}
+	return nil
+}
 
-	// Standalone stagedTrash: drop matching entries.
-	for id := range standaloneTrashIDs {
+// rewriteRecordPaths assigns rec.Path = primary and overlays the
+// per-companion path slice in place. Companions beyond len(paths)
+// keep their original Path — defensive against length mismatches
+// from upstream plan generation.
+func rewriteRecordPaths(rec *media.Record, primary string, paths []string) {
+	rec.Path = primary
+	for i := range rec.Companions {
+		if i < len(paths) {
+			rec.Companions[i].Path = paths[i]
+		}
+	}
+}
+
+// removeStandaloneTrashByIDs drops every stagedTrash entry whose id
+// is in the set. Invalid ULIDs are skipped silently — the upstream
+// plan-builder already enforced the format.
+func removeStandaloneTrashByIDs(model *domainseries.Series, ids map[string]struct{}) {
+	for id := range ids {
 		uid, err := ulid.Parse(id)
 		if err != nil {
 			continue
 		}
 		model.RemoveStagedTrash(uid)
 	}
+}
 
-	// Standalone stagedExtras: drop matching entries.
-	for id := range extraIDs {
+// removeStandaloneExtrasByIDs drops every stagedExtras entry whose id
+// is in the set.
+func removeStandaloneExtrasByIDs(model *domainseries.Series, ids map[string]struct{}) {
+	for id := range ids {
 		uid, err := ulid.Parse(id)
 		if err != nil {
 			continue
 		}
 		model.RemoveStagedExtra(uid)
 	}
-
-	return nil
 }
 
 // refreshRecordFacts re-stats the file at record.Path and its
@@ -724,7 +832,7 @@ func (e *executor) refreshRecordFacts(record *media.Record) {
 // episodePathsAfter returns (primary path, []companion paths) for the
 // given episode based on the plan's episode-owner steps' To fields.
 // Plan ordering puts the primary stage move first, then companions.
-func (e *executor) episodePathsAfter(ep refs.Episode) (string, []string) {
+func (e *executor) episodePathsAfter(ep refs.Episode) (primaryPath string, companionPaths []string) {
 	var primary string
 	var companions []string
 	for _, step := range e.in.Plan.Steps {

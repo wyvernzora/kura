@@ -8,7 +8,7 @@ import (
 
 func TestHandleTrashEmptySeries_RequiresOperator(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/series/foo/trash", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/series/foo/trash", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -18,7 +18,7 @@ func TestHandleTrashEmptySeries_RequiresOperator(t *testing.T) {
 
 func TestHandleTrashEmptySeries_RequiresConfirm(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/series/foo/trash", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/series/foo/trash", http.NoBody)
 	req.Header.Set(headerOperator, "1")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -29,7 +29,7 @@ func TestHandleTrashEmptySeries_RequiresConfirm(t *testing.T) {
 
 func TestHandleTrashEmptyAll_RequiresOperator(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/trash", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/trash", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -39,7 +39,7 @@ func TestHandleTrashEmptyAll_RequiresOperator(t *testing.T) {
 
 func TestHandleTrashRestore_RequiresOperator(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/trash/01ARZ3NDEKTSV4RRFFQ69G5FAV/restore", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/trash/01ARZ3NDEKTSV4RRFFQ69G5FAV/restore", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -49,7 +49,7 @@ func TestHandleTrashRestore_RequiresOperator(t *testing.T) {
 
 func TestHandleTrashRestore_BadULID(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/trash/notaulid/restore", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/trash/notaulid/restore", http.NoBody)
 	req.Header.Set(headerOperator, "1")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -60,7 +60,7 @@ func TestHandleTrashRestore_BadULID(t *testing.T) {
 
 func TestHandleReindex_RequiresOperator(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/library/reindex", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/library/reindex", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {

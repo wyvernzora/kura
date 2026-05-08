@@ -39,7 +39,7 @@ func parseSeasonDir(name string) (int, bool) {
 	return season, true
 }
 
-func inferEpisodeFromFilename(name string) (int, int, bool) {
+func inferEpisodeFromFilename(name string) (season, episode int, ok bool) {
 	for _, strategy := range filenameParsingStrategies {
 		ref, ok, err := strategy(name)
 		if err != nil {

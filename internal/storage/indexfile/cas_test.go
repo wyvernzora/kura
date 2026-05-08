@@ -1,8 +1,10 @@
 package indexfile_test
 
 import (
+	"bytes"
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,7 +89,7 @@ func TestSaveCASRoundTripIsByteStable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read 2: %v", err)
 	}
-	if string(first) != string(second) {
+	if !bytes.Equal(first, second) {
 		t.Fatalf("byte-stable round-trip violated:\nfirst:\n%s\nsecond:\n%s", first, second)
 	}
 }
@@ -105,8 +107,9 @@ func TestSaveCASUpdatePreservesHashRoundtrip(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 
-	// Append row via CAS.
-	updated := append(first.Rows, indexfile.Row{Series: mustParseSeries(t, "B"), Metadata: refs.Metadata("tvdb:2"), Title: "B", Status: response.ListStatusComplete})
+	// Append row via CAS. Clone first.Rows so the append doesn't
+	// alias into the LoadCAS-returned slice's backing array.
+	updated := append(slices.Clone(first.Rows), indexfile.Row{Series: mustParseSeries(t, "B"), Metadata: refs.Metadata("tvdb:2"), Title: "B", Status: response.ListStatusComplete})
 	if err := indexfile.SaveCAS(root, first.Hash, updated, mutator); err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -133,8 +136,9 @@ func TestSaveCASDetectsPreWriteDrift(t *testing.T) {
 	}
 	first, _ := indexfile.LoadCAS(root)
 
-	// Peer mutation lands.
-	peer := append(first.Rows, indexfile.Row{Series: mustParseSeries(t, "Peer"), Metadata: refs.Metadata("tvdb:peer"), Title: "Peer", Status: response.ListStatusComplete})
+	// Peer mutation lands. Clone first.Rows so the append doesn't
+	// alias into the LoadCAS-returned slice's backing array.
+	peer := append(slices.Clone(first.Rows), indexfile.Row{Series: mustParseSeries(t, "Peer"), Metadata: refs.Metadata("tvdb:peer"), Title: "Peer", Status: response.ListStatusComplete})
 	peerMutator := coord.Mutator{Op: "add", PID: 999, Host: "ws", At: time.Now().UTC()}
 	if err := indexfile.SaveCAS(root, first.Hash, peer, peerMutator); err != nil {
 		t.Fatalf("peer SaveCAS: %v", err)

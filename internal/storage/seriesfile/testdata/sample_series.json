@@ -38,5 +38,14 @@
     "S01E0003": {
       "airDate": "2019-10-16"
     }
+  },
+  "artwork": {},
+  "stagedTrash": [],
+  "stagedExtras": [],
+  "last_mutated": {
+    "op": "fixture",
+    "pid": 1,
+    "host": "fixture",
+    "at": "2026-04-20T03:00:00Z"
   }
 }

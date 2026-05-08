@@ -352,7 +352,7 @@ func (s fakeStrategy) Name() string {
 	return "fake"
 }
 
-func (s fakeStrategy) Match(term selector.Term) (bool, bool) {
+func (s fakeStrategy) Match(term selector.Term) (matched bool, stop bool) {
 	if s.match {
 		return true, s.stop
 	}
@@ -360,7 +360,7 @@ func (s fakeStrategy) Match(term selector.Term) (bool, bool) {
 	if s.matchEmptyPrefix && prefix == "" {
 		return true, s.stop
 	}
-	matched := s.matchPrefix != "" && prefix == s.matchPrefix
+	matched = s.matchPrefix != "" && prefix == s.matchPrefix
 	return matched, matched && s.stop
 }
 

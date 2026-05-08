@@ -22,7 +22,7 @@ func (s *textSearchStrategy) Name() string {
 	return "text_search"
 }
 
-func (s *textSearchStrategy) Match(t selector.Term) (bool, bool) {
+func (s *textSearchStrategy) Match(t selector.Term) (matched bool, stop bool) {
 	return true, false
 }
 

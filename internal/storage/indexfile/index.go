@@ -82,8 +82,8 @@ type Index struct {
 	// Reset on every observed mtime change so the rebuild only fires
 	// once filesystem activity has been quiet for libRootDebounce.
 	// Guarded by mu.
-	libRootRebuildTimer    *time.Timer
-	libRootDebounce        time.Duration
+	libRootRebuildTimer *time.Timer
+	libRootDebounce     time.Duration
 
 	// log + reader are set by Watch before any loop starts, then
 	// read-only thereafter. No locking needed for reads.
@@ -358,9 +358,9 @@ func (i *Index) SaveAndAdopt(expected string, rows []Row, mutator coord.Mutator)
 	return nil
 }
 
-func buildRowMaps(rows []Row) (map[refs.Series]Row, map[refs.Metadata]refs.Series, error) {
-	bySeries := make(map[refs.Series]Row, len(rows))
-	byMeta := make(map[refs.Metadata]refs.Series, len(rows))
+func buildRowMaps(rows []Row) (bySeries map[refs.Series]Row, byMeta map[refs.Metadata]refs.Series, err error) {
+	bySeries = make(map[refs.Series]Row, len(rows))
+	byMeta = make(map[refs.Metadata]refs.Series, len(rows))
 	for _, row := range rows {
 		if row.Series.IsZero() {
 			continue

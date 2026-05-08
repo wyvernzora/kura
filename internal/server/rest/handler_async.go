@@ -1,12 +1,9 @@
 package rest
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
@@ -114,85 +111,48 @@ func (s *Server) handleStage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if len(req.Episodes) == 0 && len(req.Trash) == 0 && len(req.Extras) == 0 {
-		writeError(w, &validationError{msg: "at least one of episodes, trash, or extras is required"})
+	in, err := workflow.BuildStageInput(stageRequestToWorkflow(req))
+	if err != nil {
+		writeError(w, &validationError{msg: err.Error()})
 		return
 	}
-	in := workflow.StageInput{Ref: ref}
-	for i, ep := range req.Episodes {
-		parsed, perr := refs.ParseEpisode(ep.Episode)
-		if perr != nil {
-			writeError(w, &validationError{msg: fmt.Sprintf("episodes[%d].episode: %v", i, perr)})
-			return
-		}
-		if ep.Media == "" {
-			writeError(w, &validationError{msg: fmt.Sprintf("episodes[%d].media is required (an inbox: selector — see kura_inbox_list)", i)})
-			return
-		}
-		mediaSel, perr := selector.ParseInbox(ep.Media)
-		if perr != nil {
-			writeError(w, &validationError{msg: fmt.Sprintf("episodes[%d].media: %v", i, perr)})
-			return
-		}
-		companions := make([]selector.Path, 0, len(ep.Companions))
-		for j, raw := range ep.Companions {
-			sel, cerr := selector.ParseInbox(raw)
-			if cerr != nil {
-				writeError(w, &validationError{msg: fmt.Sprintf("episodes[%d].companions[%d]: %v", i, j, cerr)})
-				return
-			}
-			companions = append(companions, sel)
-		}
-		in.Episodes = append(in.Episodes, workflow.EpisodeStageItem{
-			Episode:    parsed,
-			Media:      mediaSel,
+	in.Ref = ref
+	job := workflow.Stage(r.Context(), s.deps.Workflow, in)
+	writeJobAck(w, job.ID(), string(jobs.KindStage), job.StartedAt())
+}
+
+// stageRequestToWorkflow flattens the wire-shape stageRequest into the
+// transport-neutral workflow.StageRequest. One field-by-field copy
+// per axis; the workflow side owns selector + episode-marker parsing.
+func stageRequestToWorkflow(req stageRequest) workflow.StageRequest {
+	out := workflow.StageRequest{
+		Episodes: make([]workflow.StageRequestEpisode, 0, len(req.Episodes)),
+		Trash:    make([]workflow.StageRequestTrash, 0, len(req.Trash)),
+		Extras:   make([]workflow.StageRequestExtra, 0, len(req.Extras)),
+	}
+	for _, ep := range req.Episodes {
+		out.Episodes = append(out.Episodes, workflow.StageRequestEpisode{
+			Episode:    ep.Episode,
+			Media:      ep.Media,
 			Source:     ep.Source,
-			Companions: companions,
+			Companions: ep.Companions,
 			Replace:    ep.Replace,
 		})
 	}
-	for i, t := range req.Trash {
-		if t.Path == "" {
-			writeError(w, &validationError{msg: fmt.Sprintf("trash[%d].path is required (a series: selector — relative to the series root)", i)})
-			return
-		}
-		pathSel, perr := selector.ParseSeries(t.Path)
-		if perr != nil {
-			writeError(w, &validationError{msg: fmt.Sprintf("trash[%d].path: %v", i, perr)})
-			return
-		}
-		companions := make([]selector.Path, 0, len(t.Companions))
-		for j, raw := range t.Companions {
-			sel, cerr := selector.ParseSeries(raw)
-			if cerr != nil {
-				writeError(w, &validationError{msg: fmt.Sprintf("trash[%d].companions[%d]: %v", i, j, cerr)})
-				return
-			}
-			companions = append(companions, sel)
-		}
-		in.Trash = append(in.Trash, workflow.TrashStageItem{
-			Path:       pathSel,
-			Companions: companions,
+	for _, t := range req.Trash {
+		out.Trash = append(out.Trash, workflow.StageRequestTrash{
+			Path:       t.Path,
+			Companions: t.Companions,
 		})
 	}
-	for i, ex := range req.Extras {
-		if ex.Source == "" {
-			writeError(w, &validationError{msg: fmt.Sprintf("extras[%d].source is required (an inbox: selector — see kura_inbox_list)", i)})
-			return
-		}
-		sourceSel, perr := selector.ParseInbox(ex.Source)
-		if perr != nil {
-			writeError(w, &validationError{msg: fmt.Sprintf("extras[%d].source: %v", i, perr)})
-			return
-		}
-		in.Extras = append(in.Extras, workflow.ExtraStageItem{
+	for _, ex := range req.Extras {
+		out.Extras = append(out.Extras, workflow.StageRequestExtra{
 			Season: ex.Season,
-			Source: sourceSel,
+			Source: ex.Source,
 			Prefix: ex.Prefix,
 		})
 	}
-	job := workflow.Stage(r.Context(), s.deps.Workflow, in)
-	writeJobAck(w, job.ID(), string(jobs.KindStage), job.StartedAt())
+	return out
 }
 
 // writeJobAck emits the 202-Accepted submission response with status

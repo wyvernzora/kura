@@ -27,68 +27,12 @@ type ImportInput struct {
 	Ordering string
 }
 
-// Import takes an existing directory under the library root and starts
-// tracking it. Errors out unless the directory exists and (without
-// Force) has no .kura/series.json.
-//
-// Provider-needing.
-func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult, error) {
-	if in.Ref.IsZero() {
-		return response.AddResult{}, errors.New("workflow: series ref is required")
-	}
-	ref, err := refs.ParseSeries(in.Ref.String())
-	if err != nil {
-		return response.AddResult{}, err
-	}
-	progress.Start(ctx, "import", fmt.Sprintf("Fetching metadata for %s", ref), 0)
-	metadataSeries, metadataRef, err := fetchSeriesMetadata(ctx, deps, in.Metadata, in.Ordering)
-	if err != nil {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-		return response.AddResult{}, err
-	}
-	if _, err := seriesdir.Parse(paths.SeriesDir(deps.LibRoot, ref)); err != nil {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-		if errors.Is(err, os.ErrNotExist) {
-			return response.AddResult{}, &SeriesNotFoundError{Ref: ref}
-		}
-		return response.AddResult{}, err
-	}
-	metadataPath := paths.SeriesMetadata(deps.LibRoot, ref)
-	if _, err := os.Stat(metadataPath); err == nil {
-		if !in.Force {
-			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-			return response.AddResult{}, &SeriesAlreadyTrackedError{Ref: ref}
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-		return response.AddResult{}, err
-	}
-	if err := checkMetadataAvailable(deps, metadataRef, ref); err != nil {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-		return response.AddResult{}, err
-	}
-	if in.Force {
-		if err := os.Remove(metadataPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 0, 0)
-			return response.AddResult{}, err
-		}
-	}
-	progress.Update(ctx, "import", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)
-	model, err := seriesfile.NewFromMetadata(metadataRef, in.Ordering, metadataSeries)
-	if err != nil {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
-		return response.AddResult{}, err
-	}
-	model.Ref = ref
-	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
-	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
-		return response.AddResult{}, err
-	}
-	indexRow := indexfile.BuildRowFromModel(model, deps.Now())
-	if err := withIndexCAS(ctx, deps, "import", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
-		// Drop any prior row pointing at this series ref (Force-replace
-		// path) and any conflicting row for the same metadataRef.
+// replaceImportRow returns the index-CAS callback Import uses on the
+// final commit: drops any prior row pointing at `ref` (Force-replace
+// path), rejects conflicting rows for `metadataRef` pointing elsewhere,
+// and appends the new row.
+func replaceImportRow(ref refs.Series, metadataRef refs.Metadata, indexRow indexfile.Row) func(indexfile.Loaded) ([]indexfile.Row, error) {
+	return func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
 		filtered := make([]indexfile.Row, 0, len(loaded.Rows))
 		for _, row := range loaded.Rows {
 			if row.Series == ref {
@@ -100,8 +44,85 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 			filtered = append(filtered, row)
 		}
 		return append(filtered, indexRow), nil
-	}); err != nil {
-		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
+	}
+}
+
+// validateImportTarget checks the on-disk preconditions for Import:
+// the series directory exists and (without Force) has no series.json.
+// Returns the absolute series.json path on success; SeriesNotFoundError
+// or SeriesAlreadyTrackedError otherwise.
+func validateImportTarget(libRoot string, ref refs.Series, force bool) (string, error) {
+	if _, err := seriesdir.Parse(paths.SeriesDir(libRoot, ref)); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", &SeriesNotFoundError{Ref: ref}
+		}
+		return "", err
+	}
+	metadataPath := paths.SeriesMetadata(libRoot, ref)
+	_, statErr := os.Stat(metadataPath)
+	switch {
+	case statErr == nil:
+		if !force {
+			return "", &SeriesAlreadyTrackedError{Ref: ref}
+		}
+	case !errors.Is(statErr, os.ErrNotExist):
+		return "", statErr
+	}
+	return metadataPath, nil
+}
+
+// Import takes an existing directory under the library root and starts
+// tracking it. Errors out unless the directory exists and (without
+// Force) has no .kura/series.json.
+//
+// Provider-needing.
+func Import(ctx context.Context, deps Deps, in ImportInput) (result response.AddResult, err error) {
+	if in.Ref.IsZero() {
+		return response.AddResult{}, errors.New("workflow: series ref is required")
+	}
+	ref, err := refs.ParseSeries(in.Ref.String())
+	if err != nil {
+		return response.AddResult{}, err
+	}
+	progress.Start(ctx, "import", fmt.Sprintf("Fetching metadata for %s", ref), 0)
+	// step tracks how far the workflow advanced so the deferred
+	// Failure reports the right counter (0 = pre-write, 1 = post-Update).
+	step := 0
+	defer func() {
+		if err != nil {
+			progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), step, 0)
+		}
+	}()
+
+	metadataSeries, metadataRef, err := fetchSeriesMetadata(ctx, deps, in.Metadata, in.Ordering)
+	if err != nil {
+		return response.AddResult{}, err
+	}
+	metadataPath, err := validateImportTarget(deps.LibRoot, ref, in.Force)
+	if err != nil {
+		return response.AddResult{}, err
+	}
+	if err := checkMetadataAvailable(deps, metadataRef, ref); err != nil {
+		return response.AddResult{}, err
+	}
+	if in.Force {
+		if rmErr := os.Remove(metadataPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			return response.AddResult{}, rmErr
+		}
+	}
+	progress.Update(ctx, "import", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)
+	step = 1
+	model, err := seriesfile.NewFromMetadata(metadataRef, in.Ordering, metadataSeries)
+	if err != nil {
+		return response.AddResult{}, err
+	}
+	model.Ref = ref
+	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
+		return response.AddResult{}, err
+	}
+	indexRow := indexfile.BuildRowFromModel(model, deps.Now())
+	if err := withIndexCAS(ctx, deps, "import", replaceImportRow(ref, metadataRef, indexRow)); err != nil {
 		return response.AddResult{}, err
 	}
 	progress.Success(ctx, "import", fmt.Sprintf("Imported %s", ref), 1)

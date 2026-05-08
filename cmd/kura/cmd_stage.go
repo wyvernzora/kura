@@ -226,14 +226,14 @@ func parseStageSeriesCompanions(in []string) ([]string, error) {
 	return out, nil
 }
 
-func splitStageArgs(args []string) ([]string, string, error) {
+func splitStageArgs(args []string) (terms []string, path string, err error) {
 	if len(args) < 2 {
 		return nil, "", errors.New("stage requires at least one selector term and a path")
 	}
 	return args[:len(args)-1], args[len(args)-1], nil
 }
 
-func splitStageEpisodeArgs(args []string) ([]string, string, string, error) {
+func splitStageEpisodeArgs(args []string) (terms []string, episode, mediaPath string, err error) {
 	if len(args) < 3 {
 		return nil, "", "", errors.New("stage episode requires at least one selector term, an episode marker, and a media path")
 	}

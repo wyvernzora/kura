@@ -75,73 +75,123 @@ func ReadPlan(root string, ref refs.Series, token string) (reconcile.Plan, bool,
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
 
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return reconcile.Plan{}, false, fmt.Errorf("planfile: read %s: %w", token, err)
-		}
-		return reconcile.Plan{}, false, fmt.Errorf("planfile: %s is empty", token)
-	}
-	var hw headerV2
-	if err := json.Unmarshal(scanner.Bytes(), &hw); err != nil {
-		return reconcile.Plan{}, false, fmt.Errorf("planfile: decode header %s: %w", token, err)
-	}
-	header, err := headerFromWire(hw)
+	header, err := readPlanHeader(scanner, token)
 	if err != nil {
 		return reconcile.Plan{}, false, err
 	}
-	if header.Token != token {
-		return reconcile.Plan{}, false, fmt.Errorf("planfile: %s token mismatch (file contains %s)", token, header.Token)
-	}
-
-	// Collect remaining lines so we can distinguish a torn trailing write
-	// (last line fails to decode) from mid-file corruption (hard error).
-	var rawLines [][]byte
-	for scanner.Scan() {
-		b := scanner.Bytes()
-		cp := make([]byte, len(b))
-		copy(cp, b)
-		rawLines = append(rawLines, cp)
-	}
-	if err := scanner.Err(); err != nil {
+	rawLines, err := collectPlanLines(scanner)
+	if err != nil {
 		return reconcile.Plan{}, false, err
 	}
 
 	var steps []reconcile.Step
 	applied := false
 	for i, line := range rawLines {
-		var head struct {
-			Type   string `json:"type"`
-			Status string `json:"status"`
+		parsed, err := parsePlanLine(line, i == len(rawLines)-1)
+		if err != nil {
+			return reconcile.Plan{}, false, err
 		}
-		if err := json.Unmarshal(line, &head); err != nil {
-			if i == len(rawLines)-1 {
-				// Torn trailing line from a crash mid-write — treat as no result yet.
-				break
-			}
-			return reconcile.Plan{}, false, fmt.Errorf("planfile: decode line: %w", err)
+		if parsed.StopOnTear {
+			break
 		}
-		switch head.Type {
-		case "step":
-			var sw stepV2
-			if err := json.Unmarshal(line, &sw); err != nil {
-				return reconcile.Plan{}, false, fmt.Errorf("planfile: decode step: %w", err)
-			}
-			step, err := stepFromWire(sw)
-			if err != nil {
-				return reconcile.Plan{}, false, err
-			}
-			steps = append(steps, step)
-		case "event":
-			// progress data; ignored by ReadPlan.
-		case "result":
-			if head.Status == "success" {
-				applied = true
-			}
-		default:
-			return reconcile.Plan{}, false, fmt.Errorf("planfile: unknown line type %q", head.Type)
+		if parsed.Step != nil {
+			steps = append(steps, *parsed.Step)
+		}
+		if parsed.Applied {
+			applied = true
 		}
 	}
 	return reconcile.Plan{Header: header, Steps: steps}, applied, nil
+}
+
+// readPlanHeader scans the first line of the planfile, decodes it as
+// the v2 header, and verifies the embedded token matches the caller's
+// requested token. Empty files and scanner errors surface as typed
+// "planfile: ..." errors.
+func readPlanHeader(scanner *bufio.Scanner, token string) (reconcile.Header, error) {
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return reconcile.Header{}, fmt.Errorf("planfile: read %s: %w", token, err)
+		}
+		return reconcile.Header{}, fmt.Errorf("planfile: %s is empty", token)
+	}
+	var hw headerV2
+	if err := json.Unmarshal(scanner.Bytes(), &hw); err != nil {
+		return reconcile.Header{}, fmt.Errorf("planfile: decode header %s: %w", token, err)
+	}
+	header, err := headerFromWire(hw)
+	if err != nil {
+		return reconcile.Header{}, err
+	}
+	if header.Token != token {
+		return reconcile.Header{}, fmt.Errorf("planfile: %s token mismatch (file contains %s)", token, header.Token)
+	}
+	return header, nil
+}
+
+// collectPlanLines slurps every remaining line from scanner into a
+// fresh-allocated [][]byte. Owning the bytes lets the caller iterate
+// after the scanner has been advanced/exhausted without aliasing the
+// scanner's internal buffer.
+func collectPlanLines(scanner *bufio.Scanner) ([][]byte, error) {
+	var out [][]byte
+	for scanner.Scan() {
+		b := scanner.Bytes()
+		cp := make([]byte, len(b))
+		copy(cp, b)
+		out = append(out, cp)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// parsedPlanLine is the per-line projection ReadPlan consumes. Step
+// is non-nil for "step" lines; Applied is true for a "result" line
+// whose status is "success"; StopOnTear is true when the last line
+// of the file failed to decode (treated as a torn trailing write
+// rather than corruption).
+type parsedPlanLine struct {
+	Step       *reconcile.Step
+	Applied    bool
+	StopOnTear bool
+}
+
+// parsePlanLine decodes one JSONL line of the planfile. isLast tells
+// the parser whether a decode failure should be treated as a torn
+// trailing write (last line) or a hard error (mid-file).
+func parsePlanLine(line []byte, isLast bool) (parsedPlanLine, error) {
+	var head struct {
+		Type   string `json:"type"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(line, &head); err != nil {
+		if isLast {
+			// Torn trailing line from a crash mid-write — treat as no result yet.
+			return parsedPlanLine{StopOnTear: true}, nil
+		}
+		return parsedPlanLine{}, fmt.Errorf("planfile: decode line: %w", err)
+	}
+	switch head.Type {
+	case "step":
+		var sw stepV2
+		if err := json.Unmarshal(line, &sw); err != nil {
+			return parsedPlanLine{}, fmt.Errorf("planfile: decode step: %w", err)
+		}
+		step, err := stepFromWire(sw)
+		if err != nil {
+			return parsedPlanLine{}, err
+		}
+		return parsedPlanLine{Step: &step}, nil
+	case "event":
+		// progress data; ignored by ReadPlan.
+		return parsedPlanLine{}, nil
+	case "result":
+		return parsedPlanLine{Applied: head.Status == "success"}, nil
+	default:
+		return parsedPlanLine{}, fmt.Errorf("planfile: unknown line type %q", head.Type)
+	}
 }
 
 // ListTokens returns the ULIDs of every plan file under the series.

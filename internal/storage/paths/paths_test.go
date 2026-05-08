@@ -19,23 +19,23 @@ func TestLibraryAndSeriesPaths(t *testing.T) {
 		got  string
 		want string
 	}{
-		{"LibraryKuraDir", paths.LibraryKuraDir(root), filepath.Join("/library", ".kura")},
-		{"IndexFile", paths.IndexFile(root), filepath.Join("/library", ".kura", "index.jsonl")},
-		{"LegacyIndexFile", paths.LegacyIndexFile(root), filepath.Join("/library", ".kura", "index.tsv")},
-		{"SeriesDir", paths.SeriesDir(root, ref), filepath.Join("/library", "Bookworm")},
-		{"SeriesKuraDir", paths.SeriesKuraDir(root, ref), filepath.Join("/library", "Bookworm", ".kura")},
-		{"SeriesMetadata", paths.SeriesMetadata(root, ref), filepath.Join("/library", "Bookworm", ".kura", "series.json")},
-		{"TrashDir", paths.TrashDir(root, ref), filepath.Join("/library", "Bookworm", ".kura", "trash")},
-		{"TrashEntry", paths.TrashEntry(root, ref, "01H"), filepath.Join("/library", "Bookworm", ".kura", "trash", "01H")},
-		{"TrashMeta", paths.TrashMeta(root, ref, "01H"), filepath.Join("/library", "Bookworm", ".kura", "trash", "01H", "meta.json")},
-		{"TrashMedia", paths.TrashMedia(root, ref, "01H", "old.mkv"), filepath.Join("/library", "Bookworm", ".kura", "trash", "01H", "old.mkv")},
-		{"PlanDir", paths.PlanDir(root, ref), filepath.Join("/library", "Bookworm", ".kura", "reconcile")},
-		{"PlanFile", paths.PlanFile(root, ref, "01H"), filepath.Join("/library", "Bookworm", ".kura", "reconcile", "01H.jsonl")},
-		{"SeasonDir/1", paths.SeasonDir(root, ref, 1), filepath.Join("/library", "Bookworm", "Season 1")},
-		{"SeasonDir/0", paths.SeasonDir(root, ref, 0), filepath.Join("/library", "Bookworm")},
-		{"SeasonExtraDir", paths.SeasonExtraDir(root, ref, 2), filepath.Join("/library", "Bookworm", "Season 2", "Extra")},
-		{"EpisodeMedia", paths.EpisodeMedia(root, ref, 1, "ep.mkv"), filepath.Join("/library", "Bookworm", "Season 1", "ep.mkv")},
-		{"EpisodeMedia/0", paths.EpisodeMedia(root, ref, 0, "special.mkv"), filepath.Join("/library", "Bookworm", "special.mkv")},
+		{"LibraryKuraDir", paths.LibraryKuraDir(root), filepath.Join("/library", ".kura")},                                                       //nolint:gocritic // test fixture root
+		{"IndexFile", paths.IndexFile(root), filepath.Join("/library", ".kura", "index.jsonl")},                                                  //nolint:gocritic // test fixture root
+		{"LegacyIndexFile", paths.LegacyIndexFile(root), filepath.Join("/library", ".kura", "index.tsv")},                                        //nolint:gocritic // test fixture root
+		{"SeriesDir", paths.SeriesDir(root, ref), filepath.Join("/library", "Bookworm")},                                                         //nolint:gocritic // test fixture root
+		{"SeriesKuraDir", paths.SeriesKuraDir(root, ref), filepath.Join("/library", "Bookworm", ".kura")},                                        //nolint:gocritic // test fixture root
+		{"SeriesMetadata", paths.SeriesMetadata(root, ref), filepath.Join("/library", "Bookworm", ".kura", "series.json")},                       //nolint:gocritic // test fixture root
+		{"TrashDir", paths.TrashDir(root, ref), filepath.Join("/library", "Bookworm", ".kura", "trash")},                                         //nolint:gocritic // test fixture root
+		{"TrashEntry", paths.TrashEntry(root, ref, "01H"), filepath.Join("/library", "Bookworm", ".kura", "trash", "01H")},                       //nolint:gocritic // test fixture root
+		{"TrashMeta", paths.TrashMeta(root, ref, "01H"), filepath.Join("/library", "Bookworm", ".kura", "trash", "01H", "meta.json")},            //nolint:gocritic // test fixture root
+		{"TrashMedia", paths.TrashMedia(root, ref, "01H", "old.mkv"), filepath.Join("/library", "Bookworm", ".kura", "trash", "01H", "old.mkv")}, //nolint:gocritic // test fixture root
+		{"PlanDir", paths.PlanDir(root, ref), filepath.Join("/library", "Bookworm", ".kura", "reconcile")},                                       //nolint:gocritic // test fixture root
+		{"PlanFile", paths.PlanFile(root, ref, "01H"), filepath.Join("/library", "Bookworm", ".kura", "reconcile", "01H.jsonl")},                 //nolint:gocritic // test fixture root
+		{"SeasonDir/1", paths.SeasonDir(root, ref, 1), filepath.Join("/library", "Bookworm", "Season 1")},                                        //nolint:gocritic // test fixture root
+		{"SeasonDir/0", paths.SeasonDir(root, ref, 0), filepath.Join("/library", "Bookworm")},                                                    //nolint:gocritic // test fixture root
+		{"SeasonExtraDir", paths.SeasonExtraDir(root, ref, 2), filepath.Join("/library", "Bookworm", "Season 2", "Extra")},                       //nolint:gocritic // test fixture root
+		{"EpisodeMedia", paths.EpisodeMedia(root, ref, 1, "ep.mkv"), filepath.Join("/library", "Bookworm", "Season 1", "ep.mkv")},                //nolint:gocritic // test fixture root
+		{"EpisodeMedia/0", paths.EpisodeMedia(root, ref, 0, "special.mkv"), filepath.Join("/library", "Bookworm", "special.mkv")},                //nolint:gocritic // test fixture root
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -53,7 +53,7 @@ func planExtras(token string, model *series.Series, inboxRoot string) ([]Step, e
 // resolveExtraSource turns the persisted Path field (an inbox: selector)
 // into an absolute filesystem path. Only inbox: selectors are accepted;
 // bare absolute paths are rejected to prevent out-of-policy source access.
-func resolveExtraSource(path, inboxRoot string) (string, string, error) {
+func resolveExtraSource(path, inboxRoot string) (resolved, original string, err error) {
 	if !strings.HasPrefix(path, string(selector.Inbox)+":") {
 		return "", path, fmt.Errorf("reconcile: extras source %q is not an inbox: selector; reset and re-stage this entry", path)
 	}

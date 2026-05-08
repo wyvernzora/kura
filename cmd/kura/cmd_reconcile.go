@@ -105,7 +105,7 @@ func applyResultToResponse(result reconcile.ApplyResult) response.ReconcileApply
 	return out
 }
 
-func splitReconcileApplyArgs(args []string) ([]string, string, error) {
+func splitReconcileApplyArgs(args []string) (terms []string, planToken string, err error) {
 	if len(args) < 2 {
 		return nil, "", errors.New("reconcile apply requires at least one selector term and a plan token")
 	}

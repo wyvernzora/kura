@@ -21,7 +21,7 @@ func (s *metadataIDStrategy) Name() string {
 	return "metadata_id"
 }
 
-func (s *metadataIDStrategy) Match(t selector.Term) (bool, bool) {
+func (s *metadataIDStrategy) Match(t selector.Term) (matched bool, stop bool) {
 	ref, err := refs.ParseMetadata(t.String())
 	if err == nil && ref.Provider() == s.source.Key() {
 		return true, true

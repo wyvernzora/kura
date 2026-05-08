@@ -63,7 +63,7 @@ func TestSaveCASRoundtripPreservesHash(t *testing.T) {
 	if reloaded.Hash != model.Hash {
 		t.Fatalf("reloaded hash = %q, written = %q", reloaded.Hash, model.Hash)
 	}
-	if reloaded.LastMutated == nil {
+	if reloaded.LastMutated.Op == "" {
 		t.Fatal("LastMutated not persisted")
 	}
 	if reloaded.LastMutated.Op != "stage" || reloaded.LastMutated.PID != 12345 {
@@ -366,13 +366,14 @@ func TestStagedTrashRoundtrip(t *testing.T) {
 	if len(cleared.StagedTrash) != 0 {
 		t.Fatalf("cleared StagedTrash len = %d, want 0", len(cleared.StagedTrash))
 	}
-	// Empty array must not appear on disk (omitempty).
+	// stagedTrash is required on the v3 wire shape; cleared state
+	// surfaces as the empty array, never as a missing field.
 	bytes, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
 	if err != nil {
 		t.Fatalf("read on-disk: %v", err)
 	}
-	if strings.Contains(string(bytes), `"stagedTrash"`) {
-		t.Fatalf("on-disk file contains stagedTrash field after clear:\n%s", bytes)
+	if !strings.Contains(string(bytes), `"stagedTrash": []`) {
+		t.Fatalf("on-disk file missing empty stagedTrash array after clear:\n%s", bytes)
 	}
 }
 
@@ -426,25 +427,27 @@ func TestStagedExtrasRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read on-disk: %v", err)
 	}
-	if strings.Contains(string(bytes), `"stagedExtras"`) {
-		t.Fatalf("on-disk file contains stagedExtras field after clear:\n%s", bytes)
+	if !strings.Contains(string(bytes), `"stagedExtras": []`) {
+		t.Fatalf("on-disk file missing empty stagedExtras array after clear:\n%s", bytes)
 	}
 }
 
-func TestLoadLegacyFileWithoutClaimFields(t *testing.T) {
+func TestLoadFixtureCarriesClaimFields(t *testing.T) {
 	libRoot, ref := setupFixtureLibrary(t)
-	// Fixture has no in_progress / last_mutated. Should load cleanly.
+	// Fixture sets last_mutated; schema requires it. InProgress stays
+	// nullable for series with no live claim.
 	model, err := seriesfile.Load(libRoot, ref)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if model.InProgress != nil {
-		t.Fatalf("InProgress = %+v, want nil for legacy file", model.InProgress)
+		t.Fatalf("InProgress = %+v, want nil for fixture without live claim", model.InProgress)
 	}
-	if model.LastMutated != nil {
-		t.Fatalf("LastMutated = %+v, want nil for legacy file", model.LastMutated)
+	if model.LastMutated.Op == "" {
+		t.Fatal("LastMutated not loaded from fixture")
 	}
-	// And SaveCAS through populates them, on reload they're present.
+	// SaveCAS overwrites last_mutated with the new mutator and reloads
+	// preserve it byte-stable.
 	if err := seriesfile.SaveCAS(libRoot, model, coord.Mutator{Op: "stage", PID: 1, Host: "h", At: time.Now()}); err != nil {
 		t.Fatalf("SaveCAS: %v", err)
 	}
@@ -452,7 +455,7 @@ func TestLoadLegacyFileWithoutClaimFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if reloaded.LastMutated == nil {
-		t.Fatal("LastMutated not present after first SaveCAS")
+	if reloaded.LastMutated.Op != "stage" {
+		t.Fatalf("LastMutated.Op = %q, want stage after SaveCAS", reloaded.LastMutated.Op)
 	}
 }

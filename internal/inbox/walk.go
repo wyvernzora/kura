@@ -147,55 +147,19 @@ func Walk(inboxRoot string, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if opts.NameGlob != "" {
-		if _, mErr := filepath.Match(opts.NameGlob, "probe"); mErr != nil {
-			return Result{}, &InvalidGlobError{Pattern: opts.NameGlob, Err: mErr}
-		}
-	}
-	if opts.Kind != "" && opts.Kind != string(KindFile) && opts.Kind != string(KindDir) && opts.Kind != string(KindSymlink) {
-		return Result{}, fmt.Errorf("inbox: invalid kind filter %q", opts.Kind)
-	}
-	if opts.Limit <= 0 {
-		return Result{}, fmt.Errorf("inbox: limit must be positive (got %d)", opts.Limit)
-	}
-
-	depth := opts.Depth
-	if !opts.Recursive {
-		depth = 1
-	} else if depth <= 0 {
-		depth = 1
-	}
-
-	base := inboxRoot
-	if relPath != "" {
-		base = filepath.Join(inboxRoot, filepath.FromSlash(relPath))
-	}
-
-	if err := guardWithinRoot(inboxRoot, base); err != nil {
+	if err := validateWalkOptions(opts); err != nil {
 		return Result{}, err
 	}
-
-	info, err := os.Lstat(base)
+	depth := resolveWalkDepth(opts)
+	base, err := resolveWalkStart(inboxRoot, relPath)
 	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return Result{}, &PathNotFoundError{Path: relPath}
-		}
 		return Result{}, err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		// Walk's start path can't itself be a symlink (would conflict
-		// with the no-follow contract for traversal).
-		return Result{}, &selector.PathOutsideRootError{Path: relPath}
-	}
-	if !info.IsDir() {
-		return Result{}, &PathNotDirError{Path: relPath}
 	}
 
 	all, err := walkDir(base, relPath, depth, opts)
 	if err != nil {
 		return Result{}, err
 	}
-
 	sortEntries(all)
 
 	res := Result{Path: relPath, Entries: all}
@@ -205,6 +169,68 @@ func Walk(inboxRoot string, opts Options) (Result, error) {
 		res.Entries = all[:opts.Limit]
 	}
 	return res, nil
+}
+
+// validateWalkOptions enforces the input gates that don't depend on
+// the on-disk start path: glob compile-probe, kind enum membership,
+// and Limit positivity. Returns the typed errors callers expect (e.g.
+// *InvalidGlobError) so the surface stays unchanged.
+func validateWalkOptions(opts Options) error {
+	if opts.NameGlob != "" {
+		if _, mErr := filepath.Match(opts.NameGlob, "probe"); mErr != nil {
+			return &InvalidGlobError{Pattern: opts.NameGlob, Err: mErr}
+		}
+	}
+	if opts.Kind != "" && opts.Kind != string(KindFile) && opts.Kind != string(KindDir) && opts.Kind != string(KindSymlink) {
+		return fmt.Errorf("inbox: invalid kind filter %q", opts.Kind)
+	}
+	if opts.Limit <= 0 {
+		return fmt.Errorf("inbox: limit must be positive (got %d)", opts.Limit)
+	}
+	return nil
+}
+
+// resolveWalkDepth picks the per-walk traversal depth. Non-recursive
+// walks always run one level deep. Recursive walks accept the
+// caller's Depth or fall back to 1 when the value is non-positive.
+func resolveWalkDepth(opts Options) int {
+	if !opts.Recursive {
+		return 1
+	}
+	if opts.Depth <= 0 {
+		return 1
+	}
+	return opts.Depth
+}
+
+// resolveWalkStart joins inboxRoot with relPath, enforces the
+// guardWithinRoot containment check, and rejects the start when it's
+// missing, a symlink, or not a directory. Returns the absolute base
+// path on success.
+func resolveWalkStart(inboxRoot, relPath string) (string, error) {
+	base := inboxRoot
+	if relPath != "" {
+		base = filepath.Join(inboxRoot, filepath.FromSlash(relPath))
+	}
+	if err := guardWithinRoot(inboxRoot, base); err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(base)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", &PathNotFoundError{Path: relPath}
+		}
+		return "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		// Walk's start path can't itself be a symlink (would conflict
+		// with the no-follow contract for traversal).
+		return "", &selector.PathOutsideRootError{Path: relPath}
+	}
+	if !info.IsDir() {
+		return "", &PathNotDirError{Path: relPath}
+	}
+	return base, nil
 }
 
 // walkDir reads one directory and (if depthRemaining > 1) recurses

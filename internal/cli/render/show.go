@@ -26,24 +26,37 @@ func Show(w io.Writer, result response.Show, asJSON bool) error {
 		return err
 	}
 	styled := style.ShouldStyle(w)
+	if err := writeShowHeader(w, result, styled); err != nil {
+		return err
+	}
+	if err := writeShowSeasons(w, result); err != nil {
+		return err
+	}
+	return writeShowStaged(w, result)
+}
+
+// writeShowHeader emits the per-series header rows (ID / Title / Root
+// always; Status + LastScanned when populated). Title combines
+// preferred + canonical when they diverge.
+func writeShowHeader(w io.Writer, result response.Show, styled bool) error {
 	title := result.PreferredTitle
 	if result.CanonicalTitle != "" && result.CanonicalTitle != result.PreferredTitle {
 		title += " / " + result.CanonicalTitle
-	}
-	statusValue := ""
-	if result.Status != "" {
-		statusValue = renderListStatus(string(result.Status), styled)
 	}
 	rows := []struct{ label, value string }{
 		{"ID", styleShowValue(result.MetadataRef.String(), styled)},
 		{"Title", styleShowValue(title, styled)},
 		{"Root", styleShowValue(result.Root, styled)},
 	}
-	if statusValue != "" {
-		rows = append(rows, struct{ label, value string }{"Status", statusValue})
+	if result.Status != "" {
+		rows = append(rows, struct{ label, value string }{
+			"Status", renderListStatus(string(result.Status), styled),
+		})
 	}
 	if result.LastScanned != "" {
-		rows = append(rows, struct{ label, value string }{"LastScanned", styleShowValue(result.LastScanned, styled)})
+		rows = append(rows, struct{ label, value string }{
+			"LastScanned", styleShowValue(result.LastScanned, styled),
+		})
 	}
 	for _, row := range rows {
 		label := row.label
@@ -54,6 +67,12 @@ func Show(w io.Writer, result response.Show, asJSON bool) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// writeShowSeasons emits one section per season, with season 0
+// rendered as "SPECIALS" instead of "SEASON 0".
+func writeShowSeasons(w io.Writer, result response.Show) error {
 	for _, season := range result.Seasons {
 		label := "SEASON " + strconv.Itoa(season.Number)
 		if season.Number == 0 {
@@ -66,6 +85,13 @@ func Show(w io.Writer, result response.Show, asJSON bool) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// writeShowStaged emits the STAGED TRASH and STAGED EXTRAS sections
+// when their respective slices are non-empty. Empty sections are
+// skipped silently.
+func writeShowStaged(w io.Writer, result response.Show) error {
 	if len(result.StagedTrash) > 0 {
 		if _, err := fmt.Fprint(w, "\nSTAGED TRASH\n"); err != nil {
 			return err
