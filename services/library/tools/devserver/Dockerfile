@@ -1,5 +1,7 @@
-# Combined dev container: hot-reload kura serve with REST + MCP HTTP
-# transports plus the bundled @modelcontextprotocol/inspector UI.
+# Combined dev container: hot-reload kura serve (REST + MCP HTTP
+# transports), the bundled @modelcontextprotocol/inspector UI, and the
+# web UI tooling (Vite + Storybook) — all in one image with one
+# bind-mount.
 # Replaces tools/inspector/ and tools/restdev/.
 #
 # Build: `make devserver-build`
@@ -9,14 +11,22 @@
 # --use-test-stubs (in-memory provider + inspector); leave unset for
 # the real provider path (KURA_TVDB_KEY required for verbs that
 # resolve against TVDB).
+#
+# Set KURA_WEB_DISABLED=1 to skip Vite + Storybook startup for
+# backend-only iteration sessions.
 FROM golang:1.26.2-alpine
 
-# nodejs/npm host the mcp-inspector. mediainfo is a runtime dep of
-# `kura scan`. tini reaps air/inspector/kura subprocesses cleanly when
-# docker stops the container; -g (set on ENTRYPOINT) forwards signals
-# to the whole process group so backgrounded children die too. git
-# is needed for `go install` against modules.
+# nodejs/npm host mcp-inspector + the web tooling (Vite + Storybook).
+# Alpine's nodejs package strips the bundled corepack shim, so pnpm is
+# installed via `npm install -g` against the version pinned in
+# web/package.json#packageManager. mediainfo is a runtime dep of
+# `kura scan`. tini reaps air/inspector/kura/vite/storybook
+# subprocesses cleanly when docker stops the container; -g (set on
+# ENTRYPOINT) forwards signals to the whole process group so
+# backgrounded children die too. git is needed for `go install`
+# against modules.
 RUN apk add --no-cache mediainfo tini git nodejs npm netcat-openbsd \
+ && npm install -g pnpm@10.33.4 \
  && npm install -g @modelcontextprotocol/inspector@latest \
  && go install github.com/air-verse/air@latest \
  && mkdir -p /mnt/library /mnt/inbox /src /var/lib/kura
@@ -45,6 +55,6 @@ ENV KURA_LIBRARY_ROOT=/mnt/library \
     MCP_AUTO_OPEN_ENABLED=false \
     ALLOWED_ORIGINS=http://localhost:6274,http://127.0.0.1:6274
 
-EXPOSE 8080 8081 6274 6277
+EXPOSE 8080 8081 6274 6277 5173 6006
 
 ENTRYPOINT ["/sbin/tini", "-g", "--", "/entrypoint.sh"]

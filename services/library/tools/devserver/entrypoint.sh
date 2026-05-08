@@ -112,6 +112,43 @@ mkdir -p /src/tmp
 # both up on container stop.
 mcp-inspector &
 
+# Web tooling: Vite (full app) + Storybook (component sandbox). Both
+# run against the bind-mounted /src/web. node_modules lives in an
+# anonymous docker volume so host (macOS) binaries don't clobber the
+# alpine ones via the bind mount; on first start we trigger a fresh
+# pnpm install into the volume.
+case "${KURA_WEB_DISABLED:-}" in
+  1|true|TRUE|yes|on)
+    echo "devserver: KURA_WEB_DISABLED set — skipping Vite + Storybook"
+    ;;
+  *)
+    if [ ! -d /src/web ]; then
+      echo "devserver: /src/web not found — skipping Vite + Storybook"
+    else
+      if [ ! -d /src/web/node_modules/.pnpm ]; then
+        echo "devserver: /src/web/node_modules empty — running pnpm install"
+        (cd /src/web && pnpm install --frozen-lockfile) || \
+          echo "devserver: pnpm install failed; web tooling will not start" >&2
+      fi
+      if [ -d /src/web/node_modules/.pnpm ]; then
+        # macOS bind-mounts (VirtioFS / gRPC-FUSE) don't propagate
+        # inotify events into the Linux container, so Vite + Storybook
+        # never see source-file edits and HMR is silently broken.
+        # CHOKIDAR_USEPOLLING flips chokidar (the watcher both tools
+        # share) to a polling loop. 300 ms keeps CPU burn modest while
+        # feeling instant. WATCHPACK_POLLING covers Storybook's webpack
+        # builder for older addon versions.
+        export CHOKIDAR_USEPOLLING=1
+        export CHOKIDAR_INTERVAL=300
+        export WATCHPACK_POLLING=true
+        (cd /src/web && pnpm dev) &
+        (cd /src/web && pnpm storybook) &
+        echo "devserver: Vite on container :5173, Storybook on container :6006 (polling watcher)"
+      fi
+    fi
+    ;;
+esac
+
 # air config lives at /etc/kura/air.toml so the /src bind mount
 # doesn't shadow it.
 exec air -c /etc/kura/air.toml

@@ -9,6 +9,20 @@ tmp/
 *.dylib
 *.test
 
+# Web UI: keep the embed package's placeholder index.html tracked so
+# `go build` always finds something to embed; the real Vite output
+# (assets/, hashed JS/CSS, route chunks) is generated and ignored.
+!internal/server/webui/dist/
+internal/server/webui/dist/*
+!internal/server/webui/dist/index.html
+
+# Node / web tooling
+node_modules/
+.vite/
+*.tsbuildinfo
+pnpm-debug.log
+.pnpm-store/
+
 # Go workspace and coverage artifacts
 go.work
 coverage.out
