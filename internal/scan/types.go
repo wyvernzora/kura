@@ -16,6 +16,14 @@ type Input struct {
 	// callers can re-run scan to fix bad inferences without losing
 	// good ones.
 	Refresh bool
+	// MetadataOnly skips the filesystem walk + mediainfo probes. The
+	// scan still pulls the provider's spine + artwork + alias data
+	// and recomputes searchKey, but no active records are touched.
+	// Useful for cheap library-wide refreshes after a metadata-shape
+	// change (e.g. searchKey recipe tweak) without re-probing every
+	// file. Mutually exclusive with Refresh in spirit (MetadataOnly
+	// short-circuits before Refresh would matter).
+	MetadataOnly bool
 	// Ordering, when non-empty, overwrites the series's persisted spine
 	// ordering before the provider fetch. Empty leaves model.Ordering
 	// untouched (re-spines under whatever the series was last pinned to,
@@ -88,4 +96,3 @@ type EpisodeAlreadyExistsError struct {
 func (err EpisodeAlreadyExistsError) Error() string {
 	return fmt.Sprintf("episode %s already has an active record at a different path; use kura_stage with replace=true to install the new file", err.Episode.Marker())
 }
-

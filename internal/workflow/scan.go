@@ -22,6 +22,10 @@ type ScanInput struct {
 	// Refresh forces re-probe of every active record (mediainfo + source
 	// detection) even when size+mtime are unchanged.
 	Refresh bool
+	// MetadataOnly skips the filesystem walk + mediainfo probes.
+	// Provider spine + artwork + alias data still get refreshed and
+	// searchKey recomputed; active records are left untouched.
+	MetadataOnly bool
 	// Ordering, when non-empty, mutates the persisted per-series spine
 	// ordering ("default", "dvd", "absolute", "alternate", "official",
 	// "regional") and triggers a fresh provider fetch under the new
@@ -47,14 +51,15 @@ func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanR
 		if err != nil {
 			return response.ScanResult{}, err
 		}
-		runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger)
+		runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger, deps.PreferredLanguages)
 		var out response.ScanResult
 		err = deps.Coordinator.WithSeries(jobCtx, in.Ref, func() error {
 			return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
 				internal, runErr := runner.Scan(jobCtx, scan.Input{
-					Refresh:  in.Refresh,
-					Ordering: in.Ordering,
-					Mutator:  coord.NewMutator("scan"),
+					Refresh:      in.Refresh,
+					MetadataOnly: in.MetadataOnly,
+					Ordering:     in.Ordering,
+					Mutator:      coord.NewMutator("scan"),
 				})
 				if runErr != nil {
 					return translateScanError(runErr)

@@ -80,6 +80,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (response.AddResult,
 		return response.AddResult{}, err
 	}
 	model.Ref = ref
+	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
 		progress.Failure(ctx, "import", fmt.Sprintf("Failed to import %s", ref), 1, 0)
 		return response.AddResult{}, err
