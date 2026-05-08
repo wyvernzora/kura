@@ -14,7 +14,7 @@ import (
 	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
-func fromWire(in seriesV2) (*series.Series, error) {
+func fromWire(in seriesV3) (*series.Series, error) {
 	metadataRef, err := refs.ParseMetadata(in.MetadataRef)
 	if err != nil {
 		return nil, err
@@ -27,6 +27,8 @@ func fromWire(in seriesV2) (*series.Series, error) {
 		Episodes:       map[refs.Episode]series.Episode{},
 		StagedTrash:    []series.StagedTrashItem{},
 		StagedExtras:   []series.StagedExtraItem{},
+		UserAliases:    userAliasesFromWire(in.UserAliases),
+		SearchKey:      in.SearchKey,
 	}
 	if in.LastScanned != "" {
 		lastScanned, err := time.Parse(time.RFC3339, in.LastScanned)
@@ -144,14 +146,16 @@ func mutatorToWire(in coord.Mutator) mutatorV1 {
 	}
 }
 
-func toWire(in *series.Series) seriesV2 {
-	out := seriesV2{
+func toWire(in *series.Series) seriesV3 {
+	out := seriesV3{
 		SchemaVersion:  currentSchemaVersion,
 		MetadataRef:    in.Metadata.String(),
 		PreferredTitle: in.PreferredTitle.String(),
 		CanonicalTitle: in.CanonicalTitle.String(),
 		Ordering:       in.Ordering,
 		Episodes:       map[string]episodeV2{},
+		UserAliases:    userAliasesToWire(in.UserAliases),
+		SearchKey:      in.SearchKey,
 	}
 	if !in.LastScanned.IsZero() {
 		out.LastScanned = in.LastScanned.UTC().Format(time.RFC3339)
@@ -392,7 +396,29 @@ func absolutizeRecord(r *media.Record, seriesDir string) {
 // (memory shape) to series-dir-relative slashed paths (wire shape). Staged
 // (episode) paths stay absolute. StagedTrash paths are relativized to series
 // dir; StagedExtras paths are inbox: selectors stored verbatim.
-func relativizeActiveWire(w *seriesV2, seriesDir string) error {
+func userAliasesFromWire(in []string) []textnorm.NFCString {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]textnorm.NFCString, 0, len(in))
+	for _, value := range in {
+		out = append(out, textnorm.NFC(value))
+	}
+	return out
+}
+
+func userAliasesToWire(in []textnorm.NFCString) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	for _, value := range in {
+		out = append(out, value.String())
+	}
+	return out
+}
+
+func relativizeActiveWire(w *seriesV3, seriesDir string) error {
 	for key, ep := range w.Episodes {
 		if ep.Active != nil {
 			if err := relativizeWireRecord(ep.Active, seriesDir); err != nil {

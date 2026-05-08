@@ -5,13 +5,12 @@ import (
 	"fmt"
 )
 
-const currentSchemaVersion = 2
+const currentSchemaVersion = 3
 
-// seriesV2 is the wire shape for the current schema. Additive over the
-// retired v1 form: same fields plus per-episode title pair (rolled
-// into episodeV2) and series-level Artwork. v1 files are no longer
-// readable; operators on a v1 file must re-scan to upgrade.
-type seriesV2 struct {
+// seriesV3 is the wire shape for the current schema. Operators on
+// pre-v3 files (v1 or v2) must re-scan to upgrade — the v2-tolerant
+// decode path was removed once every series had been re-scanned.
+type seriesV3 struct {
 	SchemaVersion  int                  `json:"schemaVersion"`
 	MetadataRef    string               `json:"metadataRef"`
 	PreferredTitle string               `json:"preferredTitle,omitempty"`
@@ -22,6 +21,8 @@ type seriesV2 struct {
 	Episodes       map[string]episodeV2 `json:"episodes"`
 	StagedTrash    []stagedTrashEntryV1 `json:"stagedTrash,omitempty"`
 	StagedExtras   []stagedExtraEntryV1 `json:"stagedExtras,omitempty"`
+	UserAliases    []string             `json:"userAliases,omitempty"`
+	SearchKey      string               `json:"searchKey"`
 	InProgress     *holderV1            `json:"in_progress,omitempty"`
 	LastMutated    *mutatorV1           `json:"last_mutated,omitempty"`
 }
@@ -96,12 +97,12 @@ type companionRecordV1 struct {
 	MTime    string `json:"mtime"`
 }
 
-// encode emits the v2 wire shape regardless of how the file was loaded.
-// Lazy migration: a v1 file gets upgraded to v2 the first time any
-// workflow saves it. New fields (poster, per-episode titles) are
-// nil/empty by default; populated by scan when the provider returns
-// the data.
-func encode(s seriesV2) ([]byte, error) {
+// encode emits the v3 wire shape regardless of how the file was loaded.
+// Lazy migration: a v2 file gets upgraded to v3 the first time any
+// workflow saves it. New fields (translated titles / user aliases /
+// search key) are empty by default; populated by scan + alias
+// mutations.
+func encode(s seriesV3) ([]byte, error) {
 	s.SchemaVersion = currentSchemaVersion
 	if s.Episodes == nil {
 		s.Episodes = map[string]episodeV2{}
@@ -127,6 +128,9 @@ func encode(s seriesV2) ([]byte, error) {
 	if len(s.StagedExtras) == 0 {
 		s.StagedExtras = nil
 	}
+	if len(s.UserAliases) == 0 {
+		s.UserAliases = nil
+	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return nil, err
@@ -142,23 +146,23 @@ type schemaHeader struct {
 	SchemaVersion int `json:"schemaVersion"`
 }
 
-// decode parses a v2 series.json. v1 files are no longer accepted —
-// the v2 schema has been fully enforced; operators on legacy files
-// must re-scan to upgrade. v3+ rejected as forward-incompatible.
-func decode(data []byte) (seriesV2, error) {
+// decode parses a v3 series.json. Pre-v3 files (v1, v2) are rejected
+// — operators on legacy files must re-scan to upgrade. v4+ rejected
+// as forward-incompatible.
+func decode(data []byte) (seriesV3, error) {
 	var header schemaHeader
 	if err := json.Unmarshal(data, &header); err != nil {
-		return seriesV2{}, fmt.Errorf("seriesfile: decode: %w", err)
+		return seriesV3{}, fmt.Errorf("seriesfile: decode: %w", err)
 	}
 	if header.SchemaVersion != currentSchemaVersion {
-		return seriesV2{}, fmt.Errorf("seriesfile: unsupported schemaVersion %d", header.SchemaVersion)
+		return seriesV3{}, fmt.Errorf("seriesfile: unsupported schemaVersion %d", header.SchemaVersion)
 	}
 	if err := validateSeries(currentSchemaVersion, data); err != nil {
-		return seriesV2{}, err
+		return seriesV3{}, err
 	}
-	var s seriesV2
+	var s seriesV3
 	if err := json.Unmarshal(data, &s); err != nil {
-		return seriesV2{}, fmt.Errorf("seriesfile: decode: %w", err)
+		return seriesV3{}, fmt.Errorf("seriesfile: decode: %w", err)
 	}
 	if s.Episodes == nil {
 		s.Episodes = map[string]episodeV2{}
