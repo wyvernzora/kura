@@ -1,8 +1,11 @@
+import type { ListStatus } from '@/api/types';
+
 /**
- * Series status — mirrors `internal/response.ListStatus` server-side.
- * The string values are stable wire identifiers, not display labels.
+ * Series status — re-exports the generated `ListStatus` literal union
+ * under the web-side name. Single source of truth lives in
+ * `internal/response/list.go`.
  */
-export type Status = 'complete' | 'incomplete' | 'airing' | 'untracked' | 'error';
+export type Status = ListStatus;
 
 /**
  * A single status, or a compound state (e.g. `["airing", "incomplete"]`
