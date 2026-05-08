@@ -27,12 +27,27 @@ WEB_DIR          := web
 WEB_DIST         := $(WEB_DIR)/dist
 WEBUI_EMBED_DIST := internal/server/webui/dist
 
-.PHONY: build check fmt install lint test vet devserver-build devserver-run e2e \
+.PHONY: build check check-gen fmt gen-ts install lint test vet devserver-build devserver-run e2e \
 	web-install web-install-if-missing web-build web-dev web-test web-typecheck web-clean \
 	storybook-dev storybook-build release
 
 build:
 	go build -o bin/kura ./cmd/kura
+
+# gen-ts regenerates web/src/api/types.gen.ts from internal/response.
+# The wrapper at tools/tygo runs tygo and post-processes the closed
+# string-enum aliases (Status, ListStatus, ScanStatus) into TS literal
+# unions — tygo emits them as `= string` otherwise.
+gen-ts:
+	cd tools/tygo && go run .
+
+# check-gen regenerates and fails if the committed file drifted. Wired
+# into `check` so PRs that change response types without running gen-ts
+# fail in CI. Assumes web/src/api/types.gen.ts is tracked — the first
+# commit that lands tygo must include it.
+check-gen: gen-ts
+	@git diff --exit-code -- web/src/api/types.gen.ts \
+	  || (echo "types.gen.ts is stale; run 'make gen-ts' and commit the result" && exit 1)
 
 # `install` always rebuilds the embedded web bundle so the resulting
 # binary actually serves the UI (otherwise `bin/kura` falls back to
@@ -114,7 +129,7 @@ lint:
 test:
 	go test $(GO_PACKAGES)
 
-check: fmt vet lint test build
+check: fmt vet lint test build check-gen
 
 e2e:
 	go test -tags=e2e -v -race -count=1 -timeout=120s ./e2e/...
