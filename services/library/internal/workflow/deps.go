@@ -73,6 +73,13 @@ type Deps struct {
 	// events (file moves, etc.). Optional — nil disables logging.
 	// CLI runs leave it nil; kura serve sets it.
 	Logger *slog.Logger
+
+	// PreferredLanguages mirrors KURA_PREFERRED_LANGUAGES (BCP-47 base
+	// form, ordered). Used by the searchkey fold to gate which
+	// translated titles flow into a series's `searchKey` blob. Empty
+	// disables the translation channel — only ASCII aliases + user
+	// aliases contribute to searchKey.
+	PreferredLanguages []string
 }
 
 // logFileMove emits one structured log line per filesystem move
