@@ -80,6 +80,59 @@ func TestGetSeriesAggregatesExtendedAndEpisodes(t *testing.T) {
 	}
 }
 
+func TestGetSeriesSurfacesAliasesAndTranslatedTitles(t *testing.T) {
+	server := newTestServer(t, nil)
+	defer server.Close()
+
+	p, err := New("test-key", Options{
+		BaseURL:            server.URL,
+		HTTPClient:         server.Client(),
+		PreferredLanguages: []string{"ja", "en"},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	series, err := p.GetSeries(context.Background(), "370070", "")
+	if err != nil {
+		t.Fatalf("GetSeries: %v", err)
+	}
+
+	// Aliases pull from BOTH the top-level series.aliases array
+	// (language-tagged) and per-translation alias arrays. Top-level
+	// "Honzuki" lands tagged "en"; the per-translation "非公式別名"
+	// lands tagged "ja".
+	wantTopAlias := provider.TitleEntry{Language: "en", Value: "Honzuki"}
+	wantPerTransAlias := provider.TitleEntry{Language: "ja", Value: "非公式別名"}
+	hasTop, hasPerTrans := false, false
+	for _, alias := range series.Aliases {
+		if alias == wantTopAlias {
+			hasTop = true
+		}
+		if alias == wantPerTransAlias {
+			hasPerTrans = true
+		}
+	}
+	if !hasTop || !hasPerTrans {
+		t.Fatalf("Aliases = %#v, want %v + %v", series.Aliases, wantTopAlias, wantPerTransAlias)
+	}
+
+	// TranslatedTitles flatten every nameTranslations entry with its
+	// normalized language tag. The fixture ships a "本好きの下剋上"
+	// under "jpn" → expect ja-tagged entry.
+	wantTranslated := provider.TitleEntry{Language: "ja", Value: "本好きの下剋上"}
+	hasTranslated := false
+	for _, entry := range series.TranslatedTitles {
+		if entry == wantTranslated {
+			hasTranslated = true
+			break
+		}
+	}
+	if !hasTranslated {
+		t.Fatalf("TranslatedTitles = %#v, want %v", series.TranslatedTitles, wantTranslated)
+	}
+}
+
 func TestSelectTitleUsesCanonicalAsOriginalLanguageFallback(t *testing.T) {
 	p, err := New("test-key", Options{
 		PreferredLanguages: []string{"ja", "en"},
@@ -114,6 +167,64 @@ func TestSelectTitlePrefersExplicitOriginalLanguageTranslation(t *testing.T) {
 
 	if title.String() != "日本語タイトル" {
 		t.Fatalf("title = %q, want explicit ja translation", title)
+	}
+}
+
+func TestSelectTitleSkipsLatinCanonicalForJpnOriginalLanguage(t *testing.T) {
+	// Regression: TVDB sometimes ships a record where `name` (canonical)
+	// is romaji or English while `originalLanguage` is "jpn" and the
+	// `nameTranslations` set contains no `jpn` entry. Stamping the
+	// romaji canonical under the ja slot used to mean prefs `[ja, ...]`
+	// returned the romaji as if it were a genuine JP translation. The
+	// script-gate skips that backfill so prefs walk past ja and lands
+	// on en (or final canonical-fallback).
+	p, err := New("test-key", Options{
+		PreferredLanguages: []string{"ja", "en"},
+		HTTPClient:         http.DefaultClient,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	title := p.selectTitle(textnorm.NFC("Tomodachi no Imouto"), "jpn", []titleCandidate{
+		{Language: "eng", Value: "My Friend's Little Sister"},
+	})
+
+	if title.String() != "My Friend's Little Sister" {
+		t.Fatalf("title = %q, want en translation (canonical's Latin script blocks ja backfill)", title)
+	}
+}
+
+func TestSeriesTitleCandidatesDropsAliasesAndPrefersPrimary(t *testing.T) {
+	// Regression for tvdb:404174-style records: TVDB's
+	// `nameTranslations` mixes real translations and aliases as flat
+	// entries; an alias for "ja" sometimes precedes the canonical "ja"
+	// translation. Earlier `selectTitle` (first-per-language wins)
+	// returned the romaji alias. Filter `isAlias` and emit `isPrimary`
+	// first so real translations land first in the per-language slot.
+	record := seriesExtendedRecord{
+		Translations: translations{
+			NameTranslations: []translation{
+				{Language: "jpn", Name: "Tomodachi no Imouto ga Ore ni Dake Uzai", IsAlias: true},
+				{Language: "jpn", Name: "友達の妹が俺にだけウザい", IsPrimary: true},
+				{Language: "eng", Name: "English Alias", IsAlias: true},
+				{Language: "eng", Name: "Real English Title"},
+			},
+		},
+	}
+
+	got := seriesTitleCandidates(record)
+	want := []titleCandidate{
+		{Language: "jpn", Value: "友達の妹が俺にだけウザい"},
+		{Language: "eng", Value: "Real English Title"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("seriesTitleCandidates = %#v, want %#v", got, want)
+	}
+	for i, c := range got {
+		if c != want[i] {
+			t.Fatalf("seriesTitleCandidates[%d] = %#v, want %#v", i, c, want[i])
+		}
 	}
 }
 
