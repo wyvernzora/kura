@@ -168,6 +168,29 @@ func (c *Client) ResetSeries(ctx context.Context, ref string, req ResetRequest) 
 	return out, err
 }
 
+// ListAliases calls GET /api/v1/series/{ref}/aliases.
+func (c *Client) ListAliases(ctx context.Context, ref string) (response.AliasList, error) {
+	var out response.AliasList
+	err := c.Do(ctx, http.MethodGet, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, nil, &out, false)
+	return out, err
+}
+
+// AddAliases calls POST /api/v1/series/{ref}/aliases. Returns the
+// resulting alias list. Idempotent.
+func (c *Client) AddAliases(ctx context.Context, ref string, aliases []string) (response.AliasList, error) {
+	var out response.AliasList
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, response.AliasMutation{Aliases: aliases}, &out, false)
+	return out, err
+}
+
+// RemoveAliases calls DELETE /api/v1/series/{ref}/aliases. Returns
+// the resulting alias list. Idempotent.
+func (c *Client) RemoveAliases(ctx context.Context, ref string, aliases []string) (response.AliasList, error) {
+	var out response.AliasList
+	err := c.Do(ctx, http.MethodDelete, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, response.AliasMutation{Aliases: aliases}, &out, false)
+	return out, err
+}
+
 // ReconcilePlan calls POST /api/v1/series/{ref}/reconcile/plan.
 func (c *Client) ReconcilePlan(ctx context.Context, ref string) (response.ReconcilePlan, error) {
 	var out response.ReconcilePlan
@@ -189,8 +212,9 @@ func (c *Client) ReconcileRecover(ctx context.Context, ref string, force bool) (
 
 // ScanRequest is the POST /api/v1/series/{ref}/scan body.
 type ScanRequest struct {
-	Refresh  bool   `json:"refresh,omitempty"`
-	Ordering string `json:"ordering,omitempty"`
+	Refresh      bool   `json:"refresh,omitempty"`
+	MetadataOnly bool   `json:"metadataOnly,omitempty"`
+	Ordering     string `json:"ordering,omitempty"`
 }
 
 // SubmitScan returns a JobAck the caller can poll or stream.
@@ -266,9 +290,12 @@ func (c *Client) TrashEmptyAll(ctx context.Context, olderThan string) (response.
 	return out, err
 }
 
-// Reindex calls POST /api/v1/library/reindex. Operator-only.
-func (c *Client) Reindex(ctx context.Context) error {
-	return c.Do(ctx, http.MethodPost, "/api/v1/library/reindex", nil, nil, nil, false)
+// SubmitReindex calls POST /api/v1/library/reindex and returns the
+// JobAck the caller streams via /jobs/{id}/stream. Operator-only.
+func (c *Client) SubmitReindex(ctx context.Context) (JobAck, error) {
+	var out JobAck
+	err := c.Do(ctx, http.MethodPost, "/api/v1/library/reindex", nil, nil, &out, false)
+	return out, err
 }
 
 // InboxListOptions holds the GET /api/v1/inbox query parameters.
