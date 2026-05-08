@@ -71,7 +71,7 @@ func (i Inspector) Inspect(ctx context.Context, path string) (media.Info, error)
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, command, "--Output=JSON", path)
+	cmd := exec.CommandContext(runCtx, command, "--Output=JSON", "--", path)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
