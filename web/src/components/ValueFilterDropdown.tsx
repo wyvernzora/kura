@@ -31,6 +31,13 @@ interface ValueFilterDropdownProps {
    * grid.
    */
   counts: Record<string, number>;
+  /**
+   * Optional per-value Tailwind background class for a 8 px dot
+   * rendered before the label (e.g. `bg-status-airing`). Mirrors
+   * StatusFilterDropdown so source / resolution / status all read as
+   * one visual family. Values without an entry render no dot.
+   */
+  dotColors?: Record<string, string>;
   className?: string;
 }
 
@@ -49,6 +56,7 @@ export function ValueFilterDropdown({
   active,
   onToggle,
   counts,
+  dotColors,
   className,
 }: ValueFilterDropdownProps) {
   const visible = values.filter((v) => (counts[v] ?? 0) > 0);
@@ -101,6 +109,12 @@ export function ValueFilterDropdown({
             onSelect={(e) => e.preventDefault()}
           >
             <span className="flex w-full items-center gap-2">
+              {dotColors?.[value] && (
+                <span
+                  aria-hidden="true"
+                  className={cn('h-2 w-2 shrink-0 rounded-full', dotColors[value])}
+                />
+              )}
               <span>{value}</span>
               <span className="ml-auto font-mono text-[11px] text-muted tabular-nums">
                 {counts[value]}

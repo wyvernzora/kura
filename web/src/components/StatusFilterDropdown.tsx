@@ -25,7 +25,7 @@ interface StatusFilterDropdownProps {
   className?: string;
 }
 
-const ORDER: readonly Status[] = ['airing', 'incomplete', 'complete', 'untracked', 'error'];
+const ORDER: readonly Status[] = ['airing', 'complete', 'incomplete', 'error', 'untracked'];
 
 const DOT_BG: Record<Status, string> = {
   complete: 'bg-status-complete',

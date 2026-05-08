@@ -67,19 +67,14 @@ function LibraryHome() {
     return c;
   }, [allRows]);
 
-  const sourceCounts = useMemo(() => countMultiValuedField(allRows, (r) => r.sources), [allRows]);
-  const resolutionCounts = useMemo(
-    () => countMultiValuedField(allRows, (r) => r.resolutions),
+  const sourceCounts = useMemo(
+    () => countMultiValuedField(allRows, (r) => r.sources?.map(bucketSource)),
     [allRows],
   );
-
-  // Display order = count desc, alpha tiebreak. Server already
-  // rank-sorts each row's array, but the across-row union is not
-  // intrinsically ordered; falling back to "common values first" is
-  // the kindest default until we have a strong domain ranking on the
-  // client.
-  const sourceValues = useMemo(() => sortByCountDesc(sourceCounts), [sourceCounts]);
-  const resolutionValues = useMemo(() => sortByCountDesc(resolutionCounts), [resolutionCounts]);
+  const resolutionCounts = useMemo(
+    () => countMultiValuedField(allRows, (r) => r.resolutions?.map(bucketResolution)),
+    [allRows],
+  );
 
   const rows = useMemo(() => {
     if (isSearching) {
@@ -89,8 +84,12 @@ function LibraryHome() {
       return searchLibrary(allRows, trimmed);
     }
     let filtered = filterByStatus(allRows, active);
-    filtered = filterByMultiValuedField(filtered, activeSources, (r) => r.sources);
-    filtered = filterByMultiValuedField(filtered, activeResolutions, (r) => r.resolutions);
+    filtered = filterByMultiValuedField(filtered, activeSources, (r) =>
+      r.sources?.map(bucketSource),
+    );
+    filtered = filterByMultiValuedField(filtered, activeResolutions, (r) =>
+      r.resolutions?.map(bucketResolution),
+    );
     return sortRows(filtered, sort);
   }, [allRows, active, activeSources, activeResolutions, isSearching, trimmed, sort]);
 
@@ -127,18 +126,20 @@ function LibraryHome() {
             <ValueFilterDropdown
               label="Source"
               icon="movie"
-              values={sourceValues}
+              values={SOURCE_ORDER}
               active={activeSources}
               onToggle={toggleSource}
               counts={sourceCounts}
+              dotColors={SOURCE_DOTS}
             />
             <ValueFilterDropdown
               label="Resolution"
               icon="aspect_ratio"
-              values={resolutionValues}
+              values={RESOLUTION_ORDER}
               active={activeResolutions}
               onToggle={toggleResolution}
               counts={resolutionCounts}
+              dotColors={RESOLUTION_DOTS}
             />
             {hasActiveFilters && <ClearFiltersButton onClick={clearAllFilters} />}
           </div>
@@ -228,15 +229,51 @@ function toggle<T>(prev: ReadonlySet<T>, value: T): Set<T> {
   return next;
 }
 
-function sortByCountDesc(counts: Record<string, number>): readonly string[] {
-  const entries = Object.entries(counts).filter(([, n]) => n > 0);
-  entries.sort((a, b) => {
-    if (a[1] !== b[1]) {
-      return b[1] - a[1];
-    }
-    return a[0].localeCompare(b[0]);
-  });
-  return entries.map(([k]) => k);
+// Hardcoded display order for the Source filter. Mirrors the
+// quality-rank order surfaced elsewhere (BluRay best, TVRip worst,
+// Unknown last). Anything the backend emits outside this set buckets
+// into "Unknown" via bucketSource so an unfamiliar string never
+// vanishes from the menu silently.
+const SOURCE_ORDER: readonly string[] = [
+  'BluRay',
+  'Web-DL',
+  'WebRip',
+  'DVDRip',
+  'TVRip',
+  'Unknown',
+];
+
+const SOURCE_DOTS: Record<string, string> = {
+  BluRay: 'bg-status-airing', // blue
+  'Web-DL': 'bg-status-complete', // green
+  WebRip: 'bg-status-incomplete', // yellow
+  DVDRip: 'bg-orange-500',
+  TVRip: 'bg-status-error', // red
+  Unknown: 'bg-status-untracked', // gray
+};
+
+// Hardcoded display order for the Resolution filter. "Other" buckets
+// every raw value outside the canonical four (1440p, 360p, raw WxH,
+// etc.); ValueFilterDropdown's hide-when-zero behavior keeps it off
+// the menu when the library has no exotic resolutions.
+const RESOLUTION_ORDER: readonly string[] = ['4K', '1080p', '720p', '480p', 'Other'];
+
+const RESOLUTION_DOTS: Record<string, string> = {
+  '4K': 'bg-status-airing', // blue
+  '1080p': 'bg-status-complete', // green
+  '720p': 'bg-orange-500',
+  '480p': 'bg-status-error', // red
+  Other: 'bg-status-untracked', // gray
+};
+
+const SOURCE_BUCKET_SET = new Set(SOURCE_ORDER.filter((v) => v !== 'Unknown'));
+function bucketSource(raw: string): string {
+  return SOURCE_BUCKET_SET.has(raw) ? raw : 'Unknown';
+}
+
+const RESOLUTION_BUCKET_SET = new Set(RESOLUTION_ORDER.filter((v) => v !== 'Other'));
+function bucketResolution(raw: string): string {
+  return RESOLUTION_BUCKET_SET.has(raw) ? raw : 'Other';
 }
 
 function CenteredCard({ title, body }: { title: string; body: string }) {
