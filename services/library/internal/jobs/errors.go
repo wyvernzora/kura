@@ -16,6 +16,7 @@ const (
 	KindScan           JobKind = "scan"
 	KindStage          JobKind = "stage"
 	KindReconcileApply JobKind = "reconcile_apply"
+	KindReindex        JobKind = "reindex"
 )
 
 // JobNotFoundError indicates a Get lookup hit no entry. Either the ID

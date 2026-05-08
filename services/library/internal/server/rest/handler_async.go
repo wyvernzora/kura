@@ -22,8 +22,9 @@ type jobSubmissionResponse struct {
 
 // scanRequest is the POST /api/v1/series/{ref}/scan body.
 type scanRequest struct {
-	Refresh  bool   `json:"refresh,omitempty"`
-	Ordering string `json:"ordering,omitempty"`
+	Refresh      bool   `json:"refresh,omitempty"`
+	MetadataOnly bool   `json:"metadataOnly,omitempty"`
+	Ordering     string `json:"ordering,omitempty"`
 }
 
 // applyRequest is the POST /api/v1/series/{ref}/reconcile/apply body.
@@ -72,9 +73,10 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	job := workflow.Scan(r.Context(), s.deps.Workflow, workflow.ScanInput{
-		Ref:      ref,
-		Refresh:  req.Refresh,
-		Ordering: req.Ordering,
+		Ref:          ref,
+		Refresh:      req.Refresh,
+		MetadataOnly: req.MetadataOnly,
+		Ordering:     req.Ordering,
 	})
 	writeJobAck(w, job.ID(), string(jobs.KindScan), job.StartedAt())
 }

@@ -3,15 +3,15 @@ package rest
 import (
 	"net/http"
 
+	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 // handleReindex serves POST /api/v1/library/reindex. Operator-only.
-// Returns 204 on success; reindex has no response body.
+// Job-shaped: returns a JobAck the caller can stream via
+// /jobs/{id}/stream. The walk + index write happen inside the job
+// goroutine; progress events flow through the registry's reporter.
 func (s *Server) handleReindex(w http.ResponseWriter, r *http.Request) {
-	if err := workflow.Reindex(r.Context(), s.deps.Workflow); err != nil {
-		writeError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	job := workflow.Reindex(r.Context(), s.deps.Workflow)
+	writeJobAck(w, job.ID(), string(jobs.KindReindex), job.StartedAt())
 }
