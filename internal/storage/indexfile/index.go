@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -76,6 +77,14 @@ type Index struct {
 	rebuilding atomic.Bool
 	rebuildWG  sync.WaitGroup
 
+	// libRootRebuildTimer coalesces a burst of libRoot-mtime probes
+	// into a single TriggerRebuild call after the storm settles.
+	// Reset on every observed mtime change so the rebuild only fires
+	// once filesystem activity has been quiet for libRootDebounce.
+	// Guarded by mu.
+	libRootRebuildTimer    *time.Timer
+	libRootDebounce        time.Duration
+
 	// log + reader are set by Watch before any loop starts, then
 	// read-only thereafter. No locking needed for reads.
 	log     Logger
@@ -114,6 +123,12 @@ func Load(root string) (*Index, error) {
 // not block the whole rebuild. Progress events fire under "reindex".
 func Rebuild(ctx context.Context, root string, build RowBuilder) (*Index, error) {
 	progress.Start(ctx, "reindex", "Rebuilding library index", progress.TotalIndeterminate)
+	// Pair the existing post-rebuild log line. Operators tracking
+	// "what triggered this rebuild" benefit from a start marker that
+	// includes the libRoot — multiple rebuilds (cold, libroot-mtime,
+	// periodic, schema-mismatch, manual reindex) can interleave on a
+	// busy server; the start log makes their cadence visible.
+	slog.Info("indexfile: rebuild starting", "root", root)
 	dir, err := os.Open(root)
 	if err != nil {
 		progress.Failure(ctx, "reindex", "Failed to rebuild library index", 0, 0)
@@ -156,6 +171,11 @@ func Rebuild(ctx context.Context, root string, build RowBuilder) (*Index, error)
 		}
 	}
 	progress.Success(ctx, "reindex", fmt.Sprintf("Rebuilt library index (%d series)", len(index.bySeries)), scanned)
+	slog.Info("indexfile: rebuild complete",
+		"root", root,
+		"rows", len(index.bySeries),
+		"scanned", scanned,
+	)
 	return index, nil
 }
 

@@ -47,8 +47,23 @@ type Row struct {
 	Resolutions []string `json:"resolutions,omitempty"`
 	Sources     []string `json:"sources,omitempty"`
 
+	// Series-level artwork URLs lifted from the on-disk series.json.
+	// Both omitempty so older index rows (built before posters were
+	// surfaced) decode cleanly. Bumping these requires a rescan to
+	// populate; no schema-version bump because empty strings round-trip
+	// fine.
+	PosterURL          string `json:"posterUrl,omitempty"`
+	PosterThumbnailURL string `json:"posterThumbnailUrl,omitempty"`
+
 	LastScanned string `json:"lastScanned,omitempty"`
 	UpdatedAt   string `json:"updatedAt,omitempty"`
+
+	// SearchKey is the folded blob from `internal/searchkey.Compute`,
+	// shipped to clients for local fuzzy search. Populated by
+	// `BuildRowFromModel` from the series model's persisted
+	// `SearchKey` field; never recomputed at index-build time so the
+	// canonical fold lives in seriesfile (single source of truth).
+	SearchKey string `json:"searchKey,omitempty"`
 
 	Error string `json:"error,omitempty"`
 }
