@@ -46,6 +46,19 @@ func TestBearerMiddleware_RejectsMissingHeader(t *testing.T) {
 	}
 }
 
+func TestBearerMiddleware_SetsWWWAuthenticate(t *testing.T) {
+	handler := BearerMiddleware("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not run for missing header")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if got, want := rec.Header().Get("WWW-Authenticate"), `Bearer realm="kura"`; got != want {
+		t.Errorf("WWW-Authenticate: got %q want %q", got, want)
+	}
+}
+
 func TestBearerMiddleware_RejectsWrongToken(t *testing.T) {
 	handler := BearerMiddleware("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not run for wrong token")
