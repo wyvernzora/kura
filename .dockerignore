@@ -17,3 +17,9 @@ coverage.out
 scratch
 testlib
 tools/inspector/README.md
+
+# Web UI build inputs/outputs — the production Dockerfile manages the
+# Vite stage in its own layer; node_modules and dist must not bleed
+# from the host into either stage's build context.
+web/node_modules
+web/dist

@@ -22,7 +22,10 @@ testdata_dir = "testdata"
   poll_interval = 500
   send_interrupt = true
   kill_delay = 5000
-  stop_on_error = true
+  # stop_on_error=false: a single bad build (typo, mid-edit save)
+  # used to silently kill the watcher and require a container restart
+  # to resume. Now air keeps polling and retries on the next save.
+  stop_on_error = false
   log = "build-errors.log"
   include_ext = ["go"]
   include_dir = ["cmd", "internal"]
