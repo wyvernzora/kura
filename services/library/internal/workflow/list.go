@@ -55,59 +55,20 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 		return response.ListResult{}, err
 	}
 
-	if len(in.Statuses) > 0 {
-		filtered := rows[:0]
-		for _, row := range rows {
-			if slices.Contains(in.Statuses, row.Status) {
-				filtered = append(filtered, row)
-			}
-		}
-		rows = filtered
-	}
+	rows = applyStatusFilter(rows, in.Statuses)
 
-	pageSize := in.MaxResults
-	if pageSize < 0 {
-		return response.ListResult{}, fmt.Errorf("MaxResults must be >= 0")
-	}
-	if pageSize > maxListPageSize {
-		pageSize = maxListPageSize
+	pageSize, err := normalizePageSize(in.MaxResults)
+	if err != nil {
+		return response.ListResult{}, err
 	}
 
 	view := computeViewHash(rows)
-
-	startAt := 0
-	dataChanged := false
-	if in.Cursor != "" {
-		cursorView, anchor, err := decodeListCursor(in.Cursor)
-		if err != nil {
-			return response.ListResult{}, &InvalidCursorError{Reason: err.Error()}
-		}
-		matchesView := bytes.Equal(cursorView, view)
-		idx := indexOfAnchor(rows, anchor)
-		switch {
-		case matchesView && idx < 0:
-			return response.ListResult{}, &InvalidCursorError{Reason: "anchor not found despite matching view"}
-		case matchesView:
-			startAt = idx + 1
-		case idx < 0:
-			startAt = 0
-			dataChanged = true
-		default:
-			startAt = idx + 1
-			dataChanged = true
-		}
+	startAt, dataChanged, err := resolveCursorPosition(rows, in.Cursor, view)
+	if err != nil {
+		return response.ListResult{}, err
 	}
 
-	page := rows
-	if startAt > 0 {
-		page = page[startAt:]
-	}
-	pageCap := pageSize
-	if pageCap == 0 || pageCap > len(page) {
-		pageCap = len(page)
-	}
-	page = page[:pageCap]
-
+	page := paginateRows(rows, startAt, pageSize)
 	out := make([]response.ListRow, 0, len(page))
 	for _, row := range page {
 		out = append(out, rowToListRow(row))
@@ -116,12 +77,89 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 	progress.Start(ctx, "list", "Listing library contents", len(out))
 	progress.Success(ctx, "list", fmt.Sprintf("Listed library contents (%d series)", len(out)), len(out))
 
-	result := response.ListResult{Rows: out, DataChanged: dataChanged}
-	if pageSize > 0 && len(page) == pageSize && startAt+len(page) < len(rows) {
-		last := page[len(page)-1]
-		result.NextCursor = encodeListCursor(view, anchorHash(last.Series.String()))
+	return response.ListResult{
+		Rows:        out,
+		DataChanged: dataChanged,
+		NextCursor:  nextListCursor(view, page, pageSize, startAt, len(rows)),
+	}, nil
+}
+
+// applyStatusFilter narrows rows to entries whose Status is in the
+// allow-list. Empty statuses returns rows unchanged.
+func applyStatusFilter(rows []indexfile.Row, statuses []response.ListStatus) []indexfile.Row {
+	if len(statuses) == 0 {
+		return rows
 	}
-	return result, nil
+	filtered := rows[:0]
+	for _, row := range rows {
+		if slices.Contains(statuses, row.Status) {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
+}
+
+// normalizePageSize validates MaxResults and clamps to maxListPageSize.
+// Negative values are rejected; 0 is "no limit" and passes through.
+func normalizePageSize(maxResults int) (int, error) {
+	if maxResults < 0 {
+		return 0, fmt.Errorf("MaxResults must be >= 0")
+	}
+	if maxResults > maxListPageSize {
+		return maxListPageSize, nil
+	}
+	return maxResults, nil
+}
+
+// resolveCursorPosition decodes the opaque cursor against the current
+// rows + view. Returns the row index to start the page at, whether the
+// underlying view diverged from the cursor's recorded view, and any
+// decode / lookup error. Empty cursor is the first-page case (startAt
+// 0, dataChanged false).
+func resolveCursorPosition(rows []indexfile.Row, cursor string, view []byte) (startAt int, dataChanged bool, err error) {
+	if cursor == "" {
+		return 0, false, nil
+	}
+	cursorView, anchor, decodeErr := decodeListCursor(cursor)
+	if decodeErr != nil {
+		return 0, false, &InvalidCursorError{Reason: decodeErr.Error()}
+	}
+	matchesView := bytes.Equal(cursorView, view)
+	idx := indexOfAnchor(rows, anchor)
+	switch {
+	case matchesView && idx < 0:
+		return 0, false, &InvalidCursorError{Reason: "anchor not found despite matching view"}
+	case matchesView:
+		return idx + 1, false, nil
+	case idx < 0:
+		return 0, true, nil
+	default:
+		return idx + 1, true, nil
+	}
+}
+
+// paginateRows slices rows by startAt and pageSize. pageSize 0 (or
+// larger than the remaining tail) returns the full tail.
+func paginateRows(rows []indexfile.Row, startAt, pageSize int) []indexfile.Row {
+	page := rows
+	if startAt > 0 {
+		page = page[startAt:]
+	}
+	pageCap := pageSize
+	if pageCap == 0 || pageCap > len(page) {
+		pageCap = len(page)
+	}
+	return page[:pageCap]
+}
+
+// nextListCursor returns the encoded cursor pointing past the current
+// page, or empty when there are no more rows or pagination is disabled.
+func nextListCursor(view []byte, page []indexfile.Row, pageSize, startAt, total int) string {
+	if pageSize == 0 || len(page) != pageSize || startAt+len(page) >= total {
+		return ""
+	}
+	last := page[len(page)-1]
+	return encodeListCursor(view, anchorHash(last.Series.String()))
 }
 
 func rowToListRow(row indexfile.Row) response.ListRow {
@@ -198,7 +236,7 @@ func encodeListCursor(viewHash, anchor []byte) string {
 
 // decodeListCursor reverses encodeListCursor. Returns view, anchor, err.
 // Bad length, bad base32, or unexpected payload size yields an error.
-func decodeListCursor(cursor string) ([]byte, []byte, error) {
+func decodeListCursor(cursor string) (view, anchor []byte, err error) {
 	raw, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(cursor)
 	if err != nil {
 		return nil, nil, errors.New("malformed base32 cursor")

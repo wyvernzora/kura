@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/wyvernzora/kura/internal/coord"
@@ -81,14 +82,7 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
-	go func() {
-		select {
-		case sig := <-sigCh:
-			logger.Info("shutdown signal received, draining", "signal", sig.String())
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
+	go runShutdownSignalLoop(ctx, sigCh, cancel, logger)
 
 	deps.Index.Watch(ctx, watch)
 
@@ -136,6 +130,38 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 		}
 	}
 
+	runErr := launchServerTransports(ctx, cmd, server, restSrv, tokenResult, deps, logger, rt)
+	return finishServerShutdown(rt, registry, logger, runErr)
+}
+
+// runShutdownSignalLoop blocks on either the SIGINT/SIGTERM channel
+// or ctx cancellation. On signal, logs the signal name and cancels
+// ctx so the transport errgroup unwinds. Subsequent signals are
+// ignored (kernel default would force-kill).
+func runShutdownSignalLoop(ctx context.Context, sigCh <-chan os.Signal, cancel context.CancelFunc, logger *slog.Logger) {
+	select {
+	case sig := <-sigCh:
+		logger.Info("shutdown signal received, draining", "signal", sig.String())
+		cancel()
+	case <-ctx.Done():
+	}
+}
+
+// launchServerTransports starts each enabled transport (mcp-stdio,
+// mcp-http, rest) plus the unconditional sweep loop in their own
+// errgroup goroutines, then blocks until the first one returns. The
+// returned error is the errgroup's collected error (nil on clean
+// shutdown).
+func launchServerTransports(
+	ctx context.Context,
+	cmd *serveCmd,
+	server *sdkmcp.Server,
+	restSrv *restserver.Server,
+	tokenResult auth.Result,
+	deps workflow.Deps,
+	logger *slog.Logger,
+	rt *runContext,
+) error {
 	g, gctx := errgroup.WithContext(ctx)
 	if cmd.MCPStdio {
 		g.Go(func() error { return mcpserver.ServeStdio(gctx, server) })
@@ -159,16 +185,19 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 			PlanTTL:  envDuration(rt.Getenv, "KURA_PLAN_TTL", 0),
 		}, logger)
 	})
+	return g.Wait()
+}
 
-	runErr := g.Wait()
-
+// finishServerShutdown drains the jobs registry, logs the outcome,
+// and maps runErr to the process exit code. Treats context.Canceled
+// as a clean shutdown (the signal goroutine fires it).
+func finishServerShutdown(rt *runContext, registry *jobs.Registry, logger *slog.Logger, runErr error) error {
 	grace := envDuration(rt.Getenv, "KURA_SHUTDOWN_TIMEOUT", defaultShutdownTimeout)
 	if stuck := registry.Shutdown(grace); stuck > 0 {
 		logger.Warn("jobs did not shut down within grace period", "stuck", stuck, "grace", grace)
 	} else {
 		logger.Info("jobs registry drained", "grace", grace)
 	}
-
 	if runErr != nil && !errors.Is(runErr, context.Canceled) {
 		logger.Error("kura serve exited with error", "err", runErr)
 		return runErr

@@ -13,7 +13,7 @@ func TestBearerMiddleware_PassesValidToken(t *testing.T) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	req.Header.Set("Authorization", "Bearer secret")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -30,7 +30,7 @@ func TestBearerMiddleware_RejectsMissingHeader(t *testing.T) {
 	handler := BearerMiddleware("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not run for missing header")
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -63,7 +63,7 @@ func TestBearerMiddleware_RejectsWrongToken(t *testing.T) {
 	handler := BearerMiddleware("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not run for wrong token")
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	req.Header.Set("Authorization", "Bearer wrongvalue")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -77,7 +77,7 @@ func TestBearerMiddleware_RejectsWrongScheme(t *testing.T) {
 	handler := BearerMiddleware("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("handler should not run for non-Bearer scheme")
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
@@ -93,7 +93,7 @@ func TestBearerMiddleware_HealthPathExempt(t *testing.T) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
-	req := httptest.NewRequest(http.MethodGet, HealthPath, nil)
+	req := httptest.NewRequest(http.MethodGet, HealthPath, http.NoBody)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -111,7 +111,7 @@ func TestBearerMiddleware_DisabledPassesEverything(t *testing.T) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series", http.NoBody)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 

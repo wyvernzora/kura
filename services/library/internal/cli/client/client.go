@@ -156,23 +156,48 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	if len(query) > 0 {
 		full += "?" + query.Encode()
 	}
+	req, err := buildHTTPRequest(ctx, method, full, reqBody)
+	if err != nil {
+		return err
+	}
+	setRequestHeaders(req, c, confirm)
 
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return discoveryHint(err, c.BaseURL)
+	}
+	defer resp.Body.Close()
+	return decodeHTTPResponse(resp, respBody)
+}
+
+// buildHTTPRequest marshals reqBody (when non-nil) and constructs the
+// underlying *http.Request, including the Content-Type header for
+// requests that carry a body. Encoding + request-build errors are
+// wrapped with the conventional "encode request" / "build request"
+// prefixes the rest of the package speaks.
+func buildHTTPRequest(ctx context.Context, method, fullURL string, reqBody any) (*http.Request, error) {
 	var bodyReader io.Reader
 	if reqBody != nil {
 		buf, err := json.Marshal(reqBody)
 		if err != nil {
-			return fmt.Errorf("encode request: %w", err)
+			return nil, fmt.Errorf("encode request: %w", err)
 		}
 		bodyReader = bytes.NewReader(buf)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, method, full, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
 	if err != nil {
-		return fmt.Errorf("build request: %w", err)
+		return nil, fmt.Errorf("build request: %w", err)
 	}
 	if reqBody != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	return req, nil
+}
+
+// setRequestHeaders attaches every per-request header the kura REST
+// client speaks: Accept always, then the conditional operator /
+// confirm gates, then the bearer-token authorization when configured.
+func setRequestHeaders(req *http.Request, c *Client, confirm bool) {
 	req.Header.Set("Accept", "application/json")
 	if c.Operator {
 		req.Header.Set(headerOperator, "1")
@@ -183,13 +208,13 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	if c.BearerToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.BearerToken)
 	}
+}
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return discoveryHint(err, c.BaseURL)
-	}
-	defer resp.Body.Close()
-
+// decodeHTTPResponse interprets resp.Body. Non-2xx responses decode
+// into an *ErrorEnvelope (with the 401 hint attached when the bearer
+// gate rejected the call). 2xx responses with respBody!=nil and a
+// non-204 status decode the JSON body into respBody.
+func decodeHTTPResponse(resp *http.Response, respBody any) error {
 	if resp.StatusCode >= 400 {
 		var env ErrorEnvelope
 		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
@@ -202,7 +227,6 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 		}
 		return &env
 	}
-
 	if respBody == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}

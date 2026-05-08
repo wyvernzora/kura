@@ -125,7 +125,7 @@ func validateTrashSelector(terms []string, all bool) error {
 	return nil
 }
 
-func splitTrashRestoreArgs(args []string) ([]string, string, error) {
+func splitTrashRestoreArgs(args []string) (terms []string, trashID string, err error) {
 	if len(args) < 2 {
 		return nil, "", errors.New("trash restore requires at least one selector term and a trash ULID")
 	}

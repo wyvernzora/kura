@@ -149,9 +149,9 @@ type scanProgress struct {
 	out   io.Writer
 	err   io.Writer
 
-	ok     atomic.Int64
-	fail   atomic.Int64
-	done   atomic.Int64
+	ok   atomic.Int64
+	fail atomic.Int64
+	done atomic.Int64
 
 	mu       sync.Mutex // guards inFlight + line render
 	inFlight []string

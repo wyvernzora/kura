@@ -9,7 +9,7 @@ import (
 
 func TestHandleAliasesList_UnknownRefIs404(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series/tvdb:999999999/aliases", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series/tvdb:999999999/aliases", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {

@@ -142,43 +142,17 @@ func stageBatch(ctx context.Context, deps Deps, in StageInput) (response.StageRe
 	out := response.StageResult{}
 	now := deps.Now().UTC()
 
-	for index, item := range episodes {
-		progress.Update(ctx, "stage", fmt.Sprintf("Inspecting %s", filepath.Base(item.resolvedPath)), index+1, totalItems)
-		result, skip, err := applyEpisodeItem(ctx, deps, seriesRoot, model, item)
-		if err != nil {
-			return response.StageResult{}, err
-		}
-		if skip != nil {
-			out.Skipped = append(out.Skipped, *skip)
-			continue
-		}
-		out.Episodes = append(out.Episodes, result)
+	out.Episodes, out.Skipped, err = applyEpisodeItemsLoop(ctx, deps, seriesRoot, model, episodes, totalItems, out.Skipped)
+	if err != nil {
+		return response.StageResult{}, err
 	}
-
-	for index, item := range trash {
-		progress.Update(ctx, "stage", fmt.Sprintf("Queuing trash %s", filepath.Base(item.resolvedPath)), len(episodes)+index+1, totalItems)
-		result, skip, err := applyTrashItem(model, item, now)
-		if err != nil {
-			return response.StageResult{}, err
-		}
-		if skip != nil {
-			out.Skipped = append(out.Skipped, *skip)
-			continue
-		}
-		out.Trash = append(out.Trash, result)
+	out.Trash, out.Skipped, err = applyTrashItemsLoop(ctx, model, trash, len(episodes), totalItems, now, out.Skipped)
+	if err != nil {
+		return response.StageResult{}, err
 	}
-
-	for index, item := range extras {
-		progress.Update(ctx, "stage", fmt.Sprintf("Queuing extra %s", filepath.Base(item.resolvedPath)), len(episodes)+len(trash)+index+1, totalItems)
-		result, skip, err := applyExtraItem(model, item, now)
-		if err != nil {
-			return response.StageResult{}, err
-		}
-		if skip != nil {
-			out.Skipped = append(out.Skipped, *skip)
-			continue
-		}
-		out.Extras = append(out.Extras, result)
+	out.Extras, out.Skipped, err = applyExtraItemsLoop(ctx, model, extras, len(episodes)+len(trash), totalItems, now, out.Skipped)
+	if err != nil {
+		return response.StageResult{}, err
 	}
 
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("stage")); err != nil {
@@ -194,6 +168,88 @@ func stageBatch(ctx context.Context, deps Deps, in StageInput) (response.StageRe
 		totalItems)
 	succeeded = true
 	return out, nil
+}
+
+// applyEpisodeItemsLoop walks the validated episode batch and forwards
+// each to applyEpisodeItem, partitioning results into the applied
+// + skipped buckets. Skipped items append to the skipped slice the
+// caller already accumulated for the prior axes.
+func applyEpisodeItemsLoop(
+	ctx context.Context,
+	deps Deps,
+	seriesRoot string,
+	model *domainseries.Series,
+	items []resolvedEpisodeItem,
+	totalItems int,
+	skipped []response.StageSkip,
+) ([]response.StageEpisodeResult, []response.StageSkip, error) {
+	applied := make([]response.StageEpisodeResult, 0, len(items))
+	for index, item := range items {
+		progress.Update(ctx, "stage", fmt.Sprintf("Inspecting %s", filepath.Base(item.resolvedPath)), index+1, totalItems)
+		result, skip, err := applyEpisodeItem(ctx, deps, seriesRoot, model, item)
+		if err != nil {
+			return nil, nil, err
+		}
+		if skip != nil {
+			skipped = append(skipped, *skip)
+			continue
+		}
+		applied = append(applied, result)
+	}
+	return applied, skipped, nil
+}
+
+// applyTrashItemsLoop is the trash counterpart to applyEpisodeItemsLoop.
+// `progressOffset` is the count of items already processed by earlier
+// axes so the live progress counter stays continuous across the batch.
+func applyTrashItemsLoop(
+	ctx context.Context,
+	model *domainseries.Series,
+	items []resolvedTrashItem,
+	progressOffset, totalItems int,
+	now time.Time,
+	skipped []response.StageSkip,
+) ([]response.StageTrashResult, []response.StageSkip, error) {
+	applied := make([]response.StageTrashResult, 0, len(items))
+	for index, item := range items {
+		progress.Update(ctx, "stage", fmt.Sprintf("Queuing trash %s", filepath.Base(item.resolvedPath)), progressOffset+index+1, totalItems)
+		result, skip, err := applyTrashItem(model, item, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		if skip != nil {
+			skipped = append(skipped, *skip)
+			continue
+		}
+		applied = append(applied, result)
+	}
+	return applied, skipped, nil
+}
+
+// applyExtraItemsLoop is the extras counterpart to
+// applyEpisodeItemsLoop / applyTrashItemsLoop.
+func applyExtraItemsLoop(
+	ctx context.Context,
+	model *domainseries.Series,
+	items []resolvedExtraItem,
+	progressOffset, totalItems int,
+	now time.Time,
+	skipped []response.StageSkip,
+) ([]response.StageExtraResult, []response.StageSkip, error) {
+	applied := make([]response.StageExtraResult, 0, len(items))
+	for index, item := range items {
+		progress.Update(ctx, "stage", fmt.Sprintf("Queuing extra %s", filepath.Base(item.resolvedPath)), progressOffset+index+1, totalItems)
+		result, skip, err := applyExtraItem(model, item, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		if skip != nil {
+			skipped = append(skipped, *skip)
+			continue
+		}
+		applied = append(applied, result)
+	}
+	return applied, skipped, nil
 }
 
 // resolvedEpisodeItem carries the original input plus the resolved
@@ -265,59 +321,198 @@ func validateEpisodeItems(deps Deps, model *domainseries.Series, items []Episode
 			return nil, &DuplicateBatchEpisodeError{Episode: item.Episode}
 		}
 		seenEpisodes[item.Episode] = struct{}{}
-
-		mediaPath, err := resolveInboxSelector(deps.InboxRoot, item.Media)
+		resolved, err := validateOneEpisodeItem(deps, model, item, index)
 		if err != nil {
-			return nil, fmt.Errorf("episodes[%d]: %w", index, err)
+			return nil, err
 		}
-		info, err := os.Lstat(mediaPath)
-		if err != nil {
-			return nil, fmt.Errorf("episodes[%d]: %w", index, err)
-		}
-		if info.IsDir() {
-			return nil, fmt.Errorf("episodes[%d]: %q is a directory", index, item.Media)
-		}
-		if !mediainfo.RecognizedVideoFile(mediaPath) {
-			return nil, fmt.Errorf("episodes[%d]: %q is not a recognized video file", index, item.Media)
-		}
-		episodeState, ok := model.Episodes[item.Episode]
-		if !ok {
-			return nil, &MetadataMissingEpisodeError{Episode: item.Episode}
-		}
-		if episodeState.Active != nil && !item.Replace {
-			if _, statErr := os.Stat(episodeState.Active.Path); statErr == nil {
-				return nil, &EpisodeAlreadyExistsError{Episode: item.Episode}
-			}
-		}
-		if episodeState.Staged != nil && !item.Replace {
-			return nil, &StagedEpisodeAlreadyExistsError{Episode: item.Episode}
-		}
-		companions := make([]string, 0, len(item.Companions))
-		companionSels := make([]selector.Path, 0, len(item.Companions))
-		for _, sel := range item.Companions {
-			c, err := resolveInboxSelector(deps.InboxRoot, sel)
-			if err != nil {
-				return nil, fmt.Errorf("episodes[%d] companion: %w", index, err)
-			}
-			cInfo, statErr := os.Lstat(c)
-			if statErr != nil {
-				return nil, fmt.Errorf("episodes[%d] companion: %w", index, statErr)
-			}
-			if cInfo.IsDir() {
-				return nil, fmt.Errorf("episodes[%d] companion %q is a directory", index, sel)
-			}
-			companions = append(companions, c)
-			companionSels = append(companionSels, sel)
-		}
-		out = append(out, resolvedEpisodeItem{
-			EpisodeStageItem:      item,
-			resolvedPath:          mediaPath,
-			resolvedCompanions:    companions,
-			resolvedCompanionSels: companionSels,
-			episodeStateBefore:    episodeState,
-		})
+		out = append(out, resolved)
 	}
 	return out, nil
+}
+
+// validateOneEpisodeItem runs all per-item validation for one episode
+// stage entry: selector resolution, file-shape gates, episode-state
+// gates, and companion resolution. Returns the resolved record on
+// success or a typed/wrapped error.
+func validateOneEpisodeItem(
+	deps Deps,
+	model *domainseries.Series,
+	item EpisodeStageItem,
+	index int,
+) (resolvedEpisodeItem, error) {
+	mediaPath, err := resolveInboxSelector(deps.InboxRoot, item.Media)
+	if err != nil {
+		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %w", index, err)
+	}
+	info, err := os.Lstat(mediaPath)
+	if err != nil {
+		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %w", index, err)
+	}
+	if info.IsDir() {
+		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %q is a directory", index, item.Media)
+	}
+	if !mediainfo.RecognizedVideoFile(mediaPath) {
+		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %q is not a recognized video file", index, item.Media)
+	}
+	episodeState, ok := model.Episodes[item.Episode]
+	if !ok {
+		return resolvedEpisodeItem{}, &MetadataMissingEpisodeError{Episode: item.Episode}
+	}
+	if episodeState.Active != nil && !item.Replace {
+		if _, statErr := os.Stat(episodeState.Active.Path); statErr == nil {
+			return resolvedEpisodeItem{}, &EpisodeAlreadyExistsError{Episode: item.Episode}
+		}
+	}
+	if episodeState.Staged != nil && !item.Replace {
+		return resolvedEpisodeItem{}, &StagedEpisodeAlreadyExistsError{Episode: item.Episode}
+	}
+	companions, companionSels, err := validateCompanions(deps, item.Companions, index)
+	if err != nil {
+		return resolvedEpisodeItem{}, err
+	}
+	return resolvedEpisodeItem{
+		EpisodeStageItem:      item,
+		resolvedPath:          mediaPath,
+		resolvedCompanions:    companions,
+		resolvedCompanionSels: companionSels,
+		episodeStateBefore:    episodeState,
+	}, nil
+}
+
+// validateCompanions resolves and shape-checks each companion selector
+// for one episode stage entry. Returns the parallel slices of resolved
+// abs paths and the original selectors (preserved for persistence).
+func validateCompanions(deps Deps, sels []selector.Path, index int) ([]string, []selector.Path, error) {
+	companions := make([]string, 0, len(sels))
+	companionSels := make([]selector.Path, 0, len(sels))
+	for _, sel := range sels {
+		c, err := resolveInboxSelector(deps.InboxRoot, sel)
+		if err != nil {
+			return nil, nil, fmt.Errorf("episodes[%d] companion: %w", index, err)
+		}
+		cInfo, statErr := os.Lstat(c)
+		if statErr != nil {
+			return nil, nil, fmt.Errorf("episodes[%d] companion: %w", index, statErr)
+		}
+		if cInfo.IsDir() {
+			return nil, nil, fmt.Errorf("episodes[%d] companion %q is a directory", index, sel)
+		}
+		companions = append(companions, c)
+		companionSels = append(companionSels, sel)
+	}
+	return companions, companionSels, nil
+}
+
+// trashLookupSets bundles the active / staged / staged-trash path
+// indexes used by the trash invariant checks.
+type trashLookupSets struct {
+	activePaths      map[string]domainrefs.Episode
+	stagedPaths      map[string]domainrefs.Episode
+	stagedTrashPaths map[string]struct{}
+}
+
+// buildTrashLookupSets folds the series model into the path indexes
+// validateTrashItems needs to enforce the four trash invariants.
+func buildTrashLookupSets(model *domainseries.Series) trashLookupSets {
+	sets := trashLookupSets{
+		activePaths:      map[string]domainrefs.Episode{},
+		stagedPaths:      map[string]domainrefs.Episode{},
+		stagedTrashPaths: map[string]struct{}{},
+	}
+	for ref, ep := range model.Episodes {
+		if ep.Active != nil {
+			sets.activePaths[ep.Active.Path] = ref
+			for _, c := range ep.Active.Companions {
+				sets.activePaths[c.Path] = ref
+			}
+		}
+		if ep.Staged != nil {
+			sets.stagedPaths[ep.Staged.Path] = ref
+			for _, c := range ep.Staged.Companions {
+				sets.stagedPaths[c.Path] = ref
+			}
+		}
+	}
+	for _, t := range model.StagedTrash {
+		sets.stagedTrashPaths[t.Path] = struct{}{}
+		for _, c := range t.Companions {
+			sets.stagedTrashPaths[c.Path] = struct{}{}
+		}
+	}
+	return sets
+}
+
+// checkTrashPath enforces the three trash invariants (not active / not
+// staged / not already in stagedTrash) for a single resolved path.
+// relPath is used for error messages so the operator sees the wire
+// form they typed.
+func checkTrashPath(absPath, relPath string, sets trashLookupSets) error {
+	if ep, isActive := sets.activePaths[absPath]; isActive {
+		return &TrashTargetTrackedError{Path: relPath, Episode: ep, RecordKind: "active"}
+	}
+	if ep, isStaged := sets.stagedPaths[absPath]; isStaged {
+		return &TrashTargetTrackedError{Path: relPath, Episode: ep, RecordKind: "staged"}
+	}
+	if _, dup := sets.stagedTrashPaths[absPath]; dup {
+		return &TrashAlreadyStagedError{Path: relPath}
+	}
+	return nil
+}
+
+// validateOneTrashItem runs full validation for one trash entry: the
+// scheme + invariant checks on the primary path, then the same on each
+// companion. seenPaths is mutated in place to track per-batch dedup
+// across primary + companions across all items.
+func validateOneTrashItem(
+	seriesRoot string,
+	item TrashStageItem,
+	index int,
+	sets trashLookupSets,
+	seenPaths map[string]struct{},
+) (resolvedTrashItem, error) {
+	if item.Path.IsZero() {
+		return resolvedTrashItem{}, fmt.Errorf("trash[%d]: path selector is empty", index)
+	}
+	if item.Path.Scheme != selector.Series {
+		return resolvedTrashItem{}, fmt.Errorf("trash[%d]: expected series: selector, got %q", index, item.Path.Scheme)
+	}
+	absPath := item.Path.Resolve(seriesRoot)
+	relPath := item.Path.Relative
+	if _, dup := seenPaths[absPath]; dup {
+		return resolvedTrashItem{}, &DuplicateBatchPathError{Path: absPath}
+	}
+	seenPaths[absPath] = struct{}{}
+	if err := checkTrashPath(absPath, relPath, sets); err != nil {
+		return resolvedTrashItem{}, err
+	}
+
+	companions := make([]string, 0, len(item.Companions))
+	relCompanions := make([]string, 0, len(item.Companions))
+	for _, cSel := range item.Companions {
+		if cSel.Scheme != selector.Series {
+			return resolvedTrashItem{}, fmt.Errorf("trash[%d] companion: expected series: selector, got %q", index, cSel.Scheme)
+		}
+		cAbs := cSel.Resolve(seriesRoot)
+		cRel := cSel.Relative
+		if _, dup := seenPaths[cAbs]; dup {
+			return resolvedTrashItem{}, &DuplicateBatchPathError{Path: cAbs}
+		}
+		seenPaths[cAbs] = struct{}{}
+		if err := checkTrashPath(cAbs, cRel, sets); err != nil {
+			return resolvedTrashItem{}, err
+		}
+		companions = append(companions, cAbs)
+		relCompanions = append(relCompanions, cRel)
+	}
+
+	return resolvedTrashItem{
+		TrashStageItem:     item,
+		id:                 ulid.Make(),
+		resolvedPath:       absPath,
+		resolvedCompanions: companions,
+		relPath:            relPath,
+		relCompanions:      relCompanions,
+	}, nil
 }
 
 // validateTrashItems enforces the four trash invariants in addition to
@@ -326,92 +521,13 @@ func validateEpisodeItems(deps Deps, model *domainseries.Series, items []Episode
 func validateTrashItems(seriesRoot string, model *domainseries.Series, items []TrashStageItem) ([]resolvedTrashItem, error) {
 	out := make([]resolvedTrashItem, 0, len(items))
 	seenPaths := map[string]struct{}{}
-
-	// Build lookup sets from current series state.
-	activePaths := map[string]domainrefs.Episode{}
-	stagedPaths := map[string]domainrefs.Episode{}
-	for ref, ep := range model.Episodes {
-		if ep.Active != nil {
-			activePaths[ep.Active.Path] = ref
-			for _, c := range ep.Active.Companions {
-				activePaths[c.Path] = ref
-			}
-		}
-		if ep.Staged != nil {
-			stagedPaths[ep.Staged.Path] = ref
-			for _, c := range ep.Staged.Companions {
-				stagedPaths[c.Path] = ref
-			}
-		}
-	}
-	stagedTrashPaths := map[string]struct{}{}
-	for _, t := range model.StagedTrash {
-		stagedTrashPaths[t.Path] = struct{}{}
-		for _, c := range t.Companions {
-			stagedTrashPaths[c.Path] = struct{}{}
-		}
-	}
-
+	sets := buildTrashLookupSets(model)
 	for index, item := range items {
-		if item.Path.IsZero() {
-			return nil, fmt.Errorf("trash[%d]: path selector is empty", index)
+		resolved, err := validateOneTrashItem(seriesRoot, item, index, sets, seenPaths)
+		if err != nil {
+			return nil, err
 		}
-		if item.Path.Scheme != selector.Series {
-			return nil, fmt.Errorf("trash[%d]: expected series: selector, got %q", index, item.Path.Scheme)
-		}
-		absPath := item.Path.Resolve(seriesRoot)
-		relPath := item.Path.Relative
-		// Invariant: not duplicated within batch.
-		if _, dup := seenPaths[absPath]; dup {
-			return nil, &DuplicateBatchPathError{Path: absPath}
-		}
-		seenPaths[absPath] = struct{}{}
-		// Invariant: not active or companion of active.
-		if ep, isActive := activePaths[absPath]; isActive {
-			return nil, &TrashTargetTrackedError{Path: relPath, Episode: ep, RecordKind: "active"}
-		}
-		// Invariant: not staged or companion of staged.
-		if ep, isStaged := stagedPaths[absPath]; isStaged {
-			return nil, &TrashTargetTrackedError{Path: relPath, Episode: ep, RecordKind: "staged"}
-		}
-		// Invariant: not already in stagedTrash[].
-		if _, dup := stagedTrashPaths[absPath]; dup {
-			return nil, &TrashAlreadyStagedError{Path: relPath}
-		}
-
-		companions := make([]string, 0, len(item.Companions))
-		relCompanions := make([]string, 0, len(item.Companions))
-		for _, cSel := range item.Companions {
-			if cSel.Scheme != selector.Series {
-				return nil, fmt.Errorf("trash[%d] companion: expected series: selector, got %q", index, cSel.Scheme)
-			}
-			cAbs := cSel.Resolve(seriesRoot)
-			cRel := cSel.Relative
-			if _, dup := seenPaths[cAbs]; dup {
-				return nil, &DuplicateBatchPathError{Path: cAbs}
-			}
-			seenPaths[cAbs] = struct{}{}
-			if ep, isActive := activePaths[cAbs]; isActive {
-				return nil, &TrashTargetTrackedError{Path: cRel, Episode: ep, RecordKind: "active"}
-			}
-			if ep, isStaged := stagedPaths[cAbs]; isStaged {
-				return nil, &TrashTargetTrackedError{Path: cRel, Episode: ep, RecordKind: "staged"}
-			}
-			if _, dup := stagedTrashPaths[cAbs]; dup {
-				return nil, &TrashAlreadyStagedError{Path: cRel}
-			}
-			companions = append(companions, cAbs)
-			relCompanions = append(relCompanions, cRel)
-		}
-
-		out = append(out, resolvedTrashItem{
-			TrashStageItem:     item,
-			id:                 ulid.Make(),
-			resolvedPath:       absPath,
-			resolvedCompanions: companions,
-			relPath:            relPath,
-			relCompanions:      relCompanions,
-		})
+		out = append(out, resolved)
 	}
 	return out, nil
 }

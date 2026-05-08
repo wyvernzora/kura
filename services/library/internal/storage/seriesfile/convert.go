@@ -19,32 +19,72 @@ func fromWire(in seriesV3) (*series.Series, error) {
 	if err != nil {
 		return nil, err
 	}
+	lastScanned, err := time.Parse(time.RFC3339, in.LastScanned)
+	if err != nil {
+		return nil, fmt.Errorf("seriesfile: invalid lastScanned %q: %w", in.LastScanned, err)
+	}
+	mutator, err := mutatorFromWire(in.LastMutated)
+	if err != nil {
+		return nil, err
+	}
+	episodes, err := episodesFromWire(in.Episodes)
+	if err != nil {
+		return nil, err
+	}
+	stagedTrash, err := stagedTrashListFromWire(in.StagedTrash)
+	if err != nil {
+		return nil, err
+	}
+	stagedExtras, err := stagedExtraListFromWire(in.StagedExtras)
+	if err != nil {
+		return nil, err
+	}
 	out := &series.Series{
 		Metadata:       metadataRef,
 		PreferredTitle: textnorm.NFC(in.PreferredTitle),
 		CanonicalTitle: textnorm.NFC(in.CanonicalTitle),
+		LastScanned:    lastScanned,
 		Ordering:       in.Ordering,
-		Episodes:       map[refs.Episode]series.Episode{},
-		StagedTrash:    []series.StagedTrashItem{},
-		StagedExtras:   []series.StagedExtraItem{},
+		Artwork:        artworkFromWire(in.Artwork),
+		Episodes:       episodes,
+		StagedTrash:    stagedTrash,
+		StagedExtras:   stagedExtras,
 		UserAliases:    userAliasesFromWire(in.UserAliases),
 		SearchKey:      in.SearchKey,
+		LastMutated:    mutator,
 	}
-	if in.LastScanned != "" {
-		lastScanned, err := time.Parse(time.RFC3339, in.LastScanned)
+	if in.InProgress != nil {
+		holder, err := holderFromWire(*in.InProgress)
 		if err != nil {
-			return nil, fmt.Errorf("seriesfile: invalid lastScanned %q: %w", in.LastScanned, err)
+			return nil, err
 		}
-		out.LastScanned = lastScanned
+		out.InProgress = &holder
 	}
-	if in.Artwork != nil && in.Artwork.Poster != nil {
-		out.Artwork.Poster = series.Poster{
-			URL:          in.Artwork.Poster.URL,
-			ThumbnailURL: in.Artwork.Poster.ThumbnailURL,
-			Language:     in.Artwork.Poster.Language,
-		}
+	return out, nil
+}
+
+// artworkFromWire projects the wire artwork shell into the domain
+// shape. Poster stays nullable so series with no provider artwork
+// surface as IsZero.
+func artworkFromWire(in artworkV2) series.Artwork {
+	if in.Poster == nil {
+		return series.Artwork{}
 	}
-	for key, ep := range in.Episodes {
+	return series.Artwork{
+		Poster: series.Poster{
+			URL:          in.Poster.URL,
+			ThumbnailURL: in.Poster.ThumbnailURL,
+			Language:     in.Poster.Language,
+		},
+	}
+}
+
+// episodesFromWire decodes the wire episode map. Returns an empty
+// (non-nil) map when the wire side is empty; callers always get a
+// usable map without nil-checking.
+func episodesFromWire(in map[string]episodeV2) (map[refs.Episode]series.Episode, error) {
+	out := make(map[refs.Episode]series.Episode, len(in))
+	for key, ep := range in {
 		ref, err := refs.ParseEpisode(key)
 		if err != nil {
 			return nil, err
@@ -61,7 +101,7 @@ func fromWire(in seriesV3) (*series.Series, error) {
 		if err != nil {
 			return nil, fmt.Errorf("seriesfile: invalid air date %q: %w", ep.AirDate, err)
 		}
-		out.Episodes[ref] = series.Episode{
+		out[ref] = series.Episode{
 			AirDate:        air,
 			PreferredTitle: textnorm.NFC(ep.PreferredTitle),
 			CanonicalTitle: textnorm.NFC(ep.CanonicalTitle),
@@ -69,33 +109,32 @@ func fromWire(in seriesV3) (*series.Series, error) {
 			Staged:         staged,
 		}
 	}
-	for _, entry := range in.StagedTrash {
+	return out, nil
+}
+
+// stagedTrashListFromWire decodes the StagedTrash slice; empty in →
+// empty out so callers don't nil-check.
+func stagedTrashListFromWire(in []stagedTrashEntryV1) ([]series.StagedTrashItem, error) {
+	out := make([]series.StagedTrashItem, 0, len(in))
+	for _, entry := range in {
 		item, err := stagedTrashFromWire(entry)
 		if err != nil {
 			return nil, err
 		}
-		out.StagedTrash = append(out.StagedTrash, item)
+		out = append(out, item)
 	}
-	for _, entry := range in.StagedExtras {
+	return out, nil
+}
+
+// stagedExtraListFromWire decodes the StagedExtras slice.
+func stagedExtraListFromWire(in []stagedExtraEntryV1) ([]series.StagedExtraItem, error) {
+	out := make([]series.StagedExtraItem, 0, len(in))
+	for _, entry := range in {
 		item, err := stagedExtraFromWire(entry)
 		if err != nil {
 			return nil, err
 		}
-		out.StagedExtras = append(out.StagedExtras, item)
-	}
-	if in.InProgress != nil {
-		holder, err := holderFromWire(*in.InProgress)
-		if err != nil {
-			return nil, err
-		}
-		out.InProgress = &holder
-	}
-	if in.LastMutated != nil {
-		mutator, err := mutatorFromWire(*in.LastMutated)
-		if err != nil {
-			return nil, err
-		}
-		out.LastMutated = &mutator
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -152,36 +191,55 @@ func toWire(in *series.Series) seriesV3 {
 		MetadataRef:    in.Metadata.String(),
 		PreferredTitle: in.PreferredTitle.String(),
 		CanonicalTitle: in.CanonicalTitle.String(),
+		LastScanned:    in.LastScanned.UTC().Format(time.RFC3339),
 		Ordering:       in.Ordering,
-		Episodes:       map[string]episodeV2{},
+		Artwork:        artworkToWire(in.Artwork),
+		Episodes:       episodesToWire(in.Episodes),
+		StagedTrash:    stagedTrashListToWire(in.StagedTrash),
+		StagedExtras:   stagedExtraListToWire(in.StagedExtras),
 		UserAliases:    userAliasesToWire(in.UserAliases),
 		SearchKey:      in.SearchKey,
+		LastMutated:    mutatorToWire(in.LastMutated),
 	}
-	if !in.LastScanned.IsZero() {
-		out.LastScanned = in.LastScanned.UTC().Format(time.RFC3339)
+	if in.InProgress != nil {
+		wire := holderToWire(*in.InProgress)
+		out.InProgress = &wire
 	}
-	if !in.Artwork.IsZero() {
-		out.Artwork = &artworkV2{}
-		if !in.Artwork.Poster.IsZero() {
-			out.Artwork.Poster = &posterV2{
-				URL:          in.Artwork.Poster.URL,
-				ThumbnailURL: in.Artwork.Poster.ThumbnailURL,
-				Language:     in.Artwork.Poster.Language,
-			}
-		}
+	return out
+}
+
+// artworkToWire projects the domain artwork shape into the wire shell.
+// Always returns a value (artwork is required on wire); the inner
+// poster stays nullable.
+func artworkToWire(in series.Artwork) artworkV2 {
+	if in.Poster.IsZero() {
+		return artworkV2{}
 	}
-	keys := make([]refs.Episode, 0, len(in.Episodes))
-	for r := range in.Episodes {
+	return artworkV2{
+		Poster: &posterV2{
+			URL:          in.Poster.URL,
+			ThumbnailURL: in.Poster.ThumbnailURL,
+			Language:     in.Poster.Language,
+		},
+	}
+}
+
+// episodesToWire emits the spine map in episode-ref-sorted key order
+// so the JSON-encoded form is byte-stable across runs.
+func episodesToWire(in map[refs.Episode]series.Episode) map[string]episodeV2 {
+	out := make(map[string]episodeV2, len(in))
+	keys := make([]refs.Episode, 0, len(in))
+	for r := range in {
 		keys = append(keys, r)
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i].String() < keys[j].String() })
 	for _, ref := range keys {
-		ep := in.Episodes[ref]
+		ep := in[ref]
 		var air string
 		if ep.AirDate.IsValid() {
 			air = ep.AirDate.String()
 		}
-		out.Episodes[ref.String()] = episodeV2{
+		out[ref.String()] = episodeV2{
 			AirDate:        air,
 			PreferredTitle: ep.PreferredTitle.String(),
 			CanonicalTitle: ep.CanonicalTitle.String(),
@@ -189,19 +247,21 @@ func toWire(in *series.Series) seriesV3 {
 			Staged:         mediaToWire(ep.Staged),
 		}
 	}
-	for _, item := range in.StagedTrash {
-		out.StagedTrash = append(out.StagedTrash, stagedTrashToWire(item))
+	return out
+}
+
+func stagedTrashListToWire(in []series.StagedTrashItem) []stagedTrashEntryV1 {
+	out := make([]stagedTrashEntryV1, 0, len(in))
+	for _, item := range in {
+		out = append(out, stagedTrashToWire(item))
 	}
-	for _, item := range in.StagedExtras {
-		out.StagedExtras = append(out.StagedExtras, stagedExtraToWire(item))
-	}
-	if in.InProgress != nil {
-		wire := holderToWire(*in.InProgress)
-		out.InProgress = &wire
-	}
-	if in.LastMutated != nil {
-		wire := mutatorToWire(*in.LastMutated)
-		out.LastMutated = &wire
+	return out
+}
+
+func stagedExtraListToWire(in []series.StagedExtraItem) []stagedExtraEntryV1 {
+	out := make([]stagedExtraEntryV1, 0, len(in))
+	for _, item := range in {
+		out = append(out, stagedExtraToWire(item))
 	}
 	return out
 }

@@ -84,7 +84,7 @@ func (s *scanner) run(ctx context.Context) (err error) {
 			progress.Failure(ctx, "scan", fmt.Sprintf("Failed to scan %s", s.ref), 0, 0)
 		}
 	}()
-	if err = s.loadLocal(); err != nil {
+	if err := s.loadLocal(); err != nil {
 		return err
 	}
 	if s.model.InProgress != nil {
@@ -93,7 +93,7 @@ func (s *scanner) run(ctx context.Context) (err error) {
 	if s.input.Ordering != "" {
 		s.model.Ordering = s.input.Ordering
 	}
-	if err = s.refreshMetadata(ctx); err != nil {
+	if err := s.refreshMetadata(ctx); err != nil {
 		return err
 	}
 	if s.input.MetadataOnly {
@@ -103,7 +103,7 @@ func (s *scanner) run(ctx context.Context) (err error) {
 		// untouched.
 		s.model.LastScanned = s.now().UTC()
 		s.model.Ref = s.ref
-		if err = seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
+		if err := seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
 			return err
 		}
 		progress.Success(ctx, "scan", fmt.Sprintf("Refreshed metadata for %s", s.ref), 0)
@@ -126,12 +126,12 @@ func (s *scanner) run(ctx context.Context) (err error) {
 		}
 	}
 	progress.Update(ctx, "scan", fmt.Sprintf("Inspecting %d files", len(discovered)), 2, 0)
-	if err = s.apply(ctx, discovered); err != nil {
+	if err := s.apply(ctx, discovered); err != nil {
 		return err
 	}
 	s.model.LastScanned = s.now().UTC()
 	s.model.Ref = s.ref
-	if err = seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
+	if err := seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
 		return err
 	}
 	progress.Success(ctx, "scan", fmt.Sprintf("Scanned %s", s.ref), len(discovered))

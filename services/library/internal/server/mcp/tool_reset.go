@@ -42,77 +42,107 @@ func addResetTool(s *sdkmcp.Server, deps Deps) {
 			DestructiveHint: &hintFalse,
 		},
 	}, func(ctx context.Context, _ *sdkmcp.CallToolRequest, in resetInput) (*sdkmcp.CallToolResult, any, error) {
-		metaRef, err := refs.ParseMetadata(in.Ref)
-		if err != nil {
-			return toolErrorResult(&invalidInputError{
-				kind:    errkind.KindInvalidRef,
-				message: fmt.Sprintf("kura_reset: %v", err),
-			}), nil, nil
-		}
-		hasEpisode := in.Episode != ""
-		hasIDs := len(in.Trash) > 0 || len(in.Extras) > 0
-		if !hasEpisode && !hasIDs && !in.All {
-			return toolErrorResult(&invalidInputError{
-				kind:    errkind.KindInvalidRef,
-				message: "kura_reset: pass at least one of episode, trash, extras, or all",
-			}), nil, nil
-		}
-		if in.All && (hasEpisode || hasIDs) {
-			return toolErrorResult(&invalidInputError{
-				kind:    errkind.KindInvalidRef,
-				message: "kura_reset: all is mutually exclusive with episode/trash/extras",
-			}), nil, nil
-		}
-		seriesRef, ok, err := deps.Workflow.Index.Get(metaRef)
-		if err != nil {
-			return toolErrorResult(err), nil, nil
-		}
-		if !ok {
-			return toolErrorResult(&workflow.MetadataRefNotIndexedError{Ref: metaRef}), nil, nil
-		}
-		input := workflow.ResetInput{Ref: seriesRef, All: in.All}
-		if hasEpisode {
-			episode, err := refs.ParseEpisodeMarker(in.Episode)
-			if err != nil {
-				return toolErrorResult(&invalidInputError{
-					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_reset: episode: %v", err),
-				}), nil, nil
-			}
-			input.Episode = episode
-		}
-		for _, raw := range in.Trash {
-			id, err := ulid.Parse(raw)
-			if err != nil {
-				return toolErrorResult(&invalidInputError{
-					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_reset: trash[%s]: %v", raw, err),
-				}), nil, nil
-			}
-			input.TrashIDs = append(input.TrashIDs, id)
-		}
-		for _, raw := range in.Extras {
-			id, err := ulid.Parse(raw)
-			if err != nil {
-				return toolErrorResult(&invalidInputError{
-					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_reset: extras[%s]: %v", raw, err),
-				}), nil, nil
-			}
-			input.ExtraIDs = append(input.ExtraIDs, id)
-		}
-		result, err := workflow.Reset(ctx, deps.Workflow, input)
-		if err != nil {
-			return toolErrorResult(err), nil, nil
-		}
-		cleared := len(result.Records)
-		if result.Record != nil {
-			cleared = 1
-		}
-		return nil, resetOutput{
-			Cleared:      cleared,
-			TrashRemoved: result.TrashRemoved,
-			ExtraRemoved: result.ExtraRemoved,
-		}, nil
+		return runResetTool(ctx, deps, in)
 	})
+}
+
+// runResetTool is the kura_reset MCP tool handler body. Extracted from
+// the AddTool closure so cyclop counts the per-axis input parsing
+// against this function rather than addResetTool's setup.
+func runResetTool(ctx context.Context, deps Deps, in resetInput) (*sdkmcp.CallToolResult, any, error) {
+	metaRef, errResult := validateResetInput(in)
+	if errResult != nil {
+		return errResult, nil, nil
+	}
+	seriesRef, ok, err := deps.Workflow.Index.Get(metaRef)
+	if err != nil {
+		return toolErrorResult(err), nil, nil
+	}
+	if !ok {
+		return toolErrorResult(&workflow.MetadataRefNotIndexedError{Ref: metaRef}), nil, nil
+	}
+	input, errResult := buildResetWorkflowInput(in, seriesRef)
+	if errResult != nil {
+		return errResult, nil, nil
+	}
+	result, err := workflow.Reset(ctx, deps.Workflow, input)
+	if err != nil {
+		return toolErrorResult(err), nil, nil
+	}
+	cleared := len(result.Records)
+	if result.Record != nil {
+		cleared = 1
+	}
+	return nil, resetOutput{
+		Cleared:      cleared,
+		TrashRemoved: result.TrashRemoved,
+		ExtraRemoved: result.ExtraRemoved,
+	}, nil
+}
+
+// validateResetInput parses the metadata ref and enforces the
+// "at least one mode" + "all is exclusive with episode/trash/extras"
+// rules. Returns the parsed ref on success or a populated tool result
+// on rejection (tool errors are wire shape, not Go errors).
+func validateResetInput(in resetInput) (refs.Metadata, *sdkmcp.CallToolResult) {
+	metaRef, err := refs.ParseMetadata(in.Ref)
+	if err != nil {
+		return "", toolErrorResult(&invalidInputError{
+			kind:    errkind.KindInvalidRef,
+			message: fmt.Sprintf("kura_reset: %v", err),
+		})
+	}
+	hasEpisode := in.Episode != ""
+	hasIDs := len(in.Trash) > 0 || len(in.Extras) > 0
+	if !hasEpisode && !hasIDs && !in.All {
+		return "", toolErrorResult(&invalidInputError{
+			kind:    errkind.KindInvalidRef,
+			message: "kura_reset: pass at least one of episode, trash, extras, or all",
+		})
+	}
+	if in.All && (hasEpisode || hasIDs) {
+		return "", toolErrorResult(&invalidInputError{
+			kind:    errkind.KindInvalidRef,
+			message: "kura_reset: all is mutually exclusive with episode/trash/extras",
+		})
+	}
+	return metaRef, nil
+}
+
+// buildResetWorkflowInput parses the episode marker + ULID lists into
+// a workflow.ResetInput. Returns a populated tool result on parse
+// failure (same shape as validateResetInput).
+func buildResetWorkflowInput(in resetInput, seriesRef refs.Series) (workflow.ResetInput, *sdkmcp.CallToolResult) {
+	input := workflow.ResetInput{Ref: seriesRef, All: in.All}
+	if in.Episode != "" {
+		episode, err := refs.ParseEpisodeMarker(in.Episode)
+		if err != nil {
+			return workflow.ResetInput{}, toolErrorResult(&invalidInputError{
+				kind:    errkind.KindInvalidRef,
+				message: fmt.Sprintf("kura_reset: episode: %v", err),
+			})
+		}
+		input.Episode = episode
+	}
+	for _, raw := range in.Trash {
+		id, err := ulid.Parse(raw)
+		if err != nil {
+			return workflow.ResetInput{}, toolErrorResult(&invalidInputError{
+				kind:    errkind.KindInvalidRef,
+				message: fmt.Sprintf("kura_reset: trash[%s]: %v", raw, err),
+			})
+		}
+		input.TrashIDs = append(input.TrashIDs, id)
+	}
+	for _, raw := range in.Extras {
+		id, err := ulid.Parse(raw)
+		if err != nil {
+			return workflow.ResetInput{}, toolErrorResult(&invalidInputError{
+				kind:    errkind.KindInvalidRef,
+				message: fmt.Sprintf("kura_reset: extras[%s]: %v", raw, err),
+			})
+		}
+		input.ExtraIDs = append(input.ExtraIDs, id)
+	}
+	return input, nil
 }

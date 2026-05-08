@@ -98,7 +98,7 @@ func TestPath_String(t *testing.T) {
 func TestPath_Resolve(t *testing.T) {
 	p, _ := selector.Parse("inbox:[BDrip]/E01.mkv")
 	got := p.Resolve("/mnt/inbox")
-	want := filepath.Join("/mnt/inbox", "[BDrip]", "E01.mkv")
+	want := filepath.Join("/mnt/inbox", "[BDrip]", "E01.mkv") //nolint:gocritic // test fixture root
 	if got != want {
 		t.Errorf("Resolve: got %q, want %q", got, want)
 	}

@@ -42,33 +42,17 @@ type JobError struct {
 // arrives or ctx cancels. Returns nil after a clean terminal event;
 // returns the wrapped server error for terminal failures.
 func (c *Client) StreamJob(ctx context.Context, jobID string, onEvent func(JobEvent)) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/jobs/"+jobID+"/stream", nil)
+	req, err := buildJobStreamRequest(ctx, c, jobID)
 	if err != nil {
 		return err
-	}
-	req.Header.Set("Accept", "text/event-stream")
-	if c.Operator {
-		req.Header.Set(headerOperator, "1")
-	}
-	// Bearer must ride alongside the SSE upgrade — `Do` sets it on
-	// the JSON path; this handler is hand-rolled and previously
-	// dropped the header, leading to 401s on every async-job follow-
-	// up (scan, stage, reconcile apply).
-	if c.BearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.BearerToken)
 	}
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return discoveryHint(err, c.BaseURL)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		var env ErrorEnvelope
-		if jerr := json.NewDecoder(resp.Body).Decode(&env); jerr == nil {
-			env.Status = resp.StatusCode
-			return &env
-		}
-		return fmt.Errorf("stream returned %d %s", resp.StatusCode, resp.Status)
+	if err := checkJobStreamStatus(resp); err != nil {
+		return err
 	}
 
 	reader := bufio.NewReader(resp.Body)
@@ -84,33 +68,85 @@ func (c *Client) StreamJob(ctx context.Context, jobID string, onEvent func(JobEv
 			}
 			return err
 		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			// dispatch the accumulated event
-			if eventName != "" {
-				ev := decodeEvent(eventName, dataBuf.String())
-				onEvent(ev)
-				if ev.Kind == "result" || ev.Kind == "error" {
-					return finalErrorFor(ev)
-				}
-			}
-			eventName = ""
-			dataBuf.Reset()
-			continue
+		done, err := handleSSELine(strings.TrimRight(line, "\r\n"), &eventName, &dataBuf, onEvent)
+		if done {
+			return err
 		}
-		if rest, ok := strings.CutPrefix(line, "event:"); ok {
-			eventName = strings.TrimSpace(rest)
-			continue
-		}
-		if rest, ok := strings.CutPrefix(line, "data:"); ok {
-			if dataBuf.Len() > 0 {
-				dataBuf.WriteByte('\n')
-			}
-			dataBuf.WriteString(strings.TrimSpace(rest))
-			continue
-		}
-		// ignore comments (lines starting with ":") and unknown fields.
 	}
+}
+
+// buildJobStreamRequest constructs the SSE upgrade request, including
+// the Accept header and the operator/bearer auth headers the rest of
+// the client speaks. The bearer is required: the SSE handler is
+// hand-rolled (vs. Do's JSON path) and silently dropping the header
+// leads to 401s on every async-job follow-up.
+func buildJobStreamRequest(ctx context.Context, c *Client, jobID string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/jobs/"+jobID+"/stream", http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	if c.Operator {
+		req.Header.Set(headerOperator, "1")
+	}
+	if c.BearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.BearerToken)
+	}
+	return req, nil
+}
+
+// checkJobStreamStatus inspects the SSE response status. 200 returns
+// nil; non-200 attempts to decode the body as an ErrorEnvelope, with
+// a generic fallback for non-JSON error bodies.
+func checkJobStreamStatus(resp *http.Response) error {
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	var env ErrorEnvelope
+	if jerr := json.NewDecoder(resp.Body).Decode(&env); jerr == nil {
+		env.Status = resp.StatusCode
+		return &env
+	}
+	return fmt.Errorf("stream returned %d %s", resp.StatusCode, resp.Status)
+}
+
+// handleSSELine consumes one trimmed SSE line. The blank-line
+// separator dispatches the accumulated event via onEvent; "event:"
+// and "data:" prefixes update the per-event accumulators; comments
+// and unknown fields are ignored. Returns done=true with err set to
+// the terminal error (or nil) when the dispatched event is a
+// "result" or "error" — the caller breaks out of the read loop.
+func handleSSELine(
+	line string,
+	eventName *string,
+	dataBuf *strings.Builder,
+	onEvent func(JobEvent),
+) (done bool, err error) {
+	if line == "" {
+		if *eventName == "" {
+			return false, nil
+		}
+		ev := decodeEvent(*eventName, dataBuf.String())
+		onEvent(ev)
+		*eventName = ""
+		dataBuf.Reset()
+		if ev.Kind == "result" || ev.Kind == "error" {
+			return true, finalErrorFor(ev)
+		}
+		return false, nil
+	}
+	if rest, ok := strings.CutPrefix(line, "event:"); ok {
+		*eventName = strings.TrimSpace(rest)
+		return false, nil
+	}
+	if rest, ok := strings.CutPrefix(line, "data:"); ok {
+		if dataBuf.Len() > 0 {
+			dataBuf.WriteByte('\n')
+		}
+		dataBuf.WriteString(strings.TrimSpace(rest))
+	}
+	// Comments (":") and unknown fields ignored.
+	return false, nil
 }
 
 func decodeEvent(name, data string) JobEvent {

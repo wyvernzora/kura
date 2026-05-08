@@ -107,7 +107,7 @@ func saveCASCreate(libRoot string, m *series.Series, mutator coord.Mutator, path
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	m.LastMutated = &mutator
+	m.LastMutated = mutator
 	data, err := encodeForSeries(libRoot, m)
 	if err != nil {
 		return err
@@ -139,7 +139,7 @@ func saveCASUpdate(libRoot string, m *series.Series, mutator coord.Mutator, path
 			Mutator: peekMutatorBytes(currentBytes),
 		}
 	}
-	m.LastMutated = &mutator
+	m.LastMutated = mutator
 	data, err := encodeForSeries(libRoot, m)
 	if err != nil {
 		return err
@@ -199,10 +199,7 @@ func peekMutatorBytes(data []byte) coord.Mutator {
 	if err != nil {
 		return coord.Mutator{}
 	}
-	if wire.LastMutated == nil {
-		return coord.Mutator{}
-	}
-	mutator, err := mutatorFromWire(*wire.LastMutated)
+	mutator, err := mutatorFromWire(wire.LastMutated)
 	if err != nil {
 		return coord.Mutator{}
 	}

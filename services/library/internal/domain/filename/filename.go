@@ -65,39 +65,51 @@ func Sanitize(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, r := range s {
-		switch {
-		case r == '/' || r == '\\':
-			b.WriteByte(' ')
-		case r == ':':
-			b.WriteString(" -")
-		case r == '<' || r == '>' || r == '"' || r == '|' || r == '?' || r == '*':
-			b.WriteByte(' ')
-		case unicode.IsControl(r):
-			// Whitespace controls (tab / newline / CR) collapse to
-			// space; non-whitespace controls (NUL / DEL / etc.) drop.
-			if unicode.IsSpace(r) {
-				b.WriteByte(' ')
-			}
-		default:
-			b.WriteRune(r)
-		}
+		b.WriteString(sanitizeMapRune(r))
 	}
-	// Collapse whitespace runs to single ASCII space.
-	collapsed := strings.Builder{}
-	collapsed.Grow(b.Len())
+	return strings.Trim(collapseSpaces(b.String()), " .")
+}
+
+// sanitizeMapRune is the per-rune classifier from Sanitize. Returns
+// the replacement substring (empty drops the rune entirely).
+func sanitizeMapRune(r rune) string {
+	switch {
+	case r == '/' || r == '\\':
+		return " "
+	case r == ':':
+		return " -"
+	case r == '<' || r == '>' || r == '"' || r == '|' || r == '?' || r == '*':
+		return " "
+	case unicode.IsControl(r):
+		// Whitespace controls (tab / newline / CR) collapse to
+		// space; non-whitespace controls (NUL / DEL / etc.) drop.
+		if unicode.IsSpace(r) {
+			return " "
+		}
+		return ""
+	default:
+		return string(r)
+	}
+}
+
+// collapseSpaces flattens runs of Unicode whitespace into a single
+// ASCII space.
+func collapseSpaces(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
 	prevSpace := false
-	for _, r := range b.String() {
+	for _, r := range s {
 		if unicode.IsSpace(r) {
 			if !prevSpace {
-				collapsed.WriteByte(' ')
+				b.WriteByte(' ')
 			}
 			prevSpace = true
 			continue
 		}
-		collapsed.WriteRune(r)
+		b.WriteRune(r)
 		prevSpace = false
 	}
-	return strings.Trim(collapsed.String(), " .")
+	return b.String()
 }
 
 func (t Title) String() string {

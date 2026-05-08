@@ -10,7 +10,7 @@ import (
 func TestHandleShow_NotFound(t *testing.T) {
 	srv := newTestServer(t)
 	// Valid metadata-ref shape, not in index.
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series/tvdb:999999999", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series/tvdb:999999999", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -24,7 +24,7 @@ func TestHandleShow_RejectsSeriesRefForm(t *testing.T) {
 	// Bare directory name = SeriesRef shape. Per Product.md
 	// "Selectors, not paths," resource paths only accept metadata
 	// refs. Server must reject with 400 invalid_ref.
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series/Frieren", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series/Frieren", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -35,7 +35,7 @@ func TestHandleShow_RejectsSeriesRefForm(t *testing.T) {
 
 func TestHandleLibrary_Returns200(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/library", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/library", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -53,7 +53,7 @@ func TestHandleLibrary_Returns200(t *testing.T) {
 
 func TestHandleResolve_RejectsEmptyTerms(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/resolve", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/resolve", http.NoBody)
 	req.Body = http.NoBody
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -65,7 +65,7 @@ func TestHandleResolve_RejectsEmptyTerms(t *testing.T) {
 
 func TestHandleTrashList_AllRoute_BadOlderThan(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/trash?olderThan=banana", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/trash?olderThan=banana", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -75,7 +75,7 @@ func TestHandleTrashList_AllRoute_BadOlderThan(t *testing.T) {
 
 func TestHandleJobStatus_BadID(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/$bad$", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/$bad$", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -90,7 +90,7 @@ func TestHandleJobStatus_BadID(t *testing.T) {
 
 func TestHandleJobStatus_UnknownJob(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/abcdef0123456789", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/jobs/abcdef0123456789", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {

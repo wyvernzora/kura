@@ -21,31 +21,12 @@ type resetCmd struct {
 }
 
 func (cmd *resetCmd) Run(rt *runContext) error {
-	if cmd.Episode == "" && !cmd.All && len(cmd.Trash) == 0 && len(cmd.Extra) == 0 {
-		return errors.New("reset requires --episode, --trash, --extra, or --all")
+	if err := validateResetCmdFlags(cmd); err != nil {
+		return err
 	}
-	if cmd.All && (cmd.Episode != "" || len(cmd.Trash) > 0 || len(cmd.Extra) > 0) {
-		return errors.New("reset --all is mutually exclusive with --episode/--trash/--extra")
-	}
-	req := client.ResetRequest{All: cmd.All}
-	if cmd.Episode != "" {
-		ep, err := refs.ParseEpisodeMarker(cmd.Episode)
-		if err != nil {
-			return err
-		}
-		req.Episode = ep.String()
-	}
-	for _, raw := range cmd.Trash {
-		if _, err := ulid.Parse(raw); err != nil {
-			return err
-		}
-		req.TrashIDs = append(req.TrashIDs, raw)
-	}
-	for _, raw := range cmd.Extra {
-		if _, err := ulid.Parse(raw); err != nil {
-			return err
-		}
-		req.ExtraIDs = append(req.ExtraIDs, raw)
+	req, err := buildResetCmdRequest(cmd)
+	if err != nil {
+		return err
 	}
 	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
@@ -58,4 +39,43 @@ func (cmd *resetCmd) Run(rt *runContext) error {
 		return err
 	}
 	return render.Reset(rt.Stdout, result, cmd.JSON)
+}
+
+// validateResetCmdFlags enforces the "at least one mode" + "all is
+// mutually exclusive" rules over the CLI flag set.
+func validateResetCmdFlags(cmd *resetCmd) error {
+	if cmd.Episode == "" && !cmd.All && len(cmd.Trash) == 0 && len(cmd.Extra) == 0 {
+		return errors.New("reset requires --episode, --trash, --extra, or --all")
+	}
+	if cmd.All && (cmd.Episode != "" || len(cmd.Trash) > 0 || len(cmd.Extra) > 0) {
+		return errors.New("reset --all is mutually exclusive with --episode/--trash/--extra")
+	}
+	return nil
+}
+
+// buildResetCmdRequest parses the episode marker + ULID lists into a
+// client.ResetRequest. Returns the underlying parser error verbatim
+// so the CLI surface preserves the original message wording.
+func buildResetCmdRequest(cmd *resetCmd) (client.ResetRequest, error) {
+	req := client.ResetRequest{All: cmd.All}
+	if cmd.Episode != "" {
+		ep, err := refs.ParseEpisodeMarker(cmd.Episode)
+		if err != nil {
+			return client.ResetRequest{}, err
+		}
+		req.Episode = ep.String()
+	}
+	for _, raw := range cmd.Trash {
+		if _, err := ulid.Parse(raw); err != nil {
+			return client.ResetRequest{}, err
+		}
+		req.TrashIDs = append(req.TrashIDs, raw)
+	}
+	for _, raw := range cmd.Extra {
+		if _, err := ulid.Parse(raw); err != nil {
+			return client.ResetRequest{}, err
+		}
+		req.ExtraIDs = append(req.ExtraIDs, raw)
+	}
+	return req, nil
 }

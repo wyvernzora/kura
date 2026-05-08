@@ -15,16 +15,16 @@ type seriesV3 struct {
 	MetadataRef    string               `json:"metadataRef"`
 	PreferredTitle string               `json:"preferredTitle,omitempty"`
 	CanonicalTitle string               `json:"canonicalTitle,omitempty"`
-	LastScanned    string               `json:"lastScanned,omitempty"`
+	LastScanned    string               `json:"lastScanned"`
 	Ordering       string               `json:"ordering,omitempty"`
-	Artwork        *artworkV2           `json:"artwork,omitempty"`
+	Artwork        artworkV2            `json:"artwork"`
 	Episodes       map[string]episodeV2 `json:"episodes"`
-	StagedTrash    []stagedTrashEntryV1 `json:"stagedTrash,omitempty"`
-	StagedExtras   []stagedExtraEntryV1 `json:"stagedExtras,omitempty"`
+	StagedTrash    []stagedTrashEntryV1 `json:"stagedTrash"`
+	StagedExtras   []stagedExtraEntryV1 `json:"stagedExtras"`
 	UserAliases    []string             `json:"userAliases,omitempty"`
 	SearchKey      string               `json:"searchKey"`
 	InProgress     *holderV1            `json:"in_progress,omitempty"`
-	LastMutated    *mutatorV1           `json:"last_mutated,omitempty"`
+	LastMutated    mutatorV1            `json:"last_mutated"`
 }
 
 type artworkV2 struct {
@@ -121,12 +121,14 @@ func encode(s seriesV3) ([]byte, error) {
 			s.StagedTrash[i].Companions = []companionRecordV1{}
 		}
 	}
-	// Drop empty arrays before marshal so omitempty keeps them off disk.
-	if len(s.StagedTrash) == 0 {
-		s.StagedTrash = nil
+	// Always emit empty arrays for the staged-* slots — schema marks
+	// them required so a nil slice would render as `null` and fail
+	// validation. UserAliases stays optional (omitempty).
+	if s.StagedTrash == nil {
+		s.StagedTrash = []stagedTrashEntryV1{}
 	}
-	if len(s.StagedExtras) == 0 {
-		s.StagedExtras = nil
+	if s.StagedExtras == nil {
+		s.StagedExtras = []stagedExtraEntryV1{}
 	}
 	if len(s.UserAliases) == 0 {
 		s.UserAliases = nil

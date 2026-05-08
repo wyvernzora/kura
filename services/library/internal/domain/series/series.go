@@ -74,7 +74,7 @@ type Series struct {
 	// land on disk. Empty when no candidate produces a token.
 	SearchKey   string
 	InProgress  *coord.Holder
-	LastMutated *coord.Mutator
+	LastMutated coord.Mutator
 	Hash        string
 }
 

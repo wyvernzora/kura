@@ -8,7 +8,6 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/domain/selector"
 	"github.com/wyvernzora/kura/internal/errkind"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
@@ -71,124 +70,88 @@ func addStageTool(s *sdkmcp.Server, deps Deps) {
 			DestructiveHint: &hintFalse,
 		},
 	}, func(ctx context.Context, _ *sdkmcp.CallToolRequest, in stageInput) (*sdkmcp.CallToolResult, any, error) {
-		metaRef, err := refs.ParseMetadata(in.Ref)
-		if err != nil {
-			return toolErrorResult(&invalidInputError{
-				kind:    errkind.KindInvalidRef,
-				message: fmt.Sprintf("kura_stage: %v", err),
-			}), nil, nil
-		}
-		if over := overCap("episodes", len(in.Episodes)); over != nil {
-			return toolErrorResult(over), nil, nil
-		}
-		if over := overCap("trash", len(in.Trash)); over != nil {
-			return toolErrorResult(over), nil, nil
-		}
-		if over := overCap("extras", len(in.Extras)); over != nil {
-			return toolErrorResult(over), nil, nil
-		}
-
-		// Parse episode markers and inbox selectors up front so
-		// malformed input rejects before any Index lookup or job
-		// submission.
-		episodes := make([]workflow.EpisodeStageItem, 0, len(in.Episodes))
-		for index, item := range in.Episodes {
-			episode, err := refs.ParseEpisodeMarker(item.Episode)
-			if err != nil {
-				return toolErrorResult(&invalidInputError{
-					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_stage: episodes[%d].episode: %v", index, err),
-				}), nil, nil
-			}
-			mediaSel, perr := selector.ParseInbox(item.Media)
-			if perr != nil {
-				return toolErrorResult(&invalidInputError{
-					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_stage: episodes[%d].media: %v (use kura_inbox_list to discover valid selectors)", index, perr),
-				}), nil, nil
-			}
-			companions := make([]selector.Path, 0, len(item.Companions))
-			for j, raw := range item.Companions {
-				sel, cerr := selector.ParseInbox(raw)
-				if cerr != nil {
-					return toolErrorResult(&invalidInputError{
-						kind:    errkind.KindInvalidRef,
-						message: fmt.Sprintf("kura_stage: episodes[%d].companions[%d]: %v", index, j, cerr),
-					}), nil, nil
-				}
-				companions = append(companions, sel)
-			}
-			episodes = append(episodes, workflow.EpisodeStageItem{
-				Episode:    episode,
-				Media:      mediaSel,
-				Source:     item.Source,
-				Companions: companions,
-				Replace:    item.Replace,
-			})
-		}
-
-		seriesRef, ok, err := deps.Workflow.Index.Get(metaRef)
-		if err != nil {
-			return toolErrorResult(err), nil, nil
-		}
-		if !ok {
-			return toolErrorResult(&workflow.MetadataRefNotIndexedError{Ref: metaRef}), nil, nil
-		}
-		trash := make([]workflow.TrashStageItem, 0, len(in.Trash))
-		for index, item := range in.Trash {
-			pathSel, perr := selector.ParseSeries(item.Path)
-			if perr != nil {
-				return toolErrorResult(&invalidInputError{
-					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_stage: trash[%d].path: %v (use a series: selector relative to the series root)", index, perr),
-				}), nil, nil
-			}
-			companions := make([]selector.Path, 0, len(item.Companions))
-			for j, raw := range item.Companions {
-				sel, cerr := selector.ParseSeries(raw)
-				if cerr != nil {
-					return toolErrorResult(&invalidInputError{
-						kind:    errkind.KindInvalidRef,
-						message: fmt.Sprintf("kura_stage: trash[%d].companions[%d]: %v", index, j, cerr),
-					}), nil, nil
-				}
-				companions = append(companions, sel)
-			}
-			trash = append(trash, workflow.TrashStageItem{
-				Path:       pathSel,
-				Companions: companions,
-			})
-		}
-		extras := make([]workflow.ExtraStageItem, 0, len(in.Extras))
-		for index, item := range in.Extras {
-			sourceSel, perr := selector.ParseInbox(item.Source)
-			if perr != nil {
-				return toolErrorResult(&invalidInputError{
-					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_stage: extras[%d].source: %v (use kura_inbox_list to discover valid selectors)", index, perr),
-				}), nil, nil
-			}
-			extras = append(extras, workflow.ExtraStageItem{
-				Season: item.Season,
-				Source: sourceSel,
-				Prefix: item.Prefix,
-			})
-		}
-
-		j := workflow.Stage(ctx, deps.Workflow, workflow.StageInput{
-			Ref:      seriesRef,
-			Episodes: episodes,
-			Trash:    trash,
-			Extras:   extras,
-		})
-		// Three-branch IsTracked handler per design/async-job.md § 11.b.
-		if !j.IsTracked() {
-			_, waitErr := j.Wait(ctx)
-			if waitErr != nil {
-				return toolErrorResult(waitErr), nil, nil
-			}
-			return toolErrorResult(fmt.Errorf("internal: kura_stage returned untracked success (workflow bug)")), nil, nil
-		}
-		return nil, jobHandleOutput{JobID: j.ID()}, nil
+		return runStageTool(ctx, deps, in)
 	})
+}
+
+// runStageTool is the kura_stage MCP tool handler body. Extracted from
+// the AddTool closure so cyclop scores the per-axis input parsing
+// against this function rather than addStageTool's setup.
+func runStageTool(ctx context.Context, deps Deps, in stageInput) (*sdkmcp.CallToolResult, any, error) {
+	metaRef, err := refs.ParseMetadata(in.Ref)
+	if err != nil {
+		return toolErrorResult(&invalidInputError{
+			kind:    errkind.KindInvalidRef,
+			message: fmt.Sprintf("kura_stage: %v", err),
+		}), nil, nil
+	}
+	if over := overCap("episodes", len(in.Episodes)); over != nil {
+		return toolErrorResult(over), nil, nil
+	}
+	if over := overCap("trash", len(in.Trash)); over != nil {
+		return toolErrorResult(over), nil, nil
+	}
+	if over := overCap("extras", len(in.Extras)); over != nil {
+		return toolErrorResult(over), nil, nil
+	}
+	stageIn, err := workflow.BuildStageInput(stageInputToWorkflow(in))
+	if err != nil {
+		return toolErrorResult(&invalidInputError{
+			kind:    errkind.KindInvalidRef,
+			message: fmt.Sprintf("kura_stage: %v", err),
+		}), nil, nil
+	}
+	seriesRef, ok, err := deps.Workflow.Index.Get(metaRef)
+	if err != nil {
+		return toolErrorResult(err), nil, nil
+	}
+	if !ok {
+		return toolErrorResult(&workflow.MetadataRefNotIndexedError{Ref: metaRef}), nil, nil
+	}
+	stageIn.Ref = seriesRef
+
+	j := workflow.Stage(ctx, deps.Workflow, stageIn)
+	// Three-branch IsTracked handler per design/async-job.md § 11.b.
+	if !j.IsTracked() {
+		_, waitErr := j.Wait(ctx)
+		if waitErr != nil {
+			return toolErrorResult(waitErr), nil, nil
+		}
+		return toolErrorResult(fmt.Errorf("internal: kura_stage returned untracked success (workflow bug)")), nil, nil
+	}
+	return nil, jobHandleOutput{JobID: j.ID()}, nil
+}
+
+// stageInputToWorkflow flattens the MCP wire-shape stageInput into the
+// transport-neutral workflow.StageRequest. One field-by-field copy
+// per axis; the workflow side owns selector + episode-marker parsing.
+func stageInputToWorkflow(in stageInput) workflow.StageRequest {
+	out := workflow.StageRequest{
+		Episodes: make([]workflow.StageRequestEpisode, 0, len(in.Episodes)),
+		Trash:    make([]workflow.StageRequestTrash, 0, len(in.Trash)),
+		Extras:   make([]workflow.StageRequestExtra, 0, len(in.Extras)),
+	}
+	for _, ep := range in.Episodes {
+		out.Episodes = append(out.Episodes, workflow.StageRequestEpisode{
+			Episode:    ep.Episode,
+			Media:      ep.Media,
+			Source:     ep.Source,
+			Companions: ep.Companions,
+			Replace:    ep.Replace,
+		})
+	}
+	for _, t := range in.Trash {
+		out.Trash = append(out.Trash, workflow.StageRequestTrash{
+			Path:       t.Path,
+			Companions: t.Companions,
+		})
+	}
+	for _, ex := range in.Extras {
+		out.Extras = append(out.Extras, workflow.StageRequestExtra{
+			Season: ex.Season,
+			Source: ex.Source,
+			Prefix: ex.Prefix,
+		})
+	}
+	return out
 }
