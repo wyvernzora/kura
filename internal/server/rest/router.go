@@ -1,10 +1,26 @@
 package rest
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/wyvernzora/kura/internal/server/webui"
+)
 
 // buildRouter wires the URL surface and applies the middleware chain.
 // New handlers register here; their implementations live in
 // handler_*.go.
+//
+// Two muxes compose into the final handler:
+//
+//   - apiMux owns every /api/v1/... route and is wrapped by the
+//     bearer-auth middleware. The web UI bundle is not gated, so the
+//     login flow itself can load before the user has a token.
+//   - rootMux dispatches requests: /api/* goes to the bearer-wrapped
+//     apiMux, everything else falls through to the embedded SPA.
+//
+// Cross-cutting middleware (logging, version, CORS, recover) wraps
+// rootMux so it observes every request — including static UI hits —
+// uniformly.
 //
 // Middleware order matters. Outermost first:
 //
@@ -12,59 +28,70 @@ import "net/http"
 //	version   - sets X-Kura-Version on every response
 //	cors      - origin allow-list + preflight
 //	recover   - turns panics into 500 internal errors
-//	(handler)
+//	(rootMux: /api/* → bearer → apiMux; / → webui)
 //
-// recover sits closest to the handler so panics in middleware itself
+// recover sits closest to the inner muxes so panics in middleware itself
 // still propagate; they're rare enough not to deserve their own net.
 func (s *Server) buildRouter() http.Handler {
-	mux := http.NewServeMux()
+	apiMux := http.NewServeMux()
 
 	// health + library
-	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
-	mux.HandleFunc("GET /api/v1/library", s.handleLibrary)
+	apiMux.HandleFunc("GET /api/v1/health", s.handleHealth)
+	apiMux.HandleFunc("GET /api/v1/library", s.handleLibrary)
 
 	// series
-	mux.HandleFunc("GET /api/v1/series", s.handleList)
-	mux.HandleFunc("GET /api/v1/series/{ref}", s.handleShow)
-	mux.HandleFunc("POST /api/v1/series", s.handleAdd)
-	mux.HandleFunc("POST /api/v1/series/import", s.handleImport)
-	mux.HandleFunc("DELETE /api/v1/series/{ref}", s.handleRemoveDispatch)
+	apiMux.HandleFunc("GET /api/v1/series", s.handleList)
+	apiMux.HandleFunc("GET /api/v1/series/{ref}", s.handleShow)
+	apiMux.HandleFunc("POST /api/v1/series", s.handleAdd)
+	apiMux.HandleFunc("POST /api/v1/series/import", s.handleImport)
+	apiMux.HandleFunc("DELETE /api/v1/series/{ref}", s.handleRemoveDispatch)
 
 	// resolve
-	mux.HandleFunc("POST /api/v1/resolve", s.handleResolve)
+	apiMux.HandleFunc("POST /api/v1/resolve", s.handleResolve)
 
 	// reset
-	mux.HandleFunc("POST /api/v1/series/{ref}/reset", s.handleReset)
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/reset", s.handleReset)
+
+	// user aliases (search-key shorthands)
+	apiMux.HandleFunc("GET /api/v1/series/{ref}/aliases", s.handleAliasesList)
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/aliases", s.handleAliasesAdd)
+	apiMux.HandleFunc("DELETE /api/v1/series/{ref}/aliases", s.handleAliasesRemove)
 
 	// reconcile sync
-	mux.HandleFunc("POST /api/v1/series/{ref}/reconcile/plan", s.handleReconcilePlan)
-	mux.HandleFunc("POST /api/v1/series/{ref}/reconcile/recover", requireOperator(s.handleReconcileRecover))
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/plan", s.handleReconcilePlan)
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/recover", requireOperator(s.handleReconcileRecover))
 
 	// async mutations (job-shaped)
-	mux.HandleFunc("POST /api/v1/series/{ref}/scan", s.handleScan)
-	mux.HandleFunc("POST /api/v1/series/{ref}/stage", s.handleStage)
-	mux.HandleFunc("POST /api/v1/series/{ref}/reconcile/apply", s.handleApply)
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/scan", s.handleScan)
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/stage", s.handleStage)
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/apply", s.handleApply)
 
 	// trash mutations (operator-only)
-	mux.HandleFunc("POST /api/v1/series/{ref}/trash/{ulid}/restore", requireOperator(s.handleTrashRestore))
-	mux.HandleFunc("DELETE /api/v1/series/{ref}/trash", requireOperator(s.handleTrashEmptySeries))
-	mux.HandleFunc("DELETE /api/v1/trash", requireOperator(s.handleTrashEmptyAll))
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/trash/{ulid}/restore", requireOperator(s.handleTrashRestore))
+	apiMux.HandleFunc("DELETE /api/v1/series/{ref}/trash", requireOperator(s.handleTrashEmptySeries))
+	apiMux.HandleFunc("DELETE /api/v1/trash", requireOperator(s.handleTrashEmptyAll))
 
 	// library
-	mux.HandleFunc("POST /api/v1/library/reindex", requireOperator(s.handleReindex))
+	apiMux.HandleFunc("POST /api/v1/library/reindex", requireOperator(s.handleReindex))
 
 	// trash
-	mux.HandleFunc("GET /api/v1/series/{ref}/trash", s.handleTrashListSeries)
-	mux.HandleFunc("GET /api/v1/trash", s.handleTrashListAll)
+	apiMux.HandleFunc("GET /api/v1/series/{ref}/trash", s.handleTrashListSeries)
+	apiMux.HandleFunc("GET /api/v1/trash", s.handleTrashListAll)
 
 	// inbox
-	mux.HandleFunc("GET /api/v1/inbox", s.handleInboxList)
+	apiMux.HandleFunc("GET /api/v1/inbox", s.handleInboxList)
 
 	// jobs
-	mux.HandleFunc("GET /api/v1/jobs/{job}", s.handleJobStatus)
-	mux.HandleFunc("GET /api/v1/jobs/{job}/stream", s.handleJobStream)
+	apiMux.HandleFunc("GET /api/v1/jobs/{job}", s.handleJobStatus)
+	apiMux.HandleFunc("GET /api/v1/jobs/{job}/stream", s.handleJobStream)
 
-	return s.applyMiddleware(mux)
+	apiHandler := bearerAuthMiddleware(s.deps.BearerToken)(apiMux)
+
+	rootMux := http.NewServeMux()
+	rootMux.Handle("/api/", apiHandler)
+	rootMux.Handle("/", webui.Handler())
+
+	return s.applyMiddleware(rootMux)
 }
 
 // handleRemoveDispatch routes DELETE /series/{ref}: ?purge=1 invokes
@@ -78,9 +105,12 @@ func (s *Server) handleRemoveDispatch(w http.ResponseWriter, r *http.Request) {
 	s.handleRemove(w, r)
 }
 
+// applyMiddleware wraps rootMux with cross-cutting middleware that
+// observes every request, web UI included. The bearer-auth gate is
+// not in this chain; it lives inside the rootMux dispatch so it only
+// applies to /api/* paths.
 func (s *Server) applyMiddleware(next http.Handler) http.Handler {
 	h := next
-	h = bearerAuthMiddleware(s.deps.BearerToken)(h)
 	h = recoverMiddleware(s.deps.Logger)(h)
 	h = corsMiddleware(s.deps.AllowedOrigins)(h)
 	h = versionMiddleware()(h)
