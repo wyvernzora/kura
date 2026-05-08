@@ -50,8 +50,19 @@ type ListRow struct {
 	MetadataRef       refs.Metadata `json:"metadataRef,omitempty"`
 	Resolutions       []string      `json:"resolutions,omitempty"`
 	Sources           []string      `json:"sources,omitempty"`
-	LastScanned       string        `json:"lastScanned,omitempty"`
-	Error             string        `json:"error,omitempty"`
+	// Series-level poster artwork URLs lifted from series.json. Empty
+	// strings when the metadata provider had no poster for the series
+	// or the row predates poster surfacing — clients should fall back
+	// to a placeholder when both are empty.
+	PosterURL          string `json:"posterUrl,omitempty"`
+	PosterThumbnailURL string `json:"posterThumbnailUrl,omitempty"`
+	LastScanned        string `json:"lastScanned,omitempty"`
+	// SearchKey is the per-row folded search blob the client feeds
+	// into local fuzzy search. Server-side data only — never displayed.
+	// Empty when no candidate produces a token (rare; typically a
+	// JP-only library that never ran a v3-aware scan).
+	SearchKey string `json:"searchKey,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 // ListResult is the full library-list response. Rows are sorted by

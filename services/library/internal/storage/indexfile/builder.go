@@ -2,6 +2,7 @@ package indexfile
 
 import (
 	"errors"
+	"os"
 	"sort"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
@@ -23,7 +25,13 @@ type RowBuilder func(libRoot string, ref refs.Series, now time.Time) (Row, error
 //
 //   - series.json present and parseable: Row reflects the model
 //     (counts, quality rollups, lastScanned).
-//   - series.json absent: Row{Status: untracked, Title: ref}.
+//   - .kura/ directory absent: Row{Status: untracked, Title: ref}.
+//     The directory has never been a tracked series.
+//   - .kura/ directory present but series.json missing: Row{Status:
+//     error, Error: ...}. Genuine "lost the file" condition (transient
+//     I/O on a network volume, partial crash mid-write, hand deletion).
+//     Surfacing as untracked here would silently drop the metadataRef
+//     from the index, hiding the corruption.
 //   - series.json present but unreadable / malformed: Row{Status: error,
 //     Error: msg, Title: ref}. The error is captured in the row, not
 //     returned, so a single broken series doesn't fail the whole walk.
@@ -44,6 +52,29 @@ func BuildRow(libRoot string, ref refs.Series, now time.Time) (Row, error) {
 		}, nil
 	}
 	if !exists {
+		// Distinguish "this is an untracked media folder" from "we
+		// lost the metadata file". `.kura/` presence is the signal:
+		// it only exists when a series was tracked at some point.
+		kuraDir := paths.SeriesKuraDir(libRoot, ref)
+		info, statErr := os.Stat(kuraDir)
+		if statErr == nil && info.IsDir() {
+			return Row{
+				Series:    ref,
+				Title:     ref.String(),
+				Status:    response.ListStatusError,
+				Error:     "series.json missing from .kura/ — file disappeared under index walk",
+				UpdatedAt: now.UTC().Format(time.RFC3339),
+			}, nil
+		}
+		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
+			return Row{
+				Series:    ref,
+				Title:     ref.String(),
+				Status:    response.ListStatusError,
+				Error:     statErr.Error(),
+				UpdatedAt: now.UTC().Format(time.RFC3339),
+			}, nil
+		}
 		return Row{
 			Series:    ref,
 			Title:     ref.String(),
@@ -89,6 +120,11 @@ func BuildRowFromModel(model *series.Series, now time.Time) Row {
 	row.Staged = summary.hasStaged
 	row.Status = listStatusFor(summary)
 	row.Resolutions, row.Sources = collectActiveQuality(model)
+	if !model.Artwork.Poster.IsZero() {
+		row.PosterURL = model.Artwork.Poster.URL
+		row.PosterThumbnailURL = model.Artwork.Poster.ThumbnailURL
+	}
+	row.SearchKey = model.SearchKey
 	return row
 }
 

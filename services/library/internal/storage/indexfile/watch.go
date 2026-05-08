@@ -41,6 +41,12 @@ type WatchConfig struct {
 	// Catches drift between index.jsonl and per-series state.
 	// Builder must be non-nil if this is > 0.
 	RebuildInterval time.Duration
+	// LibRootDebounce delays a probe-detected libRoot mtime change
+	// before firing a full rebuild. A burst of mtime bumps within
+	// the debounce window is coalesced into a single rebuild after
+	// the storm settles. 0 fires the rebuild on the first detected
+	// change (legacy behaviour).
+	LibRootDebounce time.Duration
 
 	// Builder is the row builder used by the rebuild loop and the
 	// libRoot-trigger rebuild. Required if RebuildInterval > 0 or
@@ -65,6 +71,7 @@ func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
 	}
 	i.log = cfg.Logger
 	i.builder = cfg.Builder
+	i.libRootDebounce = cfg.LibRootDebounce
 
 	// Seed the index baseline so the first probe tick doesn't falsely fire.
 	// On schema-mismatched bytes we still seed (so the probe doesn't re-fire
@@ -136,7 +143,7 @@ func (i *Index) probeOnce(ctx context.Context) {
 			i.cachedLibRootMTime = libStat.ModTime()
 			i.mu.Unlock()
 			if i.builder != nil {
-				i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("rebuild_libroot"))
+				i.scheduleLibRootRebuild(ctx)
 			}
 			return
 		}
@@ -173,6 +180,32 @@ func (i *Index) probeOnce(ctx context.Context) {
 	if err := i.fullRefresh(); err != nil {
 		i.handleRefreshError(ctx, "probe refresh", err)
 	}
+}
+
+// scheduleLibRootRebuild fires a rebuild after the configured
+// debounce of quiet libRoot mtime activity. Each call resets a
+// pending timer; a burst of mtime bumps coalesces into one rebuild
+// after the storm settles. Debounce 0 fires the rebuild inline.
+func (i *Index) scheduleLibRootRebuild(ctx context.Context) {
+	if i.libRootDebounce <= 0 {
+		i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("rebuild_libroot"))
+		return
+	}
+	i.mu.Lock()
+	if i.libRootRebuildTimer != nil {
+		i.libRootRebuildTimer.Stop()
+	}
+	i.libRootRebuildTimer = time.AfterFunc(i.libRootDebounce, func() {
+		// Re-check Rebuilding here too — the periodic rebuild loop
+		// may have started one between the timer scheduling and its
+		// fire. TriggerRebuild itself short-circuits when one's in
+		// flight, but this avoids the extra goroutine spawn.
+		if i.Rebuilding() {
+			return
+		}
+		i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("rebuild_libroot"))
+	})
+	i.mu.Unlock()
 }
 
 func (i *Index) refreshLoop(ctx context.Context, interval time.Duration) {

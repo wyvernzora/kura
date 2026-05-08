@@ -126,19 +126,22 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 
 func rowToListRow(row indexfile.Row) response.ListRow {
 	return response.ListRow{
-		Status:            row.Status,
-		Staged:            row.Staged,
-		Title:             row.Title,
-		CanonicalTitle:    row.CanonicalTitle,
-		SeasonsAvailable:  row.SeasonsAvailable,
-		SeasonCount:       row.SeasonCount,
-		EpisodesAvailable: row.EpisodesAvailable,
-		EpisodeCount:      row.EpisodeCount,
-		MetadataRef:       row.Metadata,
-		Resolutions:       row.Resolutions,
-		Sources:           row.Sources,
-		LastScanned:       row.LastScanned,
-		Error:             row.Error,
+		Status:             row.Status,
+		Staged:             row.Staged,
+		Title:              row.Title,
+		CanonicalTitle:     row.CanonicalTitle,
+		SeasonsAvailable:   row.SeasonsAvailable,
+		SeasonCount:        row.SeasonCount,
+		EpisodesAvailable:  row.EpisodesAvailable,
+		EpisodeCount:       row.EpisodeCount,
+		MetadataRef:        row.Metadata,
+		Resolutions:        row.Resolutions,
+		Sources:            row.Sources,
+		PosterURL:          row.PosterURL,
+		PosterThumbnailURL: row.PosterThumbnailURL,
+		LastScanned:        row.LastScanned,
+		SearchKey:          row.SearchKey,
+		Error:              row.Error,
 	}
 }
 
