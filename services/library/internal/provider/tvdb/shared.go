@@ -29,9 +29,12 @@ type translations struct {
 }
 
 type translation struct {
-	Language string `json:"language"`
-	Name     string `json:"name"`
-	Title    string `json:"title"`
+	Language  string   `json:"language"`
+	Name      string   `json:"name"`
+	Title     string   `json:"title"`
+	Aliases   []string `json:"aliases"`
+	IsPrimary bool     `json:"isPrimary"`
+	IsAlias   bool     `json:"isAlias"`
 }
 
 type remoteID struct {

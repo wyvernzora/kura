@@ -105,10 +105,10 @@ func newTestServer(t *testing.T, override func(http.ResponseWriter, *http.Reques
 				},
 				"translations": map[string]any{
 					"nameTranslations": []map[string]any{
-						{"language": "jpn", "name": "本好きの下剋上", "aliases": []string{"非公式別名"}},
-						{"language": "eng", "name": "Official English Title"},
-						{"language": "eng", "name": "English Alias"},
-						{"language": "jpn", "name": "非公式別名"},
+						{"language": "jpn", "name": "本好きの下剋上", "aliases": []string{"非公式別名"}, "isPrimary": true},
+						{"language": "eng", "name": "Official English Title", "isPrimary": true},
+						{"language": "eng", "name": "English Alias", "isAlias": true},
+						{"language": "jpn", "name": "非公式別名", "isAlias": true},
 						{"language": "", "name": "jpn"},
 					},
 				},

@@ -3,6 +3,7 @@ package tvdb
 import (
 	"context"
 	"net/url"
+	"strings"
 
 	"github.com/wyvernzora/kura/internal/provider"
 )
@@ -16,6 +17,7 @@ type seriesExtendedRecord struct {
 	ID                   int             `json:"id"`
 	Name                 string          `json:"name"`
 	Slug                 string          `json:"slug"`
+	Aliases              []aliasRecord   `json:"aliases"`
 	Translations         translations    `json:"translations"`
 	FirstAired           string          `json:"firstAired"`
 	LastAired            string          `json:"lastAired"`
@@ -28,6 +30,14 @@ type seriesExtendedRecord struct {
 	Seasons              []seasonRecord  `json:"seasons"`
 	OverviewTranslations []string        `json:"overviewTranslations"`
 	Artworks             []artworkRecord `json:"artworks"`
+}
+
+// aliasRecord is one entry of the TVDB v4 series-extended `aliases`
+// array. Each alias carries its own language tag; entries with empty
+// `Language` are kept as language-less to mirror the upstream schema.
+type aliasRecord struct {
+	Language string `json:"language"`
+	Name     string `json:"name"`
 }
 
 // artworkRecord is one image entry in the series.artworks array.
@@ -73,11 +83,69 @@ func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episo
 			genres:           normalizeGenres(record.Genres),
 			titles:           seriesTitleCandidates(record),
 		}),
-		LastAired: normalizeDate(record.LastAired),
-		Seasons:   seasons,
-		Poster:    p.selectPoster(record.Artworks),
+		LastAired:        normalizeDate(record.LastAired),
+		Seasons:          seasons,
+		TranslatedTitles: seriesExtendedTranslatedTitles(record),
+		Aliases:          seriesExtendedAliases(record),
+		Poster:           p.selectPoster(record.Artworks),
 	}
 	return series
+}
+
+// seriesExtendedTranslatedTitles flattens TVDB's `translations.nameTranslations`
+// into a language-tagged list. Entries flagged `isAlias` are dropped
+// (TVDB conflates aliases and real translations in the same array).
+// Each entry's language tag is normalized to BCP-47 base form
+// (`jpn` → `ja`). Empty values are dropped.
+func seriesExtendedTranslatedTitles(record seriesExtendedRecord) []provider.TitleEntry {
+	out := make([]provider.TitleEntry, 0, len(record.Translations.NameTranslations))
+	for _, translation := range record.Translations.NameTranslations {
+		if translation.IsAlias {
+			continue
+		}
+		value := strings.TrimSpace(firstNonEmpty(translation.Name, translation.Title))
+		if value == "" {
+			continue
+		}
+		out = append(out, provider.TitleEntry{
+			Language: normalizeLanguage(translation.Language),
+			Value:    value,
+		})
+	}
+	return out
+}
+
+// seriesExtendedAliases flattens TVDB's series-level alias list +
+// per-translation alias arrays into a single language-tagged list.
+// Top-level aliases tag with the alias record's own `Language` (often
+// empty in TVDB's response); per-translation aliases inherit the
+// translation's language. Empty values are dropped.
+func seriesExtendedAliases(record seriesExtendedRecord) []provider.TitleEntry {
+	out := make([]provider.TitleEntry, 0, len(record.Aliases))
+	for _, alias := range record.Aliases {
+		value := strings.TrimSpace(alias.Name)
+		if value == "" {
+			continue
+		}
+		out = append(out, provider.TitleEntry{
+			Language: normalizeLanguage(alias.Language),
+			Value:    value,
+		})
+	}
+	for _, translation := range record.Translations.NameTranslations {
+		lang := normalizeLanguage(translation.Language)
+		for _, alias := range translation.Aliases {
+			value := strings.TrimSpace(alias)
+			if value == "" {
+				continue
+			}
+			out = append(out, provider.TitleEntry{
+				Language: lang,
+				Value:    value,
+			})
+		}
+	}
+	return out
 }
 
 // selectPoster picks one poster from the artwork list using the
@@ -140,19 +208,34 @@ func artworkToProvider(a artworkRecord) provider.Artwork {
 	}
 }
 
+// seriesTitleCandidates filters TVDB's `nameTranslations` into the
+// per-language preferred-title pool. TVDB conflates real translations
+// and aliases in the same array; entries flagged `isAlias` are dropped,
+// and `isPrimary` entries are emitted first so `selectTitle`'s
+// first-per-language pick lands on the canonical translation, not a
+// transliteration alias that happens to precede it in the response.
 func seriesTitleCandidates(record seriesExtendedRecord) []titleCandidate {
-	titles := make([]titleCandidate, 0, len(record.Translations.NameTranslations))
+	primary := make([]titleCandidate, 0, len(record.Translations.NameTranslations))
+	secondary := make([]titleCandidate, 0, len(record.Translations.NameTranslations))
 	for _, translation := range record.Translations.NameTranslations {
+		if translation.IsAlias {
+			continue
+		}
 		value := firstNonEmpty(translation.Name, translation.Title)
 		if value == "" {
 			continue
 		}
-		titles = append(titles, titleCandidate{
+		candidate := titleCandidate{
 			Language: translation.Language,
 			Value:    value,
-		})
+		}
+		if translation.IsPrimary {
+			primary = append(primary, candidate)
+		} else {
+			secondary = append(secondary, candidate)
+		}
 	}
-	return titles
+	return append(primary, secondary...)
 }
 
 func normalizeGenres(genres []genreRecord) []string {

@@ -102,11 +102,33 @@ type Series struct {
 	LastAired string
 	Seasons   []Season
 
+	// TranslatedTitles is every per-language title the source shipped
+	// for this series. Language is normalized to BCP-47 base form
+	// (e.g. "ja", "en"); empty Language is permitted for entries
+	// without a tag. Used by kura to compose its searchKey fold and
+	// is intentionally not surfaced on read APIs.
+	TranslatedTitles []TitleEntry
+
+	// Aliases is the source-provided alternate-title list. Same
+	// language normalization as TranslatedTitles; empty Language
+	// permitted. Like TranslatedTitles, fed into searchKey only —
+	// never returned on the wire.
+	Aliases []TitleEntry
+
 	// Poster is the selected series-level artwork URL. URL-only;
 	// kura does not cache image bytes locally. Empty when no poster
 	// matches the caller's preferred-language preference and no
 	// fallback artwork is available.
 	Poster Artwork
+}
+
+// TitleEntry pairs a title string with its language tag. Language is
+// BCP-47 base form (e.g. "ja", "en", "zh-Hans"); empty for entries
+// the source carries without a language hint (typical for top-level
+// alias lists).
+type TitleEntry struct {
+	Language string
+	Value    string
 }
 
 // Artwork is a URL-only reference to provider-hosted imagery.

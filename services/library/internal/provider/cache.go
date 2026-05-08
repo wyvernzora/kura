@@ -146,6 +146,17 @@ func cloneSeries(in Series) Series {
 	out := in
 	out.SeriesSummary = cloneSeriesSummary(in.SeriesSummary)
 	out.Seasons = cloneSeasons(in.Seasons)
+	out.TranslatedTitles = cloneTitleEntries(in.TranslatedTitles)
+	out.Aliases = cloneTitleEntries(in.Aliases)
+	return out
+}
+
+func cloneTitleEntries(in []TitleEntry) []TitleEntry {
+	if in == nil {
+		return nil
+	}
+	out := make([]TitleEntry, len(in))
+	copy(out, in)
 	return out
 }
 
