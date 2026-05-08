@@ -50,6 +50,13 @@ func (c *Client) StreamJob(ctx context.Context, jobID string, onEvent func(JobEv
 	if c.Operator {
 		req.Header.Set(headerOperator, "1")
 	}
+	// Bearer must ride alongside the SSE upgrade — `Do` sets it on
+	// the JSON path; this handler is hand-rolled and previously
+	// dropped the header, leading to 401s on every async-job follow-
+	// up (scan, stage, reconcile apply).
+	if c.BearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.BearerToken)
+	}
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return discoveryHint(err, c.BaseURL)
