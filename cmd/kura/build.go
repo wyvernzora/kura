@@ -75,15 +75,20 @@ func buildDepsAsyncIndex(rt *runContext) (workflow.Deps, error) {
 	// die with the process; no Shutdown needed. Reaper / retention
 	// disabled — invocation is short-lived, nothing accumulates.
 	registry := jobs.NewRegistry(rt.Context, jobs.Config{}, nil)
+	prefs, err := config.ParsePreferredLanguages(rt.Getenv("KURA_PREFERRED_LANGUAGES"))
+	if err != nil {
+		return workflow.Deps{}, err
+	}
 	return workflow.Deps{
-		LibRoot:     libRoot,
-		Index:       index,
-		Coordinator: coordImpl,
-		HostName:    hostName,
-		Provider:    provider,
-		Inspector:   inspector,
-		Now:         time.Now,
-		Jobs:        registry,
+		LibRoot:            libRoot,
+		Index:              index,
+		Coordinator:        coordImpl,
+		HostName:           hostName,
+		Provider:           provider,
+		Inspector:          inspector,
+		Now:                time.Now,
+		Jobs:               registry,
+		PreferredLanguages: prefs.Tags(),
 	}, nil
 }
 

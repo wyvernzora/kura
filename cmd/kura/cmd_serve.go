@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -123,6 +125,17 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 		"transports", serverTransports(cmd),
 	)
 
+	// Print a clickable bootstrap URL for the web UI. Pre-fills the
+	// bearer via ?token=... — the SPA consumes the param on first
+	// load, persists into sessionStorage, and scrubs the token from
+	// the URL via history.replaceState so it doesn't survive into
+	// browser history. Skipped when --rest isn't enabled.
+	if cmd.REST != "" {
+		if uiURL := uiBootstrapURL(cmd.REST, tokenResult.Token); uiURL != "" {
+			logger.Info("kura web UI ready", "url", uiURL)
+		}
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
 	if cmd.MCPStdio {
 		g.Go(func() error { return mcpserver.ServeStdio(gctx, server) })
@@ -186,6 +199,28 @@ func logTokenStatus(logger *slog.Logger, r auth.Result) {
 	}
 }
 
+// uiBootstrapURL builds a click-to-open URL for the embedded web
+// UI. Loopback bind addresses (`:port`, `0.0.0.0:port`, `[::]:port`)
+// resolve to `127.0.0.1` so the link works from the host that ran
+// `kura serve`; explicit hosts pass through unchanged. The bearer
+// token, if present, is appended as `?token=...` and URL-encoded.
+//
+// Returns "" if `restAddr` doesn't parse — caller skips the log.
+func uiBootstrapURL(restAddr, token string) string {
+	host, port, err := net.SplitHostPort(restAddr)
+	if err != nil {
+		return ""
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	base := "http://" + net.JoinHostPort(host, port) + "/"
+	if token == "" {
+		return base
+	}
+	return base + "?token=" + url.QueryEscape(token)
+}
+
 // serverTransports returns the transport names enabled by the CLI
 // flags, for inclusion in the boot log.
 func serverTransports(cmd *serveCmd) []string {
@@ -246,6 +281,7 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 		ProbeInterval:   envDuration(rt.Getenv, "KURA_INDEX_PROBE_INTERVAL", 2*time.Second),
 		RefreshInterval: envDuration(rt.Getenv, "KURA_INDEX_REFRESH_INTERVAL", 5*time.Minute),
 		RebuildInterval: envDuration(rt.Getenv, "KURA_INDEX_REBUILD_INTERVAL", time.Hour),
+		LibRootDebounce: envDuration(rt.Getenv, "KURA_INDEX_LIBROOT_DEBOUNCE", 3*time.Second),
 		Builder:         indexfile.BuildRow,
 		Logger:          logger,
 	}
