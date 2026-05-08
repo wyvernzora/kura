@@ -49,9 +49,15 @@ func BearerMiddleware(token string) func(http.Handler) http.Handler {
 // writeUnauthorized emits the kura-shaped 401 envelope. Mirrors the
 // REST error encoder so MCP-HTTP and REST 401s look identical to
 // clients.
+//
+// The WWW-Authenticate header gives well-behaved clients the standard
+// "this endpoint expects bearer auth" signal and lets browsers / web
+// UIs distinguish a kura 401 from a proxy 401 without parsing the
+// JSON body.
 func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("WWW-Authenticate", `Bearer realm="kura"`)
 	w.WriteHeader(http.StatusUnauthorized)
 	_ = json.NewEncoder(w).Encode(struct {
 		Kind     string `json:"kind"`
