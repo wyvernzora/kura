@@ -22,26 +22,30 @@ import (
 
 // Runner bundles the dependencies a single scan needs.
 type Runner struct {
-	root      string
-	ref       refs.Series
-	source    provider.Source
-	inspector media.Inspector
-	now       func() time.Time
-	logger    *slog.Logger
+	root               string
+	ref                refs.Series
+	source             provider.Source
+	inspector          media.Inspector
+	now                func() time.Time
+	logger             *slog.Logger
+	preferredLanguages []string
 }
 
 // NewRunner returns a Runner ready to Scan one series. logger is
 // optional (pass nil to discard); when non-nil, scan emits skip
 // events at WARN level so operators can grep server logs to find
-// series with problems.
-func NewRunner(root string, ref refs.Series, source provider.Source, inspector media.Inspector, now func() time.Time, logger *slog.Logger) Runner {
+// series with problems. preferredLanguages is the user's
+// KURA_PREFERRED_LANGUAGES list (BCP-47 base form) — fed into the
+// searchKey fold each scan; empty disables the translation channel.
+func NewRunner(root string, ref refs.Series, source provider.Source, inspector media.Inspector, now func() time.Time, logger *slog.Logger, preferredLanguages []string) Runner {
 	return Runner{
-		root:      root,
-		ref:       ref,
-		source:    source,
-		inspector: inspector,
-		now:       now,
-		logger:    logger,
+		root:               root,
+		ref:                ref,
+		source:             source,
+		inspector:          inspector,
+		now:                now,
+		logger:             logger,
+		preferredLanguages: preferredLanguages,
 	}
 }
 
@@ -92,6 +96,19 @@ func (s *scanner) run(ctx context.Context) (err error) {
 	if err = s.refreshMetadata(ctx); err != nil {
 		return err
 	}
+	if s.input.MetadataOnly {
+		// Skip filesystem walk + mediainfo. Persist whatever the
+		// metadata refresh produced (spine + artwork + searchKey),
+		// stamp lastScanned, save. Active records carry forward
+		// untouched.
+		s.model.LastScanned = s.now().UTC()
+		s.model.Ref = s.ref
+		if err = seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
+			return err
+		}
+		progress.Success(ctx, "scan", fmt.Sprintf("Refreshed metadata for %s", s.ref), 0)
+		return nil
+	}
 	progress.Update(ctx, "scan", fmt.Sprintf("Discovering files in %s", s.ref), 1, 0)
 	discovered, skipped, err := DiscoverSeriesEpisodes(s.seriesDir)
 	if err != nil {
@@ -141,6 +158,14 @@ func (s *scanner) refreshMetadata(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Every field below is provider-derived. Refresh on every scan so
+	// upstream edits (canonical retitle, new translation added,
+	// artwork swapped, alias added, spine re-numbered) flow into kura
+	// without a manual import --force. Operator-level overrides live
+	// outside provider data (UserAliases — persisted separately and
+	// preserved across rescans).
+	s.model.PreferredTitle = metadataSeries.PreferredTitle
+	s.model.CanonicalTitle = metadataSeries.CanonicalTitle
 	spine, err := spineFromMetadata(metadataSeries.Seasons)
 	if err != nil {
 		return err
@@ -153,6 +178,10 @@ func (s *scanner) refreshMetadata(ctx context.Context) error {
 			Language:     metadataSeries.Poster.Language,
 		},
 	}
+	// Provider-fresh aliases + translated titles are transient: fold
+	// them into searchKey here, never persist. Next scan refreshes
+	// both. UserAliases (persisted) carry forward across scans.
+	s.model.RecomputeSearchKey(s.preferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	known := make(map[refs.Episode]struct{}, len(spine))
 	for _, entry := range spine {
 		known[entry.Ref] = struct{}{}
