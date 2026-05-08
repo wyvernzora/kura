@@ -11,6 +11,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
+
 	"github.com/wyvernzora/kura/internal/cli/client"
 	"github.com/wyvernzora/kura/internal/cli/render"
 	"github.com/wyvernzora/kura/internal/cli/stdio"
@@ -106,29 +109,32 @@ func (cmd *scanCmd) runAll(rt *runContext, c *client.Client, ordering string) er
 		Ordering:     ordering,
 	}
 
-	jobs := make(chan string, len(refs))
-	for _, ref := range refs {
-		jobs <- ref
-	}
-	close(jobs)
-
 	io := stdio.From(rt.Context)
 	tty := io.OutIsTTY
 	tracker := newScanProgress(int64(len(refs)), tty, rt.Stdout, rt.Stderr)
 	tracker.start()
 	defer tracker.stop()
 
-	var wg sync.WaitGroup
-	for range workers {
-		wg.Go(func() {
-			for ref := range jobs {
-				tracker.startOne(ref)
-				err := cmd.scanOne(rt, c, ref, req)
-				tracker.finishOne(ref, err)
-			}
+	// errgroup carries gctx so a user Ctrl-C stops dispatching further
+	// refs at the next Acquire; in-flight scans cancel via rt.Context
+	// inside scanOne. Per-ref errors are owned by the tracker (FAIL
+	// lines printed above the live status), so goroutines return nil
+	// and we ignore g.Wait()'s error.
+	g, gctx := errgroup.WithContext(rt.Context)
+	sem := semaphore.NewWeighted(int64(workers))
+	for _, ref := range refs {
+		if err := sem.Acquire(gctx, 1); err != nil {
+			break
+		}
+		g.Go(func() error {
+			defer sem.Release(1)
+			tracker.startOne(ref)
+			err := cmd.scanOne(rt, c, ref, req)
+			tracker.finishOne(ref, err)
+			return nil
 		})
 	}
-	wg.Wait()
+	_ = g.Wait()
 
 	ok, failed := tracker.totals()
 	tracker.stop()
