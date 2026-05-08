@@ -16,6 +16,7 @@ type cli struct {
 	TVDBBaseURL string `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
 
 	Add       addCmd       `cmd:"" help:"Add a brand new series to the library."`
+	Alias     aliasCmd     `cmd:"" help:"Manage user-coined search aliases for a series."`
 	Import    importCmd    `cmd:"" help:"Import an existing directory as a tracked series."`
 	Inbox     inboxCmd     `cmd:"" help:"Inspect the inbox where new media drops before staging."`
 	List      listCmd      `cmd:"" help:"List library contents."`
