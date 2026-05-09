@@ -17,13 +17,17 @@ export const EPISODE_STATUS_LABEL: Record<EpisodeStatus, string> = {
  * Status dot color, expressed as a Tailwind utility against the
  * existing kura status palette so light/dark theming flips for free.
  *
- * `staged` and `staged_replacement` reuse the airing color (blue) —
- * they're the "in motion" states alongside currently-airing rows.
+ * Staged states keep the base color of the on-disk reality so the
+ * row reads at a glance: `staged` (no active record yet) shares the
+ * missing color, `staged_replacement` (active record about to be
+ * swapped) shares the present color. The pending-change signal is
+ * carried by the amber outer glow on the dot itself (StatusDot's
+ * `staged` prop), not by the base swatch.
  */
 export const EPISODE_STATUS_DOT_BG: Record<EpisodeStatus, string> = {
   present: 'bg-status-complete',
-  staged: 'bg-status-airing',
-  staged_replacement: 'bg-status-airing',
+  staged: 'bg-status-error',
+  staged_replacement: 'bg-status-complete',
   missing: 'bg-status-error',
   pending: 'bg-status-airing',
 };

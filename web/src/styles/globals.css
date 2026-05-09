@@ -160,6 +160,36 @@ input[type="search"]::-webkit-search-decoration {
 }
 
 /*
+ * Pending-staged-change indicator. Worn by StatusDot when an episode
+ * has a queued staged record awaiting reconcile. The base dot color
+ * still reflects on-disk reality (present=green, missing=red, etc.);
+ * this layer is an amber halo that pulses outward so the row reads as
+ * "live state + change pending" rather than getting overloaded onto
+ * one swatch. ~1.6 s loop is slow enough to be background ambience,
+ * fast enough to feel like motion.
+ */
+.kura-staged-dot {
+  animation: kura-staged-glow 1.6s ease-out infinite;
+}
+@keyframes kura-staged-glow {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-status-incomplete) 70%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-status-incomplete) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-status-incomplete) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kura-staged-dot {
+    animation: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-status-incomplete) 60%, transparent);
+  }
+}
+
+/*
  * Material Symbols Outlined — recipe from
  * https://fonts.google.com/icons (the documented one-liner).
  * 'liga' enables the ligature-driven glyph lookup so writing the
