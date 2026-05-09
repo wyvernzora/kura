@@ -120,6 +120,14 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 			if err != nil {
 				return err
 			}
+			// Per-bucket failures are collected and joined at the end
+			// of the series. Earlier code aborted at the first failed
+			// bucket which masked how many buckets were affected and
+			// stranded the rest of the trash for that series until a
+			// subsequent retry. The joined error preserves every
+			// bucket's wrapped cause for the slog Warn line and the
+			// CLI Failures envelope.
+			var bucketErrs []error
 			for _, meta := range metas {
 				if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
 					continue
@@ -127,10 +135,14 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 				attempts++
 				bytes, err := trashfile.Delete(deps.LibRoot, ref, meta.ID)
 				if err != nil {
-					return fmt.Errorf("workflow: trash empty %s/%s: %w", ref, meta.ID, err)
+					bucketErrs = append(bucketErrs, fmt.Errorf("workflow: trash empty %s/%s: %w", ref, meta.ID, err))
+					continue
 				}
 				series.Removed = append(series.Removed, meta.ID.String())
 				series.ReclaimedBytes += bytes
+			}
+			if len(bucketErrs) > 0 {
+				return errors.Join(bucketErrs...)
 			}
 			return nil
 		})

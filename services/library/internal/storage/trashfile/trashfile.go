@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -118,10 +119,44 @@ func Delete(root string, ref refs.Series, id ulid.ULID) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := os.RemoveAll(dir); err != nil {
+	if err := removeAllWithRetry(dir); err != nil {
 		return 0, err
 	}
 	return bytes, nil
+}
+
+// removeAllWithRetry tolerates transient ENOTEMPTY / cached-dirent
+// inconsistency on FUSE / bind-mount filesystems (Docker virtiofs,
+// gRPC-FUSE, NFS). os.RemoveAll unlinks every child before rmdir-ing
+// the parent, but on those FS layers the parent rmdir can race
+// against still-propagating dirent metadata for a child that was
+// just unlinked. A short retry loop with linear backoff lets the FS
+// settle. Each attempt re-reads the directory and explicitly tries
+// to unlink every leftover entry so the next RemoveAll has a clean
+// directory to work with. ErrNotExist on re-list means the dir
+// resolved itself (or another caller cleaned up); treat as success.
+func removeAllWithRetry(dir string) error {
+	const attempts = 4
+	var last error
+	for i := 0; i < attempts; i++ {
+		err := os.RemoveAll(dir)
+		if err == nil {
+			return nil
+		}
+		last = err
+		entries, readErr := os.ReadDir(dir)
+		if errors.Is(readErr, os.ErrNotExist) {
+			return nil
+		}
+		if readErr != nil {
+			return last
+		}
+		for _, e := range entries {
+			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+		time.Sleep(time.Duration(i+1) * 25 * time.Millisecond)
+	}
+	return last
 }
 
 // dirSize sums the file sizes immediately inside dir. Trash entries are
