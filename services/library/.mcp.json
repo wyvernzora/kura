@@ -1,14 +1,17 @@
 {
 	"mcpServers": {
-		"gopls": {
-			"command": "/usr/bin/env gopls",
-			"args": ["mcp"]
-		},
 		"kura": {
 			"type": "http",
 			"url": "http://127.0.0.1:8081",
 			"headers": {
 				"Authorization": "Bearer ${KURA_TOKEN}"
+			}
+		},
+		"memory": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-memory"],
+			"env": {
+				"MEMORY_FILE_PATH": "${HOME}/.local/share/kura/memory.jsonl"
 			}
 		}
 	}
