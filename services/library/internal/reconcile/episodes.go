@@ -88,7 +88,7 @@ func planStagedEpisode(token string, seriesRef refs.Series, seriesDir string, ep
 	var steps []Step
 
 	intent := "add"
-	if ep.Active != nil && !pathsEquivalentNFC(ep.Active.Path, ep.Staged.Path) {
+	if ep.Active != nil && !mediaPathsEquivalent(seriesDir, *ep.Active, *ep.Staged) {
 		// Replace: trash the current active file (and companions)
 		// before the primary move drops the new file in place.
 		intent = "replace"
@@ -178,6 +178,38 @@ func pathsEquivalentNFC(a, b string) bool {
 		return true
 	}
 	return textnorm.NFC(a).String() == textnorm.NFC(b).String()
+}
+
+// mediaPathsEquivalent reports whether two media records refer to the
+// same on-disk file once active-side absolutization and staged-side
+// scheme prefixes are normalized away. Active.Path is absolute (post-
+// Load); Staged.Path carries an inbox: or series: scheme. Used by
+// the planner to detect in-place metadata-override stages where the
+// staged record points at the existing active file — those skip the
+// trash step and emit a noop / rename move only.
+func mediaPathsEquivalent(seriesDir string, active, staged media.Record) bool {
+	activeRel := active.Path
+	if filepath.IsAbs(activeRel) {
+		rel, err := filepath.Rel(seriesDir, activeRel)
+		if err != nil {
+			return false
+		}
+		activeRel = filepath.ToSlash(rel)
+	}
+	stagedRel := staged.Path
+	switch {
+	case strings.HasPrefix(stagedRel, string(selector.Inbox)+":"):
+		return false
+	case strings.HasPrefix(stagedRel, string(selector.Series)+":"):
+		stagedRel = strings.TrimPrefix(stagedRel, string(selector.Series)+":")
+	case filepath.IsAbs(stagedRel):
+		rel, err := filepath.Rel(seriesDir, stagedRel)
+		if err != nil {
+			return false
+		}
+		stagedRel = filepath.ToSlash(rel)
+	}
+	return pathsEquivalentNFC(activeRel, stagedRel)
 }
 
 // canonicalEpisodePath composes the canonical "Season N/<basename>"

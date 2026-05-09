@@ -147,6 +147,35 @@ func TestPlanEpisodes_StagedSamePathSelfRefreshSkipsTrash(t *testing.T) {
 	}
 }
 
+// In-place metadata override: Staged.Path is a series: selector
+// pointing at the same physical file as the absolute Active.Path. The
+// planner must treat them as the same file (skip trash) even though
+// the strings differ in scheme + form (relative vs absolute).
+func TestPlanEpisodes_StagedSeriesSelectorEqualsActive(t *testing.T) {
+	seriesRef, _ := refs.ParseSeries("Show")
+	e1 := mustEpisode(t, 1, 1)
+	model := &series.Series{
+		Episodes: map[refs.Episode]series.Episode{
+			e1: {
+				Active: &media.Record{Path: "/lib/Show/Season 1/keep.mkv", Source: media.ParseSource("Unknown")},
+				Staged: &media.Record{Path: "series:Season 1/keep.mkv", Source: media.ParseSource("BluRay")},
+			},
+		},
+	}
+	steps, err := planEpisodes(testToken, seriesRef, "/lib/Show", model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range steps {
+		if s.Owner.Kind == OwnerTrash {
+			t.Fatalf("in-place override emitted trash step: %+v", s)
+		}
+	}
+	if len(steps) != 1 || steps[0].Owner.EpisodeIntent != "add" {
+		t.Fatalf("steps = %+v, want 1 episode/add step", steps)
+	}
+}
+
 func TestPlanEpisodes_NFDActivePathTreatedAsCanonical(t *testing.T) {
 	// Filesystem stored basename in NFD form (SMB/AFP NAS, legacy
 	// HFS+). The series ref + episode marker + facts compose a

@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -263,6 +264,56 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 			out, _, err := b.run(s.Context(), "stage", "episode", "--json", "--replace", "--source", args[3], ref, args[1], selector)
 			if err != nil {
 				return nil, fmt.Errorf("kura_stage_replace_source: %w", err)
+			}
+			return staticOutput(out), nil
+		},
+	)
+
+	// ── kura_stage_series ─────────────────────────────────────────────────
+	// Stage an episode using a series: media selector pointing at a
+	// path inside the series root. Cross-slot stages work identically
+	// to inbox: stages otherwise (need --replace if the target slot
+	// already has an active record).
+	cmds["kura_stage_series"] = script.Command(
+		script.CmdUsage{Summary: "stage with series: media selector", Args: "<ref> <ep> <series_rel>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 3 {
+				return nil, fmt.Errorf("kura_stage_series: expected 3 args, got %d", len(args))
+			}
+			ref := s.ExpandEnv(args[0], false)
+			mediaSel := "series:" + filepath.ToSlash(args[2])
+			out, errOut, runErr := b.run(s.Context(), "stage", "episode", "--json", ref, args[1], mediaSel)
+			// Surface stderr through the WaitFunc even on failure so
+			// scenarios can match against the binary's error output
+			// (the script harness only sees stderr captured here, not
+			// content wrapped into the returned go error).
+			return func(s *script.State) (string, string, error) {
+				return compactIfJSON(out), errOut, runErr
+			}, nil
+		},
+	)
+
+	// ── kura_stage_inplace_source ─────────────────────────────────────────
+	// In-place metadata override: re-stage the active record's own file
+	// using a series: media selector + an explicit source override. Only
+	// valid when the episode already has an active record. Looks up the
+	// active.file from kura_show so scenarios don't have to compute the
+	// canonical filename.
+	cmds["kura_stage_inplace_source"] = script.Command(
+		script.CmdUsage{Summary: "in-place source override on active record", Args: "<ref> <ep> <source>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 3 {
+				return nil, fmt.Errorf("kura_stage_inplace_source: expected <ref> <ep> <source>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			activeFile, err := lookupActiveFile(s.Context(), b, ref, args[1])
+			if err != nil {
+				return nil, fmt.Errorf("kura_stage_inplace_source: %w", err)
+			}
+			mediaSel := "series:" + activeFile
+			out, _, runErr := b.run(s.Context(), "stage", "episode", "--json", "--replace", "--source", args[2], ref, args[1], mediaSel)
+			if runErr != nil {
+				return nil, fmt.Errorf("kura_stage_inplace_source: %w", runErr)
 			}
 			return staticOutput(out), nil
 		},
@@ -585,6 +636,38 @@ func resolveSeriesRefForFixture(b *e2eBinary, raw string) (string, error) {
 		return "", fmt.Errorf("fixture lookup %q: response missing ref", raw)
 	}
 	return doc.Ref, nil
+}
+
+// lookupActiveFile fetches kura_show for one episode and returns the
+// active.file (series-relative slash path). Errors when the episode
+// has no active record. Used by kura_stage_inplace_source to locate
+// the on-disk path the in-place override targets.
+func lookupActiveFile(ctx context.Context, b *e2eBinary, ref, episode string) (string, error) {
+	out, _, err := b.run(ctx, "show", "--json", "--episodes", episode, ref)
+	if err != nil {
+		return "", fmt.Errorf("show: %w", err)
+	}
+	var doc struct {
+		Seasons []struct {
+			Episodes []struct {
+				Episode string `json:"episode"`
+				Active  *struct {
+					File string `json:"file"`
+				} `json:"active"`
+			} `json:"episodes"`
+		} `json:"seasons"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		return "", fmt.Errorf("decode show: %w (out=%s)", err, out)
+	}
+	for _, season := range doc.Seasons {
+		for _, ep := range season.Episodes {
+			if ep.Active != nil && (ep.Episode == episode || strings.EqualFold(ep.Episode, episode)) {
+				return ep.Active.File, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("episode %q has no active record in show response", episode)
 }
 
 // staticOutput wraps a fixed stdout in a script.WaitFunc, compacting
