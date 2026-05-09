@@ -1,4 +1,4 @@
-import { Link, useRouterState } from '@tanstack/react-router';
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 
 import { GearMenu } from '@/components/GearMenu';
@@ -19,26 +19,31 @@ interface TopBarProps {
 }
 
 /**
- * Sticky top chrome. Logo (left) | search field (center) | theme +
- * gear (right). Three-column layout — search lives in a `flex: 1`
- * column so it stays visually centered regardless of the side
- * clusters' widths.
+ * Sticky top chrome. Logo (left) | search field (center) | gear
+ * (right). 3-column grid (`1fr / auto / 1fr`) so the search field is
+ * centered against the viewport instead of the leftover space — the
+ * back-to-library pill is wider than the kura logo, and a flex-based
+ * center would shift the field left when those side widths diverge.
  *
  * On detail routes (`/series/$ref`) the leading slot swaps the kura
- * logo for a "back to library" button; everything else stays put so
- * the chrome reads as the same surface across navigation.
+ * logo for a "back to library" button; everything else stays put.
  *
  * At scrollY === 0 the bar is invisible chrome (paper bg, no
  * shadow, no border). On scroll: paper-tinted translucent bg,
- * backdrop blur + saturation, soft drop shadow underneath. Drives
- * the "page peeks under the bar" effect.
+ * backdrop blur + saturation, soft drop shadow underneath.
+ *
+ * Search initiated from a non-home route navigates to `/` so the
+ * library grid renders the matches; the originating path is captured
+ * in the search store so `clear()` can return the user there.
  */
 export function TopBar({ className, forceScrolled }: TopBarProps) {
   const detected = useScrolled();
   const scrolled = forceScrolled ?? detected;
+  const navigate = useNavigate();
 
   const query = useSearch((s) => s.query);
   const setQuery = useSearch((s) => s.setQuery);
+  const setOrigin = useSearch((s) => s.setOrigin);
   const clear = useSearch((s) => s.clear);
 
   // Drive the leading slot off the route so callers don't have to
@@ -46,6 +51,37 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
   // a frozen value snapshot on each navigation; cheap to read.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onDetailRoute = pathname.startsWith('/series/');
+
+  function handleSearchChange(next: string) {
+    // Capture the origin only on the empty → non-empty transition
+    // while the user is somewhere other than home. Subsequent
+    // keystrokes leave `origin` alone.
+    if (next.length > 0 && query.length === 0 && pathname !== '/') {
+      setOrigin(pathname);
+      void navigate({ to: '/' });
+      setQuery(next);
+      return;
+    }
+    // Backspacing all the way to empty rewinds the same way the
+    // explicit × button does — `clear()` resets origin so this stays
+    // a one-shot session.
+    if (next.length === 0 && query.length > 0) {
+      rewindClear();
+      return;
+    }
+    setQuery(next);
+  }
+
+  function rewindClear() {
+    const origin = useSearch.getState().origin;
+    clear();
+    // Only rewind if the user is still on the search-results view
+    // (`/`). If they've already navigated forward into a result,
+    // emptying the input should just clear the query in place.
+    if (origin && pathname === '/') {
+      void navigate({ to: origin });
+    }
+  }
 
   return (
     <header
@@ -73,18 +109,16 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
         mark sits equidistant from the top and the left when the
         bar isn't constrained to a column.
       */}
-      <div className="mx-auto flex h-[72px] max-w-[1920px] items-center gap-3 px-[18px]">
-        {onDetailRoute ? <BackToLibrary /> : <Logo />}
-        <div className="flex min-w-0 flex-1 justify-center">
-          <SearchField
-            className="w-full max-w-[560px]"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onClear={clear}
-            placeholder="Search library — title, source, year…"
-          />
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
+      <div className="mx-auto grid h-[72px] max-w-[1920px] grid-cols-[1fr_minmax(0,560px)_1fr] items-center gap-3 px-[18px]">
+        <div className="justify-self-start">{onDetailRoute ? <BackToLibrary /> : <Logo />}</div>
+        <SearchField
+          className="w-full"
+          value={query}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          onClear={rewindClear}
+          placeholder="Search library — title, source, year…"
+        />
+        <div className="flex items-center justify-self-end gap-1.5">
           <GearMenu />
         </div>
       </div>
