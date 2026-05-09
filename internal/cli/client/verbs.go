@@ -50,11 +50,19 @@ func (c *Client) Library(ctx context.Context) (LibraryResponse, error) {
 	return out, err
 }
 
-// ListSeries calls GET /api/v1/series.
-func (c *Client) ListSeries(ctx context.Context, statuses []string, limit int, cursor string) (response.ListResult, error) {
+// ListSeries calls GET /api/v1/series. airing is nil for "no filter",
+// or a pointer for the airing-flag tri-state filter.
+func (c *Client) ListSeries(ctx context.Context, statuses []string, airing *bool, limit int, cursor string) (response.ListResult, error) {
 	q := url.Values{}
 	for _, s := range statuses {
 		q.Add("status", s)
+	}
+	if airing != nil {
+		if *airing {
+			q.Set("airing", "true")
+		} else {
+			q.Set("airing", "false")
+		}
 	}
 	if limit > 0 {
 		q.Set("limit", strconv.Itoa(limit))

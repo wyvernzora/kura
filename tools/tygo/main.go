@@ -24,7 +24,7 @@ type enumOverride struct {
 var enumOverrides = []enumOverride{
 	{
 		from: "export type ListStatus = string;",
-		to:   `export type ListStatus = "untracked" | "complete" | "incomplete" | "airing" | "error";`,
+		to:   `export type ListStatus = "untracked" | "complete" | "incomplete" | "error";`,
 	},
 	{
 		from: "export type Status = string;",

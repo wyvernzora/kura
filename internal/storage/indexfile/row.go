@@ -10,7 +10,13 @@ import (
 // Bump when row-computation rules change in a way that invalidates rebuilt
 // rows (e.g. specials start counting toward EpisodesAvailable). LoadCAS
 // surfaces a schema mismatch via ErrSchemaMismatch so callers force a rebuild.
-const SchemaVersion = 2
+//
+// v2 → v3: dropped ListStatusAiring; introduced row-level IsAiring flag.
+// IsAiring algorithm tweaks since v3 (e.g. cour-aware split) do not
+// change the wire shape — Row JSON is identical — so they don't bump
+// SchemaVersion. The next sweep / mutation rebuild picks up the new
+// computation; transiently-stale IsAiring values self-heal.
+const SchemaVersion = 3
 
 // Header is the JSONL header line. One per file, line 1. Empty libraries
 // have just the header.
@@ -37,7 +43,11 @@ type Row struct {
 	CanonicalTitle string `json:"canonicalTitle,omitempty"`
 
 	Status response.ListStatus `json:"status"`
-	Staged bool                `json:"staged,omitempty"`
+	// IsAiring is the observed-airing flag, independent of Status. See
+	// builder.go:summarizeSeries for the per-season rule. Recomputed at
+	// row-build time; index rebuilds carry it across.
+	IsAiring bool `json:"isAiring,omitempty"`
+	Staged   bool `json:"staged,omitempty"`
 
 	SeasonsAvailable  int `json:"seasonsAvailable,omitempty"`
 	SeasonCount       int `json:"seasonCount,omitempty"`

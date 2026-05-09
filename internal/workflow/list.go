@@ -24,7 +24,10 @@ import (
 //   - Cursor: empty for first page; otherwise an opaque token returned
 //     by the previous page's NextCursor.
 type ListInput struct {
-	Statuses   []response.ListStatus
+	Statuses []response.ListStatus
+	// Airing is a tri-state filter on Row.IsAiring. nil = no filter,
+	// non-nil = admit only rows whose IsAiring matches.
+	Airing     *bool
 	MaxResults int
 	Cursor     string
 	Now        time.Time
@@ -56,6 +59,7 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 	}
 
 	rows = applyStatusFilter(rows, in.Statuses)
+	rows = applyAiringFilter(rows, in.Airing)
 
 	pageSize, err := normalizePageSize(in.MaxResults)
 	if err != nil {
@@ -93,6 +97,22 @@ func applyStatusFilter(rows []indexfile.Row, statuses []response.ListStatus) []i
 	filtered := rows[:0]
 	for _, row := range rows {
 		if slices.Contains(statuses, row.Status) {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
+}
+
+// applyAiringFilter narrows rows by Row.IsAiring when airing is non-nil.
+// Nil passes rows through unchanged.
+func applyAiringFilter(rows []indexfile.Row, airing *bool) []indexfile.Row {
+	if airing == nil {
+		return rows
+	}
+	want := *airing
+	filtered := rows[:0]
+	for _, row := range rows {
+		if row.IsAiring == want {
 			filtered = append(filtered, row)
 		}
 	}
@@ -165,6 +185,7 @@ func nextListCursor(view []byte, page []indexfile.Row, pageSize, startAt, total 
 func rowToListRow(row indexfile.Row) response.ListRow {
 	return response.ListRow{
 		Status:             row.Status,
+		IsAiring:           row.IsAiring,
 		Staged:             row.Staged,
 		Title:              row.Title,
 		CanonicalTitle:     row.CanonicalTitle,

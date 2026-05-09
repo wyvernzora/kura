@@ -14,6 +14,19 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
+const (
+	// airingHorizonDays is the window a cour's first episode may sit
+	// in the future and still count as "airing now". One week.
+	airingHorizonDays = 7
+
+	// airingCourGapDays is the minimum gap between two consecutive
+	// air dates that splits a season into separate cours. Anime
+	// weekly cadence is 7d; a one-week skip is 14d; this leaves
+	// 30d as a safe split threshold that catches split-cour /
+	// production-break gaps without false-splitting normal cadence.
+	airingCourGapDays = 30
+)
+
 // RowBuilder produces a fully-populated Row for a given series ref. The
 // builder owns the policy for what a row looks like — counts, status,
 // quality rollups — and is shared between Rebuild (full disk walk),
@@ -119,6 +132,7 @@ func BuildRowFromModel(model *series.Series, now time.Time) Row {
 	row.EpisodeCount = summary.episodes
 	row.Staged = summary.hasStaged
 	row.Status = listStatusFor(summary)
+	row.IsAiring = summary.airing
 	row.Resolutions, row.Sources = collectActiveQuality(model)
 	if !model.Artwork.Poster.IsZero() {
 		row.PosterURL = model.Artwork.Poster.URL
@@ -150,12 +164,20 @@ type seriesSummary struct {
 	missing        int
 	pending        int
 	hasStaged      bool
+	airing         bool
+}
+
+// seasonAirDates holds the valid AirDates for one non-special season.
+// Used by computeAiring to detect cour structure.
+type seasonAirDates struct {
+	dates []civil.Date
 }
 
 func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
 	var s seriesSummary
 	seasons := map[int]struct{}{}
 	seasonsActive := map[int]struct{}{}
+	perSeason := map[int]*seasonAirDates{}
 	for episodeRef, episode := range model.Episodes {
 		if episodeRef.IsSpecial() {
 			continue
@@ -164,10 +186,19 @@ func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
 			s.hasStaged = true
 		}
 		s.episodes++
-		seasons[episodeRef.Season()] = struct{}{}
+		sn := episodeRef.Season()
+		seasons[sn] = struct{}{}
 		if episode.Active != nil {
 			s.episodesActive++
-			seasonsActive[episodeRef.Season()] = struct{}{}
+			seasonsActive[sn] = struct{}{}
+		}
+		sa, ok := perSeason[sn]
+		if !ok {
+			sa = &seasonAirDates{}
+			perSeason[sn] = sa
+		}
+		if episode.AirDate.IsValid() {
+			sa.dates = append(sa.dates, episode.AirDate)
 		}
 		if episode.Active != nil || episode.Staged != nil {
 			continue
@@ -180,7 +211,60 @@ func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
 	}
 	s.seasons = len(seasons)
 	s.seasonsActive = len(seasonsActive)
+	s.airing = computeAiring(perSeason, now)
 	return s
+}
+
+// computeAiring returns true when any cour of any non-special season
+// is "currently airing." A season is split into cours by sorting its
+// episode air dates and starting a new cour wherever the gap between
+// consecutive dates exceeds airingCourGapDays. A cour qualifies when
+// (a) its first air date has already passed or falls within
+// airingHorizonDays AND (b) at least one of its dates is still in the
+// future. Far-ahead schedule announcements (first ep beyond the
+// horizon) and split-cour hiatuses (the active cour ended before
+// today; the next cour's first ep is months out) are both filtered.
+func computeAiring(perSeason map[int]*seasonAirDates, now time.Time) bool {
+	today := civil.DateOf(now)
+	horizon := today.AddDays(airingHorizonDays)
+	for _, sa := range perSeason {
+		if len(sa.dates) == 0 {
+			continue
+		}
+		sorted := append([]civil.Date(nil), sa.dates...)
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].Before(sorted[j])
+		})
+		for _, cour := range splitIntoCours(sorted, airingCourGapDays) {
+			first := cour[0]
+			last := cour[len(cour)-1]
+			if first.After(horizon) {
+				continue
+			}
+			if last.After(today) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// splitIntoCours partitions a sorted-ascending slice of air dates into
+// contiguous cours. A new cour begins wherever the gap to the previous
+// date exceeds gapDays. Empty input returns nil.
+func splitIntoCours(sorted []civil.Date, gapDays int) [][]civil.Date {
+	if len(sorted) == 0 {
+		return nil
+	}
+	out := [][]civil.Date{{sorted[0]}}
+	for i := 1; i < len(sorted); i++ {
+		if sorted[i].DaysSince(sorted[i-1]) > gapDays {
+			out = append(out, []civil.Date{sorted[i]})
+			continue
+		}
+		out[len(out)-1] = append(out[len(out)-1], sorted[i])
+	}
+	return out
 }
 
 func listStatusFor(summary seriesSummary) response.ListStatus {
@@ -189,9 +273,6 @@ func listStatusFor(summary seriesSummary) response.ListStatus {
 	}
 	if summary.missing > 0 {
 		return response.ListStatusIncomplete
-	}
-	if summary.pending > 0 {
-		return response.ListStatusAiring
 	}
 	return response.ListStatusComplete
 }

@@ -5,13 +5,16 @@ import "github.com/wyvernzora/kura/internal/domain/refs"
 // Show is workflow.Show's full response: persisted series metadata
 // joined with derived per-episode status and filesystem-issue lists.
 type Show struct {
-	MetadataRef     refs.Metadata   `json:"metadataRef"`
-	Ref             refs.Series     `json:"ref"`
-	Root            string          `json:"root"`
-	LastScanned     string          `json:"lastScanned,omitempty"`
-	PreferredTitle  string          `json:"preferredTitle"`
-	CanonicalTitle  string          `json:"canonicalTitle,omitempty"`
-	Status          ListStatus      `json:"status"`
+	MetadataRef    refs.Metadata `json:"metadataRef"`
+	Ref            refs.Series   `json:"ref"`
+	Root           string        `json:"root"`
+	LastScanned    string        `json:"lastScanned,omitempty"`
+	PreferredTitle string        `json:"preferredTitle"`
+	CanonicalTitle string        `json:"canonicalTitle,omitempty"`
+	Status         ListStatus    `json:"status"`
+	// IsAiring mirrors ListRow.IsAiring — observed-airing flag
+	// independent of Status.
+	IsAiring        bool            `json:"isAiring,omitempty"`
 	Artwork         *ArtworkShow    `json:"artwork,omitempty"`
 	Seasons         []SeasonShow    `json:"seasons"`
 	Truncated       bool            `json:"truncated,omitempty"`

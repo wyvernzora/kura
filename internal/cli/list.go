@@ -13,10 +13,9 @@ func ParseListStatus(value string) (response.ListStatus, error) {
 	status := response.ListStatus(strings.TrimSpace(value))
 	switch status {
 	case response.ListStatusUntracked, response.ListStatusComplete,
-		response.ListStatusIncomplete, response.ListStatusAiring,
-		response.ListStatusError:
+		response.ListStatusIncomplete, response.ListStatusError:
 		return status, nil
 	default:
-		return "", fmt.Errorf("invalid list status %q; expected one of: untracked, complete, incomplete, airing, error", value)
+		return "", fmt.Errorf("invalid list status %q; expected one of: untracked, complete, incomplete, error", value)
 	}
 }

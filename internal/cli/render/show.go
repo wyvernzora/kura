@@ -50,7 +50,7 @@ func writeShowHeader(w io.Writer, result response.Show, styled bool) error {
 	}
 	if result.Status != "" {
 		rows = append(rows, struct{ label, value string }{
-			"Status", renderListStatus(string(result.Status), styled),
+			"Status", renderListStatus(string(result.Status), result.IsAiring, styled),
 		})
 	}
 	if result.LastScanned != "" {

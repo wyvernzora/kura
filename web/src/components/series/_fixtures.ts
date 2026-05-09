@@ -140,7 +140,8 @@ export const FIXTURE_SHOW_AIRING: Show = {
   root: '/library/Frieren - Beyond Journeys End',
   preferredTitle: '葬送のフリーレン',
   canonicalTitle: 'Frieren: Beyond Journey’s End',
-  status: 'airing',
+  status: 'complete',
+  isAiring: true,
   lastScanned: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
   artwork: {
     poster: {

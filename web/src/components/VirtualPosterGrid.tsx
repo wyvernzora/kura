@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ListRow } from '@/api/types';
 import { Poster } from '@/components/ui/poster';
+import { withAiring } from '@/lib/status';
 import type { Density } from '@/lib/useAutoDensity';
 
 interface VirtualPosterGridProps {
@@ -162,7 +163,7 @@ export function VirtualPosterGrid({ rows, density, onSelect }: VirtualPosterGrid
               <Poster
                 key={row.metadataRef ?? row.title}
                 title={row.title}
-                status={row.status}
+                status={withAiring(row.status, !!row.isAiring)}
                 posterUrl={row.posterUrl}
                 posterThumbnailUrl={row.posterThumbnailUrl}
                 available={row.episodesAvailable}

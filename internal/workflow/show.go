@@ -100,6 +100,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		PreferredTitle: preferredTitle,
 		CanonicalTitle: model.CanonicalTitle.String(),
 		Status:         row.Status,
+		IsAiring:       row.IsAiring,
 		Seasons:        buildSeasons(seriesRoot, model, now, filter),
 		StagedTrash:    buildStagedTrash(seriesRoot, model.StagedTrash),
 		StagedExtras:   buildStagedExtras(model.StagedExtras),

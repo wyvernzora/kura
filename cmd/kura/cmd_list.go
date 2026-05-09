@@ -10,6 +10,12 @@ import (
 type listCmd struct {
 	JSON     bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Statuses []string `name:"status" help:"Only show entries with this status. Repeat for multiple statuses."`
+	// Airing is a tri-state filter on Row.IsAiring.
+	//
+	//   - omitted (kong default for *bool): no filter.
+	//   - --airing or --airing=true: airing only.
+	//   - --no-airing / --airing=false: non-airing only.
+	Airing *bool `name:"airing" negatable:"" help:"Filter on the airing flag (independent of status). Use --airing for currently-airing only or --no-airing for non-airing only."`
 }
 
 // listPageSize is the per-request page cap. Server clamps to 1000;
@@ -37,7 +43,7 @@ func (cmd *listCmd) Run(rt *runContext) error {
 
 	var result response.ListResult
 	for attempt := 0; attempt <= listMaxRetries; attempt++ {
-		all, drifted, err := walkListPages(rt, c, statuses)
+		all, drifted, err := walkListPages(rt, c, statuses, cmd.Airing)
 		if err != nil {
 			return err
 		}
@@ -60,12 +66,12 @@ func (cmd *listCmd) Run(rt *runContext) error {
 // walkListPages iterates the cursor chain accumulating rows.
 // Returns drifted=true when any page reports DataChanged, so the
 // caller can decide whether to retry for a consistent snapshot.
-func walkListPages(rt *runContext, c *client.Client, statuses []string) (response.ListResult, bool, error) {
+func walkListPages(rt *runContext, c *client.Client, statuses []string, airing *bool) (response.ListResult, bool, error) {
 	var all response.ListResult
 	cursor := ""
 	drifted := false
 	for {
-		page, err := c.ListSeries(rt.Context, statuses, listPageSize, cursor)
+		page, err := c.ListSeries(rt.Context, statuses, airing, listPageSize, cursor)
 		if err != nil {
 			return response.ListResult{}, false, err
 		}

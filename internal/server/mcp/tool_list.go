@@ -13,7 +13,8 @@ import (
 )
 
 type listInput struct {
-	Statuses   []string `json:"statuses,omitempty" jsonschema:"Optional status filter. Allowed values: complete, incomplete, airing, error, untracked. Empty/omitted returns all five."`
+	Statuses   []string `json:"statuses,omitempty" jsonschema:"Optional status filter. Allowed values: complete, incomplete, error, untracked. Empty/omitted returns all four."`
+	Airing     *bool    `json:"airing,omitempty" jsonschema:"Optional airing-flag filter. true admits only currently-airing series (first episode aired or airs within 168h, with at least one future episode); false admits non-airing only. Omit for no filter."`
 	MaxResults int      `json:"maxResults,omitempty" jsonschema:"Maximum rows per response. 0 or omitted uses the server default (100). Values above 1000 are clamped."`
 	Cursor     string   `json:"cursor,omitempty" jsonschema:"Opaque pagination token from a previous response's nextCursor. Omit for the first page."`
 }
@@ -29,7 +30,6 @@ var toolListDoc string
 var allowedListStatuses = map[response.ListStatus]struct{}{
 	response.ListStatusComplete:   {},
 	response.ListStatusIncomplete: {},
-	response.ListStatusAiring:     {},
 	response.ListStatusError:      {},
 	response.ListStatusUntracked:  {},
 }
@@ -64,6 +64,7 @@ func addListTool(s *sdkmcp.Server, deps Deps) {
 		}
 		result, err := workflow.List(ctx, deps.Workflow, workflow.ListInput{
 			Statuses:   statuses,
+			Airing:     in.Airing,
 			MaxResults: max,
 			Cursor:     in.Cursor,
 		})
@@ -87,7 +88,7 @@ func parseListStatuses(raw []string) ([]response.ListStatus, error) {
 		if _, ok := allowedListStatuses[status]; !ok {
 			return nil, &invalidInputError{
 				kind:    errkind.KindInvalidRef,
-				message: fmt.Sprintf("kura_list: unknown status %q (allowed: complete, incomplete, airing, error, untracked)", s),
+				message: fmt.Sprintf("kura_list: unknown status %q (allowed: complete, incomplete, error, untracked)", s),
 			}
 		}
 		out = append(out, status)

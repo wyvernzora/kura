@@ -63,6 +63,9 @@ function LibraryHome() {
     const c: Partial<Record<Status, number>> = {};
     for (const row of allRows) {
       c[row.status] = (c[row.status] ?? 0) + 1;
+      if (row.isAiring) {
+        c.airing = (c.airing ?? 0) + 1;
+      }
     }
     return c;
   }, [allRows]);

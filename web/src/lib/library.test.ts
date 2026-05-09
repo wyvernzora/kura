@@ -4,6 +4,7 @@ import type { Candidate, ListRow } from '@/api/types';
 
 import {
   countMultiValuedField,
+  displayStatus,
   filterByMultiValuedField,
   filterByStatus,
   intersectWithCandidates,
@@ -24,7 +25,8 @@ function row(overrides: Partial<ListRow> & { title: string }): ListRow {
 
 const FRIEREN = row({
   title: '葬送のフリーレン',
-  status: 'airing',
+  status: 'complete',
+  isAiring: true,
   episodesAvailable: 4,
   episodeCount: 28,
   metadataRef: 'tvdb:1',
@@ -65,11 +67,16 @@ describe('filterByStatus', () => {
   });
 
   it('keeps only rows whose status is in the active set', () => {
+    // FRIEREN has wire status=complete + isAiring=true; the complete
+    // chip filters on wire status, so it admits FRIEREN alongside the
+    // pure-complete rows.
     const result = filterByStatus(ALL, new Set(['complete']));
-    expect(result).toEqual([SPY, ATTACK]);
+    expect(result).toEqual([FRIEREN, SPY, ATTACK]);
   });
 
-  it('handles multi-status filters', () => {
+  it('treats the airing chip as a filter on row.isAiring', () => {
+    // FRIEREN matches via isAiring=true even though its wire status is
+    // complete; VINLAND matches via wire status=incomplete.
     const result = filterByStatus(ALL, new Set(['airing', 'incomplete']));
     expect(result).toEqual([FRIEREN, VINLAND]);
   });
@@ -106,11 +113,18 @@ describe('sortRows', () => {
   });
 
   it('sorts by status with airing first', () => {
+    // The status sort key uses displayStatus(row) so airing rows
+    // surface first regardless of wire status.
     const sorted = sortRows([SPY, FRIEREN, VINLAND, UNTRACKED], {
       key: 'status',
       direction: 'asc',
     });
-    expect(sorted.map((r) => r.status)).toEqual(['airing', 'incomplete', 'complete', 'untracked']);
+    expect(sorted.map((r) => displayStatus(r))).toEqual([
+      'airing',
+      'incomplete',
+      'complete',
+      'untracked',
+    ]);
   });
 
   it('does not mutate the input', () => {
