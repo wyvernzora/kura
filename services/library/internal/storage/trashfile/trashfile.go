@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/renameio/v2/maybe"
@@ -127,14 +128,27 @@ func Delete(root string, ref refs.Series, id ulid.ULID) (int64, error) {
 
 // removeAllWithRetry tolerates transient ENOTEMPTY / cached-dirent
 // inconsistency on FUSE / bind-mount filesystems (Docker virtiofs,
-// gRPC-FUSE, NFS). os.RemoveAll unlinks every child before rmdir-ing
-// the parent, but on those FS layers the parent rmdir can race
-// against still-propagating dirent metadata for a child that was
-// just unlinked. A short retry loop with linear backoff lets the FS
-// settle. Each attempt re-reads the directory and explicitly tries
-// to unlink every leftover entry so the next RemoveAll has a clean
-// directory to work with. ErrNotExist on re-list means the dir
-// resolved itself (or another caller cleaned up); treat as success.
+// gRPC-FUSE, NFS) and the silly-rename pattern on SMB / NFS / FUSE
+// where unlinking a file with an open handle elsewhere creates a
+// hidden ".smbdelete<hex>" / ".fuse_hidden<hex>" / ".nfs<hex>"
+// placeholder that lingers until the handle closes. The retry loop:
+//
+//   1. os.RemoveAll. Success → return.
+//   2. Re-read the dir. ErrNotExist → another caller / FS settled,
+//      return success.
+//   3. If every leftover is a silly-rename placeholder, treat the
+//      bucket as functionally empty: the original meta.json + media
+//      + companion files are gone (the FS layer owns these
+//      hidden files now and will clean them up when handles close).
+//      Return success; the bucket directory lingers as an empty
+//      one until a future call (or operator) rmdirs it. trashfile.
+//      List ignores buckets without meta.json so they're invisible
+//      to the user.
+//   4. Otherwise unlink each non-silly-rename entry and sleep with
+//      linear backoff before retrying.
+//
+// Bounded by attempts so a genuinely-stuck FS surfaces the error
+// promptly. 4 attempts × max 25/50/75ms = 150ms ceiling.
 func removeAllWithRetry(dir string) error {
 	const attempts = 4
 	var last error
@@ -151,12 +165,43 @@ func removeAllWithRetry(dir string) error {
 		if readErr != nil {
 			return last
 		}
+		realLeft := 0
 		for _, e := range entries {
+			if isSillyRename(e.Name()) {
+				continue
+			}
+			realLeft++
 			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+		// All real entries were unlinked successfully OR none
+		// existed; only silly-rename placeholders remain. The
+		// bucket is logically empty. Accept; the FS layer will
+		// clean up the placeholders on its own schedule.
+		if realLeft == 0 {
+			return nil
 		}
 		time.Sleep(time.Duration(i+1) * 25 * time.Millisecond)
 	}
 	return last
+}
+
+// isSillyRename reports whether name is a hidden placeholder created
+// by an SMB / NFS / FUSE client when a file is unlinked while another
+// open handle still references it. The placeholder lingers until the
+// last handle closes, then the FS layer removes it. From kura's
+// point of view these files are write-once-by-the-FS-layer and
+// effectively read-only — explicit os.Remove on them returns EBUSY
+// (SMB) or just races with the FS cleanup.
+func isSillyRename(name string) bool {
+	switch {
+	case strings.HasPrefix(name, ".smbdelete"):
+		return true
+	case strings.HasPrefix(name, ".fuse_hidden"):
+		return true
+	case strings.HasPrefix(name, ".nfs"):
+		return true
+	}
+	return false
 }
 
 // dirSize sums the file sizes immediately inside dir. Trash entries are
