@@ -278,6 +278,207 @@ func TestStage_MultiItemHappyPath(t *testing.T) {
 	}
 }
 
+// TestStage_SeriesMediaInPlaceOverride covers the in-place metadata
+// override path: stage a series: selector pointing at the existing
+// active record's path, with replace=true and an explicit source. The
+// staged record should land with the override source applied; the
+// active record is unchanged until reconcile.
+func TestStage_SeriesMediaInPlaceOverride(t *testing.T) {
+	deps, ref, insp, _ := seedStageDeps(t)
+	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
+	rel := "Season 1/episode-1.mkv"
+	mediaPath := writeMedia(t, seriesRoot, rel, "body")
+
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	e1, _ := refs.NewEpisode(1, 1)
+	if err := model.SetActive(e1, media.Record{Path: mediaPath, Companions: []media.Companion{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("seed_active")); err != nil {
+		t.Fatal(err)
+	}
+	insp.infos[mediaPath] = media.Info{}
+
+	mediaSel := selector.Path{Scheme: selector.Series, Relative: rel}
+	j := workflow.Stage(context.Background(), deps, workflow.StageInput{
+		Ref: ref,
+		Episodes: []workflow.EpisodeStageItem{{
+			Episode: e1,
+			Media:   mediaSel,
+			Source:  "BluRay",
+			Replace: true,
+		}},
+	})
+	if _, err := j.Wait(context.Background()); err != nil {
+		t.Fatalf("Stage: %v", err)
+	}
+
+	model, err = seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("Load after stage: %v", err)
+	}
+	staged := model.Episodes[e1].Staged
+	if staged == nil {
+		t.Fatal("episode 1.1 has no staged record after in-place override")
+	}
+	// media.Source.String() lower-cases for storage; Display() returns
+	// the cased label for human / wire output.
+	if got := staged.Source.Display(); got != "BluRay" {
+		t.Fatalf("staged.Source.Display() = %q, want BluRay", got)
+	}
+	if staged.Path != mediaSel.String() {
+		t.Fatalf("staged.Path = %q, want %q", staged.Path, mediaSel.String())
+	}
+}
+
+// TestStage_SeriesMediaRequiresReplace rejects series: media when
+// replace is false (no contract for "stage but don't promote").
+func TestStage_SeriesMediaRequiresReplace(t *testing.T) {
+	deps, ref, _, _ := seedStageDeps(t)
+	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
+	rel := "Season 1/episode-1.mkv"
+	mediaPath := writeMedia(t, seriesRoot, rel, "body")
+
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	e1, _ := refs.NewEpisode(1, 1)
+	if err := model.SetActive(e1, media.Record{Path: mediaPath, Companions: []media.Companion{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("seed_active")); err != nil {
+		t.Fatal(err)
+	}
+
+	mediaSel := selector.Path{Scheme: selector.Series, Relative: rel}
+	j := workflow.Stage(context.Background(), deps, workflow.StageInput{
+		Ref: ref,
+		Episodes: []workflow.EpisodeStageItem{{
+			Episode: e1,
+			Media:   mediaSel,
+			Replace: false,
+		}},
+	})
+	if _, err := j.Wait(context.Background()); err == nil {
+		t.Fatal("Stage with series: media + replace=false succeeded; want error")
+	}
+}
+
+// TestStage_SeriesMediaCrossSlot stages a series-resident file into a
+// different episode's empty slot. The file isn't claimed elsewhere, so
+// the stage must succeed and persist the staged record under the
+// target episode.
+func TestStage_SeriesMediaCrossSlot(t *testing.T) {
+	deps, ref, insp, _ := seedStageDeps(t)
+	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
+	otherRel := "Season 1/loose.mkv"
+	otherPath := writeMedia(t, seriesRoot, otherRel, "loose")
+	insp.infos[otherPath] = media.Info{}
+
+	e2, _ := refs.NewEpisode(1, 2)
+	mediaSel := selector.Path{Scheme: selector.Series, Relative: otherRel}
+	j := workflow.Stage(context.Background(), deps, workflow.StageInput{
+		Ref: ref,
+		Episodes: []workflow.EpisodeStageItem{{
+			Episode: e2,
+			Media:   mediaSel,
+		}},
+	})
+	if _, err := j.Wait(context.Background()); err != nil {
+		t.Fatalf("Stage: %v", err)
+	}
+
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	staged := model.Episodes[e2].Staged
+	if staged == nil {
+		t.Fatal("episode 1.2 has no staged record")
+	}
+	if staged.Path != mediaSel.String() {
+		t.Fatalf("staged.Path = %q, want %q", staged.Path, mediaSel.String())
+	}
+}
+
+// TestStage_SeriesMediaRejectsClaimedActivePath stages a series: file
+// that's already the active record for ANOTHER episode. Must be
+// rejected — the in-place exception only applies to the same episode's
+// own active record.
+func TestStage_SeriesMediaRejectsClaimedActivePath(t *testing.T) {
+	deps, ref, _, _ := seedStageDeps(t)
+	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
+	rel := "Season 1/episode-1.mkv"
+	mediaPath := writeMedia(t, seriesRoot, rel, "body")
+
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	e1, _ := refs.NewEpisode(1, 1)
+	e2, _ := refs.NewEpisode(1, 2)
+	if err := model.SetActive(e1, media.Record{Path: mediaPath, Companions: []media.Companion{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("seed_active")); err != nil {
+		t.Fatal(err)
+	}
+
+	mediaSel := selector.Path{Scheme: selector.Series, Relative: rel}
+	j := workflow.Stage(context.Background(), deps, workflow.StageInput{
+		Ref: ref,
+		Episodes: []workflow.EpisodeStageItem{{
+			Episode: e2,
+			Media:   mediaSel,
+		}},
+	})
+	if _, err := j.Wait(context.Background()); err == nil {
+		t.Fatal("Stage of E1's active path under E2 succeeded; want claimed-paths rejection")
+	}
+}
+
+// TestStage_SeriesMediaRequiresReplaceWhenSlotOccupied: cross-slot
+// stages still require replace=true if the target slot already has an
+// active record (matches the inbox-stage rule).
+func TestStage_SeriesMediaRequiresReplaceWhenSlotOccupied(t *testing.T) {
+	deps, ref, insp, _ := seedStageDeps(t)
+	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
+	activeRel := "Season 1/active.mkv"
+	otherRel := "Season 1/loose.mkv"
+	activePath := writeMedia(t, seriesRoot, activeRel, "active")
+	otherPath := writeMedia(t, seriesRoot, otherRel, "loose")
+	insp.infos[otherPath] = media.Info{}
+
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	e1, _ := refs.NewEpisode(1, 1)
+	if err := model.SetActive(e1, media.Record{Path: activePath, Companions: []media.Companion{}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("seed_active")); err != nil {
+		t.Fatal(err)
+	}
+
+	mediaSel := selector.Path{Scheme: selector.Series, Relative: otherRel}
+	j := workflow.Stage(context.Background(), deps, workflow.StageInput{
+		Ref: ref,
+		Episodes: []workflow.EpisodeStageItem{{
+			Episode: e1,
+			Media:   mediaSel,
+			// Replace omitted on purpose — slot has an active record.
+		}},
+	})
+	if _, err := j.Wait(context.Background()); err == nil {
+		t.Fatal("Stage over an active slot without replace=true succeeded; want EpisodeAlreadyExistsError")
+	}
+}
+
 func TestStage_DuplicateTrashPathInBatch(t *testing.T) {
 	deps, ref, _, _ := seedStageDeps(t)
 	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)

@@ -1,0 +1,54 @@
+# stage_inplace_source_override: re-stage an active record via a
+# series: media selector with an explicit source override. Validates
+# the in-place metadata override path:
+#   - kura_stage accepts series: media when path == active record path.
+#   - reconcile_apply renames the file in place to its new canonical
+#     filename (Unknown → BluRay).
+#   - The displaced "Unknown" file is NOT trashed; the in-place flow
+#     skips the trash step that a normal replace emits.
+
+kura_add stub:1001
+
+# Stage initial file. The filename has no source token, so the parser
+# leaves Source unset → Unknown after probe.
+kura_mkfile ep1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+
+# Active record carries Unknown; canonical filename reflects it.
+kura_show $KURA_LAST_REF
+stdout '"source":"Unknown"'
+kura_series_dir $KURA_LAST_REF
+exec find $KURA_SERIES_DIR -name *Unknown*1080p*.mp4 -type f
+stdout Unknown
+
+# In-place override: re-stage the active record's own file using a
+# series: media selector, with --replace --source BluRay. The harness
+# helper looks up active.file from kura_show so the scenario doesn't
+# have to reconstruct the canonical name.
+kura_stage_inplace_source $KURA_LAST_REF S01E0001 BluRay
+stdout '"source":"BluRay"'
+
+# Staged record visible alongside the still-extant active record.
+kura_show $KURA_LAST_REF
+stdout '"status":"staged_replacement"'
+
+# Reconcile + apply: file renamed in place; active updated to BluRay.
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+stdout '"source":"BluRay"'
+
+# Canonical filename now carries the BluRay token; the prior Unknown
+# filename no longer exists.
+exec find $KURA_SERIES_DIR -name *BluRay*1080p*.mp4 -type f
+stdout BluRay
+exec find $KURA_SERIES_DIR -name *Unknown*1080p*.mp4 -type f
+! stdout Unknown
+
+# Crucial: no trash entry. The in-place flow skips the displace-to-
+# trash step.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":0'

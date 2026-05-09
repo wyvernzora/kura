@@ -80,7 +80,7 @@ func (cmd *stageEpisodeCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
-	mediaSel, err := parseStageSelectorArg(mediaArg, "media")
+	mediaSel, err := parseStageMediaArg(mediaArg)
 	if err != nil {
 		return err
 	}
@@ -183,6 +183,21 @@ func parseStageSelectorArg(arg, field string) (selector.Path, error) {
 	sel, err := selector.ParseInbox(arg)
 	if err != nil {
 		return selector.Path{}, fmt.Errorf("%s must be an inbox: selector (e.g. inbox:[BDrip] Show/E01.mkv); use 'kura inbox list' to discover valid selectors: %w", field, err)
+	}
+	return sel, nil
+}
+
+// parseStageMediaArg parses a stage episode media selector. Accepts
+// inbox: (normal stage) or series: (in-place metadata override on the
+// active record). Other fields (companion, extra source) keep
+// inbox-only via parseStageSelectorArg.
+func parseStageMediaArg(arg string) (selector.Path, error) {
+	sel, err := selector.Parse(arg)
+	if err != nil {
+		return selector.Path{}, fmt.Errorf("media must be an inbox: or series: selector (e.g. inbox:[BDrip] Show/E01.mkv, or series:Season 1/foo.mkv for in-place metadata override): %w", err)
+	}
+	if sel.Scheme != selector.Inbox && sel.Scheme != selector.Series {
+		return selector.Path{}, fmt.Errorf("media must be an inbox: or series: selector, got %q", sel.Scheme)
 	}
 	return sel, nil
 }

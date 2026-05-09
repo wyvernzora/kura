@@ -115,12 +115,18 @@ func parseStageRequestEpisodes(items []StageRequestEpisode) ([]EpisodeStageItem,
 		if item.Media == "" {
 			return nil, &StageRequestError{
 				Axis: "episodes", Index: index, Field: "media",
-				Message: "is required (an inbox: selector — see kura_inbox_list)",
+				Message: "is required (an inbox: selector for normal stage, or a series: selector for in-place metadata override on the active record)",
 			}
 		}
-		mediaSel, err := selector.ParseInbox(item.Media)
+		mediaSel, err := selector.Parse(item.Media)
 		if err != nil {
 			return nil, &StageRequestError{Axis: "episodes", Index: index, Field: "media", Cause: err}
+		}
+		if mediaSel.Scheme != selector.Inbox && mediaSel.Scheme != selector.Series {
+			return nil, &StageRequestError{
+				Axis: "episodes", Index: index, Field: "media",
+				Message: fmt.Sprintf("expected inbox: or series: scheme, got %q", mediaSel.Scheme),
+			}
 		}
 		companions, err := parseStageRequestCompanions(item.Companions, "episodes", index, selector.ParseInbox)
 		if err != nil {

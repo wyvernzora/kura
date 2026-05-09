@@ -21,6 +21,7 @@ import (
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 // StageInput parameters for the Stage workflow. Stage queues per-batch
@@ -41,11 +42,17 @@ type StageInput struct {
 	Extras   []ExtraStageItem
 }
 
-// EpisodeStageItem queues one episode stage. Media is an inbox:
-// selector identifying the source file under the inbox root; the
-// workflow resolves it via deps.InboxRoot at validation time.
-// Companions are sibling files (subs, NFOs, etc.) — same selector
-// shape.
+// EpisodeStageItem queues one episode stage. Media accepts two
+// selector schemes:
+//
+//   - inbox:<rel> — normal staging from the inbox root. Resolves via
+//     deps.InboxRoot. Companions follow the same shape.
+//   - series:<rel> — in-place metadata override on the existing
+//     active record. The resolved path MUST equal the episode's
+//     active record path; Replace MUST be true; Companions MUST be
+//     empty (existing companions are preserved). Used to fix
+//     wrong-source / wrong-resolution facts on a recorded file
+//     without moving it back through the inbox.
 type EpisodeStageItem struct {
 	Episode    domainrefs.Episode
 	Media      selector.Path
@@ -282,6 +289,34 @@ type resolvedExtraItem struct {
 	relTarget    string // wire-shape destination under Season N/Extra/[prefix]/<basename>
 }
 
+// resolveSeriesSelector validates a series: selector, resolves it
+// under seriesRoot, and confirms the result stays within the series
+// directory (catches symlink escapes). Mirrors resolveInboxSelector.
+func resolveSeriesSelector(seriesRoot string, sel selector.Path) (string, error) {
+	if sel.IsZero() {
+		return "", errors.New("series selector is empty")
+	}
+	abs := sel.Resolve(seriesRoot)
+	rootAbs, err := filepath.Abs(seriesRoot)
+	if err != nil {
+		return "", err
+	}
+	rootResolved, rootErr := filepath.EvalSymlinks(rootAbs)
+	target, targetErr := filepath.EvalSymlinks(abs)
+	if rootErr != nil || targetErr != nil {
+		rootResolved = filepath.Clean(rootAbs)
+		target = filepath.Clean(abs)
+	}
+	rel, err := filepath.Rel(rootResolved, target)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", &selector.PathOutsideRootError{Path: sel.String()}
+	}
+	return abs, nil
+}
+
 // resolveInboxSelector validates a selector, resolves it to an absolute
 // path under inboxRoot, and confirms the result stays within the inbox
 // (catches symlink escapes). Returns the resolved abs path on success.
@@ -340,24 +375,62 @@ func validateOneEpisodeItem(
 	item EpisodeStageItem,
 	index int,
 ) (resolvedEpisodeItem, error) {
-	mediaPath, err := resolveInboxSelector(deps.InboxRoot, item.Media)
-	if err != nil {
-		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %w", index, err)
-	}
-	info, err := os.Lstat(mediaPath)
-	if err != nil {
-		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %w", index, err)
-	}
-	if info.IsDir() {
-		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %q is a directory", index, item.Media)
-	}
-	if !mediainfo.RecognizedVideoFile(mediaPath) {
-		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: %q is not a recognized video file", index, item.Media)
-	}
 	episodeState, ok := model.Episodes[item.Episode]
 	if !ok {
 		return resolvedEpisodeItem{}, &MetadataMissingEpisodeError{Episode: item.Episode}
 	}
+	seriesRoot := paths.SeriesDir(deps.LibRoot, model.Ref)
+	mediaPath, err := resolveStageMediaSelector(deps.InboxRoot, seriesRoot, item.Media, index)
+	if err != nil {
+		return resolvedEpisodeItem{}, err
+	}
+	if err := gateMediaFile(mediaPath, item.Media, index); err != nil {
+		return resolvedEpisodeItem{}, err
+	}
+	// In-place override: series: media targeting THIS episode's active
+	// record. Companions are preserved from the active record; replace
+	// is required because the active record's facts will be replaced.
+	if item.Media.Scheme == selector.Series && episodeState.Active != nil && pathsEquivalentNFC(mediaPath, episodeState.Active.Path) {
+		return validateInPlaceOverride(seriesRoot, item, episodeState, mediaPath, index)
+	}
+	return validateNormalEpisodeItem(deps, seriesRoot, model, item, episodeState, mediaPath, index)
+}
+
+// resolveStageMediaSelector dispatches to the inbox or series resolver
+// based on the selector scheme. Other schemes are rejected.
+func resolveStageMediaSelector(inboxRoot, seriesRoot string, sel selector.Path, index int) (string, error) {
+	switch sel.Scheme {
+	case selector.Inbox:
+		abs, err := resolveInboxSelector(inboxRoot, sel)
+		if err != nil {
+			return "", fmt.Errorf("episodes[%d]: %w", index, err)
+		}
+		return abs, nil
+	case selector.Series:
+		abs, err := resolveSeriesSelector(seriesRoot, sel)
+		if err != nil {
+			return "", fmt.Errorf("episodes[%d]: %w", index, err)
+		}
+		return abs, nil
+	default:
+		return "", fmt.Errorf("episodes[%d]: expected inbox: or series: media selector, got %q", index, sel.Scheme)
+	}
+}
+
+// validateNormalEpisodeItem handles every stage path that isn't an
+// in-place override: standard inbox: stages, and series: stages whose
+// path is NOT the current episode's active record. For series: stages
+// the media (and each companion) must not overlap any active or staged
+// record path or companion path tracked elsewhere in the series.
+func validateNormalEpisodeItem(
+	deps Deps,
+	seriesRoot string,
+	model *domainseries.Series,
+	item EpisodeStageItem,
+	episodeState domainseries.Episode,
+	mediaPath string,
+	index int,
+) (resolvedEpisodeItem, error) {
 	if episodeState.Active != nil && !item.Replace {
 		if _, statErr := os.Stat(episodeState.Active.Path); statErr == nil {
 			return resolvedEpisodeItem{}, &EpisodeAlreadyExistsError{Episode: item.Episode}
@@ -366,9 +439,30 @@ func validateOneEpisodeItem(
 	if episodeState.Staged != nil && !item.Replace {
 		return resolvedEpisodeItem{}, &StagedEpisodeAlreadyExistsError{Episode: item.Episode}
 	}
-	companions, companionSels, err := validateCompanions(deps, item.Companions, index)
-	if err != nil {
-		return resolvedEpisodeItem{}, err
+	var (
+		companions    []string
+		companionSels []selector.Path
+		err           error
+	)
+	if item.Media.Scheme == selector.Series {
+		claimed := buildClaimedPathsSet(model, deps.InboxRoot, seriesRoot)
+		if _, hit := claimed[mediaPath]; hit {
+			return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: media %q is already an active or staged record path or companion in this series; reset the existing entry or pick a different file", index, item.Media)
+		}
+		companions, companionSels, err = validateSeriesCompanions(seriesRoot, item.Companions, index)
+		if err != nil {
+			return resolvedEpisodeItem{}, err
+		}
+		for i, abs := range companions {
+			if _, hit := claimed[abs]; hit {
+				return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: companion %q is already an active or staged record path or companion in this series", index, item.Companions[i])
+			}
+		}
+	} else {
+		companions, companionSels, err = validateCompanions(deps, item.Companions, index)
+		if err != nil {
+			return resolvedEpisodeItem{}, err
+		}
 	}
 	return resolvedEpisodeItem{
 		EpisodeStageItem:      item,
@@ -377,6 +471,148 @@ func validateOneEpisodeItem(
 		resolvedCompanionSels: companionSels,
 		episodeStateBefore:    episodeState,
 	}, nil
+}
+
+// validateInPlaceOverride covers the special case where a series:
+// media stage points at the current episode's own active record. The
+// active record's companions are preserved verbatim; user-supplied
+// companions are forbidden so the override stays a metadata-only fix.
+func validateInPlaceOverride(
+	seriesRoot string,
+	item EpisodeStageItem,
+	episodeState domainseries.Episode,
+	mediaPath string,
+	index int,
+) (resolvedEpisodeItem, error) {
+	if !item.Replace {
+		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: series: media (in-place override) requires replace=true", index)
+	}
+	if len(item.Companions) > 0 {
+		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: series: media targeting the active record must omit companions; existing companions are preserved", index)
+	}
+	if episodeState.Staged != nil {
+		return resolvedEpisodeItem{}, &StagedEpisodeAlreadyExistsError{Episode: item.Episode}
+	}
+	companions := make([]string, 0, len(episodeState.Active.Companions))
+	companionSels := make([]selector.Path, 0, len(episodeState.Active.Companions))
+	for _, c := range episodeState.Active.Companions {
+		companions = append(companions, c.Path)
+		rel, err := filepath.Rel(seriesRoot, c.Path)
+		if err != nil {
+			return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: companion %q outside series root: %w", index, c.Path, err)
+		}
+		cleaned, cleanErr := selector.CleanRelative(filepath.ToSlash(rel))
+		if cleanErr != nil {
+			return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: companion %q: %w", index, c.Path, cleanErr)
+		}
+		companionSels = append(companionSels, selector.Path{Scheme: selector.Series, Relative: cleaned})
+	}
+	return resolvedEpisodeItem{
+		EpisodeStageItem:      item,
+		resolvedPath:          mediaPath,
+		resolvedCompanions:    companions,
+		resolvedCompanionSels: companionSels,
+		episodeStateBefore:    episodeState,
+	}, nil
+}
+
+// buildClaimedPathsSet returns the set of absolute paths that are
+// currently claimed by any active or staged record (or any of their
+// companions) in the series model. Used to reject series: stages that
+// would alias existing tracked files. Inbox-resident staged paths are
+// resolved under inboxRoot; series-resident staged + active paths
+// resolve under seriesRoot.
+func buildClaimedPathsSet(model *domainseries.Series, inboxRoot, seriesRoot string) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, ep := range model.Episodes {
+		if ep.Active != nil {
+			out[ep.Active.Path] = struct{}{}
+			for _, c := range ep.Active.Companions {
+				out[c.Path] = struct{}{}
+			}
+		}
+		if ep.Staged != nil {
+			if abs := resolveTrackedPath(ep.Staged.Path, inboxRoot, seriesRoot); abs != "" {
+				out[abs] = struct{}{}
+			}
+			for _, c := range ep.Staged.Companions {
+				if abs := resolveTrackedPath(c.Path, inboxRoot, seriesRoot); abs != "" {
+					out[abs] = struct{}{}
+				}
+			}
+		}
+	}
+	return out
+}
+
+// resolveTrackedPath returns the absolute filesystem path for a value
+// pulled from a persisted record (Active.Path, Staged.Path, or any
+// companion Path field). Active records are absolutized at Load so
+// they pass through unchanged. Staged records carry a selector form
+// (inbox: or series:) which we resolve under the matching root.
+// Returns "" when the value can't be interpreted.
+func resolveTrackedPath(raw, inboxRoot, seriesRoot string) string {
+	if filepath.IsAbs(raw) {
+		return raw
+	}
+	sel, err := selector.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	switch sel.Scheme {
+	case selector.Inbox:
+		return sel.Resolve(inboxRoot)
+	case selector.Series:
+		return sel.Resolve(seriesRoot)
+	}
+	return ""
+}
+
+// validateSeriesCompanions resolves and shape-checks each companion
+// selector for an episode whose media is series:-scheme. Mirrors
+// validateCompanions but with selector.Series as the required scheme
+// and seriesRoot as the resolution root.
+func validateSeriesCompanions(seriesRoot string, sels []selector.Path, index int) ([]string, []selector.Path, error) {
+	companions := make([]string, 0, len(sels))
+	companionSels := make([]selector.Path, 0, len(sels))
+	for _, sel := range sels {
+		if sel.Scheme != selector.Series {
+			return nil, nil, fmt.Errorf("episodes[%d]: companion %q must be a series: selector when media is series:", index, sel)
+		}
+		abs, err := resolveSeriesSelector(seriesRoot, sel)
+		if err != nil {
+			return nil, nil, fmt.Errorf("episodes[%d]: %w", index, err)
+		}
+		companions = append(companions, abs)
+		companionSels = append(companionSels, sel)
+	}
+	return companions, companionSels, nil
+}
+
+// gateMediaFile lstats the resolved abs path and rejects directories
+// and unrecognized extensions. Shared between the inbox and series
+// validation paths.
+func gateMediaFile(abs string, sel selector.Path, index int) error {
+	info, err := os.Lstat(abs)
+	if err != nil {
+		return fmt.Errorf("episodes[%d]: %w", index, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("episodes[%d]: %q is a directory", index, sel)
+	}
+	if !mediainfo.RecognizedVideoFile(abs) {
+		return fmt.Errorf("episodes[%d]: %q is not a recognized video file", index, sel)
+	}
+	return nil
+}
+
+// pathsEquivalentNFC mirrors the reconcile helper. Cheap NFC-normalized
+// equality so SMB/AFP-decomposed basenames compare cleanly.
+func pathsEquivalentNFC(a, b string) bool {
+	if a == b {
+		return true
+	}
+	return textnorm.NFC(a).String() == textnorm.NFC(b).String()
 }
 
 // validateCompanions resolves and shape-checks each companion selector

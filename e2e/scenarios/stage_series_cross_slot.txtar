@@ -1,0 +1,43 @@
+# stage_series_cross_slot: stage a series-resident file (manually
+# placed in the series root) into an episode slot via a series: media
+# selector. Validates the generalized series: stage path:
+#   - Cross-slot stages work identically to inbox: stages.
+#   - The file is NOT trashed; reconcile_apply moves it from its
+#     incoming series-relative path into the canonical episode slot.
+#   - Series: media must not collide with an existing active or staged
+#     record path (claimed-path rule).
+
+kura_add stub:1001
+kura_series_dir $KURA_LAST_REF
+
+# Drop a file directly into the series root (not the inbox). Simulates
+# an operator who copied a release file into the library before
+# adopting it through Kura.
+kura_write_series_file $KURA_LAST_REF orphan.mp4
+
+# Stage with series: media into the empty S01E0001 slot.
+kura_stage_series $KURA_LAST_REF S01E0001 orphan.mp4
+stdout '"status":"staged"'
+
+# Reconcile + apply: file moved to canonical Season 1/<title> - S01E01.
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+stdout '"file":"Season 1/Stub Show - S01E01'
+
+# Original orphan.mp4 path is gone (file was moved, not copied).
+exec find $KURA_SERIES_DIR -name orphan.mp4 -type f
+! stdout orphan.mp4
+
+# Empty trash — cross-slot stage didn't displace anything.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":0'
+
+# Now plant a SECOND file in the series root and try to stage it as
+# S01E0002 using the series: path of the file we just installed (which
+# is the active record for E01). Must be rejected by the claimed-path
+# rule.
+kura_write_series_file $KURA_LAST_REF other.mp4
+! kura_stage_series $KURA_LAST_REF S01E0002 'Season 1/Stub Show - S01E01 (Unknown 1080p).mp4'
+stderr 'active or staged record'

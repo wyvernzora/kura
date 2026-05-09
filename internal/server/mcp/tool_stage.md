@@ -40,17 +40,26 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 Stage inputs never carry absolute filesystem paths — kura runs in its own filesystem namespace and may not see the same paths the agent does. Two schemes:
 
 - `inbox:<rel>` — relative to `KURA_INBOX_ROOT`. Use `kura_inbox_list` to discover available paths.
-- `series:<rel>` — relative to the request's series root. Used for trash items (files already in the series directory).
+- `series:<rel>` — relative to the request's series root.
 
-| Field | Scheme | Example |
+| Field | Schemes | Example |
 |---|---|---|
-| `episodes[].media` | `inbox:` | `inbox:[BDrip] Show/E01.mkv` |
-| `episodes[].companions[]` | `inbox:` | `inbox:[BDrip] Show/E01.en.srt` |
+| `episodes[].media` | `inbox:` or `series:` | `inbox:[BDrip] Show/E01.mkv` or `series:Season 1/E01.mkv` |
+| `episodes[].companions[]` | match media scheme | `inbox:[BDrip] Show/E01.en.srt` or `series:Season 1/E01.en.srt` |
 | `extras[].source` | `inbox:` | `inbox:[BDrip] Show/Extras/bts` |
 | `trash[].path` | `series:` | `series:Season 1/loser.mkv` |
 | `trash[].companions[]` | `series:` | `series:Season 1/loser.en.srt` |
 
 Selector relative paths are forward-slash, NFC-normalized, no leading `/`, no `..` segments.
+
+### Series: stages
+
+`episodes[].media` accepts `series:` selectors for files already inside the series root. Two cases:
+
+- **Cross-slot stage.** The series-resident file is moved into the canonical slot for the target episode at reconcile_apply, just like an inbox: stage. Same rules apply: `replace=true` is required if the target slot already has an active or staged record. Companions match the media scheme.
+- **In-place metadata override.** When the series: path equals THIS episode's own active record path, the stage becomes a metadata-only update — companions are preserved verbatim from the active record; user-supplied companions are forbidden; `replace=true` is required. Reconcile_apply renames the file to its new canonical name and promotes the staged record over the active without trashing anything. Use case: rescue a record whose source/resolution was misidentified by the filename parser (`Unknown` source) by re-staging with an explicit `source` override.
+
+Claimed-path rule for series: stages: media (and each companion) must not be currently tracked as an active or staged record path or companion anywhere in the series. The in-place override is the sole exception, and only for the matching episode's own active record. Reset the conflicting entry (`kura_reset`) or pick a different file.
 
 ## Source detection
 
