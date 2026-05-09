@@ -58,12 +58,27 @@ func TestHandleTrashRestore_BadULID(t *testing.T) {
 	}
 }
 
-func TestHandleReindex_RequiresOperator(t *testing.T) {
+// Reindex and ScanAll are long-running but non-destructive — neither
+// is operator-gated. Both should accept ungated POSTs and return 202
+// with a job handle. The operator gate test was removed when the gate
+// was lifted; these replace it.
+
+func TestHandleReindex_AcceptsUngated(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/library/reindex", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status: got %d want 403", rec.Code)
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("status: got %d want 202, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleScanAll_AcceptsUngated(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/library/scan", http.NoBody)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Errorf("status: got %d want 202, body=%s", rec.Code, rec.Body.String())
 	}
 }
