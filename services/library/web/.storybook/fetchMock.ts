@@ -57,13 +57,48 @@ if (typeof window !== 'undefined') {
         );
       }
 
-      // GET /api/v1/jobs/{id} → terminal succeeded with empty result.
-      // The hook treats empty `skipped` as a clean run and clears the
-      // record, returning to idle. Story state machine is exercised
-      // end-to-end without lingering in a fake running phase.
+      // POST /api/v1/library/scan and /reindex → job ack.
+      if (method === 'POST' && /\/api\/v1\/library\/(scan|reindex)$/.test(url)) {
+        const kind = url.endsWith('/scan') ? 'scan_all' : 'reindex';
+        const jobId = `sb-mock-${Math.random().toString(36).slice(2, 10)}`;
+        return jsonResponse(
+          {
+            jobId,
+            kind,
+            statusURL: `/api/v1/jobs/${jobId}`,
+            streamURL: `/api/v1/jobs/${jobId}/stream`,
+            submittedAt: new Date().toISOString(),
+          },
+          202,
+        );
+      }
+
+      // GET /api/v1/jobs/{id} → if a story has seeded `kura.libraryJob`
+      // pointing at this jobId, keep returning a running state with
+      // synthetic progress so the gear-menu running view stays visible
+      // for the snapshot. Otherwise fall through to the default
+      // terminal-succeeded shape that lets idle stories complete the
+      // kickoff cycle without lingering.
       if (method === 'GET' && /\/api\/v1\/jobs\/[^/]+$/.test(url)) {
+        const id = url.split('/').pop() ?? '';
+        const libraryRecord = readLibraryJobRecord();
+        if (libraryRecord && libraryRecord.jobId === id) {
+          return jsonResponse({
+            jobId: id,
+            kind: libraryRecord.kind === 'reindex' ? 'reindex' : 'scan_all',
+            state: 'running',
+            startedAt: libraryRecord.startedAt,
+            progress: {
+              status: 'update',
+              stage: libraryRecord.kind === 'reindex' ? 'reindex' : 'scan_all',
+              message: 'Frieren — Beyond Journey’s End',
+              current: 312,
+              total: 742,
+            },
+          });
+        }
         return jsonResponse({
-          jobId: 'sb-mock',
+          jobId: id,
           kind: 'scan',
           state: 'succeeded',
           startedAt: new Date(Date.now() - 1500).toISOString(),
@@ -74,5 +109,17 @@ if (typeof window !== 'undefined') {
 
       return realFetch(input, init);
     };
+
+    function readLibraryJobRecord(): { kind: string; jobId: string; startedAt: string } | null {
+      try {
+        const raw = window.localStorage.getItem('kura.libraryJob');
+        if (!raw) {
+          return null;
+        }
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
   }
 }
