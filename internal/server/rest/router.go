@@ -71,8 +71,9 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("DELETE /api/v1/series/{ref}/trash", requireOperator(s.handleTrashEmptySeries))
 	apiMux.HandleFunc("DELETE /api/v1/trash", requireOperator(s.handleTrashEmptyAll))
 
-	// library
-	apiMux.HandleFunc("POST /api/v1/library/reindex", requireOperator(s.handleReindex))
+	// library — long-running but non-destructive, ungated.
+	apiMux.HandleFunc("POST /api/v1/library/reindex", s.handleReindex)
+	apiMux.HandleFunc("POST /api/v1/library/scan", s.handleScanAll)
 
 	// trash
 	apiMux.HandleFunc("GET /api/v1/series/{ref}/trash", s.handleTrashListSeries)

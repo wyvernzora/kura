@@ -543,6 +543,35 @@ export const SkipCodeDuplicateSlot = 'duplicate_slot';
 export const SkipCodeMetadataSlotMissing = 'metadata_slot_missing';
 
 //////////
+// source: scan_all.go
+
+/**
+ * ScanAllResult is the terminal payload of POST /api/v1/library/scan.
+ * Aggregates the outcome of fanning per-series scans across the
+ * tracked library — total dispatched, succeeded, failed, and the
+ * per-series failure detail for any that didn't succeed. Per-series
+ * success detail (synced/skipped) is intentionally not aggregated; a
+ * caller that needs it issues a single-series scan.
+ */
+export interface ScanAllResult {
+  total: number /* int */;
+  succeeded: number /* int */;
+  failed: number /* int */;
+  failures?: ScanAllFailure[];
+}
+/**
+ * ScanAllFailure carries enough context for a UI or operator to
+ * understand which series tripped and why. Kind is the typed error
+ * category from internal/errkind so consumers can branch without
+ * parsing free-form messages.
+ */
+export interface ScanAllFailure {
+  ref: string;
+  kind: string;
+  message: string;
+}
+
+//////////
 // source: show.go
 
 /**

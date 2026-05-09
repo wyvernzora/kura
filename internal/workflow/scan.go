@@ -45,34 +45,42 @@ type ScanInput struct {
 // happen inside the Submit closure so the goroutine, not the caller,
 // pays for I/O.
 func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanResult] {
-	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	return jobs.Submit(deps.Jobs, ctx, jobs.KindScan, in.Ref, func(jobCtx context.Context) (response.ScanResult, error) {
-		source, err := deps.Provider()
-		if err != nil {
-			return response.ScanResult{}, err
-		}
-		runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger, deps.PreferredLanguages)
-		var out response.ScanResult
-		err = deps.Coordinator.WithSeries(jobCtx, in.Ref, func() error {
-			return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
-				internal, runErr := runner.Scan(jobCtx, scan.Input{
-					Refresh:      in.Refresh,
-					MetadataOnly: in.MetadataOnly,
-					Ordering:     in.Ordering,
-					Mutator:      coord.NewMutator("scan"),
-				})
-				if runErr != nil {
-					return translateScanError(runErr)
-				}
-				out = toScanResponse(seriesRoot, internal)
-				return nil
-			})
-		})
-		if err != nil {
-			return response.ScanResult{}, err
-		}
-		return out, nil
+		return runScan(jobCtx, deps, in)
 	})
+}
+
+// runScan is the unwrapped scan body. workflow.Scan wraps it with
+// jobs.Submit (one tracked job per call); workflow.ScanAll calls it
+// inline per ref so a library-wide scan reports one aggregate job
+// rather than N tracked jobs.
+func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult, error) {
+	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
+	source, err := deps.Provider()
+	if err != nil {
+		return response.ScanResult{}, err
+	}
+	runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger, deps.PreferredLanguages)
+	var out response.ScanResult
+	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
+		return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
+			internal, runErr := runner.Scan(ctx, scan.Input{
+				Refresh:      in.Refresh,
+				MetadataOnly: in.MetadataOnly,
+				Ordering:     in.Ordering,
+				Mutator:      coord.NewMutator("scan"),
+			})
+			if runErr != nil {
+				return translateScanError(runErr)
+			}
+			out = toScanResponse(seriesRoot, internal)
+			return nil
+		})
+	})
+	if err != nil {
+		return response.ScanResult{}, err
+	}
+	return out, nil
 }
 
 func toScanResponse(seriesRoot string, in scan.Result) response.ScanResult {

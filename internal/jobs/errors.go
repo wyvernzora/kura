@@ -14,6 +14,7 @@ type JobKind string
 
 const (
 	KindScan           JobKind = "scan"
+	KindScanAll        JobKind = "scan_all"
 	KindStage          JobKind = "stage"
 	KindReconcileApply JobKind = "reconcile_apply"
 	KindReindex        JobKind = "reindex"

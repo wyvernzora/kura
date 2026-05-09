@@ -40,6 +40,7 @@ build:
 # unions — tygo emits them as `= string` otherwise.
 gen-ts:
 	cd tools/tygo && go run .
+	cd web && pnpm exec biome check --write src/api/types.gen.ts >/dev/null
 
 # check-gen regenerates and fails if the committed file drifted. Wired
 # into `check` so PRs that change response types without running gen-ts
