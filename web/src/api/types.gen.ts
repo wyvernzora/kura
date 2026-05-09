@@ -813,17 +813,37 @@ export interface TrashCompanion {
   size: number /* int64 */;
 }
 /**
- * TrashEmpty is workflow.TrashEmpty's response.
+ * TrashEmpty is workflow.TrashEmpty's response. Attempts is the total
+ * number of trash entries the workflow tried to delete across every
+ * targeted series (matched the OlderThan filter); it's >= TotalEntries
+ * (entries actually removed). Failures lists per-series errors that
+ * stopped one or more deletions; under --all they're best-effort
+ * (subsequent series still process), under single-series they cause
+ * the workflow to return an error instead. Surfaces enough signal so
+ * callers can distinguish "no trash matched the filter" from "every
+ * attempt failed" — the latter previously rendered as "Nothing to
+ * empty," which was misleading.
  */
 export interface TrashEmpty {
   series: TrashSeriesEmpty[];
   totalEntries: number /* int */;
+  attempts?: number /* int */;
   reclaimedBytes: number /* int64 */;
+  failures?: TrashEmptyFailure[];
 }
 export interface TrashSeriesEmpty {
   ref: string;
   removed: string[];
   reclaimedBytes: number /* int64 */;
+}
+/**
+ * TrashEmptyFailure is one series whose trash-empty attempt errored.
+ * Error carries the wrapped cause's Error() string; structured payload
+ * stays in the server log via deps.Logger.Warn.
+ */
+export interface TrashEmptyFailure {
+  ref: string;
+  error: string;
 }
 /**
  * TrashRestore is workflow.TrashRestore's response. Caller passed ref

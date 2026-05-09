@@ -51,18 +51,42 @@ func TrashList(w io.Writer, result response.TrashList, asJSON bool) error {
 	return err
 }
 
-// TrashEmpty writes the trash-empty response.
+// TrashEmpty writes the trash-empty response. Distinguishes the
+// "no entries matched the filter" case (Attempts == 0) from the
+// "every attempt failed" case (Attempts > 0, TotalEntries == 0) so
+// the operator can tell whether to investigate. Per-series failure
+// messages render below the summary; full structured details land
+// in the server log.
 func TrashEmpty(w io.Writer, result response.TrashEmpty, asJSON bool) error {
 	if asJSON || !style.ShouldStyle(w) {
 		return writeJSON(w, result)
 	}
-	if result.TotalEntries == 0 {
+	switch {
+	case result.Attempts == 0 && len(result.Failures) == 0:
 		_, err := fmt.Fprintln(w, "Nothing to empty.")
 		return err
+	case result.TotalEntries > 0:
+		if _, err := fmt.Fprintf(w, "Removed %s, reclaimed %s across %d series.\n",
+			entriesLabel(result.TotalEntries), formatBytes(result.ReclaimedBytes), len(result.Series)); err != nil {
+			return err
+		}
+	default:
+		if _, err := fmt.Fprintf(w, "Failed to empty %s.\n",
+			entriesLabel(result.Attempts)); err != nil {
+			return err
+		}
 	}
-	_, err := fmt.Fprintf(w, "Removed %s, reclaimed %s across %d series.\n",
-		entriesLabel(result.TotalEntries), formatBytes(result.ReclaimedBytes), len(result.Series))
-	return err
+	if len(result.Failures) > 0 {
+		if _, err := fmt.Fprintf(w, "%d series failed (see server log for full traces):\n", len(result.Failures)); err != nil {
+			return err
+		}
+		for _, f := range result.Failures {
+			if _, err := fmt.Fprintf(w, "  - %s: %s\n", f.Ref, f.Error); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // TrashRestore writes the trash-restore response. Series ref is

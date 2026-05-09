@@ -108,6 +108,10 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 	for index, ref := range refsList {
 		progress.Update(ctx, "trash-empty", fmt.Sprintf("Emptying trash for %s", ref), index+1, len(refsList))
 		series := response.TrashSeriesEmpty{Ref: ref, Removed: make([]string, 0)}
+		// attempts counts entries the inner closure actually tried to
+		// delete (matched OlderThan), so callers can distinguish "no
+		// trash for this series" from "every attempt failed."
+		attempts := 0
 		emptyErr := deps.Coordinator.WithSeries(ctx, ref, func() error {
 			if err := refuseIfClaimed(deps, ref); err != nil {
 				return err
@@ -120,6 +124,7 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 				if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
 					continue
 				}
+				attempts++
 				bytes, err := trashfile.Delete(deps.LibRoot, ref, meta.ID)
 				if err != nil {
 					return fmt.Errorf("workflow: trash empty %s/%s: %w", ref, meta.ID, err)
@@ -129,11 +134,29 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 			}
 			return nil
 		})
+		out.Attempts += attempts
 		if emptyErr != nil {
+			if deps.Logger != nil {
+				deps.Logger.Warn("trash empty per-series failure",
+					"ref", ref.String(),
+					"attempts", attempts,
+					"removed", len(series.Removed),
+					"err", emptyErr.Error(),
+				)
+			}
+			out.Failures = append(out.Failures, response.TrashEmptyFailure{
+				Ref:   ref,
+				Error: emptyErr.Error(),
+			})
 			if in.All {
-				// Best-effort under --all: skip this series and continue.
-				// Surface attempts as zero-removed entries via the
-				// existing list shape.
+				// Best-effort under --all: continue to subsequent
+				// series. The per-series failure was already logged
+				// + appended to out.Failures so the caller sees it.
+				if len(series.Removed) > 0 {
+					out.Series = append(out.Series, series)
+					out.TotalEntries += len(series.Removed)
+					out.ReclaimedBytes += series.ReclaimedBytes
+				}
 				continue
 			}
 			return response.TrashEmpty{}, emptyErr
