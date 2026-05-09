@@ -29,6 +29,7 @@ export const Route = createFileRoute('/')({
 function LibraryHome() {
   const seriesQuery = useSeriesList();
   const query = useSearch((s) => s.query);
+  const clearSearch = useSearch((s) => s.clear);
   const density = useAutoDensity();
   const navigate = useNavigate();
   const onSelect = useCallback(
@@ -36,13 +37,19 @@ function LibraryHome() {
       if (!row.metadataRef) {
         return;
       }
+      // Picking a result is an explicit destination commit — the
+      // search query has done its job, so clear it before navigating
+      // so the destination page renders with an empty search field
+      // (and the rewind-on-clear logic in TopBar doesn't bounce the
+      // user back to where they started searching from).
+      clearSearch();
       // Series detail addresses by metadata ref (provider:id) — same
       // identifier the list emits as `metadataRef`. Untracked rows
       // (no metadataRef) never reach this handler because the grid
       // only forwards onClick when the ref is present.
       void navigate({ to: '/series/$ref', params: { ref: row.metadataRef } });
     },
-    [navigate],
+    [navigate, clearSearch],
   );
 
   const [active, setActive] = useState<Set<Status>>(new Set());
