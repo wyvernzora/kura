@@ -50,11 +50,11 @@ type TrashCompanion struct {
 // attempt failed" — the latter previously rendered as "Nothing to
 // empty," which was misleading.
 type TrashEmpty struct {
-	Series         []TrashSeriesEmpty   `json:"series"`
-	TotalEntries   int                  `json:"totalEntries"`
-	Attempts       int                  `json:"attempts,omitempty"`
-	ReclaimedBytes int64                `json:"reclaimedBytes"`
-	Failures       []TrashEmptyFailure  `json:"failures,omitempty"`
+	Series         []TrashSeriesEmpty  `json:"series"`
+	TotalEntries   int                 `json:"totalEntries"`
+	Attempts       int                 `json:"attempts,omitempty"`
+	ReclaimedBytes int64               `json:"reclaimedBytes"`
+	Failures       []TrashEmptyFailure `json:"failures,omitempty"`
 }
 
 type TrashSeriesEmpty struct {
