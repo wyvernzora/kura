@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -180,9 +182,10 @@ func launchServerTransports(
 	}
 	g.Go(func() error {
 		return sweep.Run(gctx, deps.LibRoot, sweep.Config{
-			Interval: envDuration(rt.Getenv, "KURA_SWEEP_INTERVAL", 0),
-			Jitter:   envDuration(rt.Getenv, "KURA_SWEEP_JITTER", 0),
-			PlanTTL:  envDuration(rt.Getenv, "KURA_PLAN_TTL", 0),
+			Interval:     envDuration(rt.Getenv, "KURA_SWEEP_INTERVAL", 0),
+			Jitter:       envDuration(rt.Getenv, "KURA_SWEEP_JITTER", 0),
+			LogRetention: envDays(rt.Getenv, "KURA_LOG_RETENTION_DAYS", 0),
+			Registry:     deps.Jobs,
 		}, logger)
 	})
 	return g.Wait()
@@ -302,6 +305,7 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 		JobTimeout:     envDuration(rt.Getenv, "KURA_JOB_TIMEOUT", 0),
 		Retention:      envDuration(rt.Getenv, "KURA_JOB_RETENTION", 30*time.Minute),
 		ReaperInterval: envDuration(rt.Getenv, "KURA_JOB_REAPER_INTERVAL", 5*time.Minute),
+		LibRoot:        deps.LibRoot,
 	}, logger)
 	deps.Jobs = registry
 	deps.Logger = logger
@@ -327,4 +331,20 @@ func envDuration(getenv func(string) string, key string, fallback time.Duration)
 		return fallback
 	}
 	return d
+}
+
+// envDays parses an integer day count from the named env var and
+// converts it to time.Duration. Empty / invalid / negative inputs
+// fall back to the default. Days are the user-facing unit for log
+// retention; sweep internally uses Duration.
+func envDays(getenv func(string) string, key string, fallback time.Duration) time.Duration {
+	raw := getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 0 {
+		return fallback
+	}
+	return time.Duration(n) * 24 * time.Hour
 }

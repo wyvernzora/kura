@@ -27,6 +27,8 @@ const (
 	TrashMetaName       = "meta.json"
 	PlanDirName         = "reconcile"
 	PlanExtension       = ".jsonl"
+	JobsDirName         = "jobs"
+	JobLogExtension     = ".jsonl"
 	ExtraDirName        = "Extra"
 )
 
@@ -97,6 +99,18 @@ func PlanDir(libRoot string, ref refs.Series) string {
 // PlanFile returns <libRoot>/<ref>/.kura/reconcile/<token>.jsonl.
 func PlanFile(libRoot string, ref refs.Series, token string) string {
 	return filepath.Join(PlanDir(libRoot, ref), token+PlanExtension)
+}
+
+// JobsDir returns <libRoot>/.kura/jobs/. Library-scoped (not per-series)
+// because library-wide jobs (reindex, scan_all) have no owning series
+// and per-series jobs are still keyed by their unique ULID.
+func JobsDir(libRoot string) string {
+	return filepath.Join(LibraryKuraDir(libRoot), JobsDirName)
+}
+
+// JobFile returns <libRoot>/.kura/jobs/<jobID>.jsonl.
+func JobFile(libRoot, jobID string) string {
+	return filepath.Join(JobsDir(libRoot), jobID+JobLogExtension)
 }
 
 // SeasonDir returns <libRoot>/<ref>/Season <N>/. Season 0 maps to the series

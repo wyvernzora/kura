@@ -93,16 +93,23 @@ func (e *entry) Err() error {
 	return e.err
 }
 
-// Get returns the UntypedJob view of a tracked job, or
-// *JobNotFoundError if the ID is unknown or evicted.
+// Get returns the UntypedJob view of a tracked job. When the ID is
+// unknown to the in-memory registry but the registry has a LibRoot
+// configured, falls back to the on-disk JSONL log so callers see
+// persisted history transparently. Returns *JobNotFoundError only
+// when both the registry and disk lack the entry.
 func (r *Registry) Get(id string) (UntypedJob, error) {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
 	e, ok := r.byID[id]
-	if !ok {
+	libRoot := r.cfg.LibRoot
+	r.mu.RUnlock()
+	if ok {
+		return e, nil
+	}
+	if libRoot == "" {
 		return nil, &JobNotFoundError{JobID: id}
 	}
-	return e, nil
+	return readDiskJob(libRoot, id)
 }
 
 // IsShutdownError reports whether err is the registry's
