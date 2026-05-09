@@ -1,5 +1,6 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 import { GearMenu } from '@/components/GearMenu';
 import { Logo } from '@/components/Logo';
@@ -51,6 +52,31 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
   // a frozen value snapshot on each navigation; cheap to read.
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onDetailRoute = pathname.startsWith('/series/');
+
+  // ⌘K (or Ctrl-K) focuses the search input from anywhere on the
+  // page. The hint pill in SearchField promises this; the listener
+  // below honors it. preventDefault so the browser doesn't open its
+  // own URL-bar shortcut.
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if (e.key !== 'k' && e.key !== 'K') {
+        return;
+      }
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) {
+        return;
+      }
+      const input = searchRef.current;
+      if (!input) {
+        return;
+      }
+      e.preventDefault();
+      input.focus();
+      input.select();
+    }
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   function handleSearchChange(next: string) {
     // Capture the origin only on the empty → non-empty transition
@@ -112,11 +138,12 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
       <div className="mx-auto grid h-[72px] max-w-[1920px] grid-cols-[1fr_minmax(0,560px)_1fr] items-center gap-3 px-[18px]">
         <div className="justify-self-start">{onDetailRoute ? <BackToLibrary /> : <Logo />}</div>
         <SearchField
+          ref={searchRef}
           className="w-full"
           value={query}
           onChange={(e) => handleSearchChange(e.target.value)}
           onClear={rewindClear}
-          placeholder="Search library — title, source, year…"
+          placeholder="Search library — title or alias…"
         />
         <div className="flex items-center justify-self-end gap-1.5">
           <GearMenu />
