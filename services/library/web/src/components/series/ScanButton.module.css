@@ -1,0 +1,248 @@
+/*
+ * Bottom-edge hairline progress + indeterminate sweep + caption row.
+ * Lives outside Tailwind because:
+ *   - `@property --p` cannot be expressed in utility classes
+ *   - the indeterminate keyframes are bespoke
+ *   - per-state data-attribute selectors compose tighter as raw CSS
+ *
+ * Color tokens (--color-status-error / --color-status-incomplete /
+ * --color-ink) come from globals.css and invert in dark mode.
+ */
+
+@property --p {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+.scanCol {
+  --prog-fill: var(--color-ink);
+  --prog-track: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  --prog-error: var(--color-status-error);
+  --prog-warning: var(--color-status-incomplete);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.button {
+  position: relative;
+  height: 38px;
+  padding: 0 16px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  width: 100%;
+  cursor: pointer;
+  isolation: isolate;
+  transition: opacity 200ms ease, transform 160ms var(--ease-out-soft), box-shadow 160ms
+    var(--ease-out-soft), background-color 160ms var(--ease-out-soft);
+}
+
+.button:not(:disabled):hover {
+  transform: translateY(-1px);
+  background: var(--color-overlay-soft);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.button:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-card), 0 0 0 3px rgba(96, 142, 220, 0.22);
+}
+
+.icon {
+  display: inline-block;
+  height: 16px;
+  width: 16px;
+}
+
+.button[data-state="running"] .icon {
+  animation: scan-spin 1.1s linear infinite;
+}
+
+@keyframes scan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hairlineTrack,
+.hairlineFill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+}
+
+.hairlineTrack {
+  right: 0;
+  background: var(--prog-track);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.hairlineFill {
+  width: calc(var(--p, 0) * 100%);
+  background: var(--prog-fill);
+  opacity: 0;
+  transition: width 0.2s linear, opacity 180ms ease, background 180ms ease;
+}
+
+.button[data-state="running"] .hairlineTrack,
+.button[data-state="running"] .hairlineFill,
+.button[data-state="error"] .hairlineTrack,
+.button[data-state="error"] .hairlineFill,
+.button[data-state="warning"] .hairlineTrack,
+.button[data-state="warning"] .hairlineFill {
+  opacity: 1;
+}
+
+.button[data-state="error"] .hairlineFill {
+  background: var(--prog-error);
+}
+
+.button[data-state="warning"] .hairlineFill {
+  background: var(--prog-warning);
+}
+
+/* Indeterminate fallback while running with total=0. The fill width is
+ * fixed at 30% and translates -50% → 150% so the same DOM that drives
+ * determinate progress doubles as a shimmer when the server can't say
+ * how many files are ahead. */
+.button[data-state="running"][data-indeterminate="true"] .hairlineFill {
+  width: 30%;
+  animation: scan-sweep 1.4s ease-in-out infinite;
+  transition: opacity 180ms ease, background 180ms ease;
+}
+
+@keyframes scan-sweep {
+  0% {
+    transform: translateX(-50%);
+  }
+  100% {
+    transform: translateX(330%);
+  }
+}
+
+/* Caption row: file/message (left), counter or last-scanned (right
+ * text), more-link (right button). The two right children are mutually
+ * exclusive — text in idle/scanning, link in error/warning. */
+.captionRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-height: 14px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-muted);
+  letter-spacing: 0.4px;
+}
+
+.captionLeft,
+.captionRight,
+.captionMore {
+  transition: opacity 180ms ease;
+}
+
+.captionLeft {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Truncate the *beginning* of long filenames — the trailing portion
+   * (E12 (1080p).mkv) is the disambiguating bit; the leading season
+   * directory is rarely surprising. RTL flips the ellipsis to the left. */
+  direction: rtl;
+  text-align: left;
+}
+
+.captionRight {
+  flex-shrink: 0;
+}
+
+.captionMore {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--color-ink);
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  border-bottom: 1px solid currentColor;
+  line-height: 1;
+  padding-bottom: 1px;
+}
+
+.captionMore:hover {
+  opacity: 0.7;
+}
+
+/* Per-state slot visibility, keyed off the wrapper's data-state. */
+.scanCol[data-state="idle"] .captionLeft {
+  opacity: 0;
+  visibility: hidden;
+}
+.scanCol[data-state="idle"] .captionRight {
+  color: var(--color-muted);
+}
+.scanCol[data-state="idle"] .captionMore {
+  display: none;
+}
+
+.scanCol[data-state="running"] .captionLeft {
+  opacity: 1;
+  visibility: visible;
+}
+.scanCol[data-state="running"] .captionRight {
+  color: var(--color-ink);
+  font-weight: 500;
+}
+.scanCol[data-state="running"] .captionMore {
+  display: none;
+}
+
+.scanCol[data-state="error"] .captionLeft {
+  opacity: 1;
+  visibility: visible;
+  color: var(--prog-error);
+  font-weight: 500;
+}
+.scanCol[data-state="error"] .captionRight {
+  display: none;
+}
+.scanCol[data-state="error"] .captionMore {
+  display: inline-block;
+}
+
+.scanCol[data-state="warning"] .captionLeft {
+  opacity: 1;
+  visibility: visible;
+  color: var(--color-ink);
+  font-weight: 500;
+}
+.scanCol[data-state="warning"] .captionRight {
+  display: none;
+}
+.scanCol[data-state="warning"] .captionMore {
+  display: inline-block;
+}
