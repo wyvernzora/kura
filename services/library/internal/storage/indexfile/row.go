@@ -49,6 +49,12 @@ type Row struct {
 	IsAiring bool `json:"isAiring,omitempty"`
 	Staged   bool `json:"staged,omitempty"`
 
+	// Counts: SeasonsAvailable / EpisodesAvailable count slots backed
+	// by an active record. SeasonCount / EpisodeCount are the
+	// trackable totals — aired episodes (present + missing) plus
+	// pre-staged pending ones; announced-but-unaired slots without a
+	// record are excluded so "X / Y" reflects what the user can
+	// actually have on disk today. See builder.go:summarizeSeries.
 	SeasonsAvailable  int `json:"seasonsAvailable,omitempty"`
 	SeasonCount       int `json:"seasonCount,omitempty"`
 	EpisodesAvailable int `json:"episodesAvailable,omitempty"`

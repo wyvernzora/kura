@@ -1,0 +1,27 @@
+# list_excludes_pending_from_total: regression for the bug where
+# announced-but-unaired episodes counted toward EpisodeCount in
+# kura_list. Re:Zero shape: 2 aired (both staged + applied so they're
+# present) + 2 announced-but-unaired-far-future. List must report
+# 2/2, not 2/4.
+
+kura_add stub:1002
+
+# Stage + apply the 2 aired episodes so episodesAvailable=2.
+kura_mkfile e1.mp4
+kura_stage $KURA_LAST_REF S01E0001 e1.mp4
+kura_mkfile e2.mp4
+kura_stage $KURA_LAST_REF S01E0002 e2.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+
+# kura_list must reflect aired-trackable totals only.
+kura_list
+stdout '"episodesAvailable":2'
+stdout '"episodeCount":2'
+! stdout '"episodeCount":4'
+stdout '"seasonsAvailable":1'
+stdout '"seasonCount":1'
+
+# Series counts as complete because every aired episode is present;
+# the future eps are pending (not missing).
+stdout '"status":"complete"'

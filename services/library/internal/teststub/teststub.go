@@ -34,13 +34,19 @@ type Provider struct {
 	seriesByID map[string]provider.Series
 }
 
-// NewDefaultProvider returns a Provider seeded with one canonical
-// series: stub:1001, "Stub Show", 1 season, 3 episodes. Mirrors the
-// fixture historically used by e2e/stub_provider_test.go.
+// NewDefaultProvider returns a Provider seeded with two canonical
+// fixture series:
+//
+//   - stub:1001 "Stub Show" — 1 season, 3 aired episodes (2020). The
+//     baseline fixture used by most scenarios.
+//   - stub:1002 "Pending Show" — 1 season, 2 aired (2020) + 2
+//     far-future-aired (2099) episodes. Used by scenarios that need
+//     pending-episode semantics (e.g. count rollups, IsAiring).
 func NewDefaultProvider() *Provider {
 	ep1, _ := refs.NewEpisode(1, 1)
 	ep2, _ := refs.NewEpisode(1, 2)
 	ep3, _ := refs.NewEpisode(1, 3)
+	ep4, _ := refs.NewEpisode(1, 4)
 	return &Provider{
 		seriesByID: map[string]provider.Series{
 			"1001": {
@@ -71,6 +77,45 @@ func NewDefaultProvider() *Provider {
 								Aired:          "2020-01-15",
 								PreferredTitle: textnorm.NFC("Episode 3"),
 								CanonicalTitle: textnorm.NFC("Episode 3"),
+							},
+						},
+					},
+				},
+			},
+			"1002": {
+				SeriesSummary: provider.SeriesSummary{
+					MetadataRef:    "stub:1002",
+					PreferredTitle: textnorm.NFC("Pending Show"),
+					CanonicalTitle: textnorm.NFC("Pending Show"),
+					Status:         provider.SeriesStatusContinuing,
+				},
+				Seasons: []provider.Season{
+					{
+						Number: 1,
+						Episodes: []provider.Episode{
+							{
+								Ref:            ep1,
+								Aired:          "2020-01-01",
+								PreferredTitle: textnorm.NFC("E1"),
+								CanonicalTitle: textnorm.NFC("E1"),
+							},
+							{
+								Ref:            ep2,
+								Aired:          "2020-01-08",
+								PreferredTitle: textnorm.NFC("E2"),
+								CanonicalTitle: textnorm.NFC("E2"),
+							},
+							{
+								Ref:            ep3,
+								Aired:          "2099-01-01",
+								PreferredTitle: textnorm.NFC("E3"),
+								CanonicalTitle: textnorm.NFC("E3"),
+							},
+							{
+								Ref:            ep4,
+								Aired:          "2099-01-08",
+								PreferredTitle: textnorm.NFC("E4"),
+								CanonicalTitle: textnorm.NFC("E4"),
 							},
 						},
 					},
