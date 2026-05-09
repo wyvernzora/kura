@@ -34,7 +34,8 @@ func SafeMoveFile(from, to string) error {
 		return err
 	}
 	if err := os.Rename(from, to); err == nil {
-		return syncParent(to)
+		_ = syncParent(to) // best-effort: SMB/NFS may not support dir fsync; rename is already atomic
+		return nil
 	} else if !isCrossDeviceMove(err) {
 		return err
 	}
