@@ -20,10 +20,6 @@ const (
 	// active media, or the series has no episodes at all.
 	ListStatusIncomplete ListStatus = "incomplete"
 
-	// ListStatusAiring: every aired episode is present, but at least
-	// one upcoming episode has not yet aired.
-	ListStatusAiring ListStatus = "airing"
-
 	// ListStatusError: the row could not be computed (parse error,
 	// load error). The Error field carries the message.
 	ListStatusError ListStatus = "error"
@@ -39,7 +35,13 @@ const (
 // active record. SeasonCount / EpisodeCount are the totals. Renderers
 // surface them as "available/total".
 type ListRow struct {
-	Status            ListStatus    `json:"status"`
+	Status ListStatus `json:"status"`
+	// IsAiring is the observed-airing flag, independent of Status. A
+	// season counts toward IsAiring when it has at least one
+	// future-airdate episode AND the season's first episode has
+	// already aired (or airs within 168h). Specials (season 0) are
+	// excluded. Computed at row-build time; not persisted to series.json.
+	IsAiring          bool          `json:"isAiring,omitempty"`
 	Staged            bool          `json:"staged,omitempty"`
 	Title             string        `json:"title"`
 	CanonicalTitle    string        `json:"canonicalTitle,omitempty"`

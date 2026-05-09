@@ -141,7 +141,7 @@ export interface JobError {
  * Library-level (vs episode-level Status above): does the series have
  * any tracked metadata, are any episodes missing, are any unaired, etc.
  */
-export type ListStatus = "untracked" | "complete" | "incomplete" | "airing" | "error";
+export type ListStatus = "untracked" | "complete" | "incomplete" | "error";
 /**
  * ListStatusUntracked: directory under the library root has no
  * .kura/series.json (Kura does not manage it).
@@ -157,11 +157,6 @@ export const ListStatusComplete: ListStatus = "complete";
  * active media, or the series has no episodes at all.
  */
 export const ListStatusIncomplete: ListStatus = "incomplete";
-/**
- * ListStatusAiring: every aired episode is present, but at least
- * one upcoming episode has not yet aired.
- */
-export const ListStatusAiring: ListStatus = "airing";
 /**
  * ListStatusError: the row could not be computed (parse error,
  * load error). The Error field carries the message.
@@ -179,6 +174,14 @@ export const ListStatusError: ListStatus = "error";
  */
 export interface ListRow {
   status: ListStatus;
+  /**
+   * IsAiring is the observed-airing flag, independent of Status. A
+   * season counts toward IsAiring when it has at least one
+   * future-airdate episode AND the season's first episode has
+   * already aired (or airs within 168h). Specials (season 0) are
+   * excluded. Computed at row-build time; not persisted to series.json.
+   */
+  isAiring?: boolean;
   staged?: boolean;
   title: string;
   canonicalTitle?: string;
@@ -549,6 +552,11 @@ export interface Show {
   preferredTitle: string;
   canonicalTitle?: string;
   status: ListStatus;
+  /**
+   * IsAiring mirrors ListRow.IsAiring — observed-airing flag
+   * independent of Status.
+   */
+  isAiring?: boolean;
   artwork?: ArtworkShow;
   seasons: SeasonShow[];
   truncated?: boolean;

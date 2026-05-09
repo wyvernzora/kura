@@ -1,11 +1,13 @@
 import type { ListStatus } from '@/api/types';
 
 /**
- * Series status — re-exports the generated `ListStatus` literal union
- * under the web-side name. Single source of truth lives in
- * `internal/response/list.go`.
+ * Series status — superset of the wire `ListStatus` plus the
+ * UI-synthesized `'airing'` value. The wire dropped `'airing'` as a
+ * status (it now lives on `ListRow.isAiring`); the UI keeps the
+ * existing chip palette by deriving a compound status from
+ * `(row.status, row.isAiring)` at render time.
  */
-export type Status = ListStatus;
+export type Status = ListStatus | 'airing';
 
 /**
  * A single status, or a compound state (e.g. `["airing", "incomplete"]`
@@ -72,4 +74,25 @@ export function secondaryStatus(value: StatusValue): Status | undefined {
   }
   const primary = primaryStatus(value);
   return arr.find((s) => s !== primary);
+}
+
+/**
+ * withAiring synthesizes a UI status value from a wire `ListStatus` plus
+ * the `isAiring` flag. The wire dropped `'airing'` as a status (it now
+ * lives in `row.isAiring` / `show.isAiring`); this helper restores the
+ * compound display so the existing chip palette keeps working:
+ *
+ *   - isAiring=false → wire status, single value.
+ *   - isAiring=true + status=complete → `'airing'` (single).
+ *   - isAiring=true + other status → compound `['airing', status]` so
+ *     both the airing dot and the underlying chip surface.
+ */
+export function withAiring(status: ListStatus, isAiring: boolean): StatusValue {
+  if (!isAiring) {
+    return status as Status;
+  }
+  if (status === 'complete') {
+    return 'airing';
+  }
+  return ['airing', status as Status];
 }

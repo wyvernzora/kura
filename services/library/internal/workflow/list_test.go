@@ -56,7 +56,7 @@ func TestList_ReturnsAllRowsSortedByTitle(t *testing.T) {
 	deps := listFixture(t,
 		makeRow(t, "Zebra", response.ListStatusComplete),
 		makeRow(t, "Apple", response.ListStatusComplete),
-		makeRow(t, "Mango", response.ListStatusAiring),
+		makeRow(t, "Mango", response.ListStatusComplete),
 	)
 	result, err := workflow.List(context.Background(), deps, workflow.ListInput{})
 	if err != nil {
@@ -79,7 +79,7 @@ func TestList_ReturnsAllRowsSortedByTitle(t *testing.T) {
 func TestList_EmitsProgressOnInboundCtx(t *testing.T) {
 	deps := listFixture(t,
 		makeRow(t, "Apple", response.ListStatusComplete),
-		makeRow(t, "Mango", response.ListStatusAiring),
+		makeRow(t, "Mango", response.ListStatusComplete),
 	)
 	var events []progress.Event
 	ctx := progress.With(context.Background(), func(_ context.Context, ev progress.Event) {

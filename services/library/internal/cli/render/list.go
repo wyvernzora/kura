@@ -46,7 +46,7 @@ func List(w io.Writer, result response.ListResult, asJSON bool) error {
 			statusText += "*"
 		}
 		tw.AppendRow(table.Row{
-			renderListStatus(statusText, styled),
+			renderListStatus(statusText, row.IsAiring, styled),
 			idCell(row),
 			progressCell(row.SeasonsAvailable, row.SeasonCount, row.Status, styled),
 			progressCell(row.EpisodesAvailable, row.EpisodeCount, row.Status, styled),
@@ -156,25 +156,35 @@ func relativeAge(d time.Duration) string {
 	}
 }
 
-func renderListStatus(status string, styled bool) string {
+// airingBadge is the white-on-blue " airing " chip appended to the
+// status cell when row.IsAiring is true. One space pad each side.
+var airingBadge = chalk.White.NewStyle().WithBackground(chalk.Blue).Style(" airing ")
+
+func renderListStatus(status string, isAiring, styled bool) string {
 	value := strings.TrimSpace(status)
 	if !styled {
+		if isAiring {
+			return value + " (airing)"
+		}
 		return value
 	}
 	base := strings.TrimSuffix(value, "*")
 	suffix := strings.TrimPrefix(value, base)
+	var rendered string
 	switch base {
 	case string(response.ListStatusUntracked):
-		return chalk.Dim.TextStyle(style.Gray(base)) + suffix
+		rendered = chalk.Dim.TextStyle(style.Gray(base)) + suffix
 	case string(response.ListStatusComplete):
-		return chalk.Green.Color(base) + suffix
+		rendered = chalk.Green.Color(base) + suffix
 	case string(response.ListStatusIncomplete):
-		return chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
-	case string(response.ListStatusAiring):
-		return chalk.Blue.Color(base) + suffix
+		rendered = chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
 	case string(response.ListStatusError):
-		return chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
+		rendered = chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
 	default:
-		return value
+		rendered = value
 	}
+	if isAiring {
+		rendered += " " + airingBadge
+	}
+	return rendered
 }

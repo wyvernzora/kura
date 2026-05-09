@@ -38,10 +38,28 @@ function compareTitles(a: string, b: string): number {
 }
 
 /**
+ * Returns the synthetic display-status for a row: `'airing'` when
+ * `row.isAiring` is true, otherwise the wire status. Used by the
+ * status sort + chip palette so airing series surface at the top of
+ * the status sort regardless of their underlying complete /
+ * incomplete state.
+ */
+export function displayStatus(row: ListRow): Status {
+  if (row.isAiring) {
+    return 'airing';
+  }
+  return row.status as Status;
+}
+
+/**
  * Returns rows whose status is in the active filter set. An empty set
- * is treated as "no filter applied" — all rows pass through. The set
- * shape lets callers toggle individual chips without rebuilding the
- * filter logic.
+ * is treated as "no filter applied" — all rows pass through.
+ *
+ * The synthetic `'airing'` chip filters on `row.isAiring` instead of
+ * `row.status` (the wire dropped airing as a status; it's now a
+ * separate flag). Other chips filter on `row.status` as before. Active
+ * `'airing'` ORs with any wire-status chips (a series matches when
+ * either condition holds).
  */
 export function filterByStatus(
   rows: readonly ListRow[],
@@ -50,7 +68,13 @@ export function filterByStatus(
   if (active.size === 0) {
     return rows;
   }
-  return rows.filter((row) => active.has(row.status));
+  const wantAiring = active.has('airing');
+  return rows.filter((row) => {
+    if (wantAiring && row.isAiring) {
+      return true;
+    }
+    return active.has(row.status as Status);
+  });
 }
 
 /**
@@ -123,7 +147,7 @@ export function sortRows(rows: readonly ListRow[], sort: SortSpec): readonly Lis
         }
         break;
       case 'status':
-        cmp = STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status];
+        cmp = STATUS_SORT_ORDER[displayStatus(a)] - STATUS_SORT_ORDER[displayStatus(b)];
         break;
     }
     if (cmp === 0) {

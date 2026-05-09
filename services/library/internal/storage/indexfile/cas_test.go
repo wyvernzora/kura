@@ -67,7 +67,7 @@ func TestSaveCASRoundTripIsByteStable(t *testing.T) {
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Date(2026, 5, 2, 19, 14, 0, 0, time.UTC)}
 	rows := []indexfile.Row{
 		{Series: mustParseSeries(t, "Show A"), Metadata: refs.Metadata("tvdb:42"), Title: "Show A", Status: response.ListStatusComplete},
-		{Series: mustParseSeries(t, "Show B"), Metadata: refs.Metadata("tvdb:7"), Title: "Show B", Status: response.ListStatusAiring},
+		{Series: mustParseSeries(t, "Show B"), Metadata: refs.Metadata("tvdb:7"), Title: "Show B", Status: response.ListStatusIncomplete},
 	}
 	if err := indexfile.SaveCAS(root, "", rows, mutator); err != nil {
 		t.Fatalf("first save: %v", err)
@@ -218,7 +218,7 @@ func TestParseCASRejectsMalformedRows(t *testing.T) {
 	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	bad := []byte(`{"$schema":2,"indexAsOf":"2026-01-01T00:00:00Z"}` + "\n" + `not-json` + "\n")
+	bad := []byte(`{"$schema":3,"indexAsOf":"2026-01-01T00:00:00Z"}` + "\n" + `not-json` + "\n")
 	if err := os.WriteFile(paths.IndexFile(root), bad, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}

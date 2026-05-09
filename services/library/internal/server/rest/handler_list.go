@@ -19,6 +19,9 @@ const (
 // Query:
 //
 //	status (repeatable) — filter by ListStatus.
+//	airing             — when "1"/"true"/"yes"/"on", admit only airing
+//	                     rows; when "0"/"false"/"no"/"off", admit only
+//	                     non-airing rows; absent means no filter.
 //	limit              — page cap (default 100, max 1000).
 //	cursor             — opaque pagination token from a prior response.
 //
@@ -48,8 +51,15 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	airing, err := parseOptionalBool(q.Get("airing"), "airing")
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	result, err := workflow.List(r.Context(), s.deps.Workflow, workflow.ListInput{
 		Statuses:   statuses,
+		Airing:     airing,
 		MaxResults: maxResults,
 		Cursor:     q.Get("cursor"),
 	})
@@ -59,6 +69,24 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSONWithETag(w, r, http.StatusOK, result)
+}
+
+// parseOptionalBool returns nil for empty input, *true / *false for
+// recognized truthy / falsy strings, and a validation error otherwise.
+// Truthy: 1 true TRUE yes on. Falsy: 0 false FALSE no off.
+func parseOptionalBool(raw, name string) (*bool, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	switch raw {
+	case "1", "true", "TRUE", "yes", "on":
+		v := true
+		return &v, nil
+	case "0", "false", "FALSE", "no", "off":
+		v := false
+		return &v, nil
+	}
+	return nil, &validationError{msg: fmt.Sprintf("%s must be 1/true/yes/on or 0/false/no/off", name)}
 }
 
 // parseListStatuses validates each entry against the closed allowed
@@ -72,7 +100,7 @@ func parseListStatuses(raw []string) ([]response.ListStatus, error) {
 		status := response.ListStatus(s)
 		if !isAllowedListStatus(status) {
 			return nil, &validationError{
-				msg: fmt.Sprintf("unknown status %q (allowed: complete, incomplete, airing, error, untracked)", s),
+				msg: fmt.Sprintf("unknown status %q (allowed: complete, incomplete, error, untracked)", s),
 			}
 		}
 		out = append(out, status)
@@ -84,7 +112,6 @@ func isAllowedListStatus(s response.ListStatus) bool {
 	switch s {
 	case response.ListStatusComplete,
 		response.ListStatusIncomplete,
-		response.ListStatusAiring,
 		response.ListStatusError,
 		response.ListStatusUntracked:
 		return true

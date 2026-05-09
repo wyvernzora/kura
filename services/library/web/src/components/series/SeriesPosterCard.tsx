@@ -5,7 +5,7 @@ import type { Show } from '@/api/types';
 import { SeriesStatusCornerPill } from '@/components/series/SeriesStatusCornerPill';
 import { cn } from '@/lib/cn';
 import { formatRelativeAgo } from '@/lib/relativeTime';
-import { primaryStatus } from '@/lib/status';
+import { primaryStatus, withAiring } from '@/lib/status';
 import { usePosterTilt } from '@/lib/usePosterTilt';
 import { PosterArt } from '@/poster/PosterArt';
 
@@ -34,7 +34,7 @@ interface SeriesPosterCardProps {
  * scroll independently without losing context of the series identity.
  */
 export function SeriesPosterCard({ show, scanning, onScanNow, className }: SeriesPosterCardProps) {
-  const status = primaryStatus(show.status);
+  const status = primaryStatus(withAiring(show.status, !!show.isAiring));
   const title = show.preferredTitle || show.canonicalTitle || show.ref;
   const posterUrl = show.artwork?.poster?.thumbnailUrl ?? show.artwork?.poster?.url;
   return (

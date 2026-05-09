@@ -327,7 +327,7 @@ func listScannableRefs(ctx context.Context, c *client.Client) ([]string, error) 
 		cursor string
 	)
 	for {
-		page, err := c.ListSeries(ctx, nil, 0, cursor)
+		page, err := c.ListSeries(ctx, nil, nil, 0, cursor)
 		if err != nil {
 			return nil, err
 		}

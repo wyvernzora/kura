@@ -107,21 +107,138 @@ func TestBuildRowFromModel_StagedFlag(t *testing.T) {
 	}
 }
 
-func TestBuildRowFromModel_PendingIsAiring(t *testing.T) {
+// Single-cour weekly run with a future episode within cadence: cour 1
+// has E1 (2 weeks ago) and E2 (3 days out). Cour 1's first date is in
+// the past, last date is in the future → airing.
+func TestBuildRowFromModel_AiringFlag_WeeklyCadence(t *testing.T) {
 	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
 	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
-	future := civil.Date{Year: 2099, Month: 1, Day: 1}
+	past := civil.Date{Year: 2026, Month: 4, Day: 27}
+	near := civil.Date{Year: 2026, Month: 5, Day: 7}
 	model := &series.Series{
 		Ref:      mustParseSeries(t, "Show"),
 		Metadata: refs.Metadata("tvdb:1"),
 		Episodes: map[refs.Episode]series.Episode{
-			mustEpisode(t, 1, 1): {Active: rec},
-			mustEpisode(t, 1, 2): {AirDate: future},
+			mustEpisode(t, 1, 1): {AirDate: past, Active: rec},
+			mustEpisode(t, 1, 2): {AirDate: near},
 		},
 	}
 	row := indexfile.BuildRowFromModel(model, now)
-	if row.Status != response.ListStatusAiring {
-		t.Fatalf("Status = %s, want airing (one pending)", row.Status)
+	if row.Status != response.ListStatusComplete {
+		t.Fatalf("Status = %s, want complete (no missing past eps)", row.Status)
+	}
+	if !row.IsAiring {
+		t.Fatal("IsAiring = false, want true (cour has past first + future last)")
+	}
+}
+
+func TestBuildRowFromModel_AiringFlag_FirstEpFarFuture(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	farFuture1 := civil.Date{Year: 2099, Month: 1, Day: 1}
+	farFuture2 := civil.Date{Year: 2099, Month: 1, Day: 8}
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "Show"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]series.Episode{
+			mustEpisode(t, 1, 1): {AirDate: farFuture1},
+			mustEpisode(t, 1, 2): {AirDate: farFuture2},
+		},
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if row.IsAiring {
+		t.Fatal("IsAiring = true, want false (first ep beyond 168h horizon)")
+	}
+}
+
+func TestBuildRowFromModel_AiringFlag_FirstEpWithinWindow(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	withinWindow := civil.Date{Year: 2026, Month: 5, Day: 8} // 4 days ahead
+	farFuture := civil.Date{Year: 2099, Month: 1, Day: 1}
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "Show"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]series.Episode{
+			mustEpisode(t, 1, 1): {AirDate: withinWindow},
+			mustEpisode(t, 1, 2): {AirDate: farFuture},
+		},
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if !row.IsAiring {
+		t.Fatal("IsAiring = false, want true (first ep airs within 168h)")
+	}
+}
+
+func TestBuildRowFromModel_AiringFlag_NoFutureEpisodes(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	past := civil.Date{Year: 2024, Month: 6, Day: 1}
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "Show"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]series.Episode{
+			mustEpisode(t, 1, 1): {AirDate: past, Active: rec},
+		},
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if row.IsAiring {
+		t.Fatal("IsAiring = true, want false (no future eps)")
+	}
+}
+
+// Helmode-style: cour 1 is fully aired (Jan-Mar 2026, weekly); E13
+// jumps to July 2026 — a split-cour gap of ~64 days. Cour 2 contains
+// only E13, whose first air date is beyond the 7d horizon, so the
+// series should not be flagged airing on May 4 2026.
+func TestBuildRowFromModel_AiringFlag_SplitCourHiatus(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	cour1Start := civil.Date{Year: 2026, Month: 1, Day: 10}
+	cour2 := civil.Date{Year: 2026, Month: 7, Day: 11}
+	episodes := map[refs.Episode]series.Episode{}
+	for i := 1; i <= 12; i++ {
+		air := cour1Start.AddDays(7 * (i - 1))
+		episodes[mustEpisode(t, 1, i)] = series.Episode{AirDate: air, Active: rec}
+	}
+	episodes[mustEpisode(t, 1, 13)] = series.Episode{AirDate: cour2}
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "Helmode"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: episodes,
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if row.IsAiring {
+		t.Fatal("IsAiring = true, want false (cour 1 ended in March, cour 2 first ep is 64d out)")
+	}
+}
+
+// Active cour mid-run: cour 1 ran Jan-Mar (all aired), cour 2 started
+// Apr 25 with weekly cadence; today is May 4, next pending is May 9.
+// Cour 2's first date (Apr 25) is in the past, last date (May 16) is
+// in the future → cour 2 qualifies, series airing.
+func TestBuildRowFromModel_AiringFlag_ActiveSecondCour(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	cour1Start := civil.Date{Year: 2026, Month: 1, Day: 10}
+	cour2Start := civil.Date{Year: 2026, Month: 4, Day: 25}
+	episodes := map[refs.Episode]series.Episode{}
+	for i := 1; i <= 12; i++ {
+		air := cour1Start.AddDays(7 * (i - 1))
+		episodes[mustEpisode(t, 1, i)] = series.Episode{AirDate: air, Active: rec}
+	}
+	// cour 2: E13 already aired (Apr 25), E14-E16 pending weekly.
+	episodes[mustEpisode(t, 1, 13)] = series.Episode{AirDate: cour2Start, Active: rec}
+	for i := 14; i <= 16; i++ {
+		air := cour2Start.AddDays(7 * (i - 13))
+		episodes[mustEpisode(t, 1, i)] = series.Episode{AirDate: air}
+	}
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "TwoCour"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: episodes,
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if !row.IsAiring {
+		t.Fatal("IsAiring = false, want true (cour 2 started Apr 25, has future eps)")
 	}
 }
 
