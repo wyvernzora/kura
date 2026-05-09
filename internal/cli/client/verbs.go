@@ -299,10 +299,26 @@ func (c *Client) TrashEmptyAll(ctx context.Context, olderThan string) (response.
 }
 
 // SubmitReindex calls POST /api/v1/library/reindex and returns the
-// JobAck the caller streams via /jobs/{id}/stream. Operator-only.
+// JobAck the caller streams via /jobs/{id}/stream.
 func (c *Client) SubmitReindex(ctx context.Context) (JobAck, error) {
 	var out JobAck
 	err := c.Do(ctx, http.MethodPost, "/api/v1/library/reindex", nil, nil, &out, false)
+	return out, err
+}
+
+// ScanAllRequest is the POST /api/v1/library/scan body.
+type ScanAllRequest struct {
+	Refresh      bool `json:"refresh,omitempty"`
+	MetadataOnly bool `json:"metadataOnly,omitempty"`
+	Concurrency  int  `json:"concurrency,omitempty"`
+}
+
+// SubmitScanAll calls POST /api/v1/library/scan and returns the
+// JobAck the caller streams via /jobs/{id}/stream. The fan-out runs
+// server-side; the response result decodes to response.ScanAllResult.
+func (c *Client) SubmitScanAll(ctx context.Context, req ScanAllRequest) (JobAck, error) {
+	var out JobAck
+	err := c.Do(ctx, http.MethodPost, "/api/v1/library/scan", nil, req, &out, false)
 	return out, err
 }
 

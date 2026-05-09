@@ -17,7 +17,7 @@ type reindexCmd struct {
 }
 
 func (cmd *reindexCmd) Run(rt *runContext) error {
-	c := operatorClientFromRT(rt)
+	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
 	ack, err := c.SubmitReindex(rt.Context)
 	if err != nil {
