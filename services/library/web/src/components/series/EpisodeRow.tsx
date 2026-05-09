@@ -51,6 +51,7 @@ export function EpisodeRow({ episode, className }: EpisodeRowProps) {
   const title = preferredTitle || canonicalTitle || marker;
   const dim = isDimmedStatus(status);
   const hasMedia = !!active;
+  const hasStaged = !!episode.staged;
   const sub = episodeSubText(status);
   const companions = active?.companions?.length ?? 0;
   const subText = renderSubText(aired, active, sub);
@@ -70,6 +71,7 @@ export function EpisodeRow({ episode, className }: EpisodeRowProps) {
         companions={companions}
         status={status}
         hasMedia={hasMedia}
+        hasStaged={hasStaged}
         active={active}
       />
       <MobileRow
@@ -79,6 +81,7 @@ export function EpisodeRow({ episode, className }: EpisodeRowProps) {
         companions={companions}
         status={status}
         hasMedia={hasMedia}
+        hasStaged={hasStaged}
         active={active}
       />
     </div>
@@ -92,6 +95,7 @@ interface RowVariantProps {
   companions: number;
   status: EpisodeShow['status'];
   hasMedia: boolean;
+  hasStaged: boolean;
   active: MediaShow | undefined;
 }
 
@@ -102,6 +106,7 @@ function DesktopRow({
   companions,
   status,
   hasMedia,
+  hasStaged,
   active,
 }: RowVariantProps) {
   return (
@@ -109,7 +114,7 @@ function DesktopRow({
       className="hidden items-center gap-3 px-[18px] py-3 sm:grid"
       style={{ gridTemplateColumns: '14px 56px 1fr auto auto auto' }}
     >
-      <StatusDot status={status} />
+      <StatusDot status={status} staged={hasStaged} />
       <div className="text-right font-mono text-[11px] text-muted">{shortMarker(marker)}</div>
       <div className="min-w-0">
         <div className="flex items-center text-[13px] leading-tight font-medium text-ink tracking-[-0.05px]">
@@ -136,13 +141,14 @@ function MobileRow({
   companions,
   status,
   hasMedia,
+  hasStaged,
   active,
 }: RowVariantProps) {
   return (
     <div className="flex flex-col gap-1 px-3 py-3 sm:hidden">
       {/* Meta line: dot, marker · airdate · codec · size, ⋯ */}
       <div className="flex items-center gap-2">
-        <StatusDot status={status} />
+        <StatusDot status={status} staged={hasStaged} />
         <div className="min-w-0 flex-1 truncate font-mono text-[10px] tracking-[0.3px] text-muted">
           {shortMarker(marker)} · {subText}
         </div>
