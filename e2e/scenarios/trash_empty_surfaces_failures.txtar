@@ -1,0 +1,62 @@
+# trash_empty_surfaces_failures: regression for the bug where
+# `kura trash empty --all --confirm` rendered "Nothing to empty"
+# when every per-series deletion errored. Validates:
+#   - response.TrashEmpty.Failures surfaces per-series errors.
+#   - CLI render distinguishes "Failed to empty" from
+#     "Nothing to empty" when Attempts > 0 but Removed == 0.
+#   - The retry shim in trashfile.Delete eventually returns the
+#     error rather than hanging when the FS truly refuses rmdir.
+#
+# Setup: stage + apply, then stage replacement + apply → 1 trash
+# bucket. chmod 555 the trash root dir to deny rmdir of the bucket
+# (write bit is required on the parent for rmdir of a child).
+# kura trash empty --all then exhausts the retry budget and
+# surfaces the failure.
+
+kura_add stub:1001
+
+# Stage initial file + apply.
+kura_mkfile e1_v1.mp4
+kura_stage $KURA_LAST_REF S01E0001 e1_v1.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+
+# Stage replacement + apply → 1 entry in trash.
+kura_mkfile e1_v2.mp4
+kura_stage_replace $KURA_LAST_REF S01E0001 e1_v2.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# Capture the first bucket's ULID so we can match it in the
+# failure list later.
+kura_first_trash_id $KURA_LAST_REF
+
+# Lock the trash root so rmdir of the bucket fails with EACCES.
+# os.RemoveAll's recursion still unlinks children (bucket itself
+# stays 755); only the parent rmdir is blocked. The new retry shim
+# in trashfile.Delete cycles 4 times, then surfaces the error
+# rather than hanging the call.
+kura_series_dir $KURA_LAST_REF
+exec chmod 555 $KURA_SERIES_DIR/.kura/trash
+
+# Run trash empty --all. CLI is non-TTY in the e2e harness, so the
+# render falls back to JSON. Assert against the JSON shape
+# immediately because scripttest's `stdout` matches against the
+# previous command's output:
+#   - CLI exits 0 (best-effort under --all per the response shape).
+#   - "attempts":1 (one bucket was tried).
+#   - "totalEntries":0 (none removed).
+#   - "failures":[…] surfaces the affected series + bucket ID with
+#     a permission-denied cause.
+kura_trash_empty_all
+stdout '"attempts": 1'
+stdout '"totalEntries": 0'
+stdout '"failures":'
+stdout $KURA_FIRST_TRASH_ID
+stdout 'permission denied'
+
+# Restore perms so test-temp cleanup runs cleanly. Only reached
+# when every assertion above passed.
+exec chmod 755 $KURA_SERIES_DIR/.kura/trash

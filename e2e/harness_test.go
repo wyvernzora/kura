@@ -460,6 +460,62 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 		},
 	)
 
+	// ── kura_first_trash_id ───────────────────────────────────────────────
+	// Reads the first trash entry's ULID for a series via kura trash list
+	// --json and stashes it into $KURA_FIRST_TRASH_ID. Lets scenarios
+	// reference the bucket dir on disk without parsing JSON in the script.
+	cmds["kura_first_trash_id"] = script.Command(
+		script.CmdUsage{Summary: "set $KURA_FIRST_TRASH_ID for series", Args: "<ref>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 1 {
+				return nil, fmt.Errorf("kura_first_trash_id: expected 1 arg, got %d", len(args))
+			}
+			ref := s.ExpandEnv(args[0], false)
+			out, _, err := b.run(s.Context(), "trash", "list", "--json", ref)
+			if err != nil {
+				return nil, fmt.Errorf("kura_first_trash_id: %w", err)
+			}
+			var doc struct {
+				Series []struct {
+					Entries []struct {
+						ID string `json:"id"`
+					} `json:"entries"`
+				} `json:"series"`
+			}
+			if err := json.Unmarshal([]byte(out), &doc); err != nil {
+				return nil, fmt.Errorf("kura_first_trash_id: decode: %w", err)
+			}
+			if len(doc.Series) == 0 || len(doc.Series[0].Entries) == 0 {
+				return nil, fmt.Errorf("kura_first_trash_id: no trash entries for %s", ref)
+			}
+			id := doc.Series[0].Entries[0].ID
+			return func(s *script.State) (string, string, error) {
+				if setErr := s.Setenv("KURA_FIRST_TRASH_ID", id); setErr != nil {
+					return "", "", fmt.Errorf("kura_first_trash_id: set env: %w", setErr)
+				}
+				return id + "\n", "", nil
+			}, nil
+		},
+	)
+
+	// ── kura_trash_empty_all ──────────────────────────────────────────────
+	// Library-wide variant. Surfaces stderr + non-zero exit through the
+	// WaitFunc so scenarios can match per-series Failure messages even
+	// when the underlying command exits non-zero.
+	cmds["kura_trash_empty_all"] = script.Command(
+		script.CmdUsage{Summary: "empty trash across the library", Args: "[older_than]"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			cliArgs := []string{"trash", "empty", "--all", "--confirm"}
+			if len(args) >= 1 {
+				cliArgs = append(cliArgs, "--older-than", args[0])
+			}
+			out, errOut, runErr := b.run(s.Context(), cliArgs...)
+			return func(s *script.State) (string, string, error) {
+				return out, errOut, runErr
+			}, nil
+		},
+	)
+
 	// ── kura_trash_empty ──────────────────────────────────────────────────
 	cmds["kura_trash_empty"] = script.Command(
 		script.CmdUsage{Summary: "empty trash for a series", Args: "<series_ref> [older_than]"},
