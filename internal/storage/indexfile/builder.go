@@ -182,16 +182,11 @@ func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
 		if episodeRef.IsSpecial() {
 			continue
 		}
-		if episode.Staged != nil {
-			s.hasStaged = true
-		}
-		s.episodes++
 		sn := episodeRef.Season()
-		seasons[sn] = struct{}{}
-		if episode.Active != nil {
-			s.episodesActive++
-			seasonsActive[sn] = struct{}{}
-		}
+
+		// Cour calculation feeds on every announced air date,
+		// regardless of pending state, so the air-date collection
+		// happens up front before the pending short-circuit below.
 		sa, ok := perSeason[sn]
 		if !ok {
 			sa = &seasonAirDates{}
@@ -200,11 +195,30 @@ func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
 		if episode.AirDate.IsValid() {
 			sa.dates = append(sa.dates, episode.AirDate)
 		}
-		if episode.Active != nil || episode.Staged != nil {
+
+		if episode.Staged != nil {
+			s.hasStaged = true
+		}
+
+		// Pending = no record AND air date is in the future. Such
+		// slots are announced but not yet expected to have a file;
+		// they don't count toward EpisodeCount / SeasonCount, so the
+		// "X / Y" rollup reflects aired-and-trackable episodes only.
+		// Pre-staged pending episodes (Staged != nil) DO count
+		// because the file is already in hand.
+		if episode.Active == nil && episode.Staged == nil && isPending(episode.AirDate, now) {
+			s.pending++
 			continue
 		}
-		if isPending(episode.AirDate, now) {
-			s.pending++
+
+		s.episodes++
+		seasons[sn] = struct{}{}
+		if episode.Active != nil {
+			s.episodesActive++
+			seasonsActive[sn] = struct{}{}
+			continue
+		}
+		if episode.Staged != nil {
 			continue
 		}
 		s.missing++

@@ -169,8 +169,13 @@ export const ListStatusError: ListStatus = "error";
  * across non-special episodes with active records, sorted high-
  * quality-first.
  * SeasonsAvailable / EpisodesAvailable count slots populated by an
- * active record. SeasonCount / EpisodeCount are the totals. Renderers
- * surface them as "available/total".
+ * active record. SeasonCount / EpisodeCount are the trackable totals:
+ * aired episodes (present + missing) plus any pre-staged future
+ * episodes. Pure-pending slots (announced but not aired, no record
+ * yet) are EXCLUDED from both totals so the "X / Y" rollup tracks
+ * what the user can actually have on disk today. A season counts
+ * toward SeasonCount only if it has at least one trackable episode
+ * by the same rule. Renderers surface them as "available / total".
  */
 export interface ListRow {
   status: ListStatus;

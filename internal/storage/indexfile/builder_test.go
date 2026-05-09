@@ -242,6 +242,64 @@ func TestBuildRowFromModel_AiringFlag_ActiveSecondCour(t *testing.T) {
 	}
 }
 
+// Regression: pending (unaired) episodes must not contribute to
+// EpisodeCount or SeasonCount. Re:Zero-shaped scenario — a series
+// whose latest season has 5 aired-missing eps and 14 announced-but-
+// unaired eps should report 66/71 (not 66/85). SeasonCount should
+// include the partial season because it has aired episodes (5
+// missing). A pure future-only season is excluded.
+func TestBuildRowFromModel_PendingExcludedFromTotals(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	pastBase := civil.Date{Year: 2024, Month: 1, Day: 1}
+	futureBase := civil.Date{Year: 2026, Month: 5, Day: 11}
+	farFutureBase := civil.Date{Year: 2027, Month: 1, Day: 1}
+	episodes := map[refs.Episode]series.Episode{}
+	// Seasons 1-3: 22 active each = 66 aired-present.
+	for season := 1; season <= 3; season++ {
+		for i := 1; i <= 22; i++ {
+			ep := mustEpisode(t, season, i)
+			episodes[ep] = series.Episode{AirDate: pastBase.AddDays(7 * i), Active: rec}
+		}
+	}
+	// Season 4: 5 aired-missing (no record), 14 announced-but-unaired.
+	for i := 1; i <= 5; i++ {
+		ep := mustEpisode(t, 4, i)
+		episodes[ep] = series.Episode{AirDate: pastBase.AddDays(7 * i)}
+	}
+	for i := 6; i <= 19; i++ {
+		ep := mustEpisode(t, 4, i)
+		episodes[ep] = series.Episode{AirDate: futureBase.AddDays(7 * (i - 6))}
+	}
+	// Season 5: 100% future. Must not bump SeasonCount or EpisodeCount.
+	for i := 1; i <= 13; i++ {
+		ep := mustEpisode(t, 5, i)
+		episodes[ep] = series.Episode{AirDate: farFutureBase.AddDays(7 * i)}
+	}
+
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "Re_Zero"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: episodes,
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if row.EpisodeCount != 71 {
+		t.Fatalf("EpisodeCount = %d, want 71 (66 active + 5 aired-missing; 14 unaired in season 4 + 13 unaired in season 5 must be excluded)", row.EpisodeCount)
+	}
+	if row.EpisodesAvailable != 66 {
+		t.Fatalf("EpisodesAvailable = %d, want 66", row.EpisodesAvailable)
+	}
+	if row.SeasonCount != 4 {
+		t.Fatalf("SeasonCount = %d, want 4 (seasons 1-4 have aired eps; season 5 is future-only)", row.SeasonCount)
+	}
+	if row.SeasonsAvailable != 3 {
+		t.Fatalf("SeasonsAvailable = %d, want 3 (seasons 1-3 have active records)", row.SeasonsAvailable)
+	}
+	if row.Status != response.ListStatusIncomplete {
+		t.Fatalf("Status = %s, want incomplete (5 aired-missing eps)", row.Status)
+	}
+}
+
 func TestBuildRowFromModel_SpecialsExcluded(t *testing.T) {
 	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
 	rec := &media.Record{Source: media.SourceBluRay, Resolution: mustResolution(t, 1920, 1080), Size: 1}
