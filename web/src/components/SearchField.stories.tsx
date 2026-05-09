@@ -22,7 +22,7 @@ type Story = StoryObj<typeof SearchField>;
 
 export const Empty: Story = {
   args: {
-    placeholder: 'Search library — title, source, year…',
+    placeholder: 'Search library — title or alias…',
   },
 };
 
@@ -33,7 +33,7 @@ export const WithValue: Story = {
       return (
         <SearchField
           value={value}
-          placeholder="Search library — title, source, year…"
+          placeholder="Search library — title or alias…"
           onChange={(e) => setValue(e.target.value)}
           onClear={() => setValue('')}
         />
@@ -51,13 +51,13 @@ export const WithValue: Story = {
 export const Focused: Story = {
   parameters: { pseudo: { focusWithin: true } },
   args: {
-    placeholder: 'Search library — title, source, year…',
+    placeholder: 'Search library — title or alias…',
   },
 };
 
 export const Disabled: Story = {
   args: {
     disabled: true,
-    placeholder: 'Search library — title, source, year…',
+    placeholder: 'Search library — title or alias…',
   },
 };
