@@ -133,19 +133,19 @@ func Delete(root string, ref refs.Series, id ulid.ULID) (int64, error) {
 // hidden ".smbdelete<hex>" / ".fuse_hidden<hex>" / ".nfs<hex>"
 // placeholder that lingers until the handle closes. The retry loop:
 //
-//   1. os.RemoveAll. Success → return.
-//   2. Re-read the dir. ErrNotExist → another caller / FS settled,
-//      return success.
-//   3. If every leftover is a silly-rename placeholder, treat the
-//      bucket as functionally empty: the original meta.json + media
-//      + companion files are gone (the FS layer owns these
-//      hidden files now and will clean them up when handles close).
-//      Return success; the bucket directory lingers as an empty
-//      one until a future call (or operator) rmdirs it. trashfile.
-//      List ignores buckets without meta.json so they're invisible
-//      to the user.
-//   4. Otherwise unlink each non-silly-rename entry and sleep with
-//      linear backoff before retrying.
+//  1. os.RemoveAll. Success → return.
+//  2. Re-read the dir. ErrNotExist → another caller / FS settled,
+//     return success.
+//  3. If every leftover is a silly-rename placeholder, treat the
+//     bucket as functionally empty: the original meta.json + media
+//     + companion files are gone (the FS layer owns these
+//     hidden files now and will clean them up when handles close).
+//     Return success; the bucket directory lingers as an empty
+//     one until a future call (or operator) rmdirs it. trashfile.
+//     List ignores buckets without meta.json so they're invisible
+//     to the user.
+//  4. Otherwise unlink each non-silly-rename entry and sleep with
+//     linear backoff before retrying.
 //
 // Bounded by attempts so a genuinely-stuck FS surfaces the error
 // promptly. 4 attempts × max 25/50/75ms = 150ms ceiling.
