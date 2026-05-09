@@ -222,6 +222,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
 - `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.tsv`; run `kura reindex` to rebuild it from per-series metadata.
 - `KURA_HOST_ID` overrides `os.Hostname()` for the identity Kura stamps into claim holders and CAS mutators. Set this in container deployments to a stable value (e.g. the underlying host's actual hostname) so a previous container's stuck claim is detected as same-host on restart and can be auto-broken; without it, every container restart mid-apply requires a manual `kura reconcile recover`.
+- `KURA_LOG_RETENTION_DAYS` sets how long the periodic sweep retains forensic JSONL logs — reconcile plan logs at `<series>/.kura/reconcile/*.jsonl` and per-job history logs at `<library>/.kura/jobs/<ulid>.jsonl`. Default `7`. Integer days; empty / invalid / negative values fall back to the default.
 
 ### Current workflows
 

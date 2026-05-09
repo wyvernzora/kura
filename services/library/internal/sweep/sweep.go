@@ -1,8 +1,8 @@
 // Package sweep runs a background janitor that prunes old reconcile
-// plan JSONLs under each series's .kura/reconcile/ directory. Plan
-// files are forensic — apply does not delete them — so without a
-// retention sweep they accumulate forever. Server-only; the CLI never
-// runs sweeps.
+// plan JSONLs and persistent job logs under <library>/.kura/. The
+// files are forensic — apply does not delete plan logs, the registry
+// does not delete job logs — so without a retention sweep they
+// accumulate forever. Server-only; the CLI never runs sweeps.
 package sweep
 
 import (
@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
@@ -31,15 +32,20 @@ type Config struct {
 	// Jitter is the maximum offset applied to Interval at startup.
 	// Default 5m.
 	Jitter time.Duration
-	// PlanTTL is the age threshold for deleting plan JSONLs (mtime).
-	// Default 7d.
-	PlanTTL time.Duration
+	// LogRetention is the age threshold for deleting forensic JSONLs
+	// (mtime), shared by reconcile plan logs and per-job history
+	// logs. Default 7d. Configured via KURA_LOG_RETENTION_DAYS at
+	// the serve binary boundary.
+	LogRetention time.Duration
+	// Registry, when non-nil, lets the sweep skip files that belong
+	// to currently-running jobs. Tests pass nil.
+	Registry *jobs.Registry
 }
 
 const (
-	defaultInterval = time.Hour
-	defaultJitter   = 5 * time.Minute
-	defaultPlanTTL  = 7 * 24 * time.Hour
+	defaultInterval     = time.Hour
+	defaultJitter       = 5 * time.Minute
+	defaultLogRetention = 7 * 24 * time.Hour
 )
 
 // Run blocks until ctx is cancelled, sweeping libRoot every Interval.
@@ -55,8 +61,8 @@ func Run(ctx context.Context, libRoot string, cfg Config, log *slog.Logger) erro
 	if cfg.Jitter == 0 {
 		cfg.Jitter = defaultJitter
 	}
-	if cfg.PlanTTL <= 0 {
-		cfg.PlanTTL = defaultPlanTTL
+	if cfg.LogRetention <= 0 {
+		cfg.LogRetention = defaultLogRetention
 	}
 	if log == nil {
 		log = slog.Default()
@@ -65,7 +71,7 @@ func Run(ctx context.Context, libRoot string, cfg Config, log *slog.Logger) erro
 	log.Info("sweep starting",
 		"interval", cfg.Interval,
 		"jitter", cfg.Jitter,
-		"planTTL", cfg.PlanTTL,
+		"logRetention", cfg.LogRetention,
 	)
 	// Re-sample the jittered wait every iteration so concurrent
 	// replicas don't lock-step on a single startup-time offset.
@@ -105,17 +111,67 @@ func sweepOnce(libRoot string, cfg Config, log *slog.Logger, now time.Time) {
 		log.Warn("sweep list series failed", "err", err)
 		return
 	}
-	var totalDeleted, totalErrors int
+	var totalPlanDeleted, totalErrors int
 	for _, ref := range series {
-		deleted, errs := sweepSeries(libRoot, ref, cfg.PlanTTL, now, log)
-		totalDeleted += deleted
+		deleted, errs := sweepSeries(libRoot, ref, cfg.LogRetention, now, log)
+		totalPlanDeleted += deleted
 		totalErrors += errs
 	}
+	jobsDeleted, jobsErrs := sweepJobs(libRoot, cfg.LogRetention, cfg.Registry, now, log)
+	totalErrors += jobsErrs
 	log.Info("sweep tick complete",
 		"series", len(series),
-		"deletedPlans", totalDeleted,
+		"deletedPlans", totalPlanDeleted,
+		"deletedJobLogs", jobsDeleted,
 		"errors", totalErrors,
 	)
+}
+
+// sweepJobs deletes job-log JSONLs under <libRoot>/.kura/jobs/ whose
+// mtime falls past ttl. Files whose IDs are still in the registry's
+// running set are preserved — those goroutines hold the writer open.
+func sweepJobs(libRoot string, ttl time.Duration, registry *jobs.Registry, now time.Time, log *slog.Logger) (deleted, errors int) {
+	dir := paths.JobsDir(libRoot)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, 0
+		}
+		log.Warn("sweep read jobs dir failed", "err", err)
+		return 0, 1
+	}
+	var active map[string]struct{}
+	if registry != nil {
+		active = registry.ActiveIDs()
+	}
+	cutoff := now.Add(-ttl)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), paths.JobLogExtension) {
+			continue
+		}
+		id := strings.TrimSuffix(entry.Name(), paths.JobLogExtension)
+		if _, running := active[id]; running {
+			continue
+		}
+		full := filepath.Join(dir, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			log.Warn("sweep stat job log failed", "file", entry.Name(), "err", err)
+			errors++
+			continue
+		}
+		if info.ModTime().After(cutoff) {
+			continue
+		}
+		if err := os.Remove(full); err != nil {
+			log.Warn("sweep delete job log failed", "file", entry.Name(), "err", err)
+			errors++
+			continue
+		}
+		log.Debug("sweep deleted job log", "file", entry.Name(), "age", now.Sub(info.ModTime()))
+		deleted++
+	}
+	return deleted, errors
 }
 
 // sweepSeries deletes plan JSONLs older than ttl under the given

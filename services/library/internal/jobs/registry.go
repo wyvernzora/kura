@@ -2,15 +2,15 @@ package jobs
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"runtime/debug"
 	"sync"
 	"time"
 
+	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/storage/jobfile"
 )
 
 // Logger is the small interface the registry uses for lifecycle and
@@ -35,6 +35,11 @@ type Config struct {
 	JobTimeout     time.Duration // 0 disables per-job deadline
 	Retention      time.Duration // 0 disables reaper eviction (test only)
 	ReaperInterval time.Duration // 0 disables reaper goroutine (test only)
+	// LibRoot is the library root used to persist per-job JSONL logs
+	// at <libRoot>/.kura/jobs/<id>.jsonl. Empty disables persistence
+	// — preserves CLI/test paths that construct registries without a
+	// library root.
+	LibRoot string
 }
 
 // Registry tracks in-flight and recently-terminal long jobs. One per
@@ -251,6 +256,16 @@ func runJob[T any](
 	jobCtx, cancelJob := r.deriveJobCtx()
 	defer cancelJob()
 
+	// Open the persistent JSONL writer when the registry has a
+	// LibRoot. Persistence is opportunistic: if Create fails, log
+	// and proceed with an in-memory-only run.
+	writer := openJobWriter(r, j)
+	defer func() {
+		if writer != nil {
+			_ = writer.Close()
+		}
+	}()
+
 	// Capture + relay reporter. Captures the latest event onto the
 	// entry (UntypedJob.Progress polling) and the typed Job
 	// (Job.LatestProgress polling) so async consumers can poll, AND
@@ -272,6 +287,19 @@ func runJob[T any](
 		jobCopy := ev
 		j.progress = &jobCopy
 		j.mu.Unlock()
+
+		if writer != nil {
+			if err := writer.AppendProgress(jobfile.ProgressLine{
+				At:      time.Now().UTC().Format(time.RFC3339Nano),
+				Stage:   ev.Stage,
+				Status:  string(ev.Status),
+				Current: ev.Current,
+				Total:   ev.Total,
+				Message: ev.Message,
+			}); err != nil {
+				r.log.Warn("jobfile append progress failed", "id", j.id, "err", err)
+			}
+		}
 
 		if parentReporter != nil {
 			parentReporter(ctx, ev)
@@ -319,6 +347,12 @@ func runJob[T any](
 	e.endedAt = endedAt
 	e.resultJSON = resultJSON
 	e.mu.Unlock()
+
+	if writer != nil {
+		if err := writer.AppendTerminal(buildTerminalLine(state, terminalErr, resultJSON, endedAt)); err != nil {
+			r.log.Warn("jobfile append terminal failed", "id", j.id, "err", err)
+		}
+	}
 
 	// Remove from bySeries so the next submission can spawn.
 	r.mu.Lock()
@@ -443,13 +477,10 @@ func (e *typeMismatchError) Error() string {
 	return "internal: type mismatch on dedupe for kind " + string(e.kind)
 }
 
-// generateID returns a 16-char lowercase-hex ID derived from
-// crypto/rand.
+// generateID returns a 26-char Crockford-base32 ULID. The leading
+// 48 bits encode a millisecond timestamp, so plain `ls` of
+// `<library>/.kura/jobs/` is naturally chronological. Same scheme
+// kura already uses for trash buckets.
 func generateID() string {
-	var buf [8]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		// Crypto rand failure is fatal in any reasonable runtime.
-		panic("jobs: crypto/rand failed: " + err.Error())
-	}
-	return hex.EncodeToString(buf[:])
+	return ulid.Make().String()
 }
