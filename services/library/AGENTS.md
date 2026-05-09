@@ -98,7 +98,14 @@ For every task:
 
 ---
 
-## 6. Session hygiene
+## 6. End-to-end tests
+
+- E2E tests, once authored, are load-bearing regression contracts. ANY change to an existing e2e scenario — whether the work is related or unrelated, whether the change is one assertion or a rewrite, whether or not a feature change "requires" the update — requires explicit user approval before the edit. The agent must surface the proposed change with a detailed explanation of (a) what behavior the scenario currently asserts, (b) what is changing in the scenario, and (c) why the system change demands the scenario change rather than a system fix. No exceptions. If a scenario fails because the system under test changed, surface the failure for review; do not mutate the assertions to turn red into green.
+- When the user explicitly reports that the app is not behaving as required (a bug report, "this is wrong," "shouldn't do X"), add an e2e regression scenario alongside the fix when feasible. The scenario reproduces the reported behavior in its red state and asserts the corrected behavior in its green state. Skip only when the bug genuinely cannot be exercised through the e2e harness; surface that limitation in the response so the user can decide whether to add coverage some other way.
+
+---
+
+## 7. Session hygiene
 
 - Context is the constraint. Long sessions with accumulated failed attempts perform worse than fresh sessions with a better prompt.
 - After two failed corrections on the same issue, stop. Summarize what you learned and ask the user to reset the session with a sharper prompt.
@@ -107,7 +114,7 @@ For every task:
 
 ---
 
-## 7. Communication style
+## 8. Communication style
 
 - Direct, not diplomatic. "This won't scale because X" beats "That's an interesting approach, but have you considered...".
 - Concise by default. Two or three short paragraphs unless the user asks for depth. No padding, no restating the question, no ceremonial closings.
@@ -117,7 +124,7 @@ For every task:
 
 ---
 
-## 8. When to ask, when to proceed
+## 9. When to ask, when to proceed
 
 **Ask before proceeding when:**
 - The request has two plausible interpretations and the choice materially affects the output.
@@ -132,7 +139,7 @@ For every task:
 
 ---
 
-## 9. Self-improvement loop
+## 10. Self-improvement loop
 
 **This file is living. Keep it short by keeping it honest.**
 
@@ -147,7 +154,7 @@ Under 300 lines is a good ceiling. Over 500 and you are fighting your own config
 
 ---
 
-## 10. Project context
+## 11. Project context
 
 ### About Kura
 
@@ -242,7 +249,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 
 ---
 
-## 11. Project Learnings
+## 12. Project Learnings
 
 **Accumulated corrections. This section is for the agent to maintain, not just the human.**
 
@@ -260,7 +267,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 
 ---
 
-## 12. Always grill me
+## 13. Always grill me
 
 **Default mode: interrogate the user's thinking before committing to an approach.**
 
@@ -283,7 +290,7 @@ If I push back on your grilling and the pushback is reasoned, update. If it's ju
 
 ---
 
-## 13. Go engineering guidelines
+## 14. Go engineering guidelines
 
 - Prefer simple, boring Go. Avoid clever abstractions, reflection, generics, goroutine magic, or framework-shaped code unless they clearly reduce complexity.
 - Keep packages small and cohesive. Package names should describe what they provide, not vague layers like `common`, `utils`, `helpers`, or `manager`.
