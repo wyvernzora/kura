@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { useShow } from '@/api/hooks';
 import { SeasonPanel } from '@/components/series/SeasonPanel';
@@ -18,13 +18,9 @@ interface SeriesDetailProps {
  *   - pending  → `SeriesDetailSkeleton`
  *   - error    → centered `Card` with the error message
  *   - success  → poster card + per-season panels
- *
- * The "Scan now" button is wired up as a visual-only spinner for now;
- * the SSE-driven scan flow lands in a later round.
  */
 export function SeriesDetail({ seriesRef }: SeriesDetailProps) {
   const { data, isPending, isError, error } = useShow(seriesRef);
-  const [scanning, setScanning] = useState(false);
 
   // Specials (season 0) belong at the bottom — they're a footnote,
   // not the headline. Sort regular seasons ascending and append
@@ -51,16 +47,7 @@ export function SeriesDetail({ seriesRef }: SeriesDetailProps) {
         'md:grid-cols-[300px_1fr]',
       )}
     >
-      <SeriesPosterCard
-        show={data}
-        scanning={scanning}
-        onScanNow={() => {
-          // Visual-only: simulate a scan kick-off so the UI shape
-          // is observable. Real flow ships with SSE.
-          setScanning(true);
-          window.setTimeout(() => setScanning(false), 1500);
-        }}
-      />
+      <SeriesPosterCard show={data} />
       <div className="min-w-0">
         {data.truncated && <TruncatedNotice />}
         {orderedSeasons.length === 0 ? (

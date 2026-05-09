@@ -1,10 +1,11 @@
-import { RefreshCw } from 'lucide-react';
 import { useRef, useState } from 'react';
 
+import type { ScanJobState } from '@/api/scanJob';
 import type { Show } from '@/api/types';
+import { ScanButton } from '@/components/series/ScanButton';
+import { ScanDetailsModal, type ScanDetailsView } from '@/components/series/ScanDetailsModal';
 import { SeriesStatusCornerPill } from '@/components/series/SeriesStatusCornerPill';
 import { cn } from '@/lib/cn';
-import { formatRelativeAgo } from '@/lib/relativeTime';
 import { primaryStatus, withAiring } from '@/lib/status';
 import { usePosterTilt } from '@/lib/usePosterTilt';
 import { PosterArt } from '@/poster/PosterArt';
@@ -16,9 +17,6 @@ const DETAIL_TILT_DEG = 14;
 
 interface SeriesPosterCardProps {
   show: Show;
-  /** Visual-only spinner state. P5 has no real scan flow; the button no-ops. */
-  scanning?: boolean;
-  onScanNow?: () => void;
   className?: string;
 }
 
@@ -28,15 +26,34 @@ interface SeriesPosterCardProps {
  *     with status corner pill,
  *   - metadata ref (mono, muted),
  *   - title (h1, Inter 600),
- *   - "Scan now" button + last-scanned caption.
+ *   - "Scan now" button + progress + result caption.
  *
  * The card sticks below `md:` so the right-column episode tables can
  * scroll independently without losing context of the series identity.
  */
-export function SeriesPosterCard({ show, scanning, onScanNow, className }: SeriesPosterCardProps) {
+export function SeriesPosterCard({ show, className }: SeriesPosterCardProps) {
   const status = primaryStatus(withAiring(show.status, !!show.isAiring));
   const title = show.preferredTitle || show.canonicalTitle || show.ref;
   const posterUrl = show.artwork?.poster?.thumbnailUrl ?? show.artwork?.poster?.url;
+  const [modalOpen, setModalOpen] = useState(false);
+  const [view, setView] = useState<ScanDetailsView>(undefined);
+
+  function handleShowDetails(scan: ScanJobState) {
+    if (scan.phase === 'warning' && scan.skipped) {
+      setView({ kind: 'warning', skipped: scan.skipped });
+      setModalOpen(true);
+      return;
+    }
+    if (scan.phase === 'error' && scan.error) {
+      setView({
+        kind: 'error',
+        error: scan.error,
+        progressFrozen: scan.progressFrozen,
+      });
+      setModalOpen(true);
+    }
+  }
+
   return (
     <aside
       className={cn(
@@ -58,25 +75,12 @@ export function SeriesPosterCard({ show, scanning, onScanNow, className }: Serie
       <h1 className="m-0 font-sans text-[26px] leading-tight font-semibold text-ink tracking-[-0.4px] [word-break:break-word]">
         {title}
       </h1>
-      <button
-        type="button"
-        onClick={onScanNow}
-        disabled={scanning}
-        className={cn(
-          'inline-flex h-[38px] items-center justify-center gap-2 self-stretch rounded-md',
-          'border border-line-soft bg-surface px-4 text-sm font-medium text-ink shadow-card',
-          'transition-[transform,box-shadow,background-color] duration-[160ms] ease-out',
-          'hover:-translate-y-px hover:bg-overlay-soft hover:shadow-card-hover',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-overlay',
-          'disabled:cursor-default disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-surface disabled:hover:shadow-card',
-        )}
-      >
-        <RefreshCw aria-hidden="true" className={cn('h-4 w-4', scanning && 'animate-spin')} />
-        {scanning ? 'Scanning…' : 'Scan now'}
-      </button>
-      <div className="-mt-1 font-mono text-[10px] tracking-[0.4px] text-muted">
-        {show.lastScanned ? `last scanned ${formatRelativeAgo(show.lastScanned)}` : 'never scanned'}
-      </div>
+      <ScanButton
+        metadataRef={show.metadataRef}
+        lastScanned={show.lastScanned}
+        onShowDetails={handleShowDetails}
+      />
+      <ScanDetailsModal open={modalOpen} onOpenChange={setModalOpen} view={view} />
     </aside>
   );
 }
