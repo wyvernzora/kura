@@ -19,7 +19,7 @@ type healthResponse struct {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, healthResponse{
 		Ok:          true,
-		Version:     serverVersion,
+		Version:     s.deps.Version,
 		LibraryRoot: s.deps.Workflow.LibRoot,
 		UptimeMs:    time.Since(s.startedAt).Milliseconds(),
 		StartedAt:   s.startedAt,

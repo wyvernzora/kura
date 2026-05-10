@@ -114,7 +114,7 @@ func (s *Server) applyMiddleware(next http.Handler) http.Handler {
 	h := next
 	h = recoverMiddleware(s.deps.Logger)(h)
 	h = corsMiddleware(s.deps.AllowedOrigins)(h)
-	h = versionMiddleware()(h)
+	h = versionMiddleware(s.deps.Version)(h)
 	h = loggingMiddleware(s.deps.Logger)(h)
 	return h
 }

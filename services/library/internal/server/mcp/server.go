@@ -18,8 +18,13 @@ import (
 )
 
 const (
-	serverName    = "kura"
-	serverVersion = "0.1.0"
+	serverName = "kura"
+
+	// defaultServerVersion is the fallback advertised when Deps.Version
+	// is empty. Production callers (cmd/kura) inject the build-time
+	// main.Version; this default keeps tests and direct library use
+	// from blowing up on an empty Implementation.Version.
+	defaultServerVersion = "dev"
 )
 
 // httpShutdownGrace caps how long ServeHTTP waits for in-flight
@@ -47,6 +52,11 @@ type Deps struct {
 	Workflow    workflow.Deps
 	Logger      *slog.Logger
 	BearerToken string
+
+	// Version surfaces in the MCP Implementation handshake. Empty
+	// falls back to defaultServerVersion. cmd/kura sets this to the
+	// build-time main.Version so the value flows from a single source.
+	Version string
 }
 
 // NewServer constructs the MCP server with kura's capabilities and
@@ -59,9 +69,13 @@ type Deps struct {
 // status. Other JSON-RPC methods (initialize, ping, etc.) are not
 // logged — only tool calls carry actionable application semantics.
 func NewServer(deps Deps) *sdkmcp.Server {
+	version := deps.Version
+	if version == "" {
+		version = defaultServerVersion
+	}
 	s := sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
-		Version: serverVersion,
+		Version: version,
 	}, nil)
 	if deps.Logger != nil {
 		s.AddReceivingMiddleware(toolCallLoggingMiddleware(deps.Logger))

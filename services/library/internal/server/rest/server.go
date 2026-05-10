@@ -24,7 +24,12 @@ import (
 )
 
 const (
-	serverVersion = "0.1.0"
+	// defaultServerVersion is the fallback advertised when Deps.Version
+	// is empty. Production callers (cmd/kura) inject the build-time
+	// main.Version; this default keeps tests and direct library use
+	// from emitting an empty version on /api/v1/health and the
+	// X-Kura-Version response header.
+	defaultServerVersion = "dev"
 
 	// httpShutdownGrace caps how long Serve waits for in-flight requests
 	// after the parent ctx is cancelled. Mirrors mcp.httpShutdownGrace.
@@ -51,6 +56,11 @@ type Deps struct {
 	Logger         *slog.Logger
 	AllowedOrigins []string
 	BearerToken    string
+
+	// Version surfaces on /api/v1/health and the X-Kura-Version response
+	// header. Empty falls back to defaultServerVersion. cmd/kura sets
+	// this to the build-time main.Version.
+	Version string
 }
 
 // Server holds the prebuilt http.Handler plus startup-time metadata
@@ -66,6 +76,9 @@ type Server struct {
 // Each handler lives in its own file (handler_*.go) and binds itself
 // in router.go.
 func NewServer(deps Deps) *Server {
+	if deps.Version == "" {
+		deps.Version = defaultServerVersion
+	}
 	s := &Server{deps: deps, startedAt: time.Now()}
 	s.handler = s.buildRouter()
 	return s
