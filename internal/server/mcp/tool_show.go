@@ -194,11 +194,18 @@ func truncateMCPShow(out *mcpShow, ref string, log *slog.Logger) {
 	}
 
 	// Drop tail episodes (descending across seasons → episodes within
-	// season) until under threshold. After each drop, re-marshal and
-	// re-check; cheaper than estimating per-episode byte cost given
-	// arbitrary nested companion arrays.
+	// season) until under threshold. Episodes are dropped in batches
+	// sized by the current excess / average-episode-bytes estimate, so
+	// a 2000-episode show converges in ~5 marshal calls instead of the
+	// O(N) one-pop-per-marshal loop the prior implementation did. The
+	// estimate is recomputed each iteration as the remaining episode
+	// count shrinks, so a too-aggressive first guess self-corrects on
+	// the next pass without ever overshooting (we round UP, but the
+	// re-marshal verifies before we drop more).
 	dropped := map[int][]int{} // season number → dropped episode numbers
-	for {
+	remaining := totalEpisodes
+	const maxIterations = 20
+	for iter := 0; iter < maxIterations; iter++ {
 		raw, err = json.Marshal(out)
 		if err != nil {
 			return
@@ -206,25 +213,25 @@ func truncateMCPShow(out *mcpShow, ref string, log *slog.Logger) {
 		if len(raw) <= mcpShowTruncateBytes {
 			break
 		}
-		// Find the last (highest-index) season with at least one
-		// episode body and pop its last episode.
-		droppedThis := false
-		for si := len(out.Seasons) - 1; si >= 0; si-- {
-			if len(out.Seasons[si].Episodes) == 0 {
-				continue
-			}
-			last := out.Seasons[si].Episodes[len(out.Seasons[si].Episodes)-1]
-			out.Seasons[si].Episodes = out.Seasons[si].Episodes[:len(out.Seasons[si].Episodes)-1]
-			ep, parseErr := refs.ParseEpisode(last.Episode)
-			if parseErr == nil {
-				dropped[ep.Season()] = append(dropped[ep.Season()], ep.Episode())
-			}
-			droppedThis = true
-			break
+		if remaining == 0 {
+			break // nothing left to drop
 		}
-		if !droppedThis {
-			break // nothing left to drop; bail
+		excess := len(raw) - mcpShowTruncateBytes
+		// avgBytes is the mean serialized size of the episodes still in
+		// the payload, with a floor of 1 to avoid div-by-zero when the
+		// fixed scaffold (series header, summaries) dominates.
+		avgBytes := len(raw) / remaining
+		if avgBytes < 1 {
+			avgBytes = 1
 		}
+		// 5% safety margin keeps small estimation errors from forcing a
+		// second iteration. Floor of 1 makes sure we always make
+		// progress.
+		dropCount := excess/avgBytes + excess/(avgBytes*20) + 1
+		if dropCount > remaining {
+			dropCount = remaining
+		}
+		dropped, remaining = popTailEpisodes(out, dropped, dropCount, remaining)
 	}
 
 	if len(dropped) == 0 {
@@ -248,6 +255,40 @@ func truncateMCPShow(out *mcpShow, ref string, log *slog.Logger) {
 			"truncatedRanges", out.TruncatedRanges,
 		)
 	}
+}
+
+// popTailEpisodes drops up to n tail episodes from out, descending
+// across seasons (last season first) and within season (last episode
+// first). Returns the updated dropped map plus the new remaining
+// episode count. Stops early if seasons run out before n is reached.
+func popTailEpisodes(out *mcpShow, dropped map[int][]int, n, remaining int) (newDropped map[int][]int, newRemaining int) {
+	for n > 0 {
+		// Find the last season that still has at least one episode.
+		si := len(out.Seasons) - 1
+		for si >= 0 && len(out.Seasons[si].Episodes) == 0 {
+			si--
+		}
+		if si < 0 {
+			break
+		}
+		eps := out.Seasons[si].Episodes
+		take := n
+		if take > len(eps) {
+			take = len(eps)
+		}
+		// Drop `take` episodes from the tail; record their numbers in
+		// the dropped map so compressDroppedRanges can rebuild ranges.
+		for i := len(eps) - take; i < len(eps); i++ {
+			ep, parseErr := refs.ParseEpisode(eps[i].Episode)
+			if parseErr == nil {
+				dropped[ep.Season()] = append(dropped[ep.Season()], ep.Episode())
+			}
+		}
+		out.Seasons[si].Episodes = eps[:len(eps)-take]
+		remaining -= take
+		n -= take
+	}
+	return dropped, remaining
 }
 
 // compressDroppedRanges turns a per-season set of dropped episode
