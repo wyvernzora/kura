@@ -59,9 +59,9 @@ jobs:
       # golangci-lint is lower than the targeted Go version". Building
       # from source side-steps the check.
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9
         with:
-          version: v1.64.8
+          version: v2.12.2
           install-mode: goinstall
 
       # -race catches data races; -count=1 disables test caching so a green
