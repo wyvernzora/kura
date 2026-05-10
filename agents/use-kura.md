@@ -380,6 +380,58 @@ sequentially: resolve + show one, write the recommendation, move
 on. Resist the urge to bulk-resolve: the per-candidate evidence
 needs to drive the per-candidate decision.
 
+**Directory releases — adopt everything.** When the candidate is a
+directory (BD batch, season pack, multi-disc rip), the default is
+**adopt every file in it**, not just the episode media. Sort the
+contents into the right `kura_stage` arrays:
+
+- **Episode media** (canonical-episode files: `S01E03`, `Ep03`,
+  numeric, etc.) → `episodes[]` entries with the matching slot.
+- **Extras** (NCOPs, NCEDs, PVs, trailers, BTS, interviews,
+  bonus episodes, image galleries, anything not part of the
+  numbered spine) → `extras[]` entries. Use `prefix:` to give
+  them a stable bucket name (`"creditless-openings"`,
+  `"behind-the-scenes"`, etc.) so multiple releases don't fight
+  for the same `Season N/Extra/` namespace.
+- **Companion files** (subtitles, alternate audio, fonts that
+  sit next to a specific episode media file) → `companions:` on
+  the corresponding episode entry.
+
+If the release directory already contains an **`Extra/` (or
+`Extras/`, `Specials/`, `Bonus/`) subdirectory**, treat its entire
+contents as the extras input — pass each contained file or
+subdirectory through `extras[]` with a sensible `prefix`. Don't
+flatten extras into the episode list; they live under
+`Season N/Extra/[prefix]/` for a reason. Don't drop them either —
+"adopt episodes only" leaves the user manually shoveling extras
+back in.
+
+**Classification effort.** Episode mapping is the higher-value
+outcome (canonical naming, tracked spine, upgrade detection), so
+exhaust the available signals before falling back to extras:
+
+- Filename: `S01E03`, `Ep03`, ` 03 `, `_03_`, `[03]`, `EP03v2`,
+  `第3話`, etc.
+- Order: file's position in a sorted listing of the directory's
+  episode-shaped peers (matches against the spine's known
+  episode count).
+- File size: episodes within a release are usually within a tight
+  band (typically ±20% of the median); extras are most often
+  significantly smaller (creditless OPs / EDs, PVs, image
+  galleries) and occasionally much larger (uncut interviews,
+  full-length BTS). A file whose size is far off the episode
+  cluster is almost certainly an extra.
+- Sibling tokens: NC, NCED, NCOP, OP, ED, PV, CM, BTS, Special,
+  SP, Trailer in the filename are strong "this is an extra"
+  signals.
+
+Only fall back to extras when none of those signals identify a
+spine slot. `Season N/Extra/[unsorted]/<file>` is the safe
+fallback — but treat it as a fallback, not the default. A correct
+episode rename is the much more useful outcome; a wrong
+canonical-episode rename does leave a trash bucket, but those are
+rare when the filename signals are unambiguous.
+
 **What never works.** Computing an intersection between
 `kura_list` output and any source of raw release titles
 (`kura_inbox_list`, RSS, web-search, tracker JSON, etc.) by
