@@ -121,8 +121,9 @@ COPY --from=go-build /out/kura /usr/local/bin/kura
 # bypass the file path entirely.
 VOLUME ["/var/lib/kura"]
 
-# Default REST bind port. Adjust if `--rest=:NNNN` differs.
-EXPOSE 8080
+# Default bind ports: REST on 8080, MCP-over-HTTP on 8081. Adjust
+# if you override CMD with different `--rest=:NNNN` / `--mcp-http=:NNNN`.
+EXPOSE 8080 8081
 
 # Mediainfo's shared libs ship in arch-specific /lib/$arch/ paths.
 # distroless's bundled /etc/ld.so.cache only indexes the libs that
@@ -142,3 +143,11 @@ USER ${KURA_UID}:${KURA_GID}
 # readiness. Same path, no extra binary needed.
 
 ENTRYPOINT ["/usr/local/bin/kura"]
+
+# Default command: serve both REST (8080) and MCP-over-HTTP (8081) —
+# the primary mode for the image. Override via pod `args:` (or
+# `docker run kura <verb>`) to invoke a CLI verb instead. Ports are
+# hard-coded to match EXPOSE and to give k8s livenessProbe a stable
+# target; bind to different addresses by overriding args. The same
+# bearer token gates both transports (see docs/rest-api.md).
+CMD ["serve", "--rest=:8080", "--mcp-http=:8081"]
