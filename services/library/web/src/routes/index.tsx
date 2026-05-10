@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { useSeriesList } from '@/api/hooks';
 import type { ListRow } from '@/api/types';
@@ -10,8 +10,6 @@ import { ValueFilterDropdown } from '@/components/ValueFilterDropdown';
 import { VirtualPosterGrid } from '@/components/VirtualPosterGrid';
 import { Card } from '@/components/ui/card';
 import {
-  DEFAULT_SORT,
-  type SortSpec,
   countMultiValuedField,
   filterByMultiValuedField,
   filterByStatus,
@@ -20,6 +18,7 @@ import {
 import { searchLibrary } from '@/lib/searchLibrary';
 import type { Status } from '@/lib/status';
 import { useAutoDensity } from '@/lib/useAutoDensity';
+import { useLibraryFilters } from '@/state/library';
 import { useSearch } from '@/state/search';
 
 export const Route = createFileRoute('/')({
@@ -52,10 +51,18 @@ function LibraryHome() {
     [navigate, clearSearch],
   );
 
-  const [active, setActive] = useState<Set<Status>>(new Set());
-  const [activeSources, setActiveSources] = useState<Set<string>>(new Set());
-  const [activeResolutions, setActiveResolutions] = useState<Set<string>>(new Set());
-  const [sort, setSort] = useState<SortSpec>(DEFAULT_SORT);
+  // Filters + sort live in a zustand store so they survive
+  // navigation to /series/$ref and back. Local `useState` would
+  // reset on every remount.
+  const active = useLibraryFilters((s) => s.status);
+  const activeSources = useLibraryFilters((s) => s.sources);
+  const activeResolutions = useLibraryFilters((s) => s.resolutions);
+  const sort = useLibraryFilters((s) => s.sort);
+  const toggleStatus = useLibraryFilters((s) => s.toggleStatus);
+  const toggleSource = useLibraryFilters((s) => s.toggleSource);
+  const toggleResolution = useLibraryFilters((s) => s.toggleResolution);
+  const setSort = useLibraryFilters((s) => s.setSort);
+  const clearFilters = useLibraryFilters((s) => s.clear);
 
   const trimmed = query.trim();
   // Local fuzzy search has zero network cost — fire on any non-empty
@@ -103,20 +110,6 @@ function LibraryHome() {
     return sortRows(filtered, sort);
   }, [allRows, active, activeSources, activeResolutions, isSearching, trimmed, sort]);
 
-  const toggleStatus = (status: Status) => {
-    setActive((prev) => toggle(prev, status));
-  };
-  const toggleSource = (value: string) => {
-    setActiveSources((prev) => toggle(prev, value));
-  };
-  const toggleResolution = (value: string) => {
-    setActiveResolutions((prev) => toggle(prev, value));
-  };
-  const clearAllFilters = () => {
-    setActive(new Set());
-    setActiveSources(new Set());
-    setActiveResolutions(new Set());
-  };
   // Clear button is gated on at least one filter being active. Sort
   // is intentionally excluded — there's no "off" state for sort.
   const hasActiveFilters = active.size + activeSources.size + activeResolutions.size > 0;
@@ -151,7 +144,7 @@ function LibraryHome() {
               counts={resolutionCounts}
               dotColors={RESOLUTION_DOTS}
             />
-            {hasActiveFilters && <ClearFiltersButton onClick={clearAllFilters} />}
+            {hasActiveFilters && <ClearFiltersButton onClick={clearFilters} />}
           </div>
           <SortDropdown value={sort} onChange={setSort} />
         </header>
@@ -227,16 +220,6 @@ function LibraryBody({
     return null;
   }
   return <VirtualPosterGrid rows={rows} density={density} onSelect={onSelect} />;
-}
-
-function toggle<T>(prev: ReadonlySet<T>, value: T): Set<T> {
-  const next = new Set(prev);
-  if (next.has(value)) {
-    next.delete(value);
-  } else {
-    next.add(value);
-  }
-  return next;
 }
 
 // Hardcoded display order for the Source filter. Mirrors the
