@@ -88,7 +88,7 @@ spine, claim, mutator, CAS, ULID, on-disk JSON layout), see
 
 Requirements:
 
-- Go 1.26.2 or newer.
+- Go 1.26.3 or newer.
 - `mediainfo` on `PATH` (or set `KURA_MEDIAINFO_COMMAND`).
 - Docker, if building or running the container image.
 

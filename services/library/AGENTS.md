@@ -167,7 +167,7 @@ Under 300 lines is a good ceiling. Over 500 and you are fighting your own config
 
 ### Stack
 
-- **Language:** Go (1.26.2 or newer; the codebase uses the generic `errors.AsType` from the 1.26 stdlib). Pinned in `go.mod`, `.tool-versions`, and `Dockerfile`.
+- **Language:** Go (1.26.3 or newer; the codebase uses the generic `errors.AsType` from the 1.26 stdlib). Pinned in `go.mod`, `.tool-versions`, and `Dockerfile`.
 - **Main command entrypoint:** `cmd/kura`.
 - **Workflow facade:** `internal/workflow` exposes Add/Import/Show/List/Stage/Scan/Reset/Trash/Reindex/Remove + Reconcile{Plan,Apply,Recover}. The public Go API for CLI and MCP transports.
 - **Reconcile internals:** `internal/reconcile` builds plans, applies them, and recovers stuck claims. Imported only via the workflow shim.
