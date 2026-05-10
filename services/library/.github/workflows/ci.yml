@@ -115,6 +115,30 @@ jobs:
       - name: test
         run: pnpm test
 
+  # End-to-end scenarios under e2e/ exercise the CLI surface against a
+  # stub provider (kura built with -tags=e2e_stub) so the run is fully
+  # hermetic — no docker, no network, no real media. Catches workflow
+  # regressions (stage → plan → apply → trash chains) that unit tests
+  # don't cover. Gated by build-push so a red e2e run can't ship an
+  # image. Renovate dependency bumps surface here at PR time before
+  # the merge that would publish a broken :dev image.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Bumped to 300s vs the local Makefile's 120s — race-mode CI is
+      # slower than dev machines, and the suite cold-builds the
+      # kura-e2e binary once before any test runs.
+      - name: e2e
+        run: go test -tags=e2e -race -count=1 -timeout=300s ./e2e/...
+
   # Regenerate web/src/api/types.gen.ts from internal/response and fail
   # the build if the working tree drifts. Mirrors `make check-gen`. Runs
   # on its own job so a Go-only change can't slip a stale types.gen.ts
@@ -164,7 +188,7 @@ jobs:
   #   push tag vX.Y.Z      → :vX.Y.Z + :latest (VERSION=vX.Y.Z)
   build-push:
     name: build & push
-    needs: [go, web, gen-check]
+    needs: [go, web, gen-check, e2e]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
