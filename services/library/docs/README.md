@@ -29,7 +29,7 @@ If you are new to Kura, read in this order:
 | [cli.md](cli.md) | Operations catalog, selectors, every `kura <verb>` flag, env var configuration. |
 | [rest-api.md](rest-api.md) | Auth, CORS, operator gating, ETag, full endpoint catalog, async job protocol, version surfacing. |
 | [mcp.md](mcp.md) | 12 MCP tools, agent safety properties, disambiguation. |
-| [deployment.md](deployment.md) | Single-writer rule, distroless image, build args, env var matrix, bootstrap, stuck-claim recovery, k8s health probes, runtime UID overrides. |
+| [deployment.md](deployment.md) | Single-writer rule, Alpine image, build args, env var matrix, bootstrap, stuck-claim recovery, k8s health probes, runtime UID overrides. |
 | [storage.md](storage.md) | Layout, conventions, `series.json` v3, `index.jsonl` v2+, reconcile plan JSONL v2, trash `meta.json` v1, per-job logs. |
 
 ## Contributing

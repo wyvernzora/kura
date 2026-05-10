@@ -127,7 +127,7 @@ For the full CLI, REST, and MCP surfaces, see the table below.
 
 ## Deployment
 
-Distroless Docker image, single-writer per library, bearer-token
+Alpine-based Docker image, single-writer per library, bearer-token
 auth as a deploy gate (auto-generated and persisted at
 `/var/lib/kura/token` on first start; bypass with
 `KURA_DISABLE_TOKEN=1` when fronting with an authenticating proxy).

@@ -1,6 +1,6 @@
 # Deployment
 
-Kura ships as a single Go binary distributed via a distroless Docker
+Kura ships as a single Go binary distributed via an Alpine-based Docker
 image. This doc covers the operational rules and the container /
 Kubernetes setup.
 
@@ -45,12 +45,13 @@ Multi-user, OIDC, scopes, and federation remain proxy responsibility
 
 ## Container / Kubernetes setup
 
-The published image is built `FROM gcr.io/distroless/cc-debian12:latest`
-— no shell, no package manager, no busybox. Only the `kura` binary,
-`mediainfo` plus its shared-library closure, and the `/var/lib/kura`
-bearer-token directory ship in the final layer. The `kura` binary
-itself is statically linked (`CGO_ENABLED=0`); only `mediainfo`
-pulls glibc-side dependencies.
+The published image is built `FROM alpine:3.20`. `mediainfo`,
+`ca-certificates`, and `tzdata` are installed via `apk` so apk pulls
+the full dependency closure (libmediainfo, libzen, libcurl,
+libtinyxml2, locale data, etc.). The `kura` binary is statically
+linked (`CGO_ENABLED=0`) and runs identically against musl. Alpine's
+busybox shell + coreutils stay in the image so operators can
+`kubectl exec` and inspect filesystem state when something breaks.
 
 `ENTRYPOINT` is `kura`; `CMD` defaults to
 `["serve", "--rest=:8080", "--mcp-http=:8081"]`, so a pod or
@@ -123,9 +124,10 @@ prior claim as cross-host.
 
 ### Health probe
 
-No Docker `HEALTHCHECK` directive — distroless ships no shell or
-`wget`, so any in-image probe would need its own static binary. For
-k8s, use a plain `httpGet` probe; no extra binary required:
+No Docker `HEALTHCHECK` directive — kubelet's `httpGet` probe against
+`/api/v1/health` is the canonical liveness/readiness check across
+both Docker and Kubernetes; embedding a probe binary would just
+duplicate kubelet's behavior. For k8s:
 
 ```yaml
 livenessProbe:
@@ -148,12 +150,12 @@ Adjust the port if you bind `--rest=:N` to anything other than
 ### Runtime UID overrides
 
 `docker run --user X:Y` and k8s `securityContext.runAsUser` work but
-only if `/var/lib/kura` ownership inside the image matches `X:Y`,
-since distroless cannot `chown` at runtime. Either rebuild the image
-with matching `KURA_UID` / `KURA_GID`, set `KURA_TOKEN` from a Secret
-to skip the file path entirely, or use k8s
-`securityContext.fsGroup` plus a PVC to have the kubelet chown the
-mount before the container starts.
+only if `/var/lib/kura` ownership inside the image matches `X:Y` (the
+image's `chown` runs at build time; the runtime user is created
+read-only). Either rebuild the image with matching `KURA_UID` /
+`KURA_GID`, set `KURA_TOKEN` from a Secret to skip the file path
+entirely, or use k8s `securityContext.fsGroup` plus a PVC to have the
+kubelet chown the mount before the container starts.
 
 ### Building a versioned image
 
