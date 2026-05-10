@@ -4,9 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Show } from '@/api/types';
 import { withStoryProviders } from '@/components/_storyProviders';
 import { StoryRouter } from '@/components/_storyRouter';
-
-import { SeriesDetail } from './SeriesDetail';
 import { FIXTURE_SHOW_AIRING, FIXTURE_SHOW_COMPLETE_SINGLE } from './_fixtures';
+import { SeriesDetail } from './SeriesDetail';
 
 /**
  * `SeriesDetail` calls `useShow(ref)` which goes through TanStack Query.

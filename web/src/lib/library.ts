@@ -173,7 +173,9 @@ export function intersectWithCandidates(
     return [];
   }
   const rank = new Map<string, number>();
-  candidates.forEach((c, i) => rank.set(c.ref, i));
+  candidates.forEach((c, i) => {
+    rank.set(c.ref, i);
+  });
 
   const matched: { row: ListRow; index: number }[] = [];
   for (const row of rows) {

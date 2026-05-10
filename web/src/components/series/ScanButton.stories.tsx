@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import { withStoryProviders } from '@/components/_storyProviders';
 import { ScanButton } from '@/components/series/ScanButton';
-import { type ScanRecord, clearScanRecord, writeScanRecord } from '@/lib/scanState';
+import { clearScanRecord, type ScanRecord, writeScanRecord } from '@/lib/scanState';
 
 /**
  * The scan-button visual states are driven entirely by what's in

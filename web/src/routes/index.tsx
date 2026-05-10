@@ -6,9 +6,9 @@ import type { ListRow } from '@/api/types';
 import { ClearFiltersButton } from '@/components/ClearFiltersButton';
 import { SortDropdown } from '@/components/SortDropdown';
 import { StatusFilterDropdown } from '@/components/StatusFilterDropdown';
+import { Card } from '@/components/ui/card';
 import { ValueFilterDropdown } from '@/components/ValueFilterDropdown';
 import { VirtualPosterGrid } from '@/components/VirtualPosterGrid';
-import { Card } from '@/components/ui/card';
 import {
   countMultiValuedField,
   filterByMultiValuedField,
