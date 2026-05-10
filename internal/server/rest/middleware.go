@@ -103,11 +103,13 @@ func corsMiddleware(allowedOrigins []string) middleware {
 	}
 }
 
-// versionMiddleware stamps X-Kura-Version on every response.
-func versionMiddleware() middleware {
+// versionMiddleware stamps X-Kura-Version on every response. The
+// version is captured at construction time so the chain doesn't dip
+// into Server state per request.
+func versionMiddleware(version string) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set(headerVersion, serverVersion)
+			w.Header().Set(headerVersion, version)
 			next.ServeHTTP(w, r)
 		})
 	}

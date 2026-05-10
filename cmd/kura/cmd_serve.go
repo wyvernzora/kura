@@ -103,6 +103,7 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 		Workflow:    deps,
 		Logger:      logger,
 		BearerToken: tokenResult.Token,
+		Version:     Version,
 	})
 
 	var restSrv *restserver.Server
@@ -112,11 +113,12 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 			Logger:         logger,
 			AllowedOrigins: cmd.RESTCORSOrigins,
 			BearerToken:    tokenResult.Token,
+			Version:        Version,
 		})
 	}
 
 	logger.Info("kura serve starting",
-		"version", serveVersion,
+		"version", Version,
 		"libRoot", deps.LibRoot,
 		"transports", serverTransports(cmd),
 	)
@@ -208,10 +210,6 @@ func finishServerShutdown(rt *runContext, registry *jobs.Registry, logger *slog.
 	logger.Info("kura serve stopped cleanly")
 	return nil
 }
-
-// serveVersion is the human-readable version embedded in the boot
-// log. Mirrors the constant inside the MCP server package.
-const serveVersion = "0.1.0"
 
 // logTokenStatus emits one structured log line describing the auth
 // posture, including a copy-paste hint when a fresh token was just

@@ -1,6 +1,16 @@
 GO_PACKAGES := ./...
 GOFMT_DIRS := cmd internal
 
+# VERSION stamps the kura binary via -ldflags="-X main.Version=...".
+# Defaults to `git describe` (tag-based, falls back to short SHA on an
+# untagged checkout) so dev builds carry a meaningful identifier without
+# needing a manual override. Tagged releases get the literal tag, e.g.
+# "v0.1.0"; mid-development checkouts get something like
+# "v0.1.0-3-g35093c0" or "v0.1.0-3-g35093c0-dirty". CI/release builds
+# can pass `VERSION=v0.1.0` explicitly.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GO_LDFLAGS := -s -w -X main.Version=$(VERSION)
+
 # golangci-lint replaces the prior gopls-check workflow. Resolution
 # order: PATH first, then $GOBIN, then $GOPATH/bin so a `go install`
 # without exporting GOBIN still finds the binary.
@@ -32,7 +42,7 @@ WEBUI_EMBED_DIST := internal/server/webui/dist
 	storybook-dev storybook-build release
 
 build:
-	go build -o bin/kura ./cmd/kura
+	go build -trimpath -ldflags='$(GO_LDFLAGS)' -o bin/kura ./cmd/kura
 
 # gen-ts regenerates web/src/api/types.gen.ts from internal/response.
 # The wrapper at tools/tygo runs tygo and post-processes the closed
@@ -57,7 +67,7 @@ check-gen: gen-ts
 # install when node_modules is already populated, so repeat installs
 # only pay for `pnpm build` (~1 s).
 install: web-install-if-missing web-build build
-	go install ./cmd/kura
+	go install -trimpath -ldflags='$(GO_LDFLAGS)' ./cmd/kura
 
 # Web UI build flow:
 #
