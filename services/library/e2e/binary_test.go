@@ -78,8 +78,35 @@ type e2eBinary struct {
 	port     int
 	url      string
 	cmd      *exec.Cmd
-	stderr   *bytes.Buffer
+	stderr   *syncBuffer
 	stopOnce sync.Once
+}
+
+// syncBuffer is a goroutine-safe wrapper around bytes.Buffer. The
+// exec.Cmd writer goroutine fills it concurrently with the test
+// goroutine reading via dumpStderr; bare bytes.Buffer races under
+// -race.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Write(p)
+}
+
+func (s *syncBuffer) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.Len()
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.buf.String()
 }
 
 // startDaemon builds (if needed) the kura-e2e binary and boots
@@ -108,7 +135,7 @@ func startDaemon(t *testing.T, libRoot, inboxRoot string) *e2eBinary {
 		// to plumb the secret into every kura-e2e invocation.
 		"KURA_DISABLE_TOKEN=1",
 	)
-	stderr := &bytes.Buffer{}
+	stderr := &syncBuffer{}
 	cmd.Stderr = stderr
 	cmd.Stdout = io.Discard
 
