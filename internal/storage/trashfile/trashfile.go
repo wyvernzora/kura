@@ -166,19 +166,33 @@ func removeAllWithRetry(dir string) error {
 			return last
 		}
 		realLeft := 0
+		sillyLeft := 0
 		for _, e := range entries {
 			if isSillyRename(e.Name()) {
+				sillyLeft++
 				continue
 			}
 			realLeft++
 			_ = os.Remove(filepath.Join(dir, e.Name()))
 		}
-		// All real entries were unlinked successfully OR none
-		// existed; only silly-rename placeholders remain. The
-		// bucket is logically empty. Accept; the FS layer will
-		// clean up the placeholders on its own schedule.
-		if realLeft == 0 {
+		// Silly-rename placeholders mean the FS layer owns the
+		// remaining cleanup; the original meta.json + media + companion
+		// files are gone. Bucket is logically empty even though the
+		// dir lingers. trashfile.List ignores buckets without
+		// meta.json so they stay invisible.
+		if realLeft == 0 && sillyLeft > 0 {
 			return nil
+		}
+		// No silly-rename leftovers and no real entries: the bucket is
+		// fully empty but the dir itself still exists. RemoveAll's
+		// failure was on rmdir of the dir (e.g. parent is read-only).
+		// Try rmdir explicitly; success means we converged. Failure
+		// surfaces the original error rather than masking it.
+		if realLeft == 0 {
+			if err := os.Remove(dir); err == nil || errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return last
 		}
 		time.Sleep(time.Duration(i+1) * 25 * time.Millisecond)
 	}
