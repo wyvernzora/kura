@@ -7,17 +7,6 @@ import (
 	"github.com/wyvernzora/kura/internal/coord"
 )
 
-// PlanExpiredError signals the plan TTL has elapsed before apply was
-// called. Caller re-plans.
-type PlanExpiredError struct {
-	Token     string
-	ExpiresAt time.Time
-}
-
-func (e *PlanExpiredError) Error() string {
-	return fmt.Sprintf("reconcile: plan %s expired at %s", e.Token, e.ExpiresAt.Format(time.RFC3339))
-}
-
 // PlanAlreadyAppliedError signals the plan log already has a success
 // record. Apply refuses to re-apply.
 type PlanAlreadyAppliedError struct {

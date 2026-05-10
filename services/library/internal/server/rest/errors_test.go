@@ -33,7 +33,6 @@ func TestEncodeError_KindToStatus(t *testing.T) {
 		{"not_found", errkind.KindNotFound, http.StatusNotFound},
 		{"conflict", errkind.KindConflict, http.StatusConflict},
 		{"busy", errkind.KindBusy, http.StatusConflict},
-		{"plan_expired", errkind.KindPlanExpired, http.StatusConflict},
 		{"plan_applied", errkind.KindPlanApplied, http.StatusConflict},
 		{"stale_snapshot", errkind.KindStaleSnapshot, http.StatusConflict},
 		{"invalid_episode", errkind.KindInvalidEpisode, http.StatusUnprocessableEntity},

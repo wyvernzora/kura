@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -12,9 +11,6 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
-
-// PlanTTL is how long a persisted plan remains valid for apply.
-const PlanTTL = 5 * time.Minute
 
 // TokenLength is the canonical length of a reconcile plan token: a
 // 12-char lowercase hex prefix of the snapshot sha256.
@@ -30,11 +26,11 @@ type PlanInput struct {
 // wires the plan to planfile.WritePlan).
 //
 // Plan token = snapshot[:TokenLength]; deterministic given the series
-// state.
+// state. Apply re-validates the snapshot at execute time, so the token
+// alone is the freshness check — there is no separate TTL.
 //
-// Returned plan has zero CreatedAt/ExpiresAt; the caller stamps these
-// at persistence time so a re-plan of the same state can detect an
-// existing planfile and reuse its timestamps.
+// Returned plan has zero CreatedAt; the caller stamps it at
+// persistence time.
 func BuildPlan(ctx context.Context, deps Deps, in PlanInput) (Plan, error) {
 	if err := ctx.Err(); err != nil {
 		return Plan{}, err

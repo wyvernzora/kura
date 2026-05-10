@@ -29,7 +29,6 @@ const (
 	KindConflict            = "conflict"
 	KindInvalidEpisode      = "invalid_episode"
 	KindNoStaged            = "no_staged"
-	KindPlanExpired         = "plan_expired"
 	KindPlanApplied         = "plan_applied"
 	KindStaleSnapshot       = "stale_snapshot"
 	KindUnsupportedProvider = "unsupported_provider"

@@ -28,13 +28,15 @@ func (p Plan) HasWork() bool {
 	return len(p.Steps) > 0
 }
 
-// Header is the per-plan envelope: token, lifetime, series identity,
-// snapshot of series.json bytes at plan time.
+// Header is the per-plan envelope: token, series identity, snapshot
+// of series.json bytes at plan time. Apply re-validates the snapshot
+// at execute time; there is no TTL gate, so a plan stays applicable
+// until the series state changes (token mismatch) or the sweep prunes
+// the planfile.
 type Header struct {
 	SchemaVersion int
 	Token         string
 	CreatedAt     time.Time
-	ExpiresAt     time.Time
 	Series        refs.Series
 	Snapshot      string
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -88,10 +87,8 @@ func TestRelativizeUnderRoot(t *testing.T) {
 }
 
 func TestProjectReconcilePlan_DropsCreatedAtAndPlanWrapper(t *testing.T) {
-	expires := time.Date(2026, 5, 4, 0, 30, 0, 0, time.UTC)
 	in := response.ReconcilePlan{
-		Token:     "abc123",
-		ExpiresAt: &expires,
+		Token: "abc123",
 		Plan: response.ReconcilePlanDetail{
 			Series: mustSeries(t, "Show"),
 			Changes: []response.ReconcileChange{
@@ -109,9 +106,6 @@ func TestProjectReconcilePlan_DropsCreatedAtAndPlanWrapper(t *testing.T) {
 	out := projectReconcilePlan(in, "/lib/Show")
 	if out.Token != "abc123" {
 		t.Fatalf("Token = %q, want abc123", out.Token)
-	}
-	if out.ExpiresAt == "" {
-		t.Fatal("ExpiresAt empty")
 	}
 	if len(out.Changes) != 1 {
 		t.Fatalf("Changes = %v", out.Changes)

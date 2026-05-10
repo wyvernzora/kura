@@ -229,7 +229,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - `kura scan <series>` — scan a tracked series directory, record recognized episode media into `series.json`, refresh changed facts for same-path episodes, keep empty spine episodes, and report skipped files/directories.
 - `kura scan --replace <series>` — required when a discovered file replaces an existing active season/episode at a different media path.
 - `kura stage <series> [opts] <absolute-media-path>` — record an explicit external media file inside the target episode's `series.json` staged record. Active or staged season/episode collisions require `--replace`.
-- `kura reconcile plan <series>` — resolve the series selector through the library index, write a five-minute JSONL plan under `<series>/.kura/reconcile/<token>.jsonl`, and print the token. Empty plans write no plan file.
+- `kura reconcile plan <series>` — resolve the series selector through the library index, write a JSONL plan under `<series>/.kura/reconcile/<token>.jsonl`, and print the token. Token = snapshot hash; apply re-validates the snapshot at execute time. Empty plans write no plan file.
 - `kura reconcile apply <series> <token>` — apply a saved reconcile plan, move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, append move/result records to the plan JSONL file, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
 - If scan or reconcile plan has no changes, the CLI must not ask to apply anything.
 - Kura does not currently scan a central inbox. `kura stage` accepts explicitly referenced absolute media paths from any inbox or download directory.

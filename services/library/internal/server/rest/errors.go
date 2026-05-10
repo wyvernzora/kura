@@ -98,7 +98,6 @@ func statusForKind(kind, category string) int {
 		return http.StatusNotFound
 	case errkind.KindConflict,
 		errkind.KindBusy,
-		errkind.KindPlanExpired,
 		errkind.KindPlanApplied,
 		errkind.KindStaleSnapshot:
 		return http.StatusConflict

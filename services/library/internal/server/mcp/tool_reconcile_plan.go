@@ -23,7 +23,6 @@ type reconcilePlanInput struct {
 
 type mcpReconcilePlan struct {
 	Token      string               `json:"token,omitempty"`
-	ExpiresAt  string               `json:"expiresAt,omitempty"`
 	Changes    []mcpReconcileChange `json:"changes"`
 	TrashItems []mcpReconcileTrash  `json:"trashItems,omitempty"`
 	Extras     []mcpReconcileExtra  `json:"extras,omitempty"`
@@ -131,9 +130,6 @@ func projectReconcilePlan(in response.ReconcilePlan, seriesRoot string) mcpRecon
 		Token:   in.Token,
 		Changes: make([]mcpReconcileChange, 0, len(in.Plan.Changes)),
 	}
-	if in.ExpiresAt != nil {
-		out.ExpiresAt = in.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00")
-	}
 	for _, change := range in.Plan.Changes {
 		mc := mcpReconcileChange{
 			Kind:       change.Kind,
@@ -208,7 +204,7 @@ func projectReconcilePlan(in response.ReconcilePlan, seriesRoot string) mcpRecon
 }
 
 // formatMTime returns the RFC3339 (UTC) string for a non-nil MTime,
-// empty string otherwise. Matches expiresAt formatting style.
+// empty string otherwise.
 func formatMTime(mt *time.Time) string {
 	if mt == nil {
 		return ""

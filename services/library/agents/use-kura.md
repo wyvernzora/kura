@@ -280,9 +280,10 @@ kura_reconcile_apply(ref=<A>, token=<tokenA>)    kura_reconcile_apply(ref=<B>, t
 ```
 
 Within a single series the order is fixed: stage → plan → apply.
-Plan tokens expire after 5 minutes (§9), so don't fan out a plan
-batch and let it sit while you do unrelated work — apply within
-the same flight.
+Plan tokens are a hash of the series snapshot, so any state change
+between plan and apply (extra stage, scan, manual surgery) flips
+the snapshot and apply rejects with a snapshot-mismatch error;
+re-plan to get the new token.
 
 ### 4.f Refresh after the user changed the directory
 
@@ -512,28 +513,31 @@ Escalate to the user only when:
 returns a `token`. Nothing changes on disk. `kura_reconcile_apply`
 consumes the token and performs the moves.
 
-**Token expiry.** Tokens expire 5 minutes after creation. Apply
-rejects expired tokens with `PlanExpiredError`. Plan is **idempotent
-on series state**: re-calling `kura_reconcile_plan` for the same
-series state returns the original plan with its **original TTL** —
-re-plan does NOT refresh the expiry. Operationally:
+**Token = snapshot hash.** The token is a 12-char hex prefix of
+`SHA256(series.json bytes)`, so it's deterministic on series state.
+Same state → same token; any state change (extra stage, reset,
+scan, manual surgery) → different token.
 
-- Plan and apply in the same flight. Don't let a token sit while
-  you do unrelated work.
-- If you suspect drift (session compaction, long pause, user
-  detour), apply immediately and let the apply call surface
-  `PlanExpiredError` if the token aged out, rather than re-planning
-  in the hope of a fresh TTL.
-- If you receive `PlanExpiredError` and series state hasn't
-  changed since plan, you cannot trivially refresh the TTL — re-plan
-  returns the same expired plan. Surface to user; recovery is an
-  operator-side `rm <series>/.kura/reconcile/<token>.jsonl` followed
-  by a fresh `kura_reconcile_plan` call. (Or wait for the periodic
-  sweep to prune the planfile after `KURA_LOG_RETENTION_DAYS`,
-  default 7 — usually impractical.)
+**Apply re-validates.** `kura_reconcile_apply` re-reads
+`series.json` and recomputes the snapshot before executing. If the
+snapshot no longer matches the plan's, apply rejects with a
+`stale_snapshot` error. There is no separate TTL: a plan stays
+valid as long as the series state hasn't changed.
 
-See each tool's description for field semantics, expiry handling,
-verification, and busy-recovery guidance.
+**Operationally:**
+
+- Plan and apply in the same flight is still the cheap default —
+  cuts surprise diagnostics if you mistake what mutated state
+  in between.
+- If apply returns `stale_snapshot`, call `kura_reconcile_plan`
+  again to get the fresh token, then re-apply. Don't try to
+  re-use the old token — the snapshot will keep mismatching.
+- Long context interruptions (session compaction, user detour) are
+  fine **as long as the series state hasn't changed**. Re-plan is
+  cheap and idempotent if you want to be safe.
+
+See each tool's description for field semantics, verification, and
+busy-recovery guidance.
 
 ---
 

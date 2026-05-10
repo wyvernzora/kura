@@ -113,7 +113,7 @@ verb. JSON-lines:
 Path: `<library>/<SeriesRef>/.kura/reconcile/<token>.jsonl`. JSON-lines.
 
 ```jsonl
-{"type":"header","token":"abcd1234ef56","lifetime":"5m","expiresAt":"2026-05-09T12:34:56Z","series":"<ref>","snapshot":"<sha256>"}
+{"type":"header","token":"abcd1234ef56","createdAt":"2026-05-09T12:34:56Z","series":"<ref>","snapshot":"<sha256>"}
 {"type":"step","id":"...","kind":"file_move","from":"...","to":"...","owner":{"intent":"episode","episodeRef":"S01E0003"}}
 {"type":"step","id":"...","kind":"dir_remove","path":"..."}
 {"type":"event","stepID":"...","at":"...","error":null}
@@ -122,10 +122,10 @@ Path: `<library>/<SeriesRef>/.kura/reconcile/<token>.jsonl`. JSON-lines.
 ```
 
 - Token = first 12 hex chars of `SHA256(snapshot bytes)`. Same series
-  state always produces the same token; idempotent re-plan.
-- Plan TTL is **5 minutes** (hardcoded `PlanTTL` in
-  `internal/reconcile/build.go`). After expiry, apply rejects with a
-  re-plan instruction.
+  state always produces the same token; idempotent re-plan. Apply
+  re-validates the snapshot at execute time, so a plan whose series
+  state has drifted is caught by token mismatch — there is no separate
+  TTL.
 - Step kinds: `file_move` (from/to series-relative slash form),
   `dir_remove` (path series-relative; silently skips if not empty).
 - Owners: `OwnerEpisode` (canonical move), `OwnerTrash` (to
