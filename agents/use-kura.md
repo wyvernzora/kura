@@ -123,7 +123,7 @@ until the job's `state` is terminal (`succeeded`, `failed`, or
     real matches and produces phantom ones. The provider is the
     authoritative resolver: every release candidate goes through
     `kura_resolve` to obtain a MetadataRef, then `kura_show` to
-    read library state. See §4.f.
+    read library state. See §4.g.
 11. **User references to inbox locations are `inbox:` selectors.**
     When the user says "look at inbox/pending", "the bdrip dir
     under inbox", "inbox/foo/bar", "the pending folder", etc.,
@@ -195,6 +195,27 @@ queues (`trash[]`), and extras placements (`extras[]`). See the tool
 description for selector syntax, source detection, companion
 discovery, extras durability, and failure modes.
 
+**CJK / multi-byte paths.** Always copy `inbox:` selector paths
+byte-for-byte from `kura_inbox_list` output. Never paraphrase,
+re-romanize, or re-encode through a Unicode escape representation
+on the way to a stage call. NFC vs NFD, kana / latin substitution,
+half-width / full-width forms — any of these produce a path that
+looks visually identical but fails to open with `not_found` at
+stage time. The fix is mechanical (re-list, re-copy); the symptom
+("file vanished") wastes a turn either way.
+
+**Source when files lack tags.** `kura_stage` runs mediainfo but
+mediainfo can't infer source (BluRay, WebRip, …) from container
+metadata alone — it needs a filename token. When stage records
+`source: "Unknown"` and the user hasn't passed an explicit
+override, surface it before reconciling. Default action is **ask**,
+not guess. Suggest a value only when the filename or a sibling in
+the same release directory carries an unambiguous source token
+(`BD`, `BDRip`, `BluRay`, `WebRip`, `WEB-DL`, `HDTV`); never infer
+from codec / bitrate / size alone — those overlap heavily across
+sources. Apply only what the user confirms; if the user says
+proceed as-is, keep `Unknown`.
+
 ```
 # Discover what's in the inbox first.
 kura_inbox_list(path="[BDrip] Show Title")
@@ -228,7 +249,42 @@ workflows (see §7).
 To abort before reconcile:
 `kura_reset(ref, episode=<marker> | trash=[<ulid>...] | extras=[<ulid>...] | all=true)`.
 
-### 4.e Refresh after the user changed the directory
+### 4.e Bulk adoption of multiple independent series
+
+Operations across *different* series share no state and parallelize
+freely. Operations within a single series share the per-series CAS
+claim and must run in order. Use that to cut latency when
+onboarding N series at once:
+
+```
+# Resolve every title in parallel — one MetadataRef per series.
+kura_resolve(terms=[<title A>])    kura_resolve(terms=[<title B>])   ...
+
+# For each series, decide add vs already-tracked. Run in parallel.
+# Prefer kura_show first when uncertain — kura_add errors if the
+# series exists, and a not_found from kura_show is the cheapest
+# discriminator.
+kura_show(ref=<A>) || kura_add(ref=<A>)    kura_show(ref=<B>) || kura_add(ref=<B>)   ...
+
+# Stage every series in parallel; each is its own batch + its own
+# job. Poll all jobIds until terminal before continuing.
+kura_stage(ref=<A>, episodes=[...])    kura_stage(ref=<B>, episodes=[...])   ...
+
+# Plan every series in parallel. Tokens are series-scoped.
+kura_reconcile_plan(ref=<A>)    kura_reconcile_plan(ref=<B>)   ...
+
+# Apply every series in parallel. Each apply is its own job; poll
+# all until terminal. A failure in one series doesn't roll back
+# the others.
+kura_reconcile_apply(ref=<A>, token=<tokenA>)    kura_reconcile_apply(ref=<B>, token=<tokenB>)   ...
+```
+
+Within a single series the order is fixed: stage → plan → apply.
+Plan tokens expire after 5 minutes (§9), so don't fan out a plan
+batch and let it sit while you do unrelated work — apply within
+the same flight.
+
+### 4.f Refresh after the user changed the directory
 
 User added, removed, or renamed files; or wants updated provider info
 applied.
@@ -247,7 +303,7 @@ series, prefer `kura_stage` + `kura_reconcile_plan` /
 scan to discover or refresh facts; use stage/reconcile for
 intentional placement.
 
-### 4.f Release triage / adoption
+### 4.g Release triage / adoption
 
 Goal: figure out whether each release candidate should be adopted
 into the library, discarded, or used to upgrade what's already
@@ -455,6 +511,26 @@ Escalate to the user only when:
 `kura_reconcile_plan` computes what `reconcile_apply` would do and
 returns a `token`. Nothing changes on disk. `kura_reconcile_apply`
 consumes the token and performs the moves.
+
+**Token expiry.** Tokens expire 5 minutes after creation. Apply
+rejects expired tokens with `PlanExpiredError`. Plan is **idempotent
+on series state**: re-calling `kura_reconcile_plan` for the same
+series state returns the original plan with its **original TTL** —
+re-plan does NOT refresh the expiry. Operationally:
+
+- Plan and apply in the same flight. Don't let a token sit while
+  you do unrelated work.
+- If you suspect drift (session compaction, long pause, user
+  detour), apply immediately and let the apply call surface
+  `PlanExpiredError` if the token aged out, rather than re-planning
+  in the hope of a fresh TTL.
+- If you receive `PlanExpiredError` and series state hasn't
+  changed since plan, you cannot trivially refresh the TTL — re-plan
+  returns the same expired plan. Surface to user; recovery is an
+  operator-side `rm <series>/.kura/reconcile/<token>.jsonl` followed
+  by a fresh `kura_reconcile_plan` call. (Or wait for the periodic
+  sweep to prune the planfile after `KURA_LOG_RETENTION_DAYS`,
+  default 7 — usually impractical.)
 
 See each tool's description for field semantics, expiry handling,
 verification, and busy-recovery guidance.
