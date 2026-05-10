@@ -9,108 +9,85 @@
 #   - contextcheck  catches functions that should accept ctx but don't.
 #   - staticcheck   honnef.co static analysis suite (rolls in stylecheck,
 #                   simple, unused).
-
+version: "2"
 run:
-  timeout: 5m
-  modules-download-mode: readonly
-  tests: true
   build-tags:
     - e2e
     - e2e_stub
     - legacy_cli_tests
-
+  modules-download-mode: readonly
+  tests: true
 linters:
-  disable-all: true
+  default: none
   enable:
-    - govet
-    - gocritic
+    - contextcheck
     - cyclop
     - decorder
-    - contextcheck
+    - gocritic
+    - govet
     - staticcheck
-
-linters-settings:
-  cyclop:
-    # 15 is a relaxed bar that catches the genuinely tangled
-    # functions while leaving room for the stage / reconcile
-    # state machines that legitimately branch.
-    max-complexity: 15
-    package-average: 0.0   # no package-level average enforcement
-    skip-tests: true       # tests can be branchy without hurting prod
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-      - style
-    disabled-checks:
-      # paramTypeCombine flags `func f(a string, b string)` →
-      # `func f(a, b string)` — ergonomic preference, not a bug.
-      - paramTypeCombine
-      # commentedOutCode is too noisy on intentional reference
-      # commentary in design-heavy packages.
-      - commentedOutCode
-      # hugeParam fights the workflow.Deps style — kura passes
-      # structs (Deps, ShowOptions, ApplyResult) by value to avoid
-      # accidental aliasing across goroutines and concurrent
-      # mutations. Performance is not the concern here.
-      - hugeParam
-      # rangeValCopy hits the same pattern: iterating a slice of
-      # structs by value is fine when the slice is small + bounded.
-      - rangeValCopy
-      # builtinShadow flags `max` / `min` as local var names;
-      # shadowing the 1.21 builtin inside a tight function is
-      # idiomatic enough.
-      - builtinShadow
-      # regexpSimplify is cosmetic ([0-9] vs \d). Doesn't change
-      # semantics; not worth the churn.
-      - regexpSimplify
-
-  staticcheck:
-    # Default check set is fine; explicit listing avoids drift if
-    # upstream renames groups.
-    checks:
-      - all
-
-  decorder:
-    # Skip strict declaration ordering — kura's existing codebase
-    # mixes type/const/var freely (e.g. const block before its
-    # type), and rewriting hundreds of files for cosmetic order is
-    # not worth the churn. Keep init-func-first off (kura packages
-    # don't use init heavily) + dec-num off (single-decl-per-block
-    # not enforced). Re-enable dec-order-check when convention
-    # tightens.
-    disable-init-func-first-check: true
-    disable-dec-num-check: true
-    disable-dec-order-check: true
-
+  settings:
+    cyclop:
+      max-complexity: 15
+      package-average: 0
+    decorder:
+      disable-dec-num-check: true
+      disable-dec-order-check: true
+      disable-init-func-first-check: true
+    gocritic:
+      disabled-checks:
+        - paramTypeCombine
+        - commentedOutCode
+        - hugeParam
+        - rangeValCopy
+        - builtinShadow
+        - regexpSimplify
+        # importShadow flags every variable named after an imported
+        # package. v1.x didn't enable it by default; v2 did. The
+        # codebase has ~6 hits, all of them deliberate (paths, io,
+        # errors, provider) — disabling matches the prior baseline.
+        - importShadow
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+    staticcheck:
+      # Scope to the SA family (safety analysis) to match the
+      # behavior of v1.x's staticcheck, which only ran SA* by
+      # default. v2 expanded `all` to include ST* (stylecheck),
+      # QF* (quickfix), and S1* (simple) families; those check
+      # categories were not enforced before and should not expand
+      # this gate's scope. Re-enable them in a follow-up if desired.
+      checks:
+        - SA*
+  exclusions:
+    generated: lax
+    rules:
+      - linters:
+          - cyclop
+        path: e2e/
+      - linters:
+          - contextcheck
+        path: internal/server/(rest|mcp)/server\.go
+      - linters:
+          - gocritic
+          - govet
+          - staticcheck
+        path: vendor/
+      - linters:
+          - cyclop
+        path: (.+)_test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  # Surface every finding; we already curate via linter selection.
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-use-default: false
-
-  exclude-rules:
-    # Cyclop on _test.go is already off via skip-tests, but the
-    # script-driven harness in e2e/ has very long command tables
-    # that aren't real complexity — keep them off too.
-    - path: e2e/
-      linters:
-        - cyclop
-
-    # Graceful HTTP shutdown intentionally derives a fresh
-    # context.Background()-rooted ctx because the inherited ctx
-    # is already cancelled. contextcheck flags this as a foot-
-    # gun, but it's the standard pattern for net/http.Server.
-    # //nolint pragmas don't suppress contextcheck reliably, so
-    # exclude by path.
-    - path: internal/server/(rest|mcp)/server\.go
-      linters:
-        - contextcheck
-
-    # Generated / vendored / examples shouldn't gate CI on style.
-    - path: vendor/
-      linters:
-        - staticcheck
-        - gocritic
-        - govet
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
