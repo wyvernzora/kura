@@ -16,5 +16,5 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 ## Parameters
 
 <!-- schema -->
-- `jobId` (string, required) — job ID returned by `kura_scan` or `kura_reconcile_apply` (16-char hex).
+- `jobId` (string, required) — job ID returned by `kura_scan` or `kura_reconcile_apply` (26-char Crockford base32 ULID).
 <!-- /schema -->

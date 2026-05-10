@@ -51,7 +51,9 @@ func TestKuraJobStatus_ToolIsRegistered(t *testing.T) {
 
 func TestKuraJobStatus_InvalidJobIDRejected(t *testing.T) {
 	cs := connectInMemoryWithJobStatus(t, Deps{})
-	for _, id := range []string{"", "short", "not-hex-just-text", "0123456789abcdefg" /*17*/} {
+	// All non-ULID: empty, short, lowercase (Crockford base32 is uppercase),
+	// 25-char (length wrong), 26 chars containing I (not in alphabet).
+	for _, id := range []string{"", "short", "0123456789abcdef", "01HBCDEFGHJKMNPQRSTVWXYZ0", "01HBCDEFGHIJKMNPQRSTVWXYZ0"} {
 		res, err := cs.CallTool(context.Background(), &sdkmcp.CallToolParams{
 			Name:      "kura_job_status",
 			Arguments: map[string]any{"jobId": id},
@@ -79,7 +81,7 @@ func TestKuraJobStatus_NotFoundReturnsCodedError(t *testing.T) {
 	cs := connectInMemoryWithJobStatus(t, deps)
 	res, err := cs.CallTool(context.Background(), &sdkmcp.CallToolParams{
 		Name:      "kura_job_status",
-		Arguments: map[string]any{"jobId": "0123456789abcdef"},
+		Arguments: map[string]any{"jobId": "00000000000000000000000000"},
 	})
 	if err != nil {
 		t.Fatalf("CallTool: %v", err)

@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/oklog/ulid/v2"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/errkind"
@@ -18,7 +18,7 @@ import (
 )
 
 type jobStatusInput struct {
-	JobID string `json:"jobId" jsonschema:"Job ID returned by kura_scan or kura_reconcile_apply (16-char hex)."`
+	JobID string `json:"jobId" jsonschema:"Job ID returned by kura_scan or kura_reconcile_apply (26-char Crockford base32 ULID)."`
 }
 
 type mcpJobStatus struct {
@@ -47,8 +47,6 @@ type mcpJobError struct {
 	Data    map[string]any `json:"data,omitempty"`
 }
 
-var jobIDPattern = regexp.MustCompile(`^[0-9a-f]{16}$`)
-
 //go:embed tool_job_status.md
 var toolJobStatusDoc string
 
@@ -64,10 +62,10 @@ func addJobStatusTool(s *sdkmcp.Server, deps Deps) {
 			DestructiveHint: &hintFalse,
 		},
 	}, func(_ context.Context, _ *sdkmcp.CallToolRequest, in jobStatusInput) (*sdkmcp.CallToolResult, any, error) {
-		if !jobIDPattern.MatchString(in.JobID) {
+		if _, err := ulid.ParseStrict(in.JobID); err != nil {
 			return toolErrorResult(&invalidInputError{
 				kind:    errkind.KindInvalidRef,
-				message: fmt.Sprintf("kura_job_status: invalid jobId %q; expected 16-char hex", in.JobID),
+				message: fmt.Sprintf("kura_job_status: invalid jobId %q; expected 26-char Crockford base32 ULID", in.JobID),
 			}), nil, nil
 		}
 		view, err := deps.Workflow.Jobs.Get(in.JobID)
