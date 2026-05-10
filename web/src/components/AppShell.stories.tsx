@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-
-import { AppShell } from './AppShell';
 import { StoryRouter } from './_storyRouter';
+import { AppShell } from './AppShell';
 
 const meta: Meta<typeof AppShell> = {
   title: 'Compositions/AppShell',

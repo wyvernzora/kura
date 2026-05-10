@@ -43,12 +43,16 @@ describe('isSubOptimalSource', () => {
     expect(isSubOptimalSource(source)).toBe(false);
   });
 
-  it.each(['WebRip', 'TV', 'TVRip', 'HDTV', 'DVDRip', 'Unknown'])(
-    'flags %s as sub-optimal',
-    (source) => {
-      expect(isSubOptimalSource(source)).toBe(true);
-    },
-  );
+  it.each([
+    'WebRip',
+    'TV',
+    'TVRip',
+    'HDTV',
+    'DVDRip',
+    'Unknown',
+  ])('flags %s as sub-optimal', (source) => {
+    expect(isSubOptimalSource(source)).toBe(true);
+  });
 });
 
 describe('isSubOptimalResolution', () => {

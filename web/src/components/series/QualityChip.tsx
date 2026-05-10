@@ -1,8 +1,8 @@
 import { cn } from '@/lib/cn';
 import {
-  type QualityBucket,
   isSubOptimalResolution,
   isSubOptimalSource,
+  type QualityBucket,
   resolutionBucket,
   sourceBucket,
 } from '@/lib/episodeStatus';

@@ -1,12 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { KuraApiError, api } from '@/api/client';
+import { api, KuraApiError } from '@/api/client';
 import type { JobError, JobStatus, ScanResult, ScanSkip } from '@/api/types.gen';
 import {
-  type ScanRecord,
   clearScanRecord,
   readScanRecord,
+  type ScanRecord,
   subscribeScanRecord,
   writeScanRecord,
 } from '@/lib/scanState';

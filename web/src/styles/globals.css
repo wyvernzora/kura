@@ -109,7 +109,9 @@ body {
   margin: 0;
   background: var(--color-paper);
   color: var(--color-ink);
-  transition: background 200ms ease, color 200ms ease;
+  transition:
+    background 200ms ease,
+    color 200ms ease;
 }
 
 /* Scrollbar tint to match the page palette. */
@@ -131,14 +133,18 @@ body {
 .kura-focusable:focus-within,
 .kura-focusable:focus-visible {
   outline: none;
-  box-shadow: var(--shadow-card), 0 0 0 3px rgba(96, 142, 220, 0.22), 0 4px 18px
-    rgba(96, 142, 220, 0.3) !important;
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 3px rgba(96, 142, 220, 0.22),
+    0 4px 18px rgba(96, 142, 220, 0.3) !important;
   transition: box-shadow 160ms ease;
 }
 html[data-k-theme="dark"] .kura-focusable:focus-within,
 html[data-k-theme="dark"] .kura-focusable:focus-visible {
-  box-shadow: var(--shadow-card), 0 0 0 3px rgba(120, 168, 240, 0.3), 0 4px 22px
-    rgba(120, 168, 240, 0.45) !important;
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 3px rgba(120, 168, 240, 0.3),
+    0 4px 22px rgba(120, 168, 240, 0.45) !important;
 }
 .kura-focusable input:focus {
   outline: none;

@@ -12,36 +12,35 @@
  *     have not been hoisted into the response package yet.
  */
 
-export type {
-  // List
-  ListRow,
-  ListResult,
-  ListStatus,
-  // Show + nested
-  Show,
-  ArtworkShow,
-  PosterShow,
-  SeasonShow,
-  SeasonSummary,
-  EpisodeShow,
-  MediaShow,
-  CompanionShow,
-  TrashItemShow,
-  ExtraItemShow,
-  // Resolve
-  Resolution,
-  Candidate,
-  Evidence,
-  // Aliases
-  AliasList,
-  AliasMutation,
-} from './types.gen';
-
 // Generated `Status` is the episode-status enum (pending / missing /
 // …). Re-export under the web-side name so component imports keep
 // working — there is no conflict with `lib/status.ts` where `Status`
 // names the library-status enum (= generated `ListStatus`).
-export type { Status as EpisodeStatus } from './types.gen';
+export type {
+  // Aliases
+  AliasList,
+  AliasMutation,
+  ArtworkShow,
+  Candidate,
+  CompanionShow,
+  EpisodeShow,
+  Evidence,
+  ExtraItemShow,
+  ListResult,
+  // List
+  ListRow,
+  ListStatus,
+  MediaShow,
+  PosterShow,
+  // Resolve
+  Resolution,
+  SeasonShow,
+  SeasonSummary,
+  // Show + nested
+  Show,
+  Status as EpisodeStatus,
+  TrashItemShow,
+} from './types.gen';
 
 /**
  * `internal/server/auth.writeUnauthorized`-shaped 401 envelope. Also

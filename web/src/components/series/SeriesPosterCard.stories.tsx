@@ -1,9 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { withStoryProviders } from '@/components/_storyProviders';
-
-import { SeriesPosterCard } from './SeriesPosterCard';
 import { FIXTURE_SHOW_AIRING, FIXTURE_SHOW_COMPLETE_SINGLE } from './_fixtures';
+import { SeriesPosterCard } from './SeriesPosterCard';
 
 const meta: Meta<typeof SeriesPosterCard> = {
   title: 'Series/SeriesPosterCard',

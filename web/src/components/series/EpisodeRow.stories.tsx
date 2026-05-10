@@ -1,11 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react';
-
-import { EpisodeRow } from './EpisodeRow';
 import {
   FIXTURE_EPISODE_MISSING,
   FIXTURE_EPISODE_PENDING,
   FIXTURE_EPISODE_PRESENT,
 } from './_fixtures';
+import { EpisodeRow } from './EpisodeRow';
 
 const meta: Meta<typeof EpisodeRow> = {
   title: 'Series/EpisodeRow',
