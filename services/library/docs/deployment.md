@@ -52,6 +52,17 @@ bearer-token directory ship in the final layer. The `kura` binary
 itself is statically linked (`CGO_ENABLED=0`); only `mediainfo`
 pulls glibc-side dependencies.
 
+`ENTRYPOINT` is `kura`; `CMD` defaults to
+`["serve", "--rest=:8080", "--mcp-http=:8081"]`, so a pod or
+`docker run` invocation with no `args:` / `command:` starts both
+transports — REST on `:8080` and MCP-over-HTTP on `:8081`. Both use
+`EXPOSE 8080 8081`. The same bearer token gates both. Override
+`args:` to invoke a CLI verb (`args: ["list"]`,
+`args: ["scan", "tvdb:370070"]`) or to bind to different addresses.
+
+If you only want REST (or only MCP), override `args:` accordingly
+— e.g. `args: ["serve", "--rest=:8080"]` to skip MCP-over-HTTP.
+
 The image runs as UID/GID baked at build time (default
 `10001:10001`). For NFS-backed library mounts where the export
 enforces a specific UID/GID, rebuild the image with matching values:
