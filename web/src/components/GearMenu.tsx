@@ -100,7 +100,7 @@ export function GearMenu({ defaultOpen }: GearMenuProps = {}) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={styles.menu} sideOffset={8}>
         <div className={styles.menuHeader}>
-          <Logo />
+          <Logo interactive={false} />
           <div className={styles.menuHeadline}>
             <span className={styles.menuHeadlineName}>kura · home server</span>
             <span className={styles.menuHeadlineSub}>library admin</span>

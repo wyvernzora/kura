@@ -42,11 +42,23 @@ async function fetchAllSeries(): Promise<ListRow[]> {
   return acc;
 }
 
+/**
+ * Refetch cadence for the library list. Picked at 30 s as a balance
+ * between picking up background mutations (an MCP agent staging /
+ * reconciling while the dashboard is open) and not hammering the
+ * server. Paired with the matching staleTime so a same-window
+ * remount inside the interval serves cache without a redundant
+ * fetch. `refetchIntervalInBackground` defaults to false, so polling
+ * pauses while the tab is hidden.
+ */
+const SERIES_LIST_POLL_MS = 30_000;
+
 export function useSeriesList() {
   return useQuery({
     queryKey: ['series'],
     queryFn: fetchAllSeries,
-    staleTime: 30_000,
+    staleTime: SERIES_LIST_POLL_MS,
+    refetchInterval: SERIES_LIST_POLL_MS,
   });
 }
 
