@@ -2,7 +2,7 @@
 # arch-specific output), so building once on the runner's native arch
 # and reusing the dist/ across every TARGETPLATFORM avoids running
 # pnpm + Vite under QEMU for each target.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS web
+FROM --platform=$BUILDPLATFORM node:24-alpine AS web
 
 WORKDIR /src/web
 
