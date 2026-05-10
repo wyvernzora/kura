@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { useAuth } from '@/state/auth';
 
@@ -34,7 +34,7 @@ export function StoryProviders({ children }: { children: ReactNode }) {
 }
 
 /** Convenience decorator wrapping the story tree in `StoryProviders`. */
-export function withStoryProviders(Story: () => JSX.Element) {
+export function withStoryProviders(Story: () => ReactElement) {
   return (
     <StoryProviders>
       <Story />
