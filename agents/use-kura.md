@@ -111,10 +111,33 @@ until the job's `state` is terminal (`succeeded`, `failed`, or
 9. **Don't echo the user's inputs as new info.** Tool responses
    already drop fields the caller passed in. Surface what's *new*:
    discovered files, statuses, conflicts, decisions you made.
+10. **Never string-match library rows against external release
+    titles.** This includes inbox filenames (`kura_inbox_list`),
+    raw release titles from RSS feeds, web-search results,
+    tracker listings, IRC announce, manual user-pasted strings —
+    anything that isn't already a MetadataRef. `kura_list` returns
+    library titles (preferred / canonical) and SeriesRefs; the
+    external sources carry release-group brackets, romanization
+    variants, multi-language title segments, source / quality
+    tags, and date stamps. Direct or fuzzy intersection misses
+    real matches and produces phantom ones. The provider is the
+    authoritative resolver: every release candidate goes through
+    `kura_resolve` to obtain a MetadataRef, then `kura_show` to
+    read library state. See §4.f.
+11. **User references to inbox locations are `inbox:` selectors.**
+    When the user says "look at inbox/pending", "the bdrip dir
+    under inbox", "inbox/foo/bar", "the pending folder", etc.,
+    they mean the path under `KURA_INBOX_ROOT` — i.e. the
+    `inbox:<rel>` selector format kura tools already accept. Pass
+    the relative path to `kura_inbox_list(path=<rel>)` to scope a
+    listing to that subdir, and use `inbox:<rel>/...` selectors
+    when staging files from there. Never absolutize, never strip
+    the prefix to a bare path; the inbox root is operator
+    configuration kura owns.
 
 ---
 
-## 4. The five recurring workflows
+## 4. The recurring workflows
 
 ### 4.a Triage
 
@@ -223,6 +246,90 @@ series, prefer `kura_stage` + `kura_reconcile_plan` /
 `kura_reconcile_apply` over relying on a re-scan to adopt them. Use
 scan to discover or refresh facts; use stage/reconcile for
 intentional placement.
+
+### 4.f Release triage / adoption
+
+Goal: figure out whether each release candidate should be adopted
+into the library, discarded, or used to upgrade what's already
+there. Candidates come from one of:
+
+- **Inbox items** — `kura_inbox_list` filenames the user has
+  already downloaded. Scope the listing to a subdir when the user
+  narrows the request (e.g. "inbox/pending" → `kura_inbox_list(path="pending")`,
+  per rule §3.11).
+- **External release feeds** — RSS, tracker listings, IRC
+  announce, web-search results, manual user-pasted titles.
+  Anything that arrives as a raw release string from outside
+  kura.
+
+Same problem in both cases: the candidate string is opaque
+release-formatted text (release-group brackets, romanization
+variants, source tags, multi-language title segments,
+date-stamped batches), and the library is keyed by provider
+title + SeriesRef. The intuitive shortcut — list the library,
+list the candidates, compare names — does not work. String
+matching produces both false negatives (real matches missed
+because romanization differs) and false positives (unrelated
+shows that share a token). The provider is the only authority
+that can resolve "what show is this release for" reliably.
+
+**Per-candidate workflow.** For each release candidate (or
+small cluster that obviously shares a series), run a fresh
+resolution loop. The orchestration is identical whether the
+candidate is an inbox file or an RSS title, and identical whether
+you're driving it from a single context or fanning out to
+subagents:
+
+```
+# Step 1: feed the raw candidate string (or a salient title
+# fragment) to the resolver.
+kura_resolve(terms=[<release title or inbox name or fragment>])
+# 0 candidates → can't identify; surface to user.
+# 1 candidate  → safe MetadataRef.
+# 2+ candidates → disambiguate per §5 before continuing.
+
+# Step 2: read library state for the identified series.
+kura_show(ref=<chosen metadata ref>)
+# Returns: tracked? episode slots? what's already present /
+# staged / missing? lastScanned freshness?
+
+# Step 3: form an adoption recommendation from the show output:
+# - Untracked or no overlap → candidate to adopt (kura_add or kura_import).
+# - Overlapping slots already present at equal or better quality →
+#   candidate to discard.
+# - Overlapping slots present at worse quality → candidate to
+#   stage with replace: true (per §5 ranking).
+# - Missing slots that this release fills → candidate to stage.
+```
+
+**Subagent fan-out.** If the harness supports subagents (Claude
+Code's Agent tool, similar), spawn one per candidate (or per small
+cluster) and have it execute steps 1–3 in isolation, then return
+just the recommendation summary. Benefits:
+
+- Isolated context per candidate keeps the main agent's window
+  small even with dozens of releases under consideration.
+- Each subagent's resolve / show output stays scoped to its own
+  candidate; no risk of cross-contamination between unrelated
+  shows.
+- Failures are local — a failed resolve on one candidate doesn't
+  pollute reasoning about the rest.
+
+The main agent aggregates subagent reports into the final
+adopt-vs-discard table for the user.
+
+**Without subagents** (single-context harness), process candidates
+sequentially: resolve + show one, write the recommendation, move
+on. Resist the urge to bulk-resolve: the per-candidate evidence
+needs to drive the per-candidate decision.
+
+**What never works.** Computing an intersection between
+`kura_list` output and any source of raw release titles
+(`kura_inbox_list`, RSS, web-search, tracker JSON, etc.) by
+string equality, fuzzy match, prefix overlap, or any other
+library-side operation. Anime release naming conventions (CJK ↔
+romaji ↔ English, fan-sub brackets, date-stamped batches) defeat
+all of those. Always go through the resolver.
 
 ---
 
