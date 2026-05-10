@@ -1,8 +1,6 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
@@ -12,7 +10,21 @@
       },
       "suspicious": {
         "noExplicitAny": "warn"
+      },
+      "complexity": {
+        "noImportantStyles": "off"
+      },
+      "a11y": {
+        "useAriaPropsSupportedByRole": "off",
+        "noStaticElementInteractions": "off"
       }
+    }
+  },
+  "css": {
+    "parser": {
+      "cssModules": false,
+      "allowWrongLineComments": false,
+      "tailwindDirectives": true
     }
   },
   "formatter": {
@@ -31,11 +43,12 @@
     }
   },
   "files": {
-    "ignore": [
-      "dist",
-      "storybook-static",
-      "node_modules",
-      "src/routeTree.gen.ts"
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/storybook-static",
+      "!**/node_modules",
+      "!**/src/routeTree.gen.ts"
     ]
   }
 }

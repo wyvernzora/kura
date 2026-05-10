@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { pickDensity } from '@/lib/useAutoDensity';
-
-import { VirtualPosterGrid } from './VirtualPosterGrid';
 import { FIXTURE_LIST_ROWS } from './_listFixtures';
 import { StoryRouter } from './_storyRouter';
+import { VirtualPosterGrid } from './VirtualPosterGrid';
 
 const meta: Meta<typeof VirtualPosterGrid> = {
   title: 'Library/VirtualPosterGrid',

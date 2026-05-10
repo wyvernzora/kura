@@ -45,8 +45,11 @@
   width: 100%;
   cursor: pointer;
   isolation: isolate;
-  transition: opacity 200ms ease, transform 160ms var(--ease-out-soft), box-shadow 160ms
-    var(--ease-out-soft), background-color 160ms var(--ease-out-soft);
+  transition:
+    opacity 200ms ease,
+    transform 160ms var(--ease-out-soft),
+    box-shadow 160ms var(--ease-out-soft),
+    background-color 160ms var(--ease-out-soft);
 }
 
 .button:not(:disabled):hover {
@@ -62,7 +65,9 @@
 
 .button:focus-visible {
   outline: none;
-  box-shadow: var(--shadow-card), 0 0 0 3px rgba(96, 142, 220, 0.22);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 3px rgba(96, 142, 220, 0.22);
 }
 
 .icon {
@@ -101,7 +106,10 @@
   width: calc(var(--p, 0) * 100%);
   background: var(--prog-fill);
   opacity: 0;
-  transition: width 0.2s linear, opacity 180ms ease, background 180ms ease;
+  transition:
+    width 0.2s linear,
+    opacity 180ms ease,
+    background 180ms ease;
 }
 
 .button[data-state="running"] .hairlineTrack,
@@ -128,7 +136,9 @@
 .button[data-state="running"][data-indeterminate="true"] .hairlineFill {
   width: 30%;
   animation: scan-sweep 1.4s ease-in-out infinite;
-  transition: opacity 180ms ease, background 180ms ease;
+  transition:
+    opacity 180ms ease,
+    background 180ms ease;
 }
 
 @keyframes scan-sweep {

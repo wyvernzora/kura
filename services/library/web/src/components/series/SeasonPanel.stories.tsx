@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-
-import { SeasonPanel } from './SeasonPanel';
 import { FIXTURE_SEASON_AIRING, FIXTURE_SEASON_SPECIALS } from './_fixtures';
+import { SeasonPanel } from './SeasonPanel';
 
 const meta: Meta<typeof SeasonPanel> = {
   title: 'Series/SeasonPanel',

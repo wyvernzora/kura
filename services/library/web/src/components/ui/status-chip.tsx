@@ -1,9 +1,9 @@
 import { cn } from '@/lib/cn';
 import {
+  primaryStatus,
   STATUS_LABELS,
   type Status,
   type StatusValue,
-  primaryStatus,
   secondaryStatus,
 } from '@/lib/status';
 

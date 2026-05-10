@@ -1,9 +1,9 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
-  type ScanRecord,
   clearScanRecord,
   readScanRecord,
+  type ScanRecord,
   subscribeScanRecord,
   writeScanRecord,
 } from './scanState';

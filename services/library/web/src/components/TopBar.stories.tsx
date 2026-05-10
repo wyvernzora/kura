@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-
-import { TopBar } from './TopBar';
 import { StoryRouter } from './_storyRouter';
+import { TopBar } from './TopBar';
 
 const meta: Meta<typeof TopBar> = {
   title: 'Chrome/TopBar',
