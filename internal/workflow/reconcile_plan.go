@@ -12,9 +12,6 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/planfile"
 )
 
-// PlanReconcileTTL is how long a persisted plan remains valid for apply.
-const PlanReconcileTTL = reconcile.PlanTTL
-
 // PlanReconcileInput parameters for the PlanReconcile workflow.
 type PlanReconcileInput = reconcile.PlanInput
 
@@ -25,7 +22,9 @@ type PlanReconcileInput = reconcile.PlanInput
 //
 // Token derivation is deterministic: identical series state always
 // produces the same token, so this entry point is idempotent at the
-// file level (existing planfile is returned as-is).
+// file level (existing planfile is returned as-is). Apply re-validates
+// the snapshot at execute time, so a stale plan whose series state has
+// drifted is caught by the snapshot check, not a TTL gate.
 func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (response.ReconcilePlan, error) {
 	plan, err := reconcile.BuildPlan(ctx, reconcileDeps(deps), in)
 	if err != nil {
@@ -37,13 +36,11 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 	}
 
 	// Idempotency: if a planfile already exists for this token, return
-	// it as-is. Apply re-validates the snapshot at execute time.
+	// it as-is.
 	if existing, _, err := planfile.ReadPlan(deps.LibRoot, in.Ref, plan.Header.Token); err == nil {
 		out.Token = existing.Header.Token
 		ca := existing.Header.CreatedAt
-		ea := existing.Header.ExpiresAt
 		out.CreatedAt = &ca
-		out.ExpiresAt = &ea
 		out.Plan = planToResponse(existing)
 		return out, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
@@ -51,15 +48,12 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 	}
 
 	plan.Header.CreatedAt = deps.Now().UTC().Truncate(time.Second)
-	plan.Header.ExpiresAt = plan.Header.CreatedAt.Add(reconcile.PlanTTL)
 	if err := planfile.WritePlan(deps.LibRoot, in.Ref, plan); err != nil {
 		return response.ReconcilePlan{}, err
 	}
 	out.Token = plan.Header.Token
 	ca := plan.Header.CreatedAt
-	ea := plan.Header.ExpiresAt
 	out.CreatedAt = &ca
-	out.ExpiresAt = &ea
 	out.Plan = planToResponse(plan)
 	return out, nil
 }

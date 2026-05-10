@@ -36,9 +36,8 @@ type LogWriter interface {
 // ApplyInput parameters for the Apply entry point.
 //
 // Plan is the pre-loaded v2 plan; the caller (workflow shim) reads it
-// from planfile, validates plan-applied / plan-expired, opens a log,
-// and hands both to Apply. Reconcile re-validates the snapshot inside
-// the goroutine.
+// from planfile, validates plan-applied, opens a log, and hands both
+// to Apply. Reconcile re-validates the snapshot inside the goroutine.
 type ApplyInput struct {
 	Ref     refs.Series
 	Plan    Plan
@@ -49,9 +48,9 @@ type ApplyInput struct {
 // ApplyResult carries the outcome of an Apply invocation, populated on
 // both success and failure. AppliedStepIDs lists step IDs in execution
 // order; FailedStep is non-nil only when a step-execution failure
-// triggered the error return. Pre-flight failures (plan expired,
-// snapshot stale, claim contention) leave FailedStep nil — those did
-// not touch any step.
+// triggered the error return. Pre-flight failures (snapshot stale,
+// claim contention) leave FailedStep nil — those did not touch any
+// step.
 //
 // On partial failure, series.json reflects pre-apply state — post-state
 // mutations (staged → active promotion, stagedTrash drain, stagedExtras
@@ -102,10 +101,10 @@ func Apply(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, error) {
 	})
 	if err != nil {
 		// Coordinator returned the inner error verbatim; prefer it so
-		// typed errors (ApplyStepError, PlanExpiredError, etc.) reach
-		// the caller. If the coordinator added its own wrap (e.g.
-		// BusyError before applyLocked ran), inner is nil and out is
-		// the zero value — return err as-is.
+		// typed errors (ApplyStepError, StaleSnapshotError, etc.)
+		// reach the caller. If the coordinator added its own wrap
+		// (e.g. BusyError before applyLocked ran), inner is nil and
+		// out is the zero value — return err as-is.
 		if inner != nil {
 			return out, inner
 		}
@@ -213,18 +212,13 @@ func applyLocked(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, er
 
 // validateApplyPreflight enforces the plan invariants apply expects to
 // hold before any CAS / I/O: the plan's series matches the apply
-// target, the plan hasn't expired, and the post-plan disk snapshot
-// still matches what the planner saw. recordFailure is invoked for
-// non-stale-snapshot failures (StaleSnapshot is logged by the caller
-// — the plan is unrecoverable, no apply log to write to).
+// target, and the post-plan disk snapshot still matches what the
+// planner saw. recordFailure is invoked for non-stale-snapshot
+// failures (StaleSnapshot is logged by the caller — the plan is
+// unrecoverable, no apply log to write to).
 func validateApplyPreflight(deps Deps, in ApplyInput, log *slog.Logger) error {
 	if in.Plan.Header.Series != in.Ref {
 		return StaleSnapshotError{Series: in.Plan.Header.Series}
-	}
-	if deps.Now().UTC().After(in.Plan.Header.ExpiresAt) {
-		expiredErr := &PlanExpiredError{Token: in.Plan.Header.Token, ExpiresAt: in.Plan.Header.ExpiresAt}
-		recordFailure(log, in.Log, deps.Now(), 0, expiredErr)
-		return expiredErr
 	}
 	if err := validateAppliedSnapshot(deps.LibRoot, in.Ref, in.Plan); err != nil {
 		recordFailure(log, in.Log, deps.Now(), 0, err)

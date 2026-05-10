@@ -5,15 +5,6 @@ import (
 	"github.com/wyvernzora/kura/internal/errkind"
 )
 
-func (e *PlanExpiredError) Kind() string     { return errkind.KindPlanExpired }
-func (e *PlanExpiredError) Category() string { return errkind.CategoryInternalError }
-func (e *PlanExpiredError) Data() map[string]any {
-	return map[string]any{
-		"token":     e.Token,
-		"expiresAt": e.ExpiresAt.UTC().Format("2006-01-02T15:04:05Z07:00"),
-	}
-}
-
 func (e *PlanAlreadyAppliedError) Kind() string     { return errkind.KindPlanApplied }
 func (e *PlanAlreadyAppliedError) Category() string { return errkind.CategoryInternalError }
 func (e *PlanAlreadyAppliedError) Data() map[string]any {

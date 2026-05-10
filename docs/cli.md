@@ -20,7 +20,7 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 | `scan <selector>` | CLI + MCP + REST | — | Re-sync local metadata with current reality. Hard-fails if the provider is unreachable. Job-shaped. |
 | `stage <selector> <EpisodeRef> <path> [--replace] [companions...]` | CLI + MCP + REST | — | Record intent that `<path>` should become the active media file for the EpisodeRef. Files are not moved. |
 | `reset <selector> [<EpisodeRef> \| --all]` | CLI + MCP + REST | — | Remove staged record(s). Does not touch staged files on disk. |
-| `reconcile plan <selector>` | CLI + MCP + REST | — | Compute the planned filesystem changes for a series and persist them to `<series>/.kura/reconcile/<token>.jsonl`. Returns the plan plus a token (5-minute TTL). No filesystem moves. |
+| `reconcile plan <selector>` | CLI + MCP + REST | — | Compute the planned filesystem changes for a series and persist them to `<series>/.kura/reconcile/<token>.jsonl`. Returns the plan plus a token (token is a hash of the series snapshot; apply re-validates the snapshot at execute time). No filesystem moves. |
 | `reconcile apply <selector> <token>` | CLI + MCP + REST | — | Validate the persisted plan against current state and execute it. Job-shaped. All-or-nothing in intent; failures leave the series in an inconsistent state for manual resolution. |
 | `reconcile recover <selector>` | CLI + REST (operator) | Operator judgment | Clear a stale `in_progress` claim left by a crashed `reconcile apply`. |
 | `resolve <selector>` | CLI + MCP + REST | — | Resolve selector terms to candidate `MetadataRef`s. Returns the candidate list without auto-picking. |
@@ -89,7 +89,7 @@ combinations or transport failures).
 | `kura scan <selector> [--replace]` | Re-sync a series with provider + filesystem; report orphan slots and skipped files. |
 | `kura stage --episode S01E03 <selector> [--source WebRip] [--replace] [--companion PATH] <media-path>` | Record staged intent for one episode. Same-path stage is a metadata refresh and does not require `--replace`. |
 | `kura reset --episode S01E03 <selector>` / `kura reset --all <selector>` | Drop one staged record or all of them. Does not touch staged files on disk. |
-| `kura reconcile plan <selector>` | Compute and persist a five-minute reconcile plan under `<series>/.kura/reconcile/<token>.jsonl`; print the token. Same series state always produces the same token (snapshot-derived). |
+| `kura reconcile plan <selector>` | Compute and persist a reconcile plan under `<series>/.kura/reconcile/<token>.jsonl`; print the token. Same series state always produces the same token (snapshot-derived). Apply re-validates the snapshot at execute time, so a stale plan (series state changed) is rejected by token mismatch. |
 | `kura reconcile apply <selector> <token>` | Validate the persisted plan against current state and execute the moves. |
 
 ## Trash

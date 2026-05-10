@@ -259,67 +259,6 @@ func TestReleaseClaim_DetectsPeerWrite(t *testing.T) {
 	}
 }
 
-type failingLog struct {
-	appendErr error
-}
-
-func (f *failingLog) AppendEvent(time.Time, string, error) error { return nil }
-func (f *failingLog) AppendResult(time.Time, string, int, error) error {
-	return f.appendErr
-}
-
-func TestApply_LogAppendFailureSurfacedViaSlog(t *testing.T) {
-	libRoot := t.TempDir()
-	ref, err := refs.ParseSeries("LogFailureTest")
-	if err != nil {
-		t.Fatalf("ParseSeries: %v", err)
-	}
-
-	var slogBuf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&slogBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-
-	deps := Deps{
-		LibRoot:     libRoot,
-		Now:         func() time.Time { return time.Date(2026, 5, 5, 12, 0, 0, 0, time.UTC) },
-		Coordinator: coord.NewCLICoordinator(),
-		Logger:      logger,
-	}
-
-	appendSentinel := errors.New("sentinel-append-failure")
-	stub := &failingLog{appendErr: appendSentinel}
-
-	// Plan whose Series matches Ref but is already expired → applyLocked
-	// hits the PlanExpiredError branch which calls recordFailure.
-	plan := Plan{
-		Header: Header{
-			Token:     "tok-expired",
-			Series:    ref,
-			ExpiresAt: time.Date(2026, 5, 5, 11, 0, 0, 0, time.UTC), // before Now()
-		},
-		Steps: []Step{
-			{ID: "S1", Kind: StepFileMove, Owner: Owner{Kind: OwnerEpisode}, From: "a", To: "b"},
-		},
-	}
-
-	_, applyErr := Apply(context.Background(), deps, ApplyInput{
-		Ref:  ref,
-		Plan: plan,
-		Log:  stub,
-	})
-	var expired *PlanExpiredError
-	if !errors.As(applyErr, &expired) {
-		t.Fatalf("Apply err = %v, want *PlanExpiredError", applyErr)
-	}
-
-	got := slogBuf.String()
-	if !strings.Contains(got, "apply log append failed") {
-		t.Errorf("slog output missing append-failure warning; got:\n%s", got)
-	}
-	if !strings.Contains(got, "sentinel-append-failure") {
-		t.Errorf("slog output missing append-error sentinel; got:\n%s", got)
-	}
-}
-
 func TestBuildPlan_PrecancelledCtxReturnsEarly(t *testing.T) {
 	ref, err := refs.ParseSeries("AnyShow")
 	if err != nil {

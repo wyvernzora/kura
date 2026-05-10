@@ -43,10 +43,10 @@ func PlanReconcile(w io.Writer, result response.ReconcilePlan, asJSON bool) erro
 	if err := style.WriteStyledTable(w, tw, nil); err != nil {
 		return err
 	}
-	if result.Token == "" || result.ExpiresAt == nil {
+	if result.Token == "" {
 		return nil
 	}
-	_, err := fmt.Fprintf(w, "Token: %s\nExpiresAt: %s\n", result.Token, result.ExpiresAt.Format("2006-01-02T15:04:05Z07:00"))
+	_, err := fmt.Fprintf(w, "Token: %s\n", result.Token)
 	return err
 }
 

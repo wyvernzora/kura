@@ -39,7 +39,6 @@ func samplePlan(t *testing.T, token string) reconcile.Plan {
 			SchemaVersion: 2,
 			Token:         token,
 			CreatedAt:     now,
-			ExpiresAt:     now.Add(5 * time.Minute),
 			Series:        seriesRef,
 			Snapshot:      "abc123",
 		},
@@ -129,7 +128,6 @@ func TestWriteReadPlanPreservesOwnerRecords(t *testing.T) {
 			SchemaVersion: 2,
 			Token:         tokenA,
 			CreatedAt:     now,
-			ExpiresAt:     now.Add(5 * time.Minute),
 			Series:        seriesRef,
 			Snapshot:      "abc123",
 		},
@@ -311,7 +309,6 @@ func TestWritePlanRejectsBadToken(t *testing.T) {
 				SchemaVersion: 2,
 				Token:         tc.token,
 				CreatedAt:     time.Now().UTC(),
-				ExpiresAt:     time.Now().UTC().Add(time.Minute),
 				Series:        seriesRef,
 			}}
 			err := planfile.WritePlan(root, seriesRef, plan)

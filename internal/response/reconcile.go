@@ -7,13 +7,14 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 )
 
-// ReconcilePlan is workflow.PlanReconcile's response. Token/CreatedAt/
-// ExpiresAt are zero when the plan has no changes and no file was
-// persisted.
+// ReconcilePlan is workflow.PlanReconcile's response. Token / CreatedAt
+// are zero when the plan has no changes and no file was persisted.
+// There is no expiry: apply re-validates the snapshot at execute time,
+// and a stale plan (series state changed) is rejected by token
+// mismatch.
 type ReconcilePlan struct {
 	Token     string              `json:"token,omitempty"`
 	CreatedAt *time.Time          `json:"createdAt,omitempty"`
-	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
 	Plan      ReconcilePlanDetail `json:"plan"`
 }
 
@@ -93,8 +94,8 @@ type ReconcileReplaced struct {
 // both success and failure: AppliedSteps + AppliedStepIDs reflect what
 // the apply actually moved (may be < TotalSteps on partial failure),
 // FailedStep is non-nil when a per-step execution failure aborted the
-// run. Pre-flight failures (plan expired, snapshot stale, claim
-// contention) leave FailedStep nil — those did not touch any step.
+// run. Pre-flight failures (snapshot stale, claim contention) leave
+// FailedStep nil — those did not touch any step.
 //
 // On partial failure, series.json reflects the pre-apply model — staged
 // records remain staged, active records remain active, no trash drain.

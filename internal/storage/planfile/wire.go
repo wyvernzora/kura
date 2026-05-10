@@ -24,9 +24,12 @@ type headerV2 struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	Token         string `json:"token"`
 	CreatedAt     string `json:"createdAt"`
-	ExpiresAt     string `json:"expiresAt"`
-	Series        string `json:"series"`
-	Snapshot      string `json:"snapshot"`
+	// ExpiresAt is retained on the wire for backward compatibility with
+	// plans written before the TTL was removed (see commit dropping
+	// PlanExpiredError). New plans omit it; reads ignore the value.
+	ExpiresAt string `json:"expiresAt,omitempty"`
+	Series    string `json:"series"`
+	Snapshot  string `json:"snapshot"`
 }
 
 type stepV2 struct {
@@ -92,7 +95,6 @@ func headerToWire(h reconcile.Header) headerV2 {
 		SchemaVersion: currentSchemaVersion,
 		Token:         h.Token,
 		CreatedAt:     h.CreatedAt.UTC().Format(time.RFC3339),
-		ExpiresAt:     h.ExpiresAt.UTC().Format(time.RFC3339),
 		Series:        h.Series.String(),
 		Snapshot:      h.Snapshot,
 	}
@@ -109,10 +111,6 @@ func headerFromWire(in headerV2) (reconcile.Header, error) {
 	if err != nil {
 		return reconcile.Header{}, fmt.Errorf("planfile: invalid createdAt %q: %w", in.CreatedAt, err)
 	}
-	expiresAt, err := time.Parse(time.RFC3339, in.ExpiresAt)
-	if err != nil {
-		return reconcile.Header{}, fmt.Errorf("planfile: invalid expiresAt %q: %w", in.ExpiresAt, err)
-	}
 	seriesRef, err := refs.ParseSeries(in.Series)
 	if err != nil {
 		return reconcile.Header{}, err
@@ -121,7 +119,6 @@ func headerFromWire(in headerV2) (reconcile.Header, error) {
 		SchemaVersion: in.SchemaVersion,
 		Token:         in.Token,
 		CreatedAt:     createdAt,
-		ExpiresAt:     expiresAt,
 		Series:        seriesRef,
 		Snapshot:      in.Snapshot,
 	}, nil
