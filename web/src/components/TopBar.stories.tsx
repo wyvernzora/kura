@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import type { ReactElement } from 'react';
 import { StoryRouter } from './_storyRouter';
 import { TopBar } from './TopBar';
 
@@ -15,7 +16,7 @@ const meta: Meta<typeof TopBar> = {
 // shared memory router so those primitives have a context. Per-story
 // initialPath drives the detail-mode variant.
 function withRouter(initialPath: string) {
-  return function Decorator(Story: () => JSX.Element) {
+  return function Decorator(Story: () => ReactElement) {
     return (
       <StoryRouter initialPath={initialPath}>
         <Story />

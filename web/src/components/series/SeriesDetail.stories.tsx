@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 
 import type { Show } from '@/api/types';
 import { withStoryProviders } from '@/components/_storyProviders';
@@ -14,7 +15,7 @@ import { SeriesDetail } from './SeriesDetail';
  * own client so the cache state matches what the component needs to see.
  */
 function withSeededShow(ref: string, show: Show) {
-  return function Decorator(Story: () => JSX.Element) {
+  return function Decorator(Story: () => ReactElement) {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
     });
@@ -30,7 +31,7 @@ function withSeededShow(ref: string, show: Show) {
 }
 
 function withErrorShow(ref: string) {
-  return function Decorator(Story: () => JSX.Element) {
+  return function Decorator(Story: () => ReactElement) {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
