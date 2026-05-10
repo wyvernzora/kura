@@ -190,7 +190,57 @@ func launchServerTransports(
 			Registry:     deps.Jobs,
 		}, logger)
 	})
+	g.Go(func() error {
+		runStartupRecoverySweep(gctx, deps, logger)
+		return nil
+	})
 	return g.Wait()
+}
+
+// runStartupRecoverySweep clears stale same-host CAS claims left
+// behind by a previous server instance that died mid-`reconcile apply`
+// (OOMKill, eviction, rolling update). Without this, the next pod
+// inherits the dead claim and every subsequent apply on that series
+// surfaces BusyError until an operator manually runs
+// `kura reconcile recover`.
+//
+// Blocks on index readiness, then runs once. Boot must not crash on a
+// recovery error — all failures are logged and swallowed. Cross-host
+// or genuinely-live claims are left alone; surfacing them in the log
+// hands the decision to the operator.
+func runStartupRecoverySweep(ctx context.Context, deps workflow.Deps, logger *slog.Logger) {
+	if err := deps.Index.WaitReady(ctx); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			logger.Warn("startup recovery skipped: index never ready", "err", err)
+		}
+		return
+	}
+	out := workflow.RecoverStaleClaims(ctx, deps)
+	if out.Scanned == 0 {
+		return
+	}
+	for _, r := range out.Cleared {
+		holder := r.PriorHolder
+		logger.Info("startup recovery cleared stale claim",
+			"ref", r.Ref.String(),
+			"priorHolderOp", holder.Op,
+			"priorHolderHost", holder.Host,
+			"priorHolderPID", holder.PID,
+		)
+	}
+	for _, b := range out.Busy {
+		logger.Info("startup recovery skipped live claim",
+			"scope", b.Scope,
+			"holderOp", b.Holder.Op,
+			"holderHost", b.Holder.Host,
+			"holderPID", b.Holder.PID,
+		)
+	}
+	logger.Info("startup recovery sweep complete",
+		"scanned", out.Scanned,
+		"cleared", len(out.Cleared),
+		"busy", len(out.Busy),
+	)
 }
 
 // finishServerShutdown drains the jobs registry, logs the outcome,
