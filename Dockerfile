@@ -22,7 +22,7 @@ RUN pnpm build
 # arch and retarget the output — no QEMU emulation of `go build`. On a
 # multi-arch buildx run this turns a ~10 min QEMU-emulated arm64
 # compile into a ~30 s native cross-build.
-FROM --platform=$BUILDPLATFORM golang:1.26.2-alpine AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.26.3-alpine AS go-build
 
 WORKDIR /src
 
