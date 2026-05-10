@@ -198,7 +198,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 ### Library layout (on disk)
 
 - Kura targets existing Plex-style anime series libraries and preserves their structure during bootstrap.
-- Library index: `<library>/.kura/index.tsv` (never inside a series directory).
+- Library index: `<library>/.kura/index.jsonl` (never inside a series directory).
 - Per-series Kura metadata: `<series>/.kura/series.json` (never bare `.series.json`).
 - Staged external media entries live inside `series.json` episode records, not in `staged.json`.
 - Trash metadata lives beside trashed media at `<series>/.kura/trash/<trash_id>/meta.json`, not in `trash.json`.
@@ -220,7 +220,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - Prefer clear CLI/MCP surfaces over background magic.
 - Preserve a small, automation-friendly core before adding optional layers.
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
-- `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.tsv`; run `kura reindex` to rebuild it from per-series metadata.
+- `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura reindex` to rebuild it from per-series metadata.
 - `KURA_HOST_ID` overrides `os.Hostname()` for the identity Kura stamps into claim holders and CAS mutators. Set this in container deployments to a stable value (e.g. the underlying host's actual hostname) so a previous container's stuck claim is detected as same-host on restart and can be auto-broken; without it, every container restart mid-apply requires a manual `kura reconcile recover`.
 - `KURA_LOG_RETENTION_DAYS` sets how long the periodic sweep retains forensic JSONL logs — reconcile plan logs at `<series>/.kura/reconcile/*.jsonl` and per-job history logs at `<library>/.kura/jobs/<ulid>.jsonl`. Default `7`. Integer days; empty / invalid / negative values fall back to the default.
 
