@@ -59,7 +59,7 @@ jobs:
       # golangci-lint is lower than the targeted Go version". Building
       # from source side-steps the check.
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6
         with:
           version: v1.64.8
           install-mode: goinstall
@@ -85,7 +85,7 @@ jobs:
       # in web/package.json#packageManager (currently pnpm@10.33.4). The
       # action defaults to ./package.json at the repo root, which has no
       # packageManager field; point it at the web sub-directory's manifest.
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: web/package.json
 
@@ -154,7 +154,7 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           package_json_file: web/package.json
 
@@ -270,7 +270,7 @@ jobs:
       packages: write
     steps:
       - name: Delete untagged versions, keep last 10
-        uses: actions/delete-package-versions@v5
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
         with:
           package-name: kura
           package-type: container
