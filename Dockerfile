@@ -1,4 +1,8 @@
-FROM node:20-alpine AS web
+# Pinned to $BUILDPLATFORM: the web bundle is plain HTML/JS/CSS (no
+# arch-specific output), so building once on the runner's native arch
+# and reusing the dist/ across every TARGETPLATFORM avoids running
+# pnpm + Vite under QEMU for each target.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS web
 
 WORKDIR /src/web
 
@@ -12,7 +16,13 @@ COPY web/ ./
 
 RUN pnpm build
 
-FROM golang:1.26.2-alpine AS go-build
+# Pinned to $BUILDPLATFORM (the host the build is running on, e.g. the
+# amd64 GitHub runner), not $TARGETPLATFORM. Go cross-compiles natively
+# via GOOS/GOARCH, so we run the compiler under the runner's native
+# arch and retarget the output — no QEMU emulation of `go build`. On a
+# multi-arch buildx run this turns a ~10 min QEMU-emulated arm64
+# compile into a ~30 s native cross-build.
+FROM --platform=$BUILDPLATFORM golang:1.26.2-alpine AS go-build
 
 WORKDIR /src
 
@@ -21,6 +31,13 @@ WORKDIR /src
 # back to "dev" so ad-hoc `docker build` without the arg still produces a
 # usable image; published images should always set this.
 ARG VERSION=dev
+
+# TARGETOS / TARGETARCH are auto-populated by buildx for each platform
+# in the matrix (e.g. linux/amd64, linux/arm64). They drive Go's native
+# cross-compiler and need to be declared here for the RUN step below
+# to see them.
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -35,7 +52,8 @@ COPY --from=web /src/web/dist/. ./internal/server/webui/dist/
 # CGO_ENABLED=0 forces a fully static binary so the final distroless
 # layer doesn't need musl/glibc shims for kura itself; only mediainfo
 # pulls in shared libs in the final image.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.Version=${VERSION}" -o /out/kura ./cmd/kura
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w -X main.Version=${VERSION}" -o /out/kura ./cmd/kura
 
 # Mediainfo runtime stage. Debian provides a glibc-linked mediainfo
 # binary plus its shared-library closure. We materialize a minimal
