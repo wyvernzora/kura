@@ -80,6 +80,7 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	if deps.Logger != nil {
 		s.AddReceivingMiddleware(toolCallLoggingMiddleware(deps.Logger))
 	}
+	addAliasesTool(s, deps)
 	addResolveTool(s, deps)
 	addListTool(s, deps)
 	addShowTool(s, deps)
