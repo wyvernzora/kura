@@ -17,9 +17,6 @@
 // working — there is no conflict with `lib/status.ts` where `Status`
 // names the library-status enum (= generated `ListStatus`).
 export type {
-  // Aliases
-  AliasList,
-  AliasMutation,
   ArtworkShow,
   Candidate,
   CompanionShow,
@@ -40,6 +37,9 @@ export type {
   Show,
   Status as EpisodeStatus,
   TrashItemShow,
+  // Aliases
+  UserAliasList,
+  UserAliasMutation,
 } from './types.gen';
 
 /**

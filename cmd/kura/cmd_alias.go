@@ -44,7 +44,7 @@ func (cmd *aliasAddCmd) Run(rt *runContext) error {
 	}
 	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
-	out, err := c.AddAliases(rt.Context, cmd.Ref, cmd.Alias)
+	out, err := c.AddUserAliases(rt.Context, cmd.Ref, cmd.Alias)
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func (cmd *aliasRmCmd) Run(rt *runContext) error {
 	}
 	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
-	out, err := c.RemoveAliases(rt.Context, cmd.Ref, cmd.Alias)
+	out, err := c.RemoveUserAliases(rt.Context, cmd.Ref, cmd.Alias)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (cmd *aliasRmCmd) Run(rt *runContext) error {
 func (cmd *aliasListCmd) Run(rt *runContext) error {
 	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
-	out, err := c.ListAliases(rt.Context, cmd.Ref)
+	out, err := c.ListUserAliases(rt.Context, cmd.Ref)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func requireAliases(aliases []string) error {
 // cleanly into shell loops.
 func printAliases(out interface {
 	Write(p []byte) (int, error)
-}, list response.AliasList, asJSON bool) error {
+}, list response.UserAliasList, asJSON bool) error {
 	if asJSON {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")

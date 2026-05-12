@@ -177,25 +177,25 @@ func (c *Client) ResetSeries(ctx context.Context, ref string, req ResetRequest) 
 }
 
 // ListAliases calls GET /api/v1/series/{ref}/aliases.
-func (c *Client) ListAliases(ctx context.Context, ref string) (response.AliasList, error) {
-	var out response.AliasList
+func (c *Client) ListUserAliases(ctx context.Context, ref string) (response.UserAliasList, error) {
+	var out response.UserAliasList
 	err := c.Do(ctx, http.MethodGet, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, nil, &out, false)
 	return out, err
 }
 
 // AddAliases calls POST /api/v1/series/{ref}/aliases. Returns the
 // resulting alias list. Idempotent.
-func (c *Client) AddAliases(ctx context.Context, ref string, aliases []string) (response.AliasList, error) {
-	var out response.AliasList
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, response.AliasMutation{Aliases: aliases}, &out, false)
+func (c *Client) AddUserAliases(ctx context.Context, ref string, aliases []string) (response.UserAliasList, error) {
+	var out response.UserAliasList
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, response.UserAliasMutation{Aliases: aliases}, &out, false)
 	return out, err
 }
 
 // RemoveAliases calls DELETE /api/v1/series/{ref}/aliases. Returns
 // the resulting alias list. Idempotent.
-func (c *Client) RemoveAliases(ctx context.Context, ref string, aliases []string) (response.AliasList, error) {
-	var out response.AliasList
-	err := c.Do(ctx, http.MethodDelete, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, response.AliasMutation{Aliases: aliases}, &out, false)
+func (c *Client) RemoveUserAliases(ctx context.Context, ref string, aliases []string) (response.UserAliasList, error) {
+	var out response.UserAliasList
+	err := c.Do(ctx, http.MethodDelete, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, response.UserAliasMutation{Aliases: aliases}, &out, false)
 	return out, err
 }
 

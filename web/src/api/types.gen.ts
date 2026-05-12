@@ -28,22 +28,22 @@ export type ImportResult = AddResult;
 // source: aliases.go
 
 /**
- * AliasList is the response shape for the series-aliases endpoints
+ * UserAliasList is the response shape for the series-aliases endpoints
  * (`GET / POST / DELETE /api/v1/series/{ref}/aliases`). Carries the
  * persisted user aliases for the addressed series. TVDB-derived
  * aliases never appear here — they're folded into searchKey at scan
  * time and discarded.
  */
-export interface AliasList {
+export interface UserAliasList {
   aliases: string[];
 }
 /**
- * AliasMutation is the request body for POST + DELETE on the aliases
+ * UserAliasMutation is the request body for POST + DELETE on the aliases
  * endpoint. Empty / whitespace-only entries are dropped server-side;
  * duplicates collapse into a single change. Unknown aliases on
  * DELETE are no-ops.
  */
-export interface AliasMutation {
+export interface UserAliasMutation {
   aliases: string[];
 }
 
