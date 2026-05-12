@@ -95,7 +95,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 	out := response.Show{
 		MetadataRef:    model.Metadata,
 		Ref:            in.Ref,
-		Root:           seriesRoot,
+		Root:           librarySelector(deps.LibRoot, seriesRoot),
 		LastScanned:    formatOptionalTime(model.LastScanned),
 		PreferredTitle: preferredTitle,
 		CanonicalTitle: model.CanonicalTitle.String(),
@@ -131,7 +131,7 @@ func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) [
 		companions := make([]response.CompanionShow, 0, len(item.Companions))
 		for _, c := range item.Companions {
 			companions = append(companions, response.CompanionShow{
-				Path:     relativeToSeries(seriesRoot, c.Path),
+				Path:     seriesSelector(seriesRoot, c.Path),
 				Role:     c.Role,
 				Language: c.Language,
 				Label:    c.Label,
@@ -141,7 +141,7 @@ func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) [
 		}
 		out = append(out, response.TrashItemShow{
 			ID:         item.ID.String(),
-			Path:       relativeToSeries(seriesRoot, item.Path),
+			Path:       seriesSelector(seriesRoot, item.Path),
 			Size:       item.Size,
 			MTime:      item.MTime.UTC().Format(time.RFC3339),
 			AddedAt:    formatOptionalTime(item.AddedAt),
@@ -330,7 +330,7 @@ func mediaShow(seriesRoot string, record media.Record) response.MediaShow {
 	companions := make([]response.CompanionShow, 0, len(record.Companions))
 	for _, c := range record.Companions {
 		companions = append(companions, response.CompanionShow{
-			Path:     relativeToSeries(seriesRoot, c.Path),
+			Path:     seriesSelector(seriesRoot, c.Path),
 			Role:     c.Role,
 			Language: c.Language,
 			Label:    c.Label,
@@ -343,7 +343,7 @@ func mediaShow(seriesRoot string, record media.Record) response.MediaShow {
 		Resolution: record.Resolution.Display(),
 		Codec:      record.Codec.String(),
 		Size:       record.Size,
-		File:       relativeToSeries(seriesRoot, record.Path),
+		File:       seriesSelector(seriesRoot, record.Path),
 		Companions: companions,
 	}
 }

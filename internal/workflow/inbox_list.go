@@ -103,14 +103,14 @@ func InboxList(ctx context.Context, deps Deps, in InboxListInput) (response.Inbo
 	}
 
 	out := response.InboxList{
-		Path:        res.Path,
+		Path:        inboxSelector(deps.InboxRoot, res.Path),
 		Entries:     make([]response.InboxEntry, len(res.Entries)),
 		Truncated:   res.Truncated,
 		ElidedCount: res.ElidedCount,
 	}
 	for i, e := range res.Entries {
 		entry := response.InboxEntry{
-			Path: e.RelPath,
+			Path: inboxSelector(deps.InboxRoot, e.RelPath),
 			Kind: string(e.Kind),
 			Size: e.Size,
 		}

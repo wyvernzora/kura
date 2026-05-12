@@ -306,11 +306,10 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 				return nil, fmt.Errorf("kura_stage_inplace_source: expected <ref> <ep> <source>")
 			}
 			ref := s.ExpandEnv(args[0], false)
-			activeFile, err := lookupActiveFile(s.Context(), b, ref, args[1])
+			mediaSel, err := lookupActiveFile(s.Context(), b, ref, args[1])
 			if err != nil {
 				return nil, fmt.Errorf("kura_stage_inplace_source: %w", err)
 			}
-			mediaSel := "series:" + activeFile
 			out, _, runErr := b.run(s.Context(), "stage", "episode", "--json", "--replace", "--source", args[2], ref, args[1], mediaSel)
 			if runErr != nil {
 				return nil, fmt.Errorf("kura_stage_inplace_source: %w", runErr)
@@ -695,7 +694,7 @@ func resolveSeriesRefForFixture(b *e2eBinary, raw string) (string, error) {
 }
 
 // lookupActiveFile fetches kura_show for one episode and returns the
-// active.file (series-relative slash path). Errors when the episode
+// active.file (a `series:<rel>` selector). Errors when the episode
 // has no active record. Used by kura_stage_inplace_source to locate
 // the on-disk path the in-place override targets.
 func lookupActiveFile(ctx context.Context, b *e2eBinary, ref, episode string) (string, error) {

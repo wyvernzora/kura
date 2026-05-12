@@ -33,6 +33,13 @@ const (
 	// (always scoped to the request's series ref). Used for stage
 	// trash inputs and reconcile library-internal step paths.
 	Series Scheme = "series"
+
+	// Library is the scheme for paths inside the library root
+	// (KURA_LIBRARY_ROOT). Used for emitting series-root locations
+	// and other library-relative paths in responses. Selectors with
+	// this scheme are output-only today — no workflow input accepts
+	// them.
+	Library Scheme = "library"
 )
 
 // Path is a "<scheme>:<rel>" wire-shape selector. Relative is
@@ -53,7 +60,7 @@ func Parse(s string) (Path, error) {
 		return Path{}, err
 	}
 	if !knownScheme(scheme) {
-		return Path{}, fmt.Errorf("selector: unknown scheme %q (want one of: inbox, series)", scheme)
+		return Path{}, fmt.Errorf("selector: unknown scheme %q (want one of: inbox, series, library)", scheme)
 	}
 	cleaned, err := CleanRelative(rel)
 	if err != nil {
@@ -152,7 +159,7 @@ func splitScheme(s string) (Scheme, string, error) {
 
 func knownScheme(s Scheme) bool {
 	switch s {
-	case Inbox, Series:
+	case Inbox, Series, Library:
 		return true
 	}
 	return false

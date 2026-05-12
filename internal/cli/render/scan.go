@@ -42,14 +42,14 @@ func Scan(w io.Writer, result response.ScanResult, asJSON bool) error {
 				style.EpisodeStatus(string(entry.Status), tty),
 				style.MediaSource(entry.Source, tty),
 				style.MediaResolution(entry.Resolution, tty),
-				entry.Path,
+				stripPathScheme(entry.Path),
 			})
 			for index, companion := range entry.Companions {
 				prefix := "    ┣ "
 				if index == len(entry.Companions)-1 {
 					prefix = "    ┗ "
 				}
-				tw.AppendRow(table.Row{"", "", "", "", prefix + companion})
+				tw.AppendRow(table.Row{"", "", "", "", prefix + stripPathScheme(companion)})
 			}
 		}
 		dimLine := func(line string) bool {
@@ -75,7 +75,7 @@ func Scan(w io.Writer, result response.ScanResult, asJSON bool) error {
 	})
 	for _, skip := range result.Skipped {
 		skippedTable.AppendRow(table.Row{
-			skip.Path,
+			stripPathScheme(skip.Path),
 			skip.Code,
 			style.MediaSource(skip.Source, tty),
 			style.MediaResolution(skip.Resolution, tty),

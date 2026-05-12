@@ -92,20 +92,20 @@ func toScanResponse(seriesRoot string, in scan.Result) response.ScanResult {
 	for _, ep := range in.Synced {
 		companions := make([]string, 0, len(ep.Companions))
 		for _, c := range ep.Companions {
-			companions = append(companions, relativeToSeries(seriesRoot, c))
+			companions = append(companions, seriesSelector(seriesRoot, c))
 		}
 		out.Synced = append(out.Synced, response.ScannedEpisode{
 			Status:     response.ScanStatus(ep.Status),
 			Episode:    ep.Episode,
 			Source:     ep.Source,
 			Resolution: ep.Resolution,
-			Path:       relativeToSeries(seriesRoot, ep.Path),
+			Path:       seriesSelector(seriesRoot, ep.Path),
 			Companions: companions,
 		})
 	}
 	for _, skip := range in.Skipped {
 		out.Skipped = append(out.Skipped, response.ScanSkip{
-			Path:       relativeToSeries(seriesRoot, skip.Path),
+			Path:       seriesSelector(seriesRoot, skip.Path),
 			Code:       skip.Code,
 			Reason:     skip.Reason,
 			Source:     skip.Source,

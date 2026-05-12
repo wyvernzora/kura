@@ -887,18 +887,18 @@ func applyTrashItem(model *domainseries.Series, item resolvedTrashItem, now time
 	if err != nil {
 		return response.StageTrashResult{}, &response.StageSkip{
 			Kind:   "trash",
-			Path:   item.resolvedPath,
+			Path:   seriesSelector("", item.relPath),
 			Code:   "stat_failed",
 			Reason: err.Error(),
 		}, nil
 	}
 	companions := make([]media.Companion, 0, len(item.resolvedCompanions))
-	for _, cAbs := range item.resolvedCompanions {
+	for cIdx, cAbs := range item.resolvedCompanions {
 		cInfo, statErr := os.Stat(cAbs)
 		if statErr != nil {
 			return response.StageTrashResult{}, &response.StageSkip{
 				Kind:   "trash",
-				Path:   cAbs,
+				Path:   seriesSelector("", item.relCompanions[cIdx]),
 				Code:   "stat_failed",
 				Reason: statErr.Error(),
 			}, nil
@@ -919,7 +919,7 @@ func applyTrashItem(model *domainseries.Series, item resolvedTrashItem, now time
 	})
 	return response.StageTrashResult{
 		ID:   item.id.String(),
-		Path: item.relPath,
+		Path: seriesSelector("", item.relPath),
 	}, nil, nil
 }
 
