@@ -333,9 +333,13 @@ func sortByValueDesc(m map[string]int) []string {
 	return out
 }
 
+// isPending reports whether an episode slot is announced but not yet
+// expected to have media. Future air dates and TBA placeholders (no
+// valid AirDate) both qualify — the latter is the strongest form of
+// "not aired yet" and must not count as missing media.
 func isPending(aired civil.Date, now time.Time) bool {
 	if !aired.IsValid() {
-		return false
+		return true
 	}
 	return aired.After(civil.DateOf(now))
 }

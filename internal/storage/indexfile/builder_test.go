@@ -300,6 +300,41 @@ func TestBuildRowFromModel_PendingExcludedFromTotals(t *testing.T) {
 	}
 }
 
+// Regression: a TBA placeholder episode (no AirDate, no record) is the
+// strongest form of pending and must not flip the series to incomplete.
+// Kusuriya-shaped scenario — S1+S2 fully present, S3 announced with a
+// single TBA episode should stay Complete with EpisodeCount unchanged.
+func TestBuildRowFromModel_TBAPlaceholderExcluded(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	pastBase := civil.Date{Year: 2024, Month: 1, Day: 1}
+	episodes := map[refs.Episode]series.Episode{}
+	for season := 1; season <= 2; season++ {
+		for i := 1; i <= 12; i++ {
+			ep := mustEpisode(t, season, i)
+			episodes[ep] = series.Episode{AirDate: pastBase.AddDays(7 * i), Active: rec}
+		}
+	}
+	// S3 placeholder: TBA episode with no AirDate and no record.
+	episodes[mustEpisode(t, 3, 1)] = series.Episode{}
+
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "Kusuriya"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: episodes,
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if row.Status != response.ListStatusComplete {
+		t.Fatalf("Status = %s, want complete (TBA placeholder must not count as missing)", row.Status)
+	}
+	if row.EpisodeCount != 24 || row.EpisodesAvailable != 24 {
+		t.Fatalf("episode counts = %d/%d, want 24/24", row.EpisodesAvailable, row.EpisodeCount)
+	}
+	if row.SeasonCount != 2 || row.SeasonsAvailable != 2 {
+		t.Fatalf("season counts = %d/%d, want 2/2 (S3 is TBA-only)", row.SeasonsAvailable, row.SeasonCount)
+	}
+}
+
 func TestBuildRowFromModel_SpecialsExcluded(t *testing.T) {
 	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
 	rec := &media.Record{Source: media.SourceBluRay, Resolution: mustResolution(t, 1920, 1080), Size: 1}
