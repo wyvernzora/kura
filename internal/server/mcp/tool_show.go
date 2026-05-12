@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strings"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -29,12 +28,10 @@ type showInput struct {
 var toolShowDoc string
 
 // mcpShow is the lean projection of response.Show that this surface
-// emits. Fields the agent can't act on (raw series ref, library root)
-// are dropped. Media and companion paths inside the series root emit
-// as `series:<rel>` selectors so the agent can pass them straight back
-// to kura_stage / kura_trash. Inbox-staged files keep their absolute
-// path so the agent can correlate them with the `inbox:` selector
-// that produced them.
+// emits. Fields the agent can't act on (raw series ref) are dropped.
+// All path fields inherit the response contract: scheme-tagged
+// selectors (`series:<rel>` / `inbox:<rel>` / `library:<rel>`) the
+// agent can pass straight back to kura_stage / kura_trash.
 type mcpShow struct {
 	MetadataRef     string           `json:"metadataRef"`
 	PreferredTitle  string           `json:"preferredTitle"`
@@ -405,7 +402,7 @@ func projectEpisode(ep response.EpisodeShow) mcpEpisode {
 			Resolution: ep.Active.Resolution,
 			Codec:      ep.Active.Codec,
 			Size:       ep.Active.Size,
-			File:       seriesSelector(ep.Active.File),
+			File:       ep.Active.File,
 			Companions: companionPaths(ep.Active.Companions),
 		}
 	}
@@ -415,22 +412,11 @@ func projectEpisode(ep response.EpisodeShow) mcpEpisode {
 			Resolution: ep.Staged.Resolution,
 			Codec:      ep.Staged.Codec,
 			Size:       ep.Staged.Size,
-			File:       seriesSelector(ep.Staged.File),
+			File:       ep.Staged.File,
 			Companions: companionPaths(ep.Staged.Companions),
 		}
 	}
 	return out
-}
-
-// seriesSelector prefixes `series:` when path is series-relative (the
-// shape `relativeToSeries` returns for files inside the series root).
-// Absolute paths — inbox stages and other outside-root files — pass
-// through unchanged. Empty stays empty.
-func seriesSelector(path string) string {
-	if path == "" || strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "series:" + path
 }
 
 // collapseStatus maps staged_replacement → staged. The replacement
@@ -445,7 +431,7 @@ func collapseStatus(s response.Status) string {
 func companionPaths(in []response.CompanionShow) []string {
 	out := make([]string, 0, len(in))
 	for _, c := range in {
-		out = append(out, seriesSelector(c.Path))
+		out = append(out, c.Path)
 	}
 	return out
 }

@@ -4,6 +4,12 @@ import "github.com/wyvernzora/kura/internal/domain/refs"
 
 // Show is workflow.Show's full response: persisted series metadata
 // joined with derived per-episode status and filesystem-issue lists.
+//
+// All path fields in this response (Root, MediaShow.File,
+// CompanionShow.Path, TrashItemShow.Path, ExtraItemShow.Path, ...)
+// are scheme-tagged selectors: `library:<rel>` for the series root,
+// `series:<rel>` for files inside that series, `inbox:<rel>` for
+// files under the inbox root. There are no raw filesystem paths.
 type Show struct {
 	MetadataRef    refs.Metadata `json:"metadataRef"`
 	Ref            refs.Series   `json:"ref"`
@@ -25,9 +31,10 @@ type Show struct {
 }
 
 // TrashItemShow is one stagedTrash entry queued for removal at the next
-// reconcile_apply. Path is series-relative slash form (the original
-// location). Companions list original locations alongside Path; trash
-// bucket structure is intentionally not exposed on this surface.
+// reconcile_apply. Path is a `series:<rel>` selector pointing at the
+// original location. Companions list original locations alongside
+// Path; trash bucket structure is intentionally not exposed on this
+// surface.
 type TrashItemShow struct {
 	ID         string          `json:"id"`
 	Path       string          `json:"path"`
@@ -38,8 +45,8 @@ type TrashItemShow struct {
 }
 
 // ExtraItemShow is one stagedExtras entry queued for placement under
-// Season N/Extra/[Prefix]/<basename> at the next reconcile_apply. Path
-// is absolute because extras can be sourced from anywhere.
+// Season N/Extra/[Prefix]/<basename> at the next reconcile_apply.
+// Path is an `inbox:<rel>` selector identifying the source.
 type ExtraItemShow struct {
 	ID      string `json:"id"`
 	Season  int    `json:"season"`
@@ -99,9 +106,11 @@ type PosterShow struct {
 	Language     string `json:"language,omitempty"`
 }
 
-// MediaShow is one media file's display fields for the show view. Paths
-// inside the series root are series-relative slash form; paths outside
-// (e.g. staged-from-inbox files) stay absolute.
+// MediaShow is one media file's display fields for the show view.
+// File / Companions[].Path are scheme-tagged selectors:
+// `series:<rel>` for files inside the series root, `inbox:<rel>` for
+// inbox-staged files. Agents can pass them straight back to
+// kura_stage / kura_trash without further parsing.
 type MediaShow struct {
 	Source     string          `json:"source"`
 	Resolution string          `json:"resolution,omitempty"`

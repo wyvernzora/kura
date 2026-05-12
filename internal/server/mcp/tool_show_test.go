@@ -114,9 +114,9 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 						Source:     "BDRip",
 						Resolution: "1080p",
 						Size:       1024,
-						File:       "Season 1/Bookworm S01E01.mkv",
+						File:       "series:Season 1/Bookworm S01E01.mkv",
 						Companions: []response.CompanionShow{
-							{Path: "Season 1/Bookworm S01E01.en.srt"},
+							{Path: "series:Season 1/Bookworm S01E01.en.srt"},
 						},
 					},
 				},

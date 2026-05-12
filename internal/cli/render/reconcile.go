@@ -38,7 +38,7 @@ func PlanReconcile(w io.Writer, result response.ReconcilePlan, asJSON bool) erro
 		{Number: 3},
 	})
 	for _, move := range moves {
-		tw.AppendRow(table.Row{"FILE", move.From, move.To})
+		tw.AppendRow(table.Row{"FILE", stripPathScheme(move.From), stripPathScheme(move.To)})
 	}
 	if err := style.WriteStyledTable(w, tw, nil); err != nil {
 		return err
@@ -64,9 +64,9 @@ func ApplyReconcile(w io.Writer, result response.ReconcileApply, asJSON bool) er
 		return err
 	}
 	step := result.FailedStep
-	target := step.Path
+	target := stripPathScheme(step.Path)
 	if target == "" {
-		target = step.From + " -> " + step.To
+		target = stripPathScheme(step.From) + " -> " + stripPathScheme(step.To)
 	}
 	_, err := fmt.Fprintf(w,
 		"Applied %d of %d steps; failed at step %s (%s, %s, %s): %s\n",

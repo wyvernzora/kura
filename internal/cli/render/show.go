@@ -46,7 +46,7 @@ func writeShowHeader(w io.Writer, result response.Show, styled bool) error {
 	rows := []struct{ label, value string }{
 		{"ID", styleShowValue(result.MetadataRef.String(), styled)},
 		{"Title", styleShowValue(title, styled)},
-		{"Root", styleShowValue(result.Root, styled)},
+		{"Root", styleShowValue(stripPathScheme(result.Root), styled)},
 	}
 	if result.Status != "" {
 		rows = append(rows, struct{ label, value string }{
@@ -129,7 +129,7 @@ func writeStagedTrashTable(w io.Writer, items []response.TrashItemShow) error {
 		} else if n > 1 {
 			companions = fmt.Sprintf("+%d companions", n)
 		}
-		tw.AppendRow(table.Row{item.ID, item.Path, formatSkipSize(item.Size), companions})
+		tw.AppendRow(table.Row{item.ID, stripPathScheme(item.Path), formatSkipSize(item.Size), companions})
 	}
 	return style.WriteStyledTable(w, tw, nil)
 }
@@ -143,7 +143,7 @@ func writeStagedExtrasTable(w io.Writer, items []response.ExtraItemShow) error {
 		if item.IsDir {
 			kind = "dir"
 		}
-		tw.AppendRow(table.Row{item.ID, "S" + strconv.Itoa(item.Season), kind, item.Prefix, item.Path})
+		tw.AppendRow(table.Row{item.ID, "S" + strconv.Itoa(item.Season), kind, item.Prefix, stripPathScheme(item.Path)})
 	}
 	return style.WriteStyledTable(w, tw, nil)
 }
@@ -233,19 +233,27 @@ func showEpisodeRow(seriesRoot string, episode refs.Episode, aired, title string
 	return row
 }
 
-// showRelPath strips the series root prefix from path so the table column
-// stays narrow. Paths outside the series dir (typically staged inbox files)
-// are returned as-is.
-func showRelPath(seriesRoot, path string) string {
-	if path == "" || seriesRoot == "" {
+// showRelPath strips the scheme prefix (`series:` / `inbox:` /
+// `library:`) from path so the table column stays narrow. Paths
+// without a known scheme are returned as-is.
+func showRelPath(_ string, path string) string {
+	return stripPathScheme(path)
+}
+
+// stripPathScheme drops a leading `<scheme>:` from path when the
+// scheme matches a known selector scheme. Used by human-facing
+// renderers; JSON output stays untouched.
+func stripPathScheme(path string) string {
+	if path == "" {
 		return path
 	}
-	prefix := seriesRoot
-	if !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
+	idx := strings.IndexByte(path, ':')
+	if idx <= 0 {
+		return path
 	}
-	if strings.HasPrefix(path, prefix) {
-		return path[len(prefix):]
+	switch path[:idx] {
+	case "series", "inbox", "library":
+		return path[idx+1:]
 	}
 	return path
 }

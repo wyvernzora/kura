@@ -62,10 +62,10 @@ func TestBuildStagedTrash_RelativizesAndSortsByULID(t *testing.T) {
 	if got[0].ID != id1.String() {
 		t.Errorf("first ID = %s, want %s (sorted)", got[0].ID, id1)
 	}
-	if got[0].Path != "Season 1/a.mkv" {
-		t.Errorf("Path = %q, want series-relative", got[0].Path)
+	if got[0].Path != "series:Season 1/a.mkv" {
+		t.Errorf("Path = %q, want series:Season 1/a.mkv", got[0].Path)
 	}
-	if len(got[0].Companions) != 1 || got[0].Companions[0].Path != "Season 1/a.en.srt" {
+	if len(got[0].Companions) != 1 || got[0].Companions[0].Path != "series:Season 1/a.en.srt" {
 		t.Errorf("Companions = %+v", got[0].Companions)
 	}
 }

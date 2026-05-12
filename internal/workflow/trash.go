@@ -67,12 +67,13 @@ func TrashList(ctx context.Context, deps Deps, in TrashListInput) (response.Tras
 		if err != nil {
 			return response.TrashList{}, err
 		}
+		seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
 		entry := response.TrashSeriesEntry{Ref: ref, Entries: make([]response.TrashEntry, 0, len(metas))}
 		for _, meta := range metas {
 			if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
 				continue
 			}
-			view := trashEntryView(meta)
+			view := trashEntryView(seriesRoot, meta)
 			entry.Entries = append(entry.Entries, view)
 			entry.Bytes += view.Size
 			for _, c := range view.Companions {
@@ -248,7 +249,7 @@ func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore,
 			"from", move.from,
 			"to", move.to,
 		)
-		restored = append(restored, relativeToSeries(seriesRoot, move.to))
+		restored = append(restored, seriesSelector(seriesRoot, move.to))
 	}
 	if _, err := trashfile.Delete(deps.LibRoot, in.Ref, in.ID); err != nil {
 		return response.TrashRestore{}, fmt.Errorf("workflow: trash restore cleanup %s: %w", in.ID, err)
@@ -326,12 +327,12 @@ func trashAgePasses(trashedAt, now time.Time, olderThan time.Duration) bool {
 	return now.Sub(trashedAt) >= olderThan
 }
 
-func trashEntryView(meta trashfile.Meta) response.TrashEntry {
+func trashEntryView(seriesRoot string, meta trashfile.Meta) response.TrashEntry {
 	view := response.TrashEntry{
 		ID:         meta.ID.String(),
 		Episode:    meta.Episode,
 		TrashedAt:  meta.TrashedAt,
-		MediaPath:  meta.Record.Path,
+		MediaPath:  seriesSelector(seriesRoot, meta.Record.Path),
 		Source:     meta.Record.Source,
 		Resolution: meta.Record.Resolution,
 		Size:       meta.Record.Size,
@@ -339,7 +340,10 @@ func trashEntryView(meta trashfile.Meta) response.TrashEntry {
 	if len(meta.Record.Companions) > 0 {
 		view.Companions = make([]response.TrashCompanion, 0, len(meta.Record.Companions))
 		for _, c := range meta.Record.Companions {
-			view.Companions = append(view.Companions, response.TrashCompanion{Path: c.Path, Size: c.Size})
+			view.Companions = append(view.Companions, response.TrashCompanion{
+				Path: seriesSelector(seriesRoot, c.Path),
+				Size: c.Size,
+			})
 		}
 	}
 	return view

@@ -23,6 +23,8 @@ type TrashSeriesEntry struct {
 }
 
 // TrashEntry mirrors trashfile.Meta in surface-friendly shape.
+// MediaPath / Companions[].Path are `series:<rel>` selectors
+// pointing at the original (pre-trash) locations.
 type TrashEntry struct {
 	ID         string           `json:"id"`
 	Episode    refs.Episode     `json:"episode"`
@@ -74,7 +76,7 @@ type TrashEmptyFailure struct {
 // TrashRestore is workflow.TrashRestore's response. Caller passed ref
 // + trash entry ID; the new info is which episode slot the entry came
 // from (recorded at trash time) and the list of paths that got moved
-// back into place. Restored paths are series-relative slash form.
+// back into place. Restored paths are `series:<rel>` selectors.
 type TrashRestore struct {
 	Episode  refs.Episode `json:"episode"`
 	Restored []string     `json:"restored"`
