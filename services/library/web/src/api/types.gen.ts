@@ -51,8 +51,9 @@ export interface UserAliasMutation {
 // source: inbox.go
 
 /**
- * InboxList is workflow.InboxList's response. Path is the (cleaned,
- * NFC) sub-path that was listed; empty means the inbox root itself.
+ * InboxList is workflow.InboxList's response. Path is an `inbox:<rel>`
+ * selector identifying the sub-path that was listed; empty means the
+ * inbox root itself.
  * When Truncated is true the slice was capped to the caller's Limit
  * (default 500, max 5000). ElidedCount carries how many entries were
  * dropped. Hint contains human-readable suggestions for narrowing the
@@ -67,11 +68,11 @@ export interface InboxList {
 }
 /**
  * InboxEntry is one filesystem entry under the inbox root. Path is
- * forward-slash, NFC, relative to the inbox root. The basename is
- * filepath.Base(Path); the inbox: selector form is "inbox:" + Path —
- * clients can derive both trivially when needed. Size is meaningful
- * only for files; dirs and symlinks emit 0. SymlinkTarget is populated
- * only when Kind == "symlink".
+ * an `inbox:<rel>` selector — pass it straight back to kura_stage as
+ * the `media` arg. Size is meaningful only for files; dirs and
+ * symlinks emit 0. SymlinkTarget is populated only when Kind ==
+ * "symlink" and is the symlink's literal target string (may point
+ * outside any known root).
  */
 export interface InboxEntry {
   path: string;
@@ -336,8 +337,9 @@ export interface ReconcileApply {
 }
 /**
  * FailedReconcileStep names the step whose execution failed during
- * apply. Path / From / To are series-relative slash form when the step
- * targets paths inside the series root; absolute when external.
+ * apply. Path / From / To are scheme-tagged selectors
+ * (`series:<rel>` for in-library moves, `inbox:<rel>` for inbox
+ * sources).
  */
 export interface FailedReconcileStep {
   id: string;
@@ -485,8 +487,7 @@ export interface ScanResult {
  * ScannedEpisode mirrors what changed for one episode slot during a
  * scan pass: what status (added/updated/...), which episode, and the
  * media facts of the new (or removed) record. Path/Companions are
- * series-relative slash form when the file lives under the series
- * root; paths outside (rare here) remain absolute.
+ * `series:<rel>` selectors.
  */
 export interface ScannedEpisode {
   status: ScanStatus;
@@ -600,6 +601,13 @@ export interface SeriesAliases {
 /**
  * Show is workflow.Show's full response: persisted series metadata
  * joined with derived per-episode status and filesystem-issue lists.
+ * All path fields in this response (Root, MediaShow.File,
+ * CompanionShow.Path, TrashItemShow.Path, ExtraItemShow.Path, ...)
+ * are scheme-tagged selectors: `library:<rel>` for paths under
+ * KURA_LIBRARY_ROOT (Root emits as `library:<series-dir>`),
+ * `series:<rel>` for files inside the request's series root,
+ * `inbox:<rel>` for files under the inbox root. There are no raw
+ * filesystem paths.
  */
 export interface Show {
   metadataRef: string;
@@ -624,9 +632,10 @@ export interface Show {
 }
 /**
  * TrashItemShow is one stagedTrash entry queued for removal at the next
- * reconcile_apply. Path is series-relative slash form (the original
- * location). Companions list original locations alongside Path; trash
- * bucket structure is intentionally not exposed on this surface.
+ * reconcile_apply. Path is a `series:<rel>` selector pointing at the
+ * original location. Companions list original locations alongside
+ * Path; trash bucket structure is intentionally not exposed on this
+ * surface.
  */
 export interface TrashItemShow {
   id: string;
@@ -638,8 +647,8 @@ export interface TrashItemShow {
 }
 /**
  * ExtraItemShow is one stagedExtras entry queued for placement under
- * Season N/Extra/[Prefix]/<basename> at the next reconcile_apply. Path
- * is absolute because extras can be sourced from anywhere.
+ * Season N/Extra/[Prefix]/<basename> at the next reconcile_apply.
+ * Path is an `inbox:<rel>` selector identifying the source.
  */
 export interface ExtraItemShow {
   id: string;
@@ -705,9 +714,11 @@ export interface PosterShow {
   language?: string;
 }
 /**
- * MediaShow is one media file's display fields for the show view. Paths
- * inside the series root are series-relative slash form; paths outside
- * (e.g. staged-from-inbox files) stay absolute.
+ * MediaShow is one media file's display fields for the show view.
+ * File / Companions[].Path are scheme-tagged selectors:
+ * `series:<rel>` for files inside the series root, `inbox:<rel>` for
+ * inbox-staged files. Agents can pass them straight back to
+ * kura_stage / kura_trash without further parsing.
  */
 export interface MediaShow {
   source: string;
@@ -849,6 +860,8 @@ export interface TrashSeriesEntry {
 }
 /**
  * TrashEntry mirrors trashfile.Meta in surface-friendly shape.
+ * MediaPath / Companions[].Path are `series:<rel>` selectors
+ * pointing at the original (pre-trash) locations.
  */
 export interface TrashEntry {
   id: string;
@@ -901,7 +914,7 @@ export interface TrashEmptyFailure {
  * TrashRestore is workflow.TrashRestore's response. Caller passed ref
  * + trash entry ID; the new info is which episode slot the entry came
  * from (recorded at trash time) and the list of paths that got moved
- * back into place. Restored paths are series-relative slash form.
+ * back into place. Restored paths are `series:<rel>` selectors.
  */
 export interface TrashRestore {
   episode: string;

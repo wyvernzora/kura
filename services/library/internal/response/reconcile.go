@@ -109,8 +109,9 @@ type ReconcileApply struct {
 }
 
 // FailedReconcileStep names the step whose execution failed during
-// apply. Path / From / To are series-relative slash form when the step
-// targets paths inside the series root; absolute when external.
+// apply. Path / From / To are scheme-tagged selectors
+// (`series:<rel>` for in-library moves, `inbox:<rel>` for inbox
+// sources).
 type FailedReconcileStep struct {
 	ID         string `json:"id"`
 	Kind       string `json:"kind"`

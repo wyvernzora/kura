@@ -27,7 +27,7 @@ func InboxList(w io.Writer, result response.InboxList, asJSON bool) error {
 	tw.SetStyle(style.BorderlessTableStyle())
 	now := time.Now()
 	for _, e := range result.Entries {
-		path := e.Path
+		path := stripPathScheme(e.Path)
 		switch e.Kind {
 		case "dir":
 			if !strings.HasSuffix(path, "/") {

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"path/filepath"
 	"sort"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -29,9 +28,10 @@ type showInput struct {
 var toolShowDoc string
 
 // mcpShow is the lean projection of response.Show that this surface
-// emits. Fields the agent can't act on (on-disk paths for active
-// media, raw series ref, library root) are dropped; staged file paths
-// stay absolute so the agent can verify its own staging actions.
+// emits. Fields the agent can't act on (raw series ref) are dropped.
+// All path fields inherit the response contract: scheme-tagged
+// selectors (`series:<rel>` / `inbox:<rel>` / `library:<rel>`) the
+// agent can pass straight back to kura_stage / kura_trash.
 type mcpShow struct {
 	MetadataRef     string           `json:"metadataRef"`
 	PreferredTitle  string           `json:"preferredTitle"`
@@ -104,6 +104,7 @@ type mcpActiveMedia struct {
 	Resolution string   `json:"resolution,omitempty"`
 	Codec      string   `json:"codec,omitempty"`
 	Size       int64    `json:"size"`
+	File       string   `json:"file"`
 	Companions []string `json:"companions"`
 }
 
@@ -401,7 +402,8 @@ func projectEpisode(ep response.EpisodeShow) mcpEpisode {
 			Resolution: ep.Active.Resolution,
 			Codec:      ep.Active.Codec,
 			Size:       ep.Active.Size,
-			Companions: companionBasenames(ep.Active.Companions),
+			File:       ep.Active.File,
+			Companions: companionPaths(ep.Active.Companions),
 		}
 	}
 	if ep.Staged != nil {
@@ -424,14 +426,6 @@ func collapseStatus(s response.Status) string {
 		return string(response.StatusStaged)
 	}
 	return string(s)
-}
-
-func companionBasenames(in []response.CompanionShow) []string {
-	out := make([]string, 0, len(in))
-	for _, c := range in {
-		out = append(out, filepath.Base(c.Path))
-	}
-	return out
 }
 
 func companionPaths(in []response.CompanionShow) []string {

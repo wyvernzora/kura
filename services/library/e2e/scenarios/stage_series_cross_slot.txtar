@@ -24,7 +24,7 @@ kura_plan $KURA_LAST_REF
 kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
 kura_show $KURA_LAST_REF
 stdout '"status":"present"'
-stdout '"file":"Season 1/Stub Show - S01E01'
+stdout '"file":"series:Season 1/Stub Show - S01E01'
 
 # Original orphan.mp4 path is gone (file was moved, not copied).
 exec find $KURA_SERIES_DIR -name orphan.mp4 -type f

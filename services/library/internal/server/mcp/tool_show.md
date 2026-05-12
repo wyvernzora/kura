@@ -8,7 +8,7 @@ Episode `status`:
 
 Status reflects persisted state from the most recent `kura_scan`. If a tracked file went missing on disk after the last scan, status still reads `present` until the next scan prunes it. Run `kura_scan` to refresh.
 
-`active.companions` are basenames of sidecar files (subtitles, cover art) — useful for upgrade decisions ("does the existing release already have English subs?"). `staged` blocks include absolute paths so you can verify your own staging actions.
+All path fields in this response are scheme-tagged selectors: `series:<rel>` for files inside the series root (e.g. `series:Season 1/Show S01E01.mkv`), `inbox:<rel>` for inbox-staged files. Pass them straight back to `kura_stage` (with `replace=true` to override metadata in place) or `kura_trash` — no scheme reconstruction needed. Applies to `active.file`/`active.companions`, `staged.file`/`staged.companions`, and the staged trash/extras paths.
 
 `stagedTrash` lists files queued for removal at next `kura_reconcile_apply`; `stagedExtras` lists extras queued for placement.
 
