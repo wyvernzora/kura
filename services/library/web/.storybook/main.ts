@@ -17,7 +17,6 @@ const usePolling =
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.@(ts|tsx|mdx)'],
   addons: [
-    '@storybook/addon-essentials',
     '@storybook/addon-a11y',
     'storybook-addon-pseudo-states',
   ],
@@ -33,7 +32,7 @@ const config: StorybookConfig = {
     cfg.resolve = cfg.resolve ?? {};
     cfg.resolve.alias = {
       ...(cfg.resolve.alias ?? {}),
-      '@': path.resolve(__dirname, '../src'),
+      '@': path.resolve(import.meta.dirname, '../src'),
     };
     const tailwindcss = (await import('@tailwindcss/vite')).default;
     cfg.plugins = [...(cfg.plugins ?? []), tailwindcss()];
