@@ -17,7 +17,7 @@ func (s *Server) handleAliasesList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	out, werr := workflow.ListAliases(r.Context(), s.deps.Workflow, ref)
+	out, werr := workflow.ListUserAliases(r.Context(), s.deps.Workflow, ref)
 	if werr != nil {
 		writeError(w, werr)
 		return
@@ -35,12 +35,12 @@ func (s *Server) handleAliasesAdd(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	var req response.AliasMutation
+	var req response.UserAliasMutation
 	if err := decodeJSON(r.Body, &req); err != nil {
 		writeError(w, err)
 		return
 	}
-	out, werr := workflow.AddAliases(r.Context(), s.deps.Workflow, ref, req.Aliases)
+	out, werr := workflow.AddUserAliases(r.Context(), s.deps.Workflow, ref, req.Aliases)
 	if werr != nil {
 		writeError(w, werr)
 		return
@@ -57,12 +57,12 @@ func (s *Server) handleAliasesRemove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	var req response.AliasMutation
+	var req response.UserAliasMutation
 	if err := decodeJSON(r.Body, &req); err != nil {
 		writeError(w, err)
 		return
 	}
-	out, werr := workflow.RemoveAliases(r.Context(), s.deps.Workflow, ref, req.Aliases)
+	out, werr := workflow.RemoveUserAliases(r.Context(), s.deps.Workflow, ref, req.Aliases)
 	if werr != nil {
 		writeError(w, werr)
 		return

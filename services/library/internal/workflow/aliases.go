@@ -15,12 +15,12 @@ import (
 // ListAliases returns the persisted user aliases for the addressed
 // series. TVDB-derived aliases are not surfaced — they're folded
 // into searchKey at scan time and discarded.
-func ListAliases(ctx context.Context, deps Deps, ref refs.Series) (response.AliasList, error) {
+func ListUserAliases(ctx context.Context, deps Deps, ref refs.Series) (response.UserAliasList, error) {
 	model, err := seriesfile.Load(deps.LibRoot, ref)
 	if err != nil {
-		return response.AliasList{}, err
+		return response.UserAliasList{}, err
 	}
-	return response.AliasList{Aliases: aliasStrings(model.UserAliases)}, nil
+	return response.UserAliasList{Aliases: userAliasStrings(model.UserAliases)}, nil
 }
 
 // AddAliases appends each non-empty entry to the series's UserAliases
@@ -31,8 +31,8 @@ func ListAliases(ctx context.Context, deps Deps, ref refs.Series) (response.Alia
 // Transient TVDB aliases are not in scope on this path — searchKey
 // refolds against persisted titles + translations + the new user
 // alias set. The next provider scan re-folds them in.
-func AddAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (response.AliasList, error) {
-	return mutateAliases(ctx, deps, ref, "alias_add", func(model interface {
+func AddUserAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (response.UserAliasList, error) {
+	return mutateUserAliases(ctx, deps, ref, "alias_add", func(model interface {
 		AddUserAlias(textnorm.NFCString) bool
 	}, normalized []textnorm.NFCString) {
 		for _, alias := range normalized {
@@ -44,8 +44,8 @@ func AddAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []strin
 // RemoveAliases drops each entry from the series's UserAliases,
 // recomputes searchKey, and persists. Idempotent: removing a missing
 // alias is a no-op.
-func RemoveAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (response.AliasList, error) {
-	return mutateAliases(ctx, deps, ref, "alias_rm", func(model interface {
+func RemoveUserAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (response.UserAliasList, error) {
+	return mutateUserAliases(ctx, deps, ref, "alias_rm", func(model interface {
 		RemoveUserAlias(textnorm.NFCString) bool
 	}, normalized []textnorm.NFCString) {
 		for _, alias := range normalized {
@@ -54,19 +54,19 @@ func RemoveAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []st
 	}, aliases)
 }
 
-// mutateAliases is the shared CAS-retried load/mutate/save body for
+// mutateUserAliases is the shared CAS-retried load/mutate/save body for
 // add + remove. The mutate callback runs against the loaded model;
 // callers receive normalized + deduped alias inputs.
-func mutateAliases[T any](
+func mutateUserAliases[T any](
 	ctx context.Context,
 	deps Deps,
 	ref refs.Series,
 	op string,
 	apply func(model T, normalized []textnorm.NFCString),
 	rawInputs []string,
-) (response.AliasList, error) {
-	normalized := normalizeAliasInputs(rawInputs)
-	var out response.AliasList
+) (response.UserAliasList, error) {
+	normalized := normalizeUserAliasInputs(rawInputs)
+	var out response.UserAliasList
 	err := deps.Coordinator.WithSeries(ctx, ref, func() error {
 		return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
 			model, err := seriesfile.Load(deps.LibRoot, ref)
@@ -87,16 +87,16 @@ func mutateAliases[T any](
 			if err := updateIndexRow(ctx, deps, model, op); err != nil {
 				return err
 			}
-			out = response.AliasList{Aliases: aliasStrings(model.UserAliases)}
+			out = response.UserAliasList{Aliases: userAliasStrings(model.UserAliases)}
 			return nil
 		})
 	})
 	return out, err
 }
 
-// normalizeAliasInputs trims whitespace, NFC-normalizes, and dedupes
+// normalizeUserAliasInputs trims whitespace, NFC-normalizes, and dedupes
 // (preserving first-seen order). Empty entries are dropped.
-func normalizeAliasInputs(in []string) []textnorm.NFCString {
+func normalizeUserAliasInputs(in []string) []textnorm.NFCString {
 	if len(in) == 0 {
 		return nil
 	}
@@ -118,10 +118,10 @@ func normalizeAliasInputs(in []string) []textnorm.NFCString {
 	return out
 }
 
-// aliasStrings flattens persisted NFC aliases into the wire shape.
+// userAliasStrings flattens persisted NFC aliases into the wire shape.
 // Sorted alphabetically for stable diffs against the on-disk file +
 // predictable response ordering.
-func aliasStrings(in []textnorm.NFCString) []string {
+func userAliasStrings(in []textnorm.NFCString) []string {
 	out := make([]string, 0, len(in))
 	for _, alias := range in {
 		out = append(out, alias.String())
