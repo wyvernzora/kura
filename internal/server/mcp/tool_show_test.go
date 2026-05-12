@@ -137,11 +137,11 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 	if ep.Active.Source != "BDRip" || ep.Active.Resolution != "1080p" {
 		t.Fatalf("Active quality lost: %+v", ep.Active)
 	}
-	if ep.Active.File != "Season 1/Bookworm S01E01.mkv" {
-		t.Fatalf("Active.File = %q, want series-relative Season 1/Bookworm S01E01.mkv", ep.Active.File)
+	if ep.Active.File != "series:Season 1/Bookworm S01E01.mkv" {
+		t.Fatalf("Active.File = %q, want series:Season 1/Bookworm S01E01.mkv", ep.Active.File)
 	}
-	if len(ep.Active.Companions) != 1 || ep.Active.Companions[0] != "Season 1/Bookworm S01E01.en.srt" {
-		t.Fatalf("companion paths = %v, want [Season 1/Bookworm S01E01.en.srt]", ep.Active.Companions)
+	if len(ep.Active.Companions) != 1 || ep.Active.Companions[0] != "series:Season 1/Bookworm S01E01.en.srt" {
+		t.Fatalf("companion paths = %v, want [series:Season 1/Bookworm S01E01.en.srt]", ep.Active.Companions)
 	}
 }
 

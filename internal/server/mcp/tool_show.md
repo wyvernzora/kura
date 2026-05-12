@@ -8,7 +8,7 @@ Episode `status`:
 
 Status reflects persisted state from the most recent `kura_scan`. If a tracked file went missing on disk after the last scan, status still reads `present` until the next scan prunes it. Run `kura_scan` to refresh.
 
-`active.file` and `active.companions` are series-relative paths (e.g. `Season 1/Show S01E01.mkv`); pass them back as `series:<path>` selectors (e.g. `kura_stage` with `replace=true` to override metadata in place). `staged.file` and `staged.companions` are recorded as-is — absolute for inbox-staged files (inspect via the `inbox:` selector that produced them), series-relative for in-place stages.
+Paths inside the series root emit as `series:<rel>` selectors (e.g. `series:Season 1/Show S01E01.mkv`) — pass them straight back to `kura_stage` (with `replace=true` to override metadata in place) or `kura_trash`. Inbox-staged files keep their absolute on-disk path so you can correlate them with the `inbox:` selector that produced them. This applies to both `active.file`/`active.companions` and `staged.file`/`staged.companions`.
 
 `stagedTrash` lists files queued for removal at next `kura_reconcile_apply`; `stagedExtras` lists extras queued for placement.
 
