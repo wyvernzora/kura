@@ -573,6 +573,28 @@ export interface ScanAllFailure {
 }
 
 //////////
+// source: series_aliases.go
+
+/**
+ * AliasEntry is one title or alias entry from an external metadata source,
+ * paired with its language tag. Lang is BCP-47 base form (e.g. "ja",
+ * "zh-TW"); empty string is permitted — TVDB aliases are frequently
+ * untagged.
+ */
+export interface AliasEntry {
+  lang: string;
+  alias: string;
+}
+/**
+ * SeriesAliases is the response shape for kura_aliases: all known titles
+ * and aliases for a series as reported by the metadata provider.
+ */
+export interface SeriesAliases {
+  ref: string;
+  aliases: AliasEntry[];
+}
+
+//////////
 // source: show.go
 
 /**
