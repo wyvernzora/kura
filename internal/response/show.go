@@ -7,9 +7,11 @@ import "github.com/wyvernzora/kura/internal/domain/refs"
 //
 // All path fields in this response (Root, MediaShow.File,
 // CompanionShow.Path, TrashItemShow.Path, ExtraItemShow.Path, ...)
-// are scheme-tagged selectors: `library:<rel>` for the series root,
-// `series:<rel>` for files inside that series, `inbox:<rel>` for
-// files under the inbox root. There are no raw filesystem paths.
+// are scheme-tagged selectors: `library:<rel>` for paths under
+// KURA_LIBRARY_ROOT (Root emits as `library:<series-dir>`),
+// `series:<rel>` for files inside the request's series root,
+// `inbox:<rel>` for files under the inbox root. There are no raw
+// filesystem paths.
 type Show struct {
 	MetadataRef    refs.Metadata `json:"metadataRef"`
 	Ref            refs.Series   `json:"ref"`
