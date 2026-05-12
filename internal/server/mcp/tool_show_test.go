@@ -114,9 +114,9 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 						Source:     "BDRip",
 						Resolution: "1080p",
 						Size:       1024,
-						File:       "/library/Bookworm/Season 1/Bookworm S01E01.mkv",
+						File:       "Season 1/Bookworm S01E01.mkv",
 						Companions: []response.CompanionShow{
-							{Path: "/library/Bookworm/Season 1/Bookworm S01E01.en.srt"},
+							{Path: "Season 1/Bookworm S01E01.en.srt"},
 						},
 					},
 				},
@@ -137,8 +137,11 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 	if ep.Active.Source != "BDRip" || ep.Active.Resolution != "1080p" {
 		t.Fatalf("Active quality lost: %+v", ep.Active)
 	}
-	if len(ep.Active.Companions) != 1 || ep.Active.Companions[0] != "Bookworm S01E01.en.srt" {
-		t.Fatalf("companion basenames = %v, want [Bookworm S01E01.en.srt]", ep.Active.Companions)
+	if ep.Active.File != "Season 1/Bookworm S01E01.mkv" {
+		t.Fatalf("Active.File = %q, want series-relative Season 1/Bookworm S01E01.mkv", ep.Active.File)
+	}
+	if len(ep.Active.Companions) != 1 || ep.Active.Companions[0] != "Season 1/Bookworm S01E01.en.srt" {
+		t.Fatalf("companion paths = %v, want [Season 1/Bookworm S01E01.en.srt]", ep.Active.Companions)
 	}
 }
 
