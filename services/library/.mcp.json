@@ -1,18 +1,29 @@
 {
-	"mcpServers": {
-		"kura": {
-			"type": "http",
-			"url": "http://127.0.0.1:8081",
-			"headers": {
-				"Authorization": "Bearer ${KURA_TOKEN}"
-			}
-		},
-		"memory": {
-			"command": "npx",
-			"args": ["-y", "@modelcontextprotocol/server-memory"],
-			"env": {
-				"MEMORY_FILE_PATH": "${HOME}/.local/share/kura/memory.jsonl"
-			}
-		}
-	}
+  "mcpServers": {
+    "kura": {
+      "type": "http",
+      "url": "http://127.0.0.1:8081/mcp",
+      "headers": {
+        "Authorization": "Bearer ${KURA_TOKEN}"
+      }
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "${HOME}/.local/share/kura/memory.jsonl"
+      }
+    },
+    "dmhy": {
+      "type": "http",
+      "url": "http://localhost:8082/mcp"
+    },
+    "qbittorrent": {
+      "type": "http",
+      "url": "http://localhost:8083/mcp"
+    }
+  }
 }

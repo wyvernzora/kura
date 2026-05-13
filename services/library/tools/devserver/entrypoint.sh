@@ -93,7 +93,7 @@ fi
 
   # serverUrl is the inspector proxy's view of kura — always reach
   # via loopback inside the container, regardless of kura's bind addr.
-  INSPECTOR_URL="http://localhost:${CLIENT_PORT}/?MCP_PROXY_AUTH_TOKEN=${MCP_PROXY_AUTH_TOKEN}&transport=streamable-http&serverUrl=http%3A%2F%2F127.0.0.1%3A${MCP_PORT}"
+  INSPECTOR_URL="http://localhost:${CLIENT_PORT}/?MCP_PROXY_AUTH_TOKEN=${MCP_PROXY_AUTH_TOKEN}&transport=streamable-http&serverUrl=http%3A%2F%2F127.0.0.1%3A${MCP_PORT}%2Fmcp"
   if [ -n "${KURA_BEARER}" ]; then
     INSPECTOR_URL="${INSPECTOR_URL}&bearerToken=${KURA_BEARER}"
   fi

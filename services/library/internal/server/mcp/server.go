@@ -161,9 +161,16 @@ func ServeHTTP(ctx context.Context, addr string, server *sdkmcp.Server, bearerTo
 		return server
 	}, nil)
 	gated := auth.BearerMiddleware(bearerToken)(handler)
+	// Mount under /mcp per MCP Streamable HTTP convention so the path
+	// is interoperable with the broader ecosystem (inspector defaults,
+	// reverse-proxy layouts that route /mcp to the transport while
+	// reserving / for REST or a webui).
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", gated)
+	mux.Handle("/mcp/", gated)
 	httpServer := &http.Server{
 		Addr:              addr,
-		Handler:           gated,
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errCh := make(chan error, 1)
