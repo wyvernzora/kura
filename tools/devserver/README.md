@@ -27,7 +27,7 @@ KURA_DISABLE_TOKEN=1 KURA_DEV_STUBS=1 make devserver-run
 The container also prints a copy-paste inspector URL on first start
 once kura's MCP HTTP transport is bound. The URL embeds the proxy
 session token, the kura bearer token, and the prefill query params
-(`transport=streamable-http`, `serverUrl=http://127.0.0.1:8081`).
+(`transport=streamable-http`, `serverUrl=http://127.0.0.1:8081/mcp`).
 Open it in a browser, click **Connect**.
 
 ## What runs inside
@@ -116,12 +116,12 @@ host shell into the container when set:
 ## Use with Claude Code
 
 The project ships a `.mcp.json` entry for `kura` that points at
-`http://127.0.0.1:8081` and reads the bearer token from `KURA_TOKEN`:
+`http://127.0.0.1:8081/mcp` and reads the bearer token from `KURA_TOKEN`:
 
 ```json
 "kura": {
   "type": "http",
-  "url": "http://127.0.0.1:8081",
+  "url": "http://127.0.0.1:8081/mcp",
   "headers": {
     "Authorization": "Bearer ${KURA_TOKEN}"
   }
