@@ -116,6 +116,9 @@ func TestDeleteRemovesEntryAndReportsBytes(t *testing.T) {
 // and returns nil. The placeholder remains; trashfile.List ignores
 // the bucket because there's no meta.json.
 func TestDeleteSucceedsWithSillyRenameLeftover(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses DAC, so chmod 0o555 doesn't block unlink — the silly-rename simulation needs an unprivileged user")
+	}
 	root := t.TempDir()
 	seriesRef, _ := refs.ParseSeries("Show")
 	episodeRef, _ := refs.NewEpisode(1, 1)
