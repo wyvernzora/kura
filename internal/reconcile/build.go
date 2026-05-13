@@ -57,21 +57,26 @@ func BuildPlan(ctx context.Context, deps Deps, in PlanInput) (Plan, error) {
 
 	log := deps.log().With("ref", in.Ref.String(), "token", token)
 	var steps []Step
-	episodeSteps, err := planEpisodes(token, in.Ref, seriesDir.Path(), model)
-	if err != nil {
-		return Plan{}, err
-	}
-	steps = append(steps, episodeSteps...)
-	log.Debug("plan: episodes", "steps", len(episodeSteps))
-	if err := ctx.Err(); err != nil {
-		return Plan{}, err
-	}
+	// Standalone stagedTrash runs first so trash-bucket moves clear the
+	// active layout before any episode or extras step writes to it. An
+	// episode canonicalization whose target path is currently occupied
+	// by a user-staged trash file would otherwise clobber the trash file
+	// when apply walks steps in plan order.
 	trashSteps, err := planTrash(token, seriesDir.Path(), model)
 	if err != nil {
 		return Plan{}, err
 	}
 	steps = append(steps, trashSteps...)
 	log.Debug("plan: trash", "steps", len(trashSteps))
+	if err := ctx.Err(); err != nil {
+		return Plan{}, err
+	}
+	episodeSteps, err := planEpisodes(token, in.Ref, seriesDir.Path(), model)
+	if err != nil {
+		return Plan{}, err
+	}
+	steps = append(steps, episodeSteps...)
+	log.Debug("plan: episodes", "steps", len(episodeSteps))
 	if err := ctx.Err(); err != nil {
 		return Plan{}, err
 	}
