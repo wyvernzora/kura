@@ -1,0 +1,41 @@
+# reconcile_trash_before_moves: a single reconcile that contains both a
+# standalone stagedTrash entry AND an episode canonicalization whose
+# target path is currently occupied by the staged-trash file. Before the
+# fix, episode rename ran before the trash step and SafeMoveFile aborted
+# because the target already existed; apply failed half-way. After the
+# fix, the trash step runs first, clears the canonical-target path, and
+# the canonicalization rename succeeds.
+
+kura_add stub:1001
+
+# Non-canonical active source. Scan adopts it as E01.
+kura_write_series_file $KURA_LAST_REF Season 1/show.s01e01.mp4
+kura_scan $KURA_LAST_REF
+stdout '"status":"added"'
+
+# A leftover file sitting at the canonical target path. checkTrashPath
+# only rejects paths that match an active or staged record; this path
+# matches neither.
+kura_write_series_file $KURA_LAST_REF 'Season 1/Stub Show - S01E01 (Unknown 1080p).mp4'
+kura_stage_trash $KURA_LAST_REF 'Season 1/Stub Show - S01E01 (Unknown 1080p).mp4'
+stdout '"trash":\['
+
+# Plan + apply: trash step must run before the canonical rename so the
+# target is clear when SafeMoveFile runs.
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":2'
+
+# Trash list reports the leftover.
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+
+# Active episode is at the canonical name.
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+stdout '"file":"series:Season 1/Stub Show - S01E01 \(Unknown 1080p\).mp4"'
+
+# Original non-canonical episode source is gone.
+kura_series_dir $KURA_LAST_REF
+exec find $KURA_SERIES_DIR -name show.s01e01.mp4
+! stdout show.s01e01.mp4
