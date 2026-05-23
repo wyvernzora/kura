@@ -17,7 +17,7 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.7.10
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-isatty v0.0.22
-	github.com/modelcontextprotocol/go-sdk v1.6.0
+	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31
