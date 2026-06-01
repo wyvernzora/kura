@@ -33,7 +33,7 @@ func DiscoverSeriesEpisodes(seriesDir seriesdir.SeriesDir) ([]DiscoveredFile, []
 	if err != nil {
 		return nil, nil, err
 	}
-	return rejectDuplicateSlots(seriesDir, episodes, skipped)
+	return rejectDuplicateSlots(seriesDir, episodes, skipped, nil)
 }
 
 // WalkSeriesEpisodes returns every recognized video under seriesDir
@@ -97,7 +97,12 @@ func GroupBySlot(files []DiscoveredFile) map[refs.Episode][]DiscoveredFile {
 // with SkipCodeDuplicateSlot. Each skip carries quality hints
 // (source, resolution, size) so callers can pick a winner without
 // re-walking the filesystem. Kura does not auto-pick.
-func rejectDuplicateSlots(seriesDir seriesdir.SeriesDir, episodes []DiscoveredFile, skipped []ImportSkip) ([]DiscoveredFile, []ImportSkip, error) {
+func rejectDuplicateSlots(
+	seriesDir seriesdir.SeriesDir,
+	episodes []DiscoveredFile,
+	skipped []ImportSkip,
+	keep func(DiscoveredFile) bool,
+) ([]DiscoveredFile, []ImportSkip, error) {
 	byRef := map[refs.Episode][]int{}
 	for index, episode := range episodes {
 		byRef[episode.Ref] = append(byRef[episode.Ref], index)
@@ -110,7 +115,19 @@ func rejectDuplicateSlots(seriesDir seriesdir.SeriesDir, episodes []DiscoveredFi
 		if len(indices) < 2 {
 			continue
 		}
+		keepIndex := -1
+		if keep != nil {
+			for _, index := range indices {
+				if keep(episodes[index]) {
+					keepIndex = index
+					break
+				}
+			}
+		}
 		for _, index := range indices {
+			if index == keepIndex {
+				continue
+			}
 			dropped[index] = struct{}{}
 			skip := ImportSkip{
 				Path:   episodes[index].Path,

@@ -110,7 +110,7 @@ func (s *scanner) run(ctx context.Context) (err error) {
 		return nil
 	}
 	progress.Update(ctx, "scan", fmt.Sprintf("Discovering files in %s", s.ref), 1, 0)
-	discovered, skipped, err := DiscoverSeriesEpisodes(s.seriesDir)
+	discovered, skipped, err := s.discoverSeriesEpisodes()
 	if err != nil {
 		return err
 	}
@@ -136,6 +136,20 @@ func (s *scanner) run(ctx context.Context) (err error) {
 	}
 	progress.Success(ctx, "scan", fmt.Sprintf("Scanned %s", s.ref), len(discovered))
 	return nil
+}
+
+func (s *scanner) discoverSeriesEpisodes() ([]DiscoveredFile, []ImportSkip, error) {
+	episodes, skipped, err := WalkSeriesEpisodes(s.seriesDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	return rejectDuplicateSlots(s.seriesDir, episodes, skipped, func(file DiscoveredFile) bool {
+		episode, ok := s.model.Episodes[file.Ref]
+		if !ok || episode.Active == nil {
+			return false
+		}
+		return episode.Active.Path == s.absRel(file.Path)
+	})
 }
 
 func (s *scanner) loadLocal() error {

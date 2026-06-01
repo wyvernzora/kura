@@ -215,3 +215,37 @@ func TestDiscoverSeasonEpisodesRejectsDuplicateSlots(t *testing.T) {
 		t.Fatalf("duplicate-slot skips = %d, want 2; skipped = %v", dups, skipped)
 	}
 }
+
+func TestRejectDuplicateSlotsKeepsActiveFileWhenRequested(t *testing.T) {
+	root := t.TempDir()
+	seriesDir := filepath.Join(root, "Frieren")
+	seasonDir := filepath.Join(seriesDir, "Season 1")
+	if err := os.MkdirAll(seasonDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	activePath := "Season 1/Frieren - S01E01 (WebRip 1080p).mkv"
+	dupePath := "Season 1/[SubsPlease] Frieren - 01 (1080p).mkv"
+	writeScanTestFile(t, filepath.Join(seriesDir, filepath.FromSlash(activePath)))
+	writeScanTestFile(t, filepath.Join(seriesDir, filepath.FromSlash(dupePath)))
+
+	dir, err := seriesdir.Parse(seriesDir)
+	if err != nil {
+		t.Fatalf("seriesdir.Parse: %v", err)
+	}
+	episodes, skipped, err := WalkSeriesEpisodes(dir)
+	if err != nil {
+		t.Fatalf("WalkSeriesEpisodes: %v", err)
+	}
+	kept, skipped, err := rejectDuplicateSlots(dir, episodes, skipped, func(file DiscoveredFile) bool {
+		return file.Path == activePath
+	})
+	if err != nil {
+		t.Fatalf("rejectDuplicateSlots: %v", err)
+	}
+	if len(kept) != 1 || kept[0].Path != activePath {
+		t.Fatalf("kept = %#v, want active path only", kept)
+	}
+	if len(skipped) != 1 || skipped[0].Path != dupePath || skipped[0].Code != SkipCodeDuplicateSlot {
+		t.Fatalf("skipped = %#v, want duplicate loser only", skipped)
+	}
+}

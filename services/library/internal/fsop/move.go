@@ -14,13 +14,14 @@ import (
 	"syscall"
 )
 
-// SafeMoveFile moves from to to, normalizes the destination file, and refuses
-// to overwrite an existing target under Kura's single-writer library model.
+// SafeMoveFile moves from to to and refuses to overwrite an existing target
+// under Kura's single-writer library model.
 // It uses an O(1) rename for normal same-filesystem moves and only copies
-// file contents for true cross-device moves. The destination is normalized so
-// Kura mirrors owner read/write bits to the group, aligns the file group with
-// its parent where possible, and reduces permissions by the configured
-// permission mask.
+// file contents for true cross-device moves. Destination permission
+// normalization is best-effort: Kura tries to mirror owner read/write bits to
+// the group, align the file group with its parent, and reduce permissions by
+// the configured permission mask, but a successful move is not rolled back if
+// an NFS export or container UID/GID policy rejects chmod/chown.
 //
 // Returns an error if to already exists — callers must not rely on silent
 // overwrite semantics.
@@ -49,12 +50,7 @@ func SafeMoveFile(from, to string) error {
 		}
 		return err
 	}
-	if err := normalizeMovedFile(to, info); err != nil {
-		if rollbackErr := os.Rename(to, from); rollbackErr != nil {
-			return fmt.Errorf("fsop: normalize moved file %q: %w (rollback failed: %v)", to, err, rollbackErr)
-		}
-		return fmt.Errorf("fsop: normalize moved file %q: %w", to, err)
-	}
+	_ = normalizeMovedFile(to, info)
 	bestEffortSyncParent(to)
 	bestEffortSyncParent(from)
 	return nil
@@ -102,10 +98,7 @@ func copyThenRemove(from, to string, info os.FileInfo) error {
 		_ = os.Remove(to)
 		return fmt.Errorf("fsop: destination changed while moving %q", to)
 	}
-	if err := normalizeMovedFile(to, dstInfo); err != nil {
-		_ = os.Remove(to)
-		return fmt.Errorf("fsop: normalize moved file %q: %w", to, err)
-	}
+	_ = normalizeMovedFile(to, dstInfo)
 	bestEffortSyncParent(to)
 	if err := os.Remove(from); err != nil {
 		return err
