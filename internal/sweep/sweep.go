@@ -24,13 +24,11 @@ import (
 // Config tunes the sweep loop. Zero values fall back to the defaults
 // at the top of Run.
 type Config struct {
-	// Interval is the base period between sweeps. Default 1h. The
-	// effective ticker interval is Interval + uniform(-Jitter,
-	// +Jitter), sampled once at startup so concurrent replicas don't
-	// drift into lockstep on the same wall-clock minute.
+	// Interval is the base period between sweeps. Default 1h. When
+	// Jitter is non-zero, the effective ticker interval is Interval +
+	// uniform(-Jitter, +Jitter).
 	Interval time.Duration
-	// Jitter is the maximum offset applied to Interval at startup.
-	// Default 5m.
+	// Jitter is the maximum offset applied to each Interval. Default 0.
 	Jitter time.Duration
 	// LogRetention is the age threshold for deleting forensic JSONLs
 	// (mtime), shared by reconcile plan logs and per-job history
@@ -44,7 +42,6 @@ type Config struct {
 
 const (
 	defaultInterval     = time.Hour
-	defaultJitter       = 5 * time.Minute
 	defaultLogRetention = 7 * 24 * time.Hour
 )
 
@@ -58,9 +55,6 @@ func Run(ctx context.Context, libRoot string, cfg Config, log *slog.Logger) erro
 	if cfg.Jitter < 0 {
 		cfg.Jitter = 0
 	}
-	if cfg.Jitter == 0 {
-		cfg.Jitter = defaultJitter
-	}
 	if cfg.LogRetention <= 0 {
 		cfg.LogRetention = defaultLogRetention
 	}
@@ -73,8 +67,7 @@ func Run(ctx context.Context, libRoot string, cfg Config, log *slog.Logger) erro
 		"jitter", cfg.Jitter,
 		"logRetention", cfg.LogRetention,
 	)
-	// Re-sample the jittered wait every iteration so concurrent
-	// replicas don't lock-step on a single startup-time offset.
+	// Re-sample an explicitly configured jitter every iteration.
 	for {
 		wait := jitteredInterval(cfg.Interval, cfg.Jitter)
 		timer := time.NewTimer(wait)

@@ -97,7 +97,16 @@ secret:
 | `KURA_UMASK` | Process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. Unset preserves the image/runtime default. | Set when the mounted library needs stricter metadata permissions or group-friendly writes. Kura requests group-writable modes for library artifacts and mirrors owner read/write onto group for media it moves; the umask reduces from there. |
 | `KURA_TVDB_KEY` | TVDB API key. Lazy: only required for metadata-needing workflows. | Inject from a Secret. |
 | `KURA_LOG_RETENTION_DAYS` | Days of forensic JSONL logs to keep (reconcile plan logs, per-job history logs). Default `7`. | Override only if you need longer retention for incident review. |
+| `KURA_SWEEP_INTERVAL` | Period between scheduled forensic-log pruning sweeps. Go duration, default `1h`. | Usually leave at default; startup recovery and the scheduled sweep are enough for a single personal library. |
+| `KURA_SWEEP_JITTER` | Optional random offset applied to each scheduled sweep interval. Go duration, default `0`. | Leave unset unless you deliberately run many independent Kura instances and want their sweeps de-correlated. |
 | `KURA_JOB_TIMEOUT` | Per-job deadline. Unset means no timeout. | Set if you want runaway jobs killed. |
+
+Permission normalization after moving media is best-effort. On NFS
+exports or Kubernetes security contexts that reject `chown` / `chmod`,
+Kura keeps the successful move and relies on the operator to fix the
+mount UID/GID, parent setgid bit, `KURA_UMASK`, or existing file modes.
+For the intended single-writer personal-library deployment, this is an
+operational repair, not a reason to roll back a 100+ GB move.
 
 ### Bootstrap on first start
 

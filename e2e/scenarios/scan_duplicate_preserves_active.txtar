@@ -1,0 +1,17 @@
+# scan_duplicate_preserves_active: once scan has adopted an active file, a
+# later duplicate-slot file should not cause that active record to disappear.
+# Validates: duplicate-slot scan ambiguity keeps the current active winner.
+
+kura_add stub:1001
+
+kura_write_series_file $KURA_LAST_REF Season 1/show.s01e01.mp4
+kura_scan $KURA_LAST_REF
+stdout '"status":"added"'
+
+kura_write_series_file $KURA_LAST_REF Season 1/[SubsPlease] Show - 01 (1080p).mkv
+kura_scan $KURA_LAST_REF
+stdout '"code":"duplicate_slot"'
+! stdout '"status":"removed"'
+
+kura_show_ep $KURA_LAST_REF S01E0001
+stdout '"status":"present"'
