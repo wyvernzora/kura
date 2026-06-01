@@ -94,6 +94,7 @@ secret:
 | `KURA_LIBRARY_ROOT` | Library root (required). Series directories live here. | Mount a PV containing the library; both library and inbox roots must exist at start time and must not nest. |
 | `KURA_INBOX_ROOT` | Inbox root for staged downloads (required for `kura serve`). | Same PV with a `subPath`, or a separate PV. Must be disjoint from `KURA_LIBRARY_ROOT`. |
 | `KURA_HOST_ID` | Stable claim-stamp identity used by the boot-time stuck-claim recovery sweep. | **Set this** to a stable string (e.g. the underlying node hostname or a fixed deployment label). Without it, every container restart sees a different `os.Hostname()` and the auto-recovery cannot break a prior pod's stale claim. |
+| `KURA_UMASK` | Process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. Unset preserves the image/runtime default. | Set when the mounted library needs stricter metadata permissions or group-friendly writes. Kura requests group-writable modes for library artifacts and mirrors owner read/write onto group for media it moves; the umask reduces from there. |
 | `KURA_TVDB_KEY` | TVDB API key. Lazy: only required for metadata-needing workflows. | Inject from a Secret. |
 | `KURA_LOG_RETENTION_DAYS` | Days of forensic JSONL logs to keep (reconcile plan logs, per-job history logs). Default `7`. | Override only if you need longer retention for incident review. |
 | `KURA_JOB_TIMEOUT` | Per-job deadline. Unset means no timeout. | Set if you want runaway jobs killed. |

@@ -92,7 +92,7 @@ func SaveCAS(libRoot string, m *series.Series, mutator coord.Mutator) error {
 }
 
 func saveCASCreate(libRoot string, m *series.Series, mutator coord.Mutator, path, scope string) error {
-	if err := os.MkdirAll(paths.SeriesKuraDir(libRoot, m.Ref), 0o755); err != nil {
+	if err := os.MkdirAll(paths.SeriesKuraDir(libRoot, m.Ref), 0o775); err != nil {
 		return err
 	}
 	// Existence pre-check: a partial file from a prior crash would not
@@ -112,7 +112,7 @@ func saveCASCreate(libRoot string, m *series.Series, mutator coord.Mutator, path
 	if err != nil {
 		return err
 	}
-	if err := maybe.WriteFile(path, data, 0o644); err != nil {
+	if err := maybe.WriteFile(path, data, 0o664); err != nil {
 		return err
 	}
 	finalHash, err := readAndHash(path)
@@ -144,10 +144,10 @@ func saveCASUpdate(libRoot string, m *series.Series, mutator coord.Mutator, path
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(paths.SeriesKuraDir(libRoot, m.Ref), 0o755); err != nil {
+	if err := os.MkdirAll(paths.SeriesKuraDir(libRoot, m.Ref), 0o775); err != nil {
 		return err
 	}
-	if err := maybe.WriteFile(path, data, 0o644); err != nil {
+	if err := maybe.WriteFile(path, data, 0o664); err != nil {
 		return err
 	}
 	finalHash, err := readAndHash(path)

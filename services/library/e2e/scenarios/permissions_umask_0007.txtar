@@ -1,0 +1,39 @@
+# permissions_umask_0007: KURA_UMASK=0007 should keep Kura-managed
+# library artifacts group-writable while removing all "other" bits.
+# A downloader-created 0600 source media file should land as 0660
+# after reconcile apply.
+# kura_e2e_unix
+# kura_e2e_env KURA_UMASK=0007
+
+kura_add stub:1001
+kura_assert_lib_mode 770 .kura
+kura_assert_lib_mode 660 .kura/index.jsonl
+kura_assert_series_mode $KURA_LAST_REF 770 .
+kura_assert_series_mode $KURA_LAST_REF 770 .kura
+kura_assert_series_mode $KURA_LAST_REF 660 .kura/series.json
+
+kura_mkfile ep1.mp4
+exec chmod 600 ep1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_plan $KURA_LAST_REF
+kura_assert_series_mode $KURA_LAST_REF 770 .kura/reconcile
+kura_assert_series_mode $KURA_LAST_REF 660 .kura/reconcile/$KURA_PLAN_TOKEN.jsonl
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+kura_assert_active_mode $KURA_LAST_REF S01E0001 660
+kura_assert_active_group_parent $KURA_LAST_REF S01E0001
+kura_assert_lib_mode 770 .kura/jobs
+kura_assert_lib_glob_mode 660 .kura/jobs/*.jsonl
+
+kura_mkfile ep1_v2.mp4
+exec chmod 600 ep1_v2.mp4
+kura_stage_replace $KURA_LAST_REF S01E0001 ep1_v2.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+kura_assert_active_mode $KURA_LAST_REF S01E0001 660
+kura_assert_active_group_parent $KURA_LAST_REF S01E0001
+kura_assert_series_mode $KURA_LAST_REF 770 .kura/trash/$KURA_TRASH_ID
+kura_assert_series_mode $KURA_LAST_REF 660 .kura/trash/$KURA_TRASH_ID/meta.json
+kura_assert_series_glob_mode $KURA_LAST_REF 660 .kura/trash/$KURA_TRASH_ID/*.mp4

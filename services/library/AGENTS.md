@@ -26,6 +26,7 @@ This file holds project-specific context, learnings, and overrides only. Rules i
 - **Domain:** anime-first library manager, broadly similar in category to Sonarr.
 - **Priority:** anime behavior comes first; other series types can work when compatible but should not drive the design.
 - **Product shape:** no bloat. Prefer CLI tools for manual use and MCP tools for agentic use.
+- **Operational scale:** personal anime library automation, not a high-throughput multi-writer file transaction system. Expect new episodes a few times a week and occasional season upgrades, usually flowing qbit/download inbox -> Kura -> library with an LLM agent driving Kura. Kura is the only intended writer inside the library root; other tools should be readonly there, and direct human writes are rare. Avoid engineering for AWS-S3-scale concurrency or hostile library writers unless the product requirements explicitly change.
 - **UI:** possible in the distant future, but not a current priority.
 - **Distribution:** Go application shipped as a Docker container.
 

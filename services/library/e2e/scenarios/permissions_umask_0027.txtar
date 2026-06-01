@@ -1,0 +1,39 @@
+# permissions_umask_0027: KURA_UMASK=0027 should reduce the same
+# group-friendly requested modes to stricter owner-write-only modes.
+# This guards that chmod/normalization still respects the deploy-time
+# mask instead of forcing group write unconditionally.
+# kura_e2e_unix
+# kura_e2e_env KURA_UMASK=0027
+
+kura_add stub:1001
+kura_assert_lib_mode 750 .kura
+kura_assert_lib_mode 640 .kura/index.jsonl
+kura_assert_series_mode $KURA_LAST_REF 750 .
+kura_assert_series_mode $KURA_LAST_REF 750 .kura
+kura_assert_series_mode $KURA_LAST_REF 640 .kura/series.json
+
+kura_mkfile ep1.mp4
+exec chmod 600 ep1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_plan $KURA_LAST_REF
+kura_assert_series_mode $KURA_LAST_REF 750 .kura/reconcile
+kura_assert_series_mode $KURA_LAST_REF 640 .kura/reconcile/$KURA_PLAN_TOKEN.jsonl
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+kura_assert_active_mode $KURA_LAST_REF S01E0001 640
+kura_assert_active_group_parent $KURA_LAST_REF S01E0001
+kura_assert_lib_mode 750 .kura/jobs
+kura_assert_lib_glob_mode 640 .kura/jobs/*.jsonl
+
+kura_mkfile ep1_v2.mp4
+exec chmod 600 ep1_v2.mp4
+kura_stage_replace $KURA_LAST_REF S01E0001 ep1_v2.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_trash_list $KURA_LAST_REF
+stdout '"totalEntries":1'
+kura_assert_active_mode $KURA_LAST_REF S01E0001 640
+kura_assert_active_group_parent $KURA_LAST_REF S01E0001
+kura_assert_series_mode $KURA_LAST_REF 750 .kura/trash/$KURA_TRASH_ID
+kura_assert_series_mode $KURA_LAST_REF 640 .kura/trash/$KURA_TRASH_ID/meta.json
+kura_assert_series_glob_mode $KURA_LAST_REF 640 .kura/trash/$KURA_TRASH_ID/*.mp4
