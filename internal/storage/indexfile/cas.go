@@ -135,10 +135,10 @@ func SaveCAS(root string, expected string, rows []Row, mutator coord.Mutator) er
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
+	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o775); err != nil {
 		return err
 	}
-	if err := maybe.WriteFile(path, data, 0o644); err != nil {
+	if err := maybe.WriteFile(path, data, 0o664); err != nil {
 		return err
 	}
 

@@ -64,6 +64,9 @@ func run(args []string, rt runContext) error {
 	if err != nil {
 		return err
 	}
+	if err := configureUmask(rt.Getenv); err != nil {
+		return err
+	}
 
 	rt.Context = stdio.With(rt.Context, stdio.New(rt.Stdin, rt.Stdout, rt.Stderr))
 	rt.Context = progress.With(rt.Context, newProgressReporter(rt.Stderr))

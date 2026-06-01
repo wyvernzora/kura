@@ -71,15 +71,16 @@ func repoRoot() string {
 // e2eBinary represents one running kura-e2e daemon plus subprocess
 // helpers for exercising it via CLI invocations.
 type e2eBinary struct {
-	t        *testing.T
-	bin      string
+	t         *testing.T
+	bin       string
 	libRoot   string
 	inboxRoot string
-	port     int
-	url      string
-	cmd      *exec.Cmd
-	stderr   *syncBuffer
-	stopOnce sync.Once
+	port      int
+	url       string
+	env       []string
+	cmd       *exec.Cmd
+	stderr    *syncBuffer
+	stopOnce  sync.Once
 }
 
 // syncBuffer is a goroutine-safe wrapper around bytes.Buffer. The
@@ -113,7 +114,7 @@ func (s *syncBuffer) String() string {
 // `kura-e2e serve --rest=:0 --rest-port-file=... --use-test-stubs`
 // against libRoot. Blocks up to 5s waiting for the port file to
 // appear and the /health endpoint to respond.
-func startDaemon(t *testing.T, libRoot, inboxRoot string) *e2eBinary {
+func startDaemon(t *testing.T, libRoot, inboxRoot string, extraEnv []string) *e2eBinary {
 	t.Helper()
 	bin := buildKuraE2E(t)
 
@@ -135,6 +136,7 @@ func startDaemon(t *testing.T, libRoot, inboxRoot string) *e2eBinary {
 		// to plumb the secret into every kura-e2e invocation.
 		"KURA_DISABLE_TOKEN=1",
 	)
+	cmd.Env = append(cmd.Env, extraEnv...)
 	stderr := &syncBuffer{}
 	cmd.Stderr = stderr
 	cmd.Stdout = io.Discard
@@ -148,6 +150,7 @@ func startDaemon(t *testing.T, libRoot, inboxRoot string) *e2eBinary {
 		bin:       bin,
 		libRoot:   libRoot,
 		inboxRoot: inboxRoot,
+		env:       append([]string(nil), extraEnv...),
 		cmd:       cmd,
 		stderr:    stderr,
 	}
@@ -200,6 +203,7 @@ func (b *e2eBinary) run(ctx context.Context, args ...string) (stdout, stderr str
 		"KURA_SERVER_URL="+b.url,
 		"KURA_DISABLE_TOKEN=1",
 	)
+	cmd.Env = append(cmd.Env, b.env...)
 	var so, se bytes.Buffer
 	cmd.Stdout = &so
 	cmd.Stderr = &se

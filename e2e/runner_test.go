@@ -23,6 +23,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,10 +72,17 @@ func runScenario(t *testing.T, path string) {
 	// ar.Comment holds the script body (everything before the first
 	// "-- file --" section). ar.Files holds any embedded test fixtures.
 	ar := txtar.Parse(data)
+	config, err := parseScenarioConfig(string(ar.Comment))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.unixOnly && !isUnixGOOS(runtime.GOOS) {
+		t.Skip("scenario requires Unix permissions")
+	}
 
 	libRoot := t.TempDir()
 	inboxRoot := t.TempDir()
-	b := startDaemon(t, libRoot, inboxRoot)
+	b := startDaemon(t, libRoot, inboxRoot, config.env)
 	eng := newEngine(t, b)
 
 	workdir := inboxRoot
@@ -115,5 +124,44 @@ func runScenario(t *testing.T, path string) {
 		t.Logf("script output:\n%s", log.String())
 		b.dumpStderr()
 		t.Fatal(err)
+	}
+}
+
+type scenarioConfig struct {
+	env      []string
+	unixOnly bool
+}
+
+func parseScenarioConfig(scriptBody string) (scenarioConfig, error) {
+	var config scenarioConfig
+	scanner := bufio.NewScanner(strings.NewReader(scriptBody))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		const envPrefix = "# kura_e2e_env "
+		if !strings.HasPrefix(line, envPrefix) {
+			if line == "# kura_e2e_unix" {
+				config.unixOnly = true
+			}
+			continue
+		}
+		entry := strings.TrimSpace(strings.TrimPrefix(line, envPrefix))
+		if entry == "" || !strings.Contains(entry, "=") {
+			return scenarioConfig{}, fmt.Errorf("invalid kura_e2e_env directive %q", line)
+		}
+		config.env = append(config.env, entry)
+	}
+	if err := scanner.Err(); err != nil {
+		return scenarioConfig{}, err
+	}
+	slices.Sort(config.env)
+	return config, nil
+}
+
+func isUnixGOOS(goos string) bool {
+	switch goos {
+	case "aix", "android", "darwin", "dragonfly", "freebsd", "hurd", "illumos", "ios", "linux", "netbsd", "openbsd", "solaris":
+		return true
+	default:
+		return false
 	}
 }

@@ -64,7 +64,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult
 	if err := checkMetadataAvailable(deps, metadataRef, ref); err != nil {
 		return response.AddResult{}, err
 	}
-	if err := os.MkdirAll(target, 0o755); err != nil {
+	if err := os.MkdirAll(target, 0o775); err != nil {
 		return response.AddResult{}, err
 	}
 	progress.Update(ctx, "add", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)

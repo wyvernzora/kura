@@ -93,10 +93,10 @@ func Write(root string, ref refs.Series, m Meta) error {
 	}
 	data = append(data, '\n')
 	dir := paths.TrashEntry(root, ref, m.ID.String())
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o775); err != nil {
 		return err
 	}
-	return maybe.WriteFile(paths.TrashMeta(root, ref, m.ID.String()), data, 0o644)
+	return maybe.WriteFile(paths.TrashMeta(root, ref, m.ID.String()), data, 0o664)
 }
 
 func Read(root string, ref refs.Series, id ulid.ULID) (Meta, error) {

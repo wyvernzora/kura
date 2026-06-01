@@ -150,7 +150,7 @@ func Serve(ctx context.Context, addr string, opts ServeOptions, server *Server) 
 // see a partial write.
 func writePortFile(path string, port int) error {
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, fmt.Appendf(nil, "%d\n", port), 0o644); err != nil {
+	if err := os.WriteFile(tmp, fmt.Appendf(nil, "%d\n", port), 0o664); err != nil {
 		return fmt.Errorf("write port file: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {

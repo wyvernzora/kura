@@ -138,6 +138,7 @@ kura trash empty <selector>                # permanently delete them
 | `KURA_PREFERRED_LANGUAGES` | Comma-separated BCP-47 preferred metadata languages. |
 | `KURA_MEDIAINFO_COMMAND` | Override the `mediainfo` executable path. |
 | `KURA_HOST_ID` | Override `os.Hostname()` for claim holder identity. Set in container deployments to a stable value. |
+| `KURA_UMASK` | Process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. Unset preserves the parent process default. |
 | `KURA_TOKEN` / `KURA_DISABLE_TOKEN` | Server bearer token (see [deployment.md](deployment.md)). |
 | `KURA_LOG_RETENTION_DAYS` | Days to retain forensic JSONL logs (reconcile plan + per-job). Default `7`. |
 | `KURA_JOB_TIMEOUT` | Per-job deadline duration (e.g. `60m`). Unset means no timeout. |

@@ -33,7 +33,7 @@ func Create(libRoot string, header HeaderLine) (*Writer, error) {
 	if header.JobID == "" {
 		return nil, fmt.Errorf("jobfile: empty JobID")
 	}
-	if err := os.MkdirAll(paths.JobsDir(libRoot), 0o755); err != nil {
+	if err := os.MkdirAll(paths.JobsDir(libRoot), 0o775); err != nil {
 		return nil, fmt.Errorf("jobfile: mkdir jobs dir: %w", err)
 	}
 	header.Type = LineHeader
@@ -41,7 +41,7 @@ func Create(libRoot string, header HeaderLine) (*Writer, error) {
 		header.SchemaVersion = SchemaVersion
 	}
 	path := paths.JobFile(libRoot, header.JobID)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o664)
 	if err != nil {
 		return nil, fmt.Errorf("jobfile: open %s: %w", path, err)
 	}

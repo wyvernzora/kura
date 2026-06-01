@@ -54,10 +54,10 @@ func WritePlan(root string, ref refs.Series, plan reconcile.Plan) error {
 		}
 	}
 	path := paths.PlanFile(root, ref, plan.Header.Token)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o775); err != nil {
 		return err
 	}
-	return maybe.WriteFile(path, []byte(buf.String()), 0o644)
+	return maybe.WriteFile(path, []byte(buf.String()), 0o664)
 }
 
 // ReadPlan returns the plan from the JSONL file plus a flag reporting

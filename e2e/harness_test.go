@@ -8,9 +8,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -604,6 +607,154 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 		},
 	)
 
+	// ── kura_assert_lib_mode ──────────────────────────────────────────────
+	cmds["kura_assert_lib_mode"] = script.Command(
+		script.CmdUsage{Summary: "assert mode for path under library root", Args: "<octal_mode> <rel_path>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 2 {
+				return nil, fmt.Errorf("kura_assert_lib_mode: expected <octal_mode> <rel_path>")
+			}
+			mode, err := parseModeArg(args[0])
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_lib_mode: %w", err)
+			}
+			rel := s.ExpandEnv(strings.Join(args[1:], " "), false)
+			path := filepath.Join(b.libRoot, filepath.FromSlash(rel))
+			if err := assertMode(path, mode); err != nil {
+				return nil, fmt.Errorf("kura_assert_lib_mode: %w", err)
+			}
+			return staticOutput(""), nil
+		},
+	)
+
+	// ── kura_assert_lib_glob_mode ─────────────────────────────────────────
+	cmds["kura_assert_lib_glob_mode"] = script.Command(
+		script.CmdUsage{Summary: "assert mode for paths matching a library-root glob", Args: "<octal_mode> <glob>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 2 {
+				return nil, fmt.Errorf("kura_assert_lib_glob_mode: expected <octal_mode> <glob>")
+			}
+			mode, err := parseModeArg(args[0])
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_lib_glob_mode: %w", err)
+			}
+			rel := s.ExpandEnv(strings.Join(args[1:], " "), false)
+			matches, err := filepath.Glob(filepath.Join(b.libRoot, filepath.FromSlash(rel)))
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_lib_glob_mode: %w", err)
+			}
+			if len(matches) == 0 {
+				return nil, fmt.Errorf("kura_assert_lib_glob_mode: no matches for %q", rel)
+			}
+			for _, path := range matches {
+				if err := assertMode(path, mode); err != nil {
+					return nil, fmt.Errorf("kura_assert_lib_glob_mode: %w", err)
+				}
+			}
+			return staticOutput(""), nil
+		},
+	)
+
+	// ── kura_assert_series_mode ───────────────────────────────────────────
+	cmds["kura_assert_series_mode"] = script.Command(
+		script.CmdUsage{Summary: "assert mode for path under a series root", Args: "<ref> <octal_mode> <rel_path>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 3 {
+				return nil, fmt.Errorf("kura_assert_series_mode: expected <ref> <octal_mode> <rel_path>")
+			}
+			input := s.ExpandEnv(args[0], false)
+			mode, err := parseModeArg(args[1])
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_series_mode: %w", err)
+			}
+			seriesRoot, err := seriesRootForFixture(b, input)
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_series_mode: %w", err)
+			}
+			rel := s.ExpandEnv(strings.Join(args[2:], " "), false)
+			path := filepath.Join(seriesRoot, filepath.FromSlash(rel))
+			if err := assertMode(path, mode); err != nil {
+				return nil, fmt.Errorf("kura_assert_series_mode: %w", err)
+			}
+			return staticOutput(""), nil
+		},
+	)
+
+	// ── kura_assert_series_glob_mode ──────────────────────────────────────
+	cmds["kura_assert_series_glob_mode"] = script.Command(
+		script.CmdUsage{Summary: "assert mode for paths matching a series-root glob", Args: "<ref> <octal_mode> <glob>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 3 {
+				return nil, fmt.Errorf("kura_assert_series_glob_mode: expected <ref> <octal_mode> <glob>")
+			}
+			input := s.ExpandEnv(args[0], false)
+			mode, err := parseModeArg(args[1])
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_series_glob_mode: %w", err)
+			}
+			seriesRoot, err := seriesRootForFixture(b, input)
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_series_glob_mode: %w", err)
+			}
+			rel := s.ExpandEnv(strings.Join(args[2:], " "), false)
+			matches, err := filepath.Glob(filepath.Join(seriesRoot, filepath.FromSlash(rel)))
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_series_glob_mode: %w", err)
+			}
+			if len(matches) == 0 {
+				return nil, fmt.Errorf("kura_assert_series_glob_mode: no matches for %q", rel)
+			}
+			for _, path := range matches {
+				if err := assertMode(path, mode); err != nil {
+					return nil, fmt.Errorf("kura_assert_series_glob_mode: %w", err)
+				}
+			}
+			return staticOutput(""), nil
+		},
+	)
+
+	// ── kura_assert_active_mode ───────────────────────────────────────────
+	cmds["kura_assert_active_mode"] = script.Command(
+		script.CmdUsage{Summary: "assert mode for an episode's active media file", Args: "<ref> <episode> <octal_mode>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 3 {
+				return nil, fmt.Errorf("kura_assert_active_mode: expected <ref> <episode> <octal_mode>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			mode, err := parseModeArg(args[2])
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_active_mode: %w", err)
+			}
+			path, err := activeFilePath(s.Context(), b, ref, args[1])
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_active_mode: %w", err)
+			}
+			if err := assertMode(path, mode); err != nil {
+				return nil, fmt.Errorf("kura_assert_active_mode: %w", err)
+			}
+			return staticOutput(""), nil
+		},
+	)
+
+	// ── kura_assert_active_group_parent ───────────────────────────────────
+	cmds["kura_assert_active_group_parent"] = script.Command(
+		script.CmdUsage{Summary: "assert active media group matches its parent directory", Args: "<ref> <episode>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 2 {
+				return nil, fmt.Errorf("kura_assert_active_group_parent: expected <ref> <episode>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			path, err := activeFilePath(s.Context(), b, ref, args[1])
+			if err != nil {
+				return nil, fmt.Errorf("kura_assert_active_group_parent: %w", err)
+			}
+			if err := assertGroupMatchesParent(path); err != nil {
+				return nil, fmt.Errorf("kura_assert_active_group_parent: %w", err)
+			}
+			return staticOutput(""), nil
+		},
+	)
+
 	// ── kura_mkfile ───────────────────────────────────────────────────────
 	cmds["kura_mkfile"] = script.Command(
 		script.CmdUsage{Summary: "create empty file in workdir", Args: "<path>"},
@@ -657,6 +808,56 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 	return eng
 }
 
+func parseModeArg(raw string) (fs.FileMode, error) {
+	parsed, err := strconv.ParseUint(strings.TrimSpace(raw), 8, 32)
+	if err != nil {
+		return 0, fmt.Errorf("parse mode %q: %w", raw, err)
+	}
+	return fs.FileMode(parsed), nil
+}
+
+func assertMode(path string, want fs.FileMode) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if got := info.Mode().Perm(); got != want {
+		return fmt.Errorf("%s mode = %#o, want %#o", path, got, want)
+	}
+	return nil
+}
+
+func assertGroupMatchesParent(path string) error {
+	fileGID, err := statGID(path)
+	if err != nil {
+		return err
+	}
+	parentGID, err := statGID(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	if fileGID != parentGID {
+		return fmt.Errorf("%s gid = %d, parent gid = %d", path, fileGID, parentGID)
+	}
+	return nil
+}
+
+func statGID(path string) (uint64, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	value := reflect.ValueOf(info.Sys())
+	if value.Kind() == reflect.Pointer {
+		value = value.Elem()
+	}
+	field := value.FieldByName("Gid")
+	if !field.IsValid() {
+		return 0, fmt.Errorf("%s: stat does not expose gid on this platform", path)
+	}
+	return field.Convert(reflect.TypeOf(uint64(0))).Uint(), nil
+}
+
 // resolveSeriesRefForFixture maps either a metadata ref
 // (provider:id) or a literal series ref to the underlying SeriesRef
 // the harness needs to compute on-disk paths. Metadata refs trigger
@@ -693,6 +894,18 @@ func resolveSeriesRefForFixture(b *e2eBinary, raw string) (string, error) {
 	return doc.Ref, nil
 }
 
+func seriesRootForFixture(b *e2eBinary, raw string) (string, error) {
+	seriesRefStr, err := resolveSeriesRefForFixture(b, raw)
+	if err != nil {
+		return "", err
+	}
+	ref, err := refs.ParseSeries(seriesRefStr)
+	if err != nil {
+		return "", err
+	}
+	return paths.SeriesDir(b.libRoot, ref), nil
+}
+
 // lookupActiveFile fetches kura_show for one episode and returns the
 // active.file (a `series:<rel>` selector). Errors when the episode
 // has no active record. Used by kura_stage_inplace_source to locate
@@ -723,6 +936,22 @@ func lookupActiveFile(ctx context.Context, b *e2eBinary, ref, episode string) (s
 		}
 	}
 	return "", fmt.Errorf("episode %q has no active record in show response", episode)
+}
+
+func activeFilePath(ctx context.Context, b *e2eBinary, ref, episode string) (string, error) {
+	selector, err := lookupActiveFile(ctx, b, ref, episode)
+	if err != nil {
+		return "", err
+	}
+	const prefix = "series:"
+	if !strings.HasPrefix(selector, prefix) {
+		return "", fmt.Errorf("active selector %q is not series-relative", selector)
+	}
+	seriesRoot, err := seriesRootForFixture(b, ref)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(seriesRoot, filepath.FromSlash(strings.TrimPrefix(selector, prefix))), nil
 }
 
 // staticOutput wraps a fixed stdout in a script.WaitFunc, compacting
@@ -776,4 +1005,3 @@ func firstTrashID(jsonOut string) string {
 	}
 	return resp.Series[0].Entries[0].ID
 }
-
