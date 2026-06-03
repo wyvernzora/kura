@@ -14,7 +14,7 @@
 #
 # Set KURA_WEB_DISABLED=1 to skip Vite + Storybook startup for
 # backend-only iteration sessions.
-FROM golang:1.26.3-alpine
+FROM golang:1.26.4-alpine
 
 # nodejs/npm host mcp-inspector + the web tooling (Vite + Storybook).
 # Alpine's nodejs package strips the bundled corepack shim, so pnpm is
