@@ -59,7 +59,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
 # + libtinyxml2 + locale data) automatically, and a real shell + busybox
 # coreutils survive in the image so operators can `kubectl exec` and
 # inspect filesystem state when something breaks.
-FROM alpine:3.23
+FROM alpine:3.24
 
 # UID / GID baked into the image. Override per build to match the
 # UID/GID your NFS export expects:
