@@ -161,6 +161,7 @@ Index of the engineer-facing docs lives in
 - [Deployment](docs/deployment.md) — Docker, Kubernetes,
   single-writer.
 - [Storage](docs/storage.md) — on-disk file formats.
+- [Changelog](CHANGELOG.md) — release notes.
 
 ## Contributing
 
