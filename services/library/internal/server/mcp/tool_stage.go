@@ -23,7 +23,7 @@ type stageEpisodeInputItem struct {
 	Episode    string   `json:"episode" jsonschema:"Episode marker (S01E03) or storage form (S01E0003)."`
 	Media      string   `json:"media" jsonschema:"File to stage. Accepts inbox: or series: selectors. Series: selectors must be unclaimed, except for an in-place metadata override of this episode's active file."`
 	Source     string   `json:"source,omitempty" jsonschema:"Override for the source label (BluRay, WebRip, Web-DL, HDTV, DVDRip, TVRip, Unknown)."`
-	Companions []string `json:"companions,omitempty" jsonschema:"Sidecar selectors using the same scheme as media. Each companion is subject to the same claimed-path rules as media."`
+	Companions []string `json:"companions,omitempty" jsonschema:"Inbox sidecar selectors. Current MCP parsing accepts companions only for inbox media."`
 	Replace    bool     `json:"replace,omitempty" jsonschema:"Allow staging over an existing active or staged record at this slot."`
 }
 

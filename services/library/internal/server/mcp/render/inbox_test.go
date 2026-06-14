@@ -44,8 +44,11 @@ func TestInboxList_SymlinkTargetSurfacedWithArrow(t *testing.T) {
 	if !strings.Contains(out, "L ") {
 		t.Errorf("missing L kind glyph: %q", out)
 	}
-	if !strings.Contains(out, "link -> /elsewhere") {
-		t.Errorf("missing symlink arrow target: %q", out)
+	if !strings.Contains(out, "L         -  2026-04-22T18:02Z  link\n") {
+		t.Errorf("symlink row should keep selector path clean: %q", out)
+	}
+	if !strings.Contains(out, "# symlink link -> /elsewhere") {
+		t.Errorf("missing symlink target hint: %q", out)
 	}
 	if !strings.Contains(out, "      -") {
 		t.Errorf("symlink should have '-' size column: %q", out)

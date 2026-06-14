@@ -172,6 +172,24 @@ func TestProjectEpisode_StagedReplacementCollapsesToStaged(t *testing.T) {
 	}
 }
 
+func TestProjectShow_StagedReplacementSummaryCollapsesToStaged(t *testing.T) {
+	got := projectShow(response.Show{
+		MetadataRef:    refs.Metadata("tvdb:370070"),
+		PreferredTitle: "Bookworm",
+		Seasons: []response.SeasonShow{{
+			Number: 1,
+			Summary: response.SeasonSummary{
+				EpisodeCount:      2,
+				Staged:            1,
+				StagedReplacement: 1,
+			},
+		}},
+	})
+	if got.Seasons[0].Summary.Staged != 2 {
+		t.Fatalf("Staged = %d, want 2", got.Seasons[0].Summary.Staged)
+	}
+}
+
 func TestTruncateMCPShow_DropsTailOverBudget(t *testing.T) {
 	// Synthesize a large response: 5 seasons × 400 episodes each =
 	// 2000 episodes with verbose titles to force a JSON > 80 KB.

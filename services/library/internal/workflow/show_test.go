@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"cloud.google.com/go/civil"
 	"github.com/oklog/ulid/v2"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -77,12 +78,15 @@ func TestBuildStagedExtras_ReadsPersistedIsDir(t *testing.T) {
 		{ID: id2, Season: 2, Path: "/inbox/bts", IsDir: true},
 		{ID: id1, Season: 1, Path: "/inbox/intro.mp4", IsDir: false},
 	}
-	got := buildStagedExtras(items)
+	got := buildStagedExtras("/inbox", items)
 	if len(got) != 2 {
 		t.Fatalf("len = %d", len(got))
 	}
 	if got[0].ID != id1.String() {
 		t.Errorf("first ID = %s, want %s", got[0].ID, id1)
+	}
+	if got[0].Path != "inbox:intro.mp4" {
+		t.Errorf("Path = %q, want inbox:intro.mp4", got[0].Path)
 	}
 	if got[0].IsDir {
 		t.Errorf("file extra IsDir = true; expected false (persisted value)")
@@ -104,6 +108,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 	r1, v1 := mk(1, 1, response.StatusPresent, "BluRay")
 	r2, v2 := mk(1, 2, response.StatusMissing, "")
 	r3, v3 := mk(2, 1, response.StatusPresent, "WebRip")
+	r4, v4 := mk(3, 1, response.StatusStagedReplacement, "")
 
 	cases := []struct {
 		name   string
@@ -113,7 +118,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 		{
 			name:   "no filter",
 			filter: episodeFilter{},
-			want:   []refs.Episode{r1, r2, r3},
+			want:   []refs.Episode{r1, r2, r3, r4},
 		},
 		{
 			name:   "selector S1",
@@ -129,6 +134,11 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 			name:   "status missing",
 			filter: episodeFilter{statuses: statusSet([]response.Status{response.StatusMissing})},
 			want:   []refs.Episode{r2},
+		},
+		{
+			name:   "status staged includes staged replacement",
+			filter: episodeFilter{statuses: statusSet([]response.Status{response.StatusStaged})},
+			want:   []refs.Episode{r4},
 		},
 		{
 			name:   "source BluRay drops episodes without active",
@@ -150,7 +160,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 			for _, pair := range []struct {
 				ref  refs.Episode
 				view response.EpisodeShow
-			}{{r1, v1}, {r2, v2}, {r3, v3}} {
+			}{{r1, v1}, {r2, v2}, {r3, v3}, {r4, v4}} {
 				if tc.filter.match(pair.ref, pair.view) {
 					got = append(got, pair.ref)
 				}
@@ -167,12 +177,26 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 	}
 }
 
+func TestComputeEpisodeStatus_NoAirDateIsPending(t *testing.T) {
+	now := time.Date(2026, 6, 14, 0, 0, 0, 0, time.UTC)
+	got := computeEpisodeStatus(domainseries.Episode{}, now)
+	if got != response.StatusPending {
+		t.Fatalf("status = %s, want %s", got, response.StatusPending)
+	}
+
+	past := civil.DateOf(now).AddDays(-1)
+	got = computeEpisodeStatus(domainseries.Episode{AirDate: past}, now)
+	if got != response.StatusMissing {
+		t.Fatalf("past status = %s, want %s", got, response.StatusMissing)
+	}
+}
+
 func TestBuildStagedExtras_MissingSourceLeavesIsDirFalse(t *testing.T) {
 	id := ulid.MustParse("01H0000000000000000000AAAA")
 	items := []domainseries.StagedExtraItem{
-		{ID: id, Season: 1, Path: "/nonexistent/path"},
+		{ID: id, Season: 1, Path: "/inbox/nonexistent/path"},
 	}
-	got := buildStagedExtras(items)
+	got := buildStagedExtras("/inbox", items)
 	if len(got) != 1 {
 		t.Fatalf("len = %d", len(got))
 	}

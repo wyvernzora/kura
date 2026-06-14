@@ -11,15 +11,16 @@ Each episode carries `preferredTitle` (in the operator's first preferred languag
 - `status`: subset of episode statuses to include.
 - `source` / `resolution`: subsets of active media source / resolution to include. Episodes without active media drop when these are non-empty.
 
-**Auto-truncate**: for very long series (1000+ episodes) the response can exceed Claude Code's tool-result token budget. The server drops episode bodies from the spine tail, preserves per-season summaries, and surfaces the dropped slots as selector strings in `truncatedRanges` (e.g. `["S03E15-26", "S04"]`). When `truncated: true`, retry with one of those entries as `episodes` to fetch its detail. `summary` blocks reflect the filtered view so dropped seasons still show their counts.
+**Auto-truncate**: for very long series (1000+ episodes) the response can exceed client tool-result token budgets. The server drops episode bodies from the spine tail, preserves per-season summaries, and surfaces the dropped slots as selector strings in `truncatedRanges` (e.g. `["S03E15-26", "S04"]`). When `truncated: true`, retry with one of those entries as `episodes` to fetch its detail. `summary` blocks reflect the filtered view so dropped seasons still show their counts.
 
 <!-- schema-note
 Parameter schema is defined in tool_show.go (jsonschema tags on showInput struct).
 That Go definition is authoritative. If this section conflicts with the Go file, the Go file wins.
 -->
+<!-- schema -->
 ## Parameters
 
-<!-- schema -->
+
 - `ref` (string, required) — metadata ref to inspect (e.g. `tvdb:370070`).
 - `episodes` (string, optional) — episode selector: `S<N>` | `S<N>E<E>` | `S<N>E<A>-<B>`. Specials = `S0`. Empty = whole series.
 - `status` ([]string, optional) — filter to specific episode statuses: `pending`, `missing`, `present`, `staged`, `staged_replacement`. Empty = all statuses.

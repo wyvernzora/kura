@@ -2,17 +2,18 @@ Execute a reconcile plan: move staged files into their canonical locations and a
 
 Apply can take seconds to minutes for large plans (file moves on NFS). It runs as a tracked job.
 
-Plans expire 5 minutes after creation by `kura_reconcile_plan`. An expired token returns `plan_expired`; re-call `kura_reconcile_plan` for a fresh one. A token whose plan was already applied returns `plan_applied` (treat as success-equivalent).
+Plan-read failures surface through `kura_job_status` as terminal `error.kind` values. `plan_applied` means the token was already applied (treat as success-equivalent). `not_found` means the plan token is missing; call `kura_reconcile_plan` again.
 
-If the series state changed between plan and apply, apply returns `stale_snapshot`. Re-call `kura_reconcile_plan` and try again.
+If the series state changed between plan and apply, job status reports `stale_snapshot`. Re-call `kura_reconcile_plan` and try again.
 
 <!-- schema-note
 Parameter schema is defined in tool_reconcile_apply.go (jsonschema tags on reconcileApplyInput struct).
 That Go definition is authoritative. If this section conflicts with the Go file, the Go file wins.
 -->
+<!-- schema -->
 ## Parameters
 
-<!-- schema -->
+
 - `ref` (string, required) — metadata ref (e.g. `tvdb:370070`) from `kura_resolve`.
 - `token` (string, required) — plan token from `kura_reconcile_plan` (12-char hex).
 <!-- /schema -->

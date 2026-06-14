@@ -18,7 +18,7 @@ import (
 )
 
 type jobStatusInput struct {
-	JobID string `json:"jobId" jsonschema:"Job ID returned by kura_scan or kura_reconcile_apply (26-char Crockford base32 ULID)."`
+	JobID string `json:"jobId" jsonschema:"Job ID returned by kura_scan, kura_stage, or kura_reconcile_apply (26-char Crockford base32 ULID)."`
 }
 
 type mcpJobStatus struct {

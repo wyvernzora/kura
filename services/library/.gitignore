@@ -40,6 +40,7 @@ docs/LOCAL.md
 scratch
 .claude
 .codex
+.checkpoint
 
 # Editor and OS files
 .DS_Store

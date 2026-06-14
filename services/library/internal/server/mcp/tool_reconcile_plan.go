@@ -35,13 +35,14 @@ type mcpReconcilePlan struct {
 // for standalone trash (no mediainfo probe at stage time); Size and
 // MTime come from the file stat.
 type mcpReconcileTrash struct {
-	ID         string `json:"id"`
-	From       string `json:"from"`
-	Source     string `json:"source,omitempty"`
-	Resolution string `json:"resolution,omitempty"`
-	Codec      string `json:"codec,omitempty"`
-	Size       int64  `json:"size,omitempty"`
-	MTime      string `json:"mtime,omitempty"`
+	ID         string   `json:"id"`
+	From       string   `json:"from"`
+	Companions []string `json:"companions,omitempty"`
+	Source     string   `json:"source,omitempty"`
+	Resolution string   `json:"resolution,omitempty"`
+	Codec      string   `json:"codec,omitempty"`
+	Size       int64    `json:"size,omitempty"`
+	MTime      string   `json:"mtime,omitempty"`
 }
 
 type mcpReconcileExtra struct {
@@ -176,9 +177,14 @@ func projectReconcilePlan(in response.ReconcilePlan, seriesRoot string) mcpRecon
 	if len(in.Plan.TrashItems) > 0 {
 		out.TrashItems = make([]mcpReconcileTrash, 0, len(in.Plan.TrashItems))
 		for _, item := range in.Plan.TrashItems {
+			companions := make([]string, 0, len(item.Companions))
+			for _, companion := range item.Companions {
+				companions = append(companions, relativizeUnderRoot(companion.From, seriesRoot))
+			}
 			out.TrashItems = append(out.TrashItems, mcpReconcileTrash{
 				ID:         item.ID,
 				From:       relativizeUnderRoot(item.From, seriesRoot),
+				Companions: companions,
 				Source:     item.Source,
 				Resolution: item.Resolution,
 				Codec:      item.Codec,

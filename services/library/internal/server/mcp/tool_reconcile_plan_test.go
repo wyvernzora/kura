@@ -202,6 +202,9 @@ func TestProjectReconcilePlan_TrashItemsSurfaceAsRemovals(t *testing.T) {
 	if tr.ID != "01H0000000000000000000AAAA" || tr.From != "Season 1/loser.mkv" {
 		t.Fatalf("TrashItems[0] = %+v", tr)
 	}
+	if len(tr.Companions) != 1 || tr.Companions[0] != "Season 1/loser.en.srt" {
+		t.Fatalf("TrashItems[0].Companions = %v, want [Season 1/loser.en.srt]", tr.Companions)
+	}
 	// No bucket leak anywhere in the marshalled response.
 	raw, err := json.Marshal(out)
 	if err != nil {

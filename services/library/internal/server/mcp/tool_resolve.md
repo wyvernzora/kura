@@ -13,9 +13,10 @@ Use `genres` + `originalLanguage` + `originalCountry` to distinguish among candi
 Parameter schema is defined in tool_resolve.go (jsonschema tags on resolveInput struct).
 That Go definition is authoritative. If this section conflicts with the Go file, the Go file wins.
 -->
+<!-- schema -->
 ## Parameters
 
-<!-- schema -->
+
 - `terms` ([]string, required) — selector terms. Each is either a free-text title fragment matched against series titles in any source language (e.g. `bookworm`, `honzuki`) or one explicit metadata ref (e.g. `tvdb:370070`). Must not be empty.
 <!-- /schema -->
 
