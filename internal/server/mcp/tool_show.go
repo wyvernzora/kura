@@ -17,7 +17,7 @@ import (
 )
 
 type showInput struct {
-	Ref        string   `json:"ref" jsonschema:"Metadata ref to inspect (e.g. \"tvdb:370070\"). Get one from kura_resolve."`
+	Ref        string   `json:"ref" jsonschema:"Metadata ref to inspect, e.g. \"tvdb:370070\"."`
 	Episodes   string   `json:"episodes,omitempty" jsonschema:"Optional episode selector: S<N> | S<N>E<E> | S<N>E<A>-<B>. Specials = S0. Empty = whole series."`
 	Status     []string `json:"status,omitempty" jsonschema:"Optional set of episode statuses to include (pending, missing, present, staged, staged_replacement). Empty = all statuses."`
 	Source     []string `json:"source,omitempty" jsonschema:"Optional set of active-media sources to include (BluRay, WebRip, etc.). Empty = all sources."`
@@ -31,7 +31,7 @@ var toolShowDoc string
 // emits. Fields the agent can't act on (raw series ref) are dropped.
 // All path fields inherit the response contract: scheme-tagged
 // selectors (`series:<rel>` / `inbox:<rel>` / `library:<rel>`) the
-// agent can pass straight back to kura_stage / kura_trash.
+// agent can pass straight back to compatible Kura tools.
 type mcpShow struct {
 	MetadataRef     string           `json:"metadataRef"`
 	PreferredTitle  string           `json:"preferredTitle"`

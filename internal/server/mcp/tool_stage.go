@@ -13,7 +13,7 @@ import (
 )
 
 type stageInput struct {
-	Ref      string                  `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Ref      string                  `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
 	Episodes []stageEpisodeInputItem `json:"episodes,omitempty" jsonschema:"Episode stages. One per spine slot. At least one of episodes/trash/extras is required."`
 	Trash    []stageTrashInputItem   `json:"trash,omitempty" jsonschema:"Files queued for trash on the next reconcile_apply."`
 	Extras   []stageExtraInputItem   `json:"extras,omitempty" jsonschema:"Files or directories queued for placement under Season N/Extra/[prefix]/ on next reconcile_apply."`
@@ -21,9 +21,9 @@ type stageInput struct {
 
 type stageEpisodeInputItem struct {
 	Episode    string   `json:"episode" jsonschema:"Episode marker (S01E03) or storage form (S01E0003)."`
-	Media      string   `json:"media" jsonschema:"Path selector for the file to stage. Two schemes: 'inbox:<rel>' (file under the inbox root; discover via kura_inbox_list) or 'series:<rel>' (file already inside the request's series root). Series: stages reject any path that's currently an active or staged record (or any of their companions) elsewhere in the series — reset the existing entry first or pick a different file. Exception: when the series: path equals THIS episode's own active record path, the stage runs as an in-place metadata override (replace=true required, companions must be omitted, existing companions are preserved). All other rules (replace=true when the target slot already has an active record) apply identically to inbox: stages."`
+	Media      string   `json:"media" jsonschema:"File to stage. Accepts inbox: or series: selectors. Series: selectors must be unclaimed, except for an in-place metadata override of this episode's active file."`
 	Source     string   `json:"source,omitempty" jsonschema:"Override for the source label (BluRay, WebRip, Web-DL, HDTV, DVDRip, TVRip, Unknown)."`
-	Companions []string `json:"companions,omitempty" jsonschema:"Sidecar selectors (subtitles, art). Must use the same scheme as media (inbox: with inbox: media; series: with series: media). Each companion is subject to the same claimed-path rules as media: it must not equal an existing active or staged record path or companion."`
+	Companions []string `json:"companions,omitempty" jsonschema:"Sidecar selectors using the same scheme as media. Each companion is subject to the same claimed-path rules as media."`
 	Replace    bool     `json:"replace,omitempty" jsonschema:"Allow staging over an existing active or staged record at this slot."`
 }
 
@@ -34,7 +34,7 @@ type stageTrashInputItem struct {
 
 type stageExtraInputItem struct {
 	Season int    `json:"season" jsonschema:"Season number under which the extra is placed."`
-	Source string `json:"source" jsonschema:"Inbox selector pointing at a file or directory under the inbox root (e.g. 'inbox:[BDrip] Show/Extras/'). Use kura_inbox_list to discover."`
+	Source string `json:"source" jsonschema:"Inbox selector pointing at a file or directory under the inbox root, e.g. 'inbox:[BDrip] Show/Extras/'."`
 	Prefix string `json:"prefix,omitempty" jsonschema:"Optional sub-folder under Season N/Extra/."`
 }
 

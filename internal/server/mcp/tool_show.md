@@ -1,14 +1,6 @@
-Return the observed state of one tracked series: metadata header, every season, every episode with its `status` and quality info for active/staged media.
+Return the observed state of one tracked series: metadata header, season summaries, episodes, and quality info for active/staged media.
 
-Episode `status`:
-- `pending`: air date in the future, no media recorded.
-- `missing`: aired, no media recorded.
-- `present`: active media is recorded for this episode.
-- `staged`: staged media awaiting reconcile. If `active` is also present, reconcile will replace it.
-
-Status reflects persisted state from the most recent `kura_scan`. If a tracked file went missing on disk after the last scan, status still reads `present` until the next scan prunes it. Run `kura_scan` to refresh.
-
-All path fields in this response are scheme-tagged selectors: `series:<rel>` for files inside the series root (e.g. `series:Season 1/Show S01E01.mkv`), `inbox:<rel>` for inbox-staged files. Pass them straight back to `kura_stage` (with `replace=true` to override metadata in place) or `kura_trash` — no scheme reconstruction needed. Applies to `active.file`/`active.companions`, `staged.file`/`staged.companions`, and the staged trash/extras paths.
+All path fields in this response are scheme-tagged selectors that can be passed back to compatible Kura tools without reconstruction. Applies to `active.file`/`active.companions`, `staged.file`/`staged.companions`, and the staged trash/extras paths.
 
 `stagedTrash` lists files queued for removal at next `kura_reconcile_apply`; `stagedExtras` lists extras queued for placement.
 
@@ -28,7 +20,7 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 ## Parameters
 
 <!-- schema -->
-- `ref` (string, required) — metadata ref to inspect (e.g. `tvdb:370070`). Get one from `kura_resolve`.
+- `ref` (string, required) — metadata ref to inspect (e.g. `tvdb:370070`).
 - `episodes` (string, optional) — episode selector: `S<N>` | `S<N>E<E>` | `S<N>E<A>-<B>`. Specials = `S0`. Empty = whole series.
 - `status` ([]string, optional) — filter to specific episode statuses: `pending`, `missing`, `present`, `staged`, `staged_replacement`. Empty = all statuses.
 - `source` ([]string, optional) — filter to specific active-media sources (e.g. `BluRay`, `WebRip`). Empty = all sources.

@@ -14,7 +14,7 @@ import (
 )
 
 type importInput struct {
-	Ref      string `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Ref      string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
 	Dirname  string `json:"dirname" jsonschema:"Existing directory basename under the library root to adopt."`
 	Ordering string `json:"ordering,omitempty" jsonschema:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`
 }

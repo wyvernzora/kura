@@ -18,7 +18,7 @@ import (
 )
 
 type reconcilePlanInput struct {
-	Ref string `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Ref string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
 }
 
 type mcpReconcilePlan struct {

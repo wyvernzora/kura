@@ -1,11 +1,4 @@
-List series under the library root with summary state per row (status, episode counts, last scan time).
-
-Status meanings:
-- `complete`: every aired episode has present media.
-- `incomplete`: at least one aired episode is missing.
-- `airing`: every aired episode is present, more episodes upcoming.
-- `error`: row could not be computed; `error` field carries the message.
-- `untracked`: directory exists under the library root but has no `.kura/series.json` (kura does not manage it).
+List series under the library root with summary state per row: status, airing flag, staged flag, episode counts, quality rollups, artwork, and last scan time.
 
 The `staged` flag is independent of status — true if any episode has staged media awaiting reconcile.
 
@@ -18,7 +11,8 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 ## Parameters
 
 <!-- schema -->
-- `statuses` ([]string, optional) — filter by status. Allowed values: `complete`, `incomplete`, `airing`, `error`, `untracked`. Empty or omitted returns all five.
+- `statuses` ([]string, optional) — filter by status. Allowed values: `complete`, `incomplete`, `error`, `untracked`. Empty or omitted returns all four.
+- `airing` (bool, optional) — when true, return only currently-airing series; when false, return only non-airing series. Omit for no airing filter.
 - `maxResults` (int, optional) — maximum rows per response. `0` or omitted uses the server default (100). Values above 1000 are clamped.
 - `cursor` (string, optional) — opaque pagination token from a previous response's `nextCursor`. Omit for the first page.
 <!-- /schema -->

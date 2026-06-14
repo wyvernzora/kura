@@ -18,7 +18,7 @@ import (
 )
 
 type reconcileApplyInput struct {
-	Ref   string `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Ref   string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
 	Token string `json:"token" jsonschema:"Plan token from kura_reconcile_plan (12-char hex)."`
 }
 

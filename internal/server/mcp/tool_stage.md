@@ -1,10 +1,10 @@
 Queue a batch of staging changes against one series. Records intent only — files stay in place until `kura_reconcile_apply` runs and moves them into the canonical layout.
 
-Returns a `jobId` immediately; poll `kura_job_status` for terminal state. Multi-item batches with many large files (mediainfo probe per episode item, recursive moves for extras) can take seconds to minutes.
+Returns a `jobId`. Multi-item batches with many large files (mediainfo probe per episode item, recursive moves for extras) can take seconds to minutes.
 
 Three input arrays cover the three kinds of placement:
 
-- `episodes[]` — stage media for a spine slot. Each item carries an episode marker, a media path (inbox selector), optional source override, optional companions, and an optional `replace` flag for displacing an existing active or staged record.
+- `episodes[]` — stage media for a spine slot. Each item carries an episode marker, a media path selector, optional source override, optional companions, and an optional `replace` flag for displacing an existing active or staged record.
 - `trash[]` — queue a file (and explicit companions) for trash on the next reconcile. Path must be inside the series root and must not be the active or staged record (or companion of one) for any episode.
 - `extras[]` — queue a file or directory tree for placement under `Season N/Extra/[prefix]/<basename>`. Source path can live anywhere on disk. Refuses if the destination already exists.
 
@@ -22,16 +22,16 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 - `ref` (string, required) — metadata ref (e.g. `tvdb:370070`) from `kura_resolve`.
 - `episodes` ([]object, optional) — episode stages. One per spine slot. At least one of `episodes`/`trash`/`extras` is required.
   - `episode` (string, required) — episode marker (`S01E03`) or storage form (`S01E0003`).
-  - `media` (string, required) — inbox selector (e.g. `inbox:[BDrip] Show/E03.mkv`). Use `kura_inbox_list` to discover valid values.
+  - `media` (string, required) — `inbox:` or `series:` selector for the file to stage.
   - `source` (string, optional) — override for the source label (`BluRay`, `WebRip`, `Web-DL`, `HDTV`, `DVDRip`, `TVRip`, `Unknown`).
-  - `companions` ([]string, optional) — sidecar inbox selectors (subtitles, art) — same shape as `media`.
+  - `companions` ([]string, optional) — sidecar selectors (subtitles, art) matching the media scheme.
   - `replace` (bool, optional) — allow staging over an existing active or staged record at this slot.
 - `trash` ([]object, optional) — files queued for trash on next `reconcile_apply`.
   - `path` (string, required) — series selector for the file to queue (e.g. `series:Season 1/foo.mkv`). Scoped to the series in the request's `ref`.
   - `companions` ([]string, optional) — sidecar `series:` selectors to drag along into trash.
 - `extras` ([]object, optional) — files or directories queued for placement under `Season N/Extra/[prefix]/` on next `reconcile_apply`.
   - `season` (int, required) — season number under which the extra is placed.
-  - `source` (string, required) — inbox selector pointing at a file or directory under the inbox root. Use `kura_inbox_list` to discover.
+  - `source` (string, required) — inbox selector pointing at a file or directory under the inbox root.
   - `prefix` (string, optional) — optional sub-folder under `Season N/Extra/`.
 <!-- /schema -->
 
@@ -60,16 +60,6 @@ Selector relative paths are forward-slash, NFC-normalized, no leading `/`, no `.
 - **In-place metadata override.** When the series: path equals THIS episode's own active record path, the stage becomes a metadata-only update — companions are preserved verbatim from the active record; user-supplied companions are forbidden; `replace=true` is required. Reconcile_apply renames the file to its new canonical name and promotes the staged record over the active without trashing anything. Use case: rescue a record whose source/resolution was misidentified by the filename parser (`Unknown` source) by re-staging with an explicit `source` override.
 
 Claimed-path rule for series: stages: media (and each companion) must not be currently tracked as an active or staged record path or companion anywhere in the series. The in-place override is the sole exception, and only for the matching episode's own active record. Reset the conflicting entry (`kura_reset`) or pick a different file.
-
-## Source detection
-
-Always set `source` on episode items, best effort. Parse the filename for tokens (`BluRay`, `BDRip`, `WebRip`, `Web-DL`, `HDTV`, `TVRip`, `DVDRip`). If the filename is silent, look at sibling files in the same release for a hint. If sources genuinely can't be inferred, omit it — Kura will record `Unknown`. Don't guess wildly; a wrong source is harder to spot than `Unknown`.
-
-## Companion discovery
-
-Always discover episode companions. Look in the same directory as the `media` selector (use `kura_inbox_list` with `path=<release-dir>`) for sidecar files matching the media basename — subtitles (`.ass`, `.srt`, `.vtt`, `.ssa`), chapters (`.txt`), cover art (`.jpg`, `.png`), thumbnails, NFO files. Pass them all in `companions` as `inbox:` selectors. Missing companions on stage means they get orphaned when the media moves.
-
-Trash companions are not auto-discovered — pass the sidecar list explicitly. Trash companions are `series:` selectors (sidecar files live alongside the trash target inside the series root).
 
 ## Extras
 

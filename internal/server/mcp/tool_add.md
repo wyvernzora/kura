@@ -1,4 +1,4 @@
-Register a new series in the library at the given metadata ref. Creates a directory under the library root for the series so subsequent tools (`kura_show`, `kura_stage`, `kura_scan`, etc.) can act on it.
+Register a new series in the library at the given metadata ref. Creates a directory under the library root and writes the initial episode spine.
 
 Refuses if the ref is already tracked or the target directory already exists.
 
