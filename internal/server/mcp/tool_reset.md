@@ -8,9 +8,10 @@ Active media records are not affected — use `kura_stage` with `replace=true` f
 Parameter schema is defined in tool_reset.go (jsonschema tags on resetInput struct).
 That Go definition is authoritative. If this section conflicts with the Go file, the Go file wins.
 -->
+<!-- schema -->
 ## Parameters
 
-<!-- schema -->
+
 - `ref` (string, required) — metadata ref (e.g. `tvdb:370070`) from `kura_resolve`.
 - `episode` (string, optional) — episode marker (`S01E03`) or storage form (`S01E0003`). Drops the staged record for this slot.
 - `trash` ([]string, optional) — ULIDs of `stagedTrash` entries to drop.

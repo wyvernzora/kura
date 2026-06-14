@@ -8,9 +8,10 @@ Pagination: pass `maxResults` (default 100, max 1000) to cap the page size. The 
 Parameter schema is defined in tool_list.go (jsonschema tags on listInput struct).
 That Go definition is authoritative. If this section conflicts with the Go file, the Go file wins.
 -->
+<!-- schema -->
 ## Parameters
 
-<!-- schema -->
+
 - `statuses` ([]string, optional) — filter by status. Allowed values: `complete`, `incomplete`, `error`, `untracked`. Empty or omitted returns all four.
 - `airing` (bool, optional) — when true, return only currently-airing series; when false, return only non-airing series. Omit for no airing filter.
 - `maxResults` (int, optional) — maximum rows per response. `0` or omitted uses the server default (100). Values above 1000 are clamped.

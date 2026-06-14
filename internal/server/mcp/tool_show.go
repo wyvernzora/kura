@@ -81,12 +81,11 @@ type mcpSeason struct {
 }
 
 type mcpSeasonSummary struct {
-	EpisodeCount      int `json:"episodeCount"`
-	Present           int `json:"present"`
-	Missing           int `json:"missing"`
-	Staged            int `json:"staged"`
-	StagedReplacement int `json:"stagedReplacement"`
-	Pending           int `json:"pending"`
+	EpisodeCount int `json:"episodeCount"`
+	Present      int `json:"present"`
+	Missing      int `json:"missing"`
+	Staged       int `json:"staged"`
+	Pending      int `json:"pending"`
 }
 
 type mcpEpisode struct {
@@ -353,12 +352,11 @@ func projectShow(in response.Show) mcpShow {
 		out.Seasons = append(out.Seasons, mcpSeason{
 			Number: season.Number,
 			Summary: mcpSeasonSummary{
-				EpisodeCount:      season.Summary.EpisodeCount,
-				Present:           season.Summary.Present,
-				Missing:           season.Summary.Missing,
-				Staged:            season.Summary.Staged,
-				StagedReplacement: season.Summary.StagedReplacement,
-				Pending:           season.Summary.Pending,
+				EpisodeCount: season.Summary.EpisodeCount,
+				Present:      season.Summary.Present,
+				Missing:      season.Summary.Missing,
+				Staged:       season.Summary.Staged + season.Summary.StagedReplacement,
+				Pending:      season.Summary.Pending,
 			},
 			Episodes: eps,
 		})

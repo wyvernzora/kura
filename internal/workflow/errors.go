@@ -25,6 +25,17 @@ func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("workflow: series %q not found", e.Ref)
 }
 
+// ReconcilePlanNotFoundError signals a reconcile apply token does not
+// identify a saved plan for the requested series.
+type ReconcilePlanNotFoundError struct {
+	Ref   refs.Series
+	Token string
+}
+
+func (e *ReconcilePlanNotFoundError) Error() string {
+	return fmt.Sprintf("workflow: reconcile plan %s for series %q not found", e.Token, e.Ref)
+}
+
 // MetadataRefNotIndexedError signals the requested metadata ref has no
 // matching series under the library root.
 type MetadataRefNotIndexedError struct {

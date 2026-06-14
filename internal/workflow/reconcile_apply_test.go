@@ -9,6 +9,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/selector"
+	"github.com/wyvernzora/kura/internal/errkind"
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
@@ -37,6 +38,21 @@ func TestApplyReconcile_AlwaysReturnsTrackedJob(t *testing.T) {
 	// Don't Wait — closure will fail looking up the bogus token, but
 	// that's a goroutine concern. Invariant is about Submit being
 	// called regardless of input validity.
+}
+
+func TestApplyReconcile_MissingPlanReturnsCodedNotFound(t *testing.T) {
+	deps, ref := seedSeries(t)
+	deps.Jobs = jobs.NewRegistry(context.Background(), jobs.Config{}, nil)
+	t.Cleanup(func() { deps.Jobs.Shutdown(0) })
+
+	j := workflow.ApplyReconcile(context.Background(), deps, workflow.ApplyReconcileInput{Ref: ref, Token: "deadbeefdead"})
+	if _, err := j.Wait(context.Background()); err == nil {
+		t.Fatal("Wait err = nil, want missing plan error")
+	} else if coded, ok := err.(errkind.Coded); !ok {
+		t.Fatalf("err = %T %[1]v, want coded error", err)
+	} else if coded.Kind() != errkind.KindNotFound {
+		t.Fatalf("kind = %s, want %s", coded.Kind(), errkind.KindNotFound)
+	}
 }
 
 // End-to-end test: Stage episode + trash + extra, plan, apply. Verify

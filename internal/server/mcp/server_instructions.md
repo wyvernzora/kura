@@ -8,7 +8,7 @@ These rules are correctness requirements. Violating them can make you act on the
 - Never invent, normalize, romanize, translate, trim, lowercase, uppercase, re-encode, or otherwise rewrite metadata refs, selector strings, series names, episode titles, or inbox paths. Copy strings returned by Kura tools verbatim.
 - Never reconstruct `inbox:`, `series:`, or `library:` selectors from displayed path fragments. Use selector strings exactly as returned by Kura.
 - Never assume `kura_show` proves files still exist. It reports Kura's recorded state; use `kura_scan` when current file presence matters.
-- Never treat a submitted async job as successful until `kura_job_status` reports a terminal `succeeded` state.
+- Never treat a submitted async job as successful until `kura_job_status` reports a terminal `succeeded` state. Exception: a retried reconcile-apply job that fails with `error.kind: "plan_applied"` means the plan was already applied.
 
 ## Core model
 
@@ -16,15 +16,15 @@ These rules are correctness requirements. Violating them can make you act on the
 - The current metadata provider is TVDB. The provider supplies series identity, titles, artwork, episode slots, and air dates.
 - Each series has an episode spine: the set of known episode slots. Local media records attach to spine slots.
 - A series can also be untracked: Kura can see it in the library, but it has not been adopted into Kura metadata yet.
-- `kura_show` reads persisted Kura metadata. It does not verify files are still present. Run `kura_scan` when disk state may have changed.
 
 Episode status values:
 
-- `pending`: the episode has not aired and no media is recorded.
+- `pending`: the episode has not aired, or has no known air date, and no media is recorded.
 - `missing`: the episode has aired and no media is recorded.
 - `present`: active media is recorded.
 - `staged`: media is queued to become active.
-- `staged_replacement`: staged media is queued to replace active media.
+
+In MCP output, a staged replacement is reported as `staged` with both `active` and `staged` media blocks present. `kura_show.status` also accepts `staged_replacement` when you need to isolate replacements.
 
 Library-list row status values:
 
@@ -37,13 +37,12 @@ Library-list row status values:
 
 ## Selectors and paths
 
-- Use `kura_resolve` when you only have a title or release name. Resolve returns metadata candidates; after choosing one, call other tools with the chosen metadata ref.
-- Tools that take `ref` expect exactly one metadata ref. Do not invent refs.
-- Kura tools do not use caller-local absolute paths. Path fields are scheme-tagged selectors:
+- Kura tools do not use caller-local absolute paths. Media path fields generally use scheme-tagged selectors:
   - `inbox:<rel>` identifies media visible through Kura's inbox.
   - `series:<rel>` identifies media inside the selected series.
   - `library:<rel>` identifies a library-scoped item.
-- Copy selector strings from tool output exactly, especially for non-ASCII paths.
+- Tool-specific fields such as `kura_inbox_list.path` and add/import `dirname` use their documented relative or basename forms.
+- `kura_reconcile_plan` preview paths are descriptive output, not selectors to pass back into tools.
 
 ## Lifecycle
 
@@ -55,11 +54,9 @@ Library-list row status values:
 - `kura_reconcile_plan` computes and persists the moves needed to apply current staged intent. A non-empty plan returns a token; an empty plan returns no token.
 - `kura_reconcile_apply` applies a saved plan: staged episode media moves into canonical locations, replaced active media moves into Kura trash, queued trash files move into Kura trash, and queued extras are placed as extras.
 
-Long-running workflows return a `jobId`. Poll `kura_job_status` until the job reaches `succeeded`, `failed`, or `cancelled`. Current async MCP tools are `kura_scan`, `kura_stage`, and `kura_reconcile_apply`.
-
 ## Safety boundaries
 
 - Read tools do not mutate library state.
 - Staging and reset mutate Kura metadata only; they do not move media files.
 - Reconcile apply moves files but displaces active media into recoverable Kura trash rather than permanently deleting it.
-- Permanent deletion and operator repair workflows are outside the MCP tool surface. If a task requires trash empty, trash restore, purge remove, or stale reconcile recovery, surface that to the user.
+- Permanent deletion and operator repair workflows are outside the MCP tool surface. If a task requires trash restore/empty, permanent series removal/untracking, or stale reconcile recovery, surface that to the user.

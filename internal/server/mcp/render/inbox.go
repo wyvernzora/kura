@@ -12,9 +12,11 @@ import (
 //
 //	F   1.15GB  2026-05-01T03:14Z  [BDrip] Hoshi.../E01.mkv
 //	D        -  2026-05-01T03:14Z  [BDrip] Hoshi.../Subs/
-//	L        -  2026-04-22T18:02Z  link -> /elsewhere
+//	L        -  2026-04-22T18:02Z  link
+//	# symlink link -> /elsewhere
 //
-// Trailing slash on directory paths. ` -> target` suffix on symlinks.
+// Trailing slash on directory paths. Symlink targets are emitted as hint
+// lines so the data row's path column remains a copyable selector.
 // Hint lines (when truncated) follow as ' #'-prefixed lines so callers
 // can distinguish data from advice.
 func InboxList(r response.InboxList) string {
@@ -41,10 +43,10 @@ func InboxList(r response.InboxList) string {
 		if e.Kind == "dir" && !strings.HasSuffix(path, "/") {
 			path += "/"
 		}
-		if e.Kind == "symlink" && e.SymlinkTarget != "" {
-			path = path + " -> " + e.SymlinkTarget
-		}
 		fmt.Fprintf(&b, "%s   %7s  %s  %s\n", kind, size, mtime, path)
+		if e.Kind == "symlink" && e.SymlinkTarget != "" {
+			fmt.Fprintf(&b, "# symlink %s -> %s\n", e.Path, e.SymlinkTarget)
+		}
 	}
 
 	if r.Truncated {

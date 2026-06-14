@@ -103,7 +103,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		IsAiring:       row.IsAiring,
 		Seasons:        buildSeasons(seriesRoot, model, now, filter),
 		StagedTrash:    buildStagedTrash(seriesRoot, model.StagedTrash),
-		StagedExtras:   buildStagedExtras(model.StagedExtras),
+		StagedExtras:   buildStagedExtras(deps.InboxRoot, model.StagedExtras),
 	}
 	if !model.Artwork.IsZero() {
 		artwork := &response.ArtworkShow{}
@@ -151,7 +151,7 @@ func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) [
 	return out
 }
 
-func buildStagedExtras(items []domainseries.StagedExtraItem) []response.ExtraItemShow {
+func buildStagedExtras(inboxRoot string, items []domainseries.StagedExtraItem) []response.ExtraItemShow {
 	if len(items) == 0 {
 		return nil
 	}
@@ -163,7 +163,7 @@ func buildStagedExtras(items []domainseries.StagedExtraItem) []response.ExtraIte
 		out = append(out, response.ExtraItemShow{
 			ID:      item.ID.String(),
 			Season:  item.Season,
-			Path:    item.Path,
+			Path:    inboxSelector(inboxRoot, item.Path),
 			Prefix:  item.Prefix,
 			IsDir:   item.IsDir,
 			AddedAt: formatOptionalTime(item.AddedAt),
@@ -187,7 +187,7 @@ func (f episodeFilter) match(ref refs.Episode, view response.EpisodeShow) bool {
 		return false
 	}
 	if len(f.statuses) > 0 {
-		if _, ok := f.statuses[view.Status]; !ok {
+		if _, ok := f.statuses[view.Status]; !ok && !matchesCollapsedStatus(f.statuses, view.Status) {
 			return false
 		}
 	}
@@ -208,6 +208,14 @@ func (f episodeFilter) match(ref refs.Episode, view response.EpisodeShow) bool {
 		}
 	}
 	return true
+}
+
+func matchesCollapsedStatus(statuses map[response.Status]struct{}, status response.Status) bool {
+	if status != response.StatusStagedReplacement {
+		return false
+	}
+	_, ok := statuses[response.StatusStaged]
+	return ok
 }
 
 func statusSet(in []response.Status) map[response.Status]struct{} {
@@ -357,7 +365,7 @@ func formatOptionalTime(value time.Time) string {
 
 func isPending(aired civil.Date, now time.Time) bool {
 	if !aired.IsValid() {
-		return false
+		return true
 	}
 	return aired.After(civil.DateOf(now))
 }

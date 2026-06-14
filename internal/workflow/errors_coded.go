@@ -18,6 +18,15 @@ func (e *NotFoundError) Data() map[string]any {
 	return map[string]any{"ref": e.Ref.String()}
 }
 
+func (e *ReconcilePlanNotFoundError) Kind() string     { return errkind.KindNotFound }
+func (e *ReconcilePlanNotFoundError) Category() string { return errkind.CategoryInvalidParams }
+func (e *ReconcilePlanNotFoundError) Data() map[string]any {
+	return map[string]any{
+		"ref":   e.Ref.String(),
+		"token": e.Token,
+	}
+}
+
 func (e *MetadataRefNotIndexedError) Kind() string     { return errkind.KindNotFound }
 func (e *MetadataRefNotIndexedError) Category() string { return errkind.CategoryInvalidParams }
 func (e *MetadataRefNotIndexedError) Data() map[string]any {

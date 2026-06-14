@@ -2,6 +2,8 @@ package workflow
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/jobs"
@@ -58,6 +60,9 @@ func ApplyReconcile(ctx context.Context, deps Deps, in ApplyReconcileInput) *job
 	return jobs.Submit(deps.Jobs, ctx, jobs.KindReconcileApply, in.Ref, func(jobCtx context.Context) (reconcile.ApplyResult, error) {
 		plan, applied, err := planfile.ReadPlan(deps.LibRoot, in.Ref, in.Token)
 		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return reconcile.ApplyResult{}, &ReconcilePlanNotFoundError{Ref: in.Ref, Token: in.Token}
+			}
 			return reconcile.ApplyResult{}, err
 		}
 		if applied {

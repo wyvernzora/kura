@@ -9,11 +9,12 @@
 	],
 	"timezone": "America/Los_Angeles",
 	"schedule": ["after 6pm every weekday", "every weekend"],
+	"minimumReleaseAge": "5 days",
+	"internalChecksFilter": "strict",
 	"prConcurrentLimit": 10,
 	"prHourlyLimit": 4,
 	"lockFileMaintenance": {
-		"enabled": true,
-		"schedule": ["before 6am on monday"]
+		"enabled": false
 	},
 	"vulnerabilityAlerts": {
 		"labels": ["security"],
