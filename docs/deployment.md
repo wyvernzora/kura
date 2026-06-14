@@ -45,7 +45,7 @@ Multi-user, OIDC, scopes, and federation remain proxy responsibility
 
 ## Container / Kubernetes setup
 
-The published image is built `FROM alpine:3.23`. `mediainfo`,
+The published image is built `FROM alpine:3.24`. `mediainfo`,
 `ca-certificates`, and `tzdata` are installed via `apk` so apk pulls
 the full dependency closure (libmediainfo, libzen, libcurl,
 libtinyxml2, locale data, etc.). The `kura` binary is statically
