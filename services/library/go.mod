@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
-	golang.org/x/text v0.37.0
+	golang.org/x/text v0.38.0
 )
 
 require (
@@ -21,9 +21,9 @@ require (
 	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31
-	golang.org/x/sync v0.20.0
-	golang.org/x/sys v0.44.0
-	golang.org/x/term v0.43.0
+	golang.org/x/sync v0.21.0
+	golang.org/x/sys v0.46.0
+	golang.org/x/term v0.44.0
 	golang.org/x/tools v0.45.0
 	rsc.io/script v0.0.2
 )
