@@ -4,6 +4,8 @@ A change describes one media-file move: kind (`add` / `replace` / `move`), episo
 
 `trashItems` lists files that will disappear from their original location and move into recoverable Kura trash on apply; the trash destination is intentionally hidden from MCP. `extras` lists extras that will be placed under `Season N/Extra/[prefix]/`.
 
+Preview paths are descriptive, not generic selectors to pass to other tools. In-series paths are relative to the series root. Inbox paths are shown as `inbox:<rel>` selectors. Other external absolute paths are reduced to basenames so MCP output does not leak host paths.
+
 Returns `changes: []` and no token when there is nothing to do.
 
 <!-- schema-note

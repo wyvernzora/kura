@@ -75,9 +75,10 @@ type entry struct {
 	endedAt  time.Time
 	progress *progress.Event
 
-	// resultJSON is populated on terminal-success by the goroutine
-	// that runs the workflow. UntypedJob.Result() reads it for
-	// polling clients.
+	// resultJSON is populated for terminal jobs when the workflow
+	// result can be marshalled. UntypedJob.Result() exposes it only on
+	// success; UntypedJob.TerminalResult() exposes it for transports
+	// that need partial failure detail.
 	resultJSON json.RawMessage
 
 	doneCh chan struct{}
@@ -315,18 +316,20 @@ func runJob[T any](
 		state = StatusFailed
 	}
 
+	encoded, encErr := json.Marshal(result)
 	var resultJSON json.RawMessage
-	if state == StatusSucceeded {
-		encoded, encErr := json.Marshal(result)
-		if encErr != nil {
+	if encErr != nil {
+		if state == StatusSucceeded {
 			// Marshal failure: treat as workflow failure with the
 			// marshal error. Don't lose the goroutine.
 			state = StatusFailed
 			terminalErr = &resultEncodeError{Inner: encErr}
 			r.log.Error("job result marshal failed", "id", j.id, "kind", j.kind, "err", encErr)
 		} else {
-			resultJSON = encoded
+			r.log.Warn("failed job result marshal failed", "id", j.id, "kind", j.kind, "err", encErr)
 		}
+	} else {
+		resultJSON = encoded
 	}
 
 	// Order: typed Job state first, then entry state, then close
@@ -334,9 +337,7 @@ func runJob[T any](
 	// fields. Both mutexes protect their own copies of the fields.
 	j.mu.Lock()
 	j.state = state
-	if state == StatusSucceeded {
-		j.result = result
-	}
+	j.result = result
 	j.err = terminalErr
 	j.endedAt = endedAt
 	j.mu.Unlock()

@@ -14,11 +14,14 @@ import (
 	"github.com/wyvernzora/kura/internal/errkind"
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type jobStatusInput struct {
-	JobID string `json:"jobId" jsonschema:"Job ID returned by kura_scan, kura_stage, or kura_reconcile_apply (26-char Crockford base32 ULID)."`
+	JobID         string `json:"jobId" jsonschema:"Job ID returned by kura_scan, kura_stage, or kura_reconcile_apply (26-char Crockford base32 ULID)."`
+	IncludeResult bool   `json:"includeResult,omitempty" jsonschema:"When true, include terminal success result payload. Defaults to false for compact polling."`
 }
 
 type mcpJobStatus struct {
@@ -42,9 +45,10 @@ type mcpJobProgress struct {
 }
 
 type mcpJobError struct {
-	Kind    string         `json:"kind"`
-	Message string         `json:"message"`
-	Data    map[string]any `json:"data,omitempty"`
+	Kind     string         `json:"kind"`
+	Category string         `json:"category"`
+	Message  string         `json:"message"`
+	Data     map[string]any `json:"data,omitempty"`
 }
 
 //go:embed tool_job_status.md
@@ -72,14 +76,18 @@ func addJobStatusTool(s *sdkmcp.Server, deps Deps) {
 		if err != nil {
 			return toolErrorResult(err), nil, nil
 		}
-		return nil, projectJobStatus(view, deps.Workflow.Index), nil
+		out, err := projectJobStatus(view, deps.Workflow.Index, in.IncludeResult)
+		if err != nil {
+			return toolErrorResult(err), nil, nil
+		}
+		return nil, out, nil
 	})
 }
 
 // projectJobStatus turns the registry's UntypedJob view into the
 // MCP wire shape, swapping the internal SeriesRef for the agent-
 // facing MetadataRef via index reverse-lookup.
-func projectJobStatus(view jobs.UntypedJob, idx *indexfile.Index) mcpJobStatus {
+func projectJobStatus(view jobs.UntypedJob, idx *indexfile.Index, includeResult bool) (mcpJobStatus, error) {
 	out := mcpJobStatus{
 		JobID:       view.ID(),
 		Kind:        view.Kind(),
@@ -99,36 +107,87 @@ func projectJobStatus(view jobs.UntypedJob, idx *indexfile.Index) mcpJobStatus {
 			Total:   ev.Total,
 		}
 	}
-	if raw := view.Result(); len(raw) > 0 {
-		out.Result = raw
+	if includeResult {
+		if raw := view.Result(); len(raw) > 0 {
+			projected, err := workflow.ProjectJobResultJSON(view.Kind(), raw)
+			if err != nil {
+				return mcpJobStatus{}, err
+			}
+			out.Result = projected
+		}
 	}
 	if err := view.Err(); err != nil {
-		out.Error = projectJobError(err)
+		var detail any
+		if raw := view.TerminalResult(); len(raw) > 0 {
+			reconcileResult, ok, resultErr := workflow.ReconcileApplyJobResult(view.Kind(), raw)
+			if resultErr != nil {
+				return mcpJobStatus{}, resultErr
+			}
+			if ok && hasReconcileApplyDetail(reconcileResult) {
+				detail = reconcileResult
+			}
+		}
+		out.Error = projectJobError(err, detail)
 	}
-	return out
+	return out, nil
 }
 
 // projectJobError extracts kind/message/data from a terminal-failure
 // error. Coded errors (errkind.Coded) carry their own taxonomy;
 // shutdown sentinel and untyped errors fall back to "internal".
-func projectJobError(err error) *mcpJobError {
+func projectJobError(err error, result any) *mcpJobError {
 	if jobs.IsShutdownError(err) {
 		return &mcpJobError{
-			Kind:    errkind.KindInternal,
-			Message: err.Error(),
+			Kind:     errkind.KindInternal,
+			Category: errkind.CategoryInternalError,
+			Message:  err.Error(),
+		}
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return &mcpJobError{
+			Kind:     errkind.KindInternal,
+			Category: errkind.CategoryCancelled,
+			Message:  err.Error(),
 		}
 	}
 	if coded, ok := errors.AsType[errkind.Coded](err); ok {
+		data := cloneJobErrorData(coded.Data())
+		if result != nil {
+			data["result"] = result
+		}
 		return &mcpJobError{
-			Kind:    coded.Kind(),
-			Message: err.Error(),
-			Data:    coded.Data(),
+			Kind:     coded.Kind(),
+			Category: coded.Category(),
+			Message:  err.Error(),
+			Data:     data,
 		}
 	}
-	return &mcpJobError{
-		Kind:    errkind.KindInternal,
-		Message: err.Error(),
+	data := map[string]any(nil)
+	if result != nil {
+		data = map[string]any{"result": result}
 	}
+	return &mcpJobError{
+		Kind:     errkind.KindInternal,
+		Category: errkind.CategoryInternalError,
+		Message:  err.Error(),
+		Data:     data,
+	}
+}
+
+func cloneJobErrorData(in map[string]any) map[string]any {
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func hasReconcileApplyDetail(result response.ReconcileApply) bool {
+	return !result.Series.IsZero() ||
+		result.AppliedSteps > 0 ||
+		result.TotalSteps > 0 ||
+		len(result.AppliedStepIDs) > 0 ||
+		result.FailedStep != nil
 }
 
 // lookupMetadataRef returns the metadata ref tracking series via

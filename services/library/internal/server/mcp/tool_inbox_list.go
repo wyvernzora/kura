@@ -7,7 +7,6 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wyvernzora/kura/internal/errkind"
-	"github.com/wyvernzora/kura/internal/server/mcp/render"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -56,9 +55,6 @@ func addInboxListTool(s *sdkmcp.Server, deps Deps) {
 		if err != nil {
 			return toolErrorResult(err), nil, nil
 		}
-		text := render.InboxList(result)
-		return &sdkmcp.CallToolResult{
-			Content: []sdkmcp.Content{&sdkmcp.TextContent{Text: text}},
-		}, nil, nil
+		return &sdkmcp.CallToolResult{StructuredContent: result}, nil, nil
 	})
 }

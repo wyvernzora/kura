@@ -58,9 +58,10 @@ func addAddTool(s *sdkmcp.Server, deps Deps) {
 				message: fmt.Sprintf("kura_add: %v", err),
 			}), nil, nil
 		}
-		if _, err := workflow.Add(ctx, deps.Workflow, workflow.AddInput{Metadata: metaRef, Ref: seriesRef, Ordering: ordering}); err != nil {
+		result, err := workflow.Add(ctx, deps.Workflow, workflow.AddInput{Metadata: metaRef, Ref: seriesRef, Ordering: ordering})
+		if err != nil {
 			return toolErrorResult(err), nil, nil
 		}
-		return nil, ackSuccess, nil
+		return nil, result, nil
 	})
 }

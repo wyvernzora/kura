@@ -50,10 +50,10 @@ type ProgressLine struct {
 }
 
 // TerminalLine carries the closing record. State matches
-// jobs.Status.String() ("succeeded" | "failed"). On success, Result
-// is the workflow's marshalled result (raw JSON so this package
-// stays kind-agnostic). On failure, Error carries the projected
-// errkind envelope.
+// jobs.Status.String() ("succeeded" | "failed"). Result is the
+// workflow's marshalled result (raw JSON so this package stays
+// kind-agnostic); failed jobs may carry partial-progress detail
+// there. On failure, Error carries the projected errkind envelope.
 type TerminalLine struct {
 	Type   string          `json:"type"`
 	At     string          `json:"at"`

@@ -42,8 +42,10 @@ func buildTerminalLine(state Status, terminalErr error, resultJSON json.RawMessa
 		At:    endedAt.UTC().Format(time.RFC3339Nano),
 		State: state.String(),
 	}
-	if state == StatusSucceeded {
+	if len(resultJSON) > 0 {
 		line.Result = resultJSON
+	}
+	if state == StatusSucceeded {
 		return line
 	}
 	// Failed — project the typed error if it satisfies errkind.Coded;
@@ -117,6 +119,16 @@ func (d *diskJob) Result() json.RawMessage {
 	copy(out, d.result)
 	return out
 }
+
+func (d *diskJob) TerminalResult() json.RawMessage {
+	if d.state == StatusRunning || len(d.result) == 0 {
+		return nil
+	}
+	out := make(json.RawMessage, len(d.result))
+	copy(out, d.result)
+	return out
+}
+
 func (d *diskJob) Err() error { return d.err }
 
 // projectFromDisk maps a parsed jobfile.Job into the UntypedJob view.
@@ -158,6 +170,7 @@ func projectFromDisk(job jobfile.Job) UntypedJob {
 			d.result = job.Terminal.Result
 		default:
 			d.state = StatusFailed
+			d.result = job.Terminal.Result
 			if job.Terminal.Error != nil {
 				d.err = &reconstructedError{
 					kind:    job.Terminal.Error.Kind,

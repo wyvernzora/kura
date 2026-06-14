@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -11,6 +13,8 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/errkind"
 	"github.com/wyvernzora/kura/internal/jobs"
+	"github.com/wyvernzora/kura/internal/reconcile"
+	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
@@ -115,7 +119,10 @@ func TestProjectJobStatus_ReversesSeriesToMetadataRef(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := projectJobStatus(view, idx)
+	out, err := projectJobStatus(view, idx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	close(finish)
 	j.Wait(context.Background())
 
@@ -134,9 +141,12 @@ func TestProjectJobError_CodedErrorPreservesKindAndData(t *testing.T) {
 	got := projectJobError(&jobs.JobBusyError{
 		Series:   mustSeries(t, "Show"),
 		Existing: jobs.BusyHandle{JobID: "abc", Kind: jobs.KindScan, Series: mustSeries(t, "Show")},
-	})
+	}, nil)
 	if got.Kind != errkind.KindBusy {
 		t.Fatalf("Kind = %q, want busy", got.Kind)
+	}
+	if got.Category != errkind.CategoryInternalError {
+		t.Fatalf("Category = %q, want %q", got.Category, errkind.CategoryInternalError)
 	}
 	if got.Data == nil || got.Data["series"] != "Show" {
 		t.Fatalf("Data = %+v, want series=Show", got.Data)
@@ -144,11 +154,132 @@ func TestProjectJobError_CodedErrorPreservesKindAndData(t *testing.T) {
 }
 
 func TestProjectJobError_UnknownErrorFallsBackToInternal(t *testing.T) {
-	got := projectJobError(errors.New("anything"))
+	got := projectJobError(errors.New("anything"), nil)
 	if got.Kind != errkind.KindInternal {
 		t.Fatalf("Kind = %q, want internal", got.Kind)
 	}
+	if got.Category != errkind.CategoryInternalError {
+		t.Fatalf("Category = %q, want %q", got.Category, errkind.CategoryInternalError)
+	}
 	if got.Message != "anything" {
 		t.Fatalf("Message = %q, want anything", got.Message)
+	}
+}
+
+func TestProjectJobStatus_ResultRequiresIncludeResult(t *testing.T) {
+	registry := jobs.NewRegistry(context.Background(), jobs.Config{}, nil)
+	t.Cleanup(func() { registry.Shutdown(time.Second) })
+	j := jobs.Submit(registry, context.Background(), jobs.KindScan, mustSeries(t, "Show"), func(context.Context) (map[string]int, error) {
+		return map[string]int{"synced": 3}, nil
+	})
+	if _, err := j.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	view, err := registry.Get(j.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	compact, err := projectJobStatus(view, indexfile.New(t.TempDir()), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(compact.Result) != 0 {
+		t.Fatalf("compact Result = %s, want omitted", compact.Result)
+	}
+
+	full, err := projectJobStatus(view, indexfile.New(t.TempDir()), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(full.Result) != `{"synced":3}` {
+		t.Fatalf("full Result = %s, want synced payload", full.Result)
+	}
+}
+
+func TestProjectJobStatus_ProjectsReconcileApplySuccess(t *testing.T) {
+	registry := jobs.NewRegistry(context.Background(), jobs.Config{}, nil)
+	t.Cleanup(func() { registry.Shutdown(time.Second) })
+	j := jobs.Submit(registry, context.Background(), jobs.KindReconcileApply, mustSeries(t, "Show"), func(context.Context) (reconcile.ApplyResult, error) {
+		return reconcile.ApplyResult{
+			Series:         mustSeries(t, "Show"),
+			AppliedSteps:   1,
+			TotalSteps:     2,
+			AppliedStepIDs: []string{"step1"},
+		}, nil
+	})
+	if _, err := j.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	view, err := registry.Get(j.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := projectJobStatus(view, indexfile.New(t.TempDir()), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := map[string]any{}
+	if err := json.Unmarshal(out.Result, &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["series"] != "Show" || body["appliedSteps"] != float64(1) || body["totalSteps"] != float64(2) {
+		t.Fatalf("projected reconcile result = %s", out.Result)
+	}
+}
+
+func TestProjectJobStatus_FailedReconcileApplyIncludesCategoryAndPartialResult(t *testing.T) {
+	registry := jobs.NewRegistry(context.Background(), jobs.Config{}, nil)
+	t.Cleanup(func() { registry.Shutdown(time.Second) })
+	stepErr := &reconcile.ApplyStepError{
+		StepID:    "step1",
+		StepKind:  reconcile.StepFileMove,
+		OwnerKind: reconcile.OwnerEpisode,
+		From:      "inbox:release.mkv",
+		To:        "Season 1/Show - S01E01.mkv",
+		Err:       os.ErrNotExist,
+	}
+	j := jobs.Submit(registry, context.Background(), jobs.KindReconcileApply, mustSeries(t, "Show"), func(context.Context) (reconcile.ApplyResult, error) {
+		return reconcile.ApplyResult{
+			Series:         mustSeries(t, "Show"),
+			AppliedSteps:   1,
+			TotalSteps:     2,
+			AppliedStepIDs: []string{"step0"},
+			FailedStep: &reconcile.FailedStepRef{
+				ID:         "step1",
+				Kind:       reconcile.StepFileMove,
+				OwnerKind:  reconcile.OwnerEpisode,
+				From:       "inbox:release.mkv",
+				To:         "Season 1/Show - S01E01.mkv",
+				ErrMessage: stepErr.Error(),
+			},
+		}, stepErr
+	})
+	if _, err := j.Wait(context.Background()); err == nil {
+		t.Fatal("Wait error = nil, want failure")
+	}
+	view, err := registry.Get(j.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := projectJobStatus(view, indexfile.New(t.TempDir()), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Error == nil {
+		t.Fatal("Error = nil")
+	}
+	if out.Error.Kind != errkind.KindApplyStepFailed {
+		t.Fatalf("Error.Kind = %q, want %q", out.Error.Kind, errkind.KindApplyStepFailed)
+	}
+	if out.Error.Category != errkind.CategoryInternalError {
+		t.Fatalf("Error.Category = %q, want %q", out.Error.Category, errkind.CategoryInternalError)
+	}
+	result, ok := out.Error.Data["result"].(response.ReconcileApply)
+	if !ok {
+		t.Fatalf("error.data.result = %T, want response.ReconcileApply", out.Error.Data["result"])
+	}
+	if result.AppliedSteps != 1 || result.TotalSteps != 2 || result.FailedStep == nil {
+		t.Fatalf("partial result = %+v", result)
 	}
 }

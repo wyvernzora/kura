@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -70,7 +69,7 @@ func TestKuraInboxList_ToolIsRegistered(t *testing.T) {
 	}
 }
 
-func TestKuraInboxList_ReturnsTextContent(t *testing.T) {
+func TestKuraInboxList_ReturnsStructuredContentOnly(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "alpha.mkv"), []byte("data"), 0o644); err != nil {
 		t.Fatal(err)
@@ -86,18 +85,26 @@ func TestKuraInboxList_ReturnsTextContent(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("IsError, content=%v structured=%v", res.Content, res.StructuredContent)
 	}
-	if len(res.Content) == 0 {
-		t.Fatal("Content empty")
+	if len(res.Content) != 0 {
+		t.Fatalf("Content len = %d, want 0", len(res.Content))
 	}
-	tc, ok := res.Content[0].(*sdkmcp.TextContent)
+	body, err := decodeStructured(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("decode StructuredContent: %v", err)
+	}
+	entries, ok := body["entries"].([]any)
+	if !ok || len(entries) != 1 {
+		t.Fatalf("entries = %#v, want one entry", body["entries"])
+	}
+	entry, ok := entries[0].(map[string]any)
 	if !ok {
-		t.Fatalf("Content[0] type %T, want *TextContent", res.Content[0])
+		t.Fatalf("entry = %T, want map", entries[0])
 	}
-	if !strings.Contains(tc.Text, "alpha.mkv") {
-		t.Errorf("text missing alpha.mkv: %q", tc.Text)
+	if entry["path"] != "inbox:alpha.mkv" {
+		t.Fatalf("path = %v, want inbox:alpha.mkv", entry["path"])
 	}
-	if !strings.HasPrefix(tc.Text, "F ") && !strings.HasPrefix(tc.Text, "F  ") {
-		t.Errorf("expected leading 'F' kind glyph: %q", tc.Text)
+	if entry["kind"] != "file" {
+		t.Fatalf("kind = %v, want file", entry["kind"])
 	}
 }
 
