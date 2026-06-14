@@ -2,6 +2,8 @@ Adopt an existing directory under the library root as a tracked series at the gi
 
 Refuses if the directory is already tracked or doesn't exist on disk. To re-track a directory whose `.kura/series.json` is corrupted, an operator must use the CLI `--force` form; agents can't bypass.
 
+Returns the resolved `metadataRef`, adopted series `ref`, and provider `preferredTitle`.
+
 <!-- schema-note
 Parameter schema is defined in tool_import.go (jsonschema tags on importInput struct).
 That Go definition is authoritative. If this section conflicts with the Go file, the Go file wins.

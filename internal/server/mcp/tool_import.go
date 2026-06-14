@@ -61,13 +61,14 @@ func addImportTool(s *sdkmcp.Server, deps Deps) {
 				message: fmt.Sprintf("kura_import: %v", err),
 			}), nil, nil
 		}
-		if _, err := workflow.Import(ctx, deps.Workflow, workflow.ImportInput{
+		result, err := workflow.Import(ctx, deps.Workflow, workflow.ImportInput{
 			Metadata: metaRef,
 			Ref:      seriesRef,
 			Ordering: ordering,
-		}); err != nil {
+		})
+		if err != nil {
 			return toolErrorResult(err), nil, nil
 		}
-		return nil, ackSuccess, nil
+		return nil, result, nil
 	})
 }

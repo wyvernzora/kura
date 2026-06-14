@@ -2,6 +2,8 @@ Register a new series in the library at the given metadata ref. Creates a direct
 
 Refuses if the ref is already tracked or the target directory already exists.
 
+Returns the resolved `metadataRef`, sanitized series `ref`, and provider `preferredTitle`.
+
 <!-- schema-note
 Parameter schema is defined in tool_add.go (jsonschema tags on addInput struct).
 That Go definition is authoritative. If this section conflicts with the Go file, the Go file wins.

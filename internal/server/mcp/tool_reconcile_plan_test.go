@@ -68,20 +68,21 @@ func TestKuraReconcilePlan_InvalidRefRejected(t *testing.T) {
 	}
 }
 
-func TestRelativizeUnderRoot(t *testing.T) {
+func TestProjectReconcilePreviewPath(t *testing.T) {
 	cases := []struct {
 		path, root, want string
 	}{
 		{"/lib/Show/Season 1/x.mkv", "/lib/Show", "Season 1/x.mkv"},
-		{"/external/staged.mkv", "/lib/Show", "/external/staged.mkv"},
+		{"/external/staged.mkv", "/lib/Show", "staged.mkv"},
 		{"Season 1/x.mkv", "/lib/Show", "Season 1/x.mkv"}, // already relative
 		{"", "/lib/Show", ""},
-		{"/lib/ShowOther/x.mkv", "/lib/Show", "/lib/ShowOther/x.mkv"}, // prefix collision
+		{"/lib/ShowOther/x.mkv", "/lib/Show", "x.mkv"}, // prefix collision
+		{"/inbox/release/x.mkv", "/lib/Show", "inbox:release/x.mkv"},
 	}
 	for _, tc := range cases {
-		got := relativizeUnderRoot(tc.path, tc.root)
+		got := projectReconcilePreviewPath(tc.path, tc.root, "/inbox")
 		if got != tc.want {
-			t.Errorf("relativizeUnderRoot(%q, %q) = %q, want %q", tc.path, tc.root, got, tc.want)
+			t.Errorf("projectReconcilePreviewPath(%q, %q, /inbox) = %q, want %q", tc.path, tc.root, got, tc.want)
 		}
 	}
 }
@@ -103,7 +104,7 @@ func TestProjectReconcilePlan_DropsCreatedAtAndPlanWrapper(t *testing.T) {
 			},
 		},
 	}
-	out := projectReconcilePlan(in, "/lib/Show")
+	out := projectReconcilePlan(in, "/lib/Show", "/inbox")
 	if out.Token != "abc123" {
 		t.Fatalf("Token = %q, want abc123", out.Token)
 	}
@@ -140,7 +141,7 @@ func TestProjectReconcilePlan_DropsReplacedTo(t *testing.T) {
 			},
 		},
 	}
-	out := projectReconcilePlan(in, "/lib/Show")
+	out := projectReconcilePlan(in, "/lib/Show", "/inbox")
 	rep := out.Changes[0].Replaced
 	if rep == nil {
 		t.Fatal("Replaced is nil")
@@ -153,7 +154,7 @@ func TestProjectReconcilePlan_DropsReplacedTo(t *testing.T) {
 	}
 }
 
-func TestProjectReconcilePlan_ExternalFromStaysAbsolute(t *testing.T) {
+func TestProjectReconcilePlan_ExternalFromDoesNotLeakAbsolutePath(t *testing.T) {
 	in := response.ReconcilePlan{
 		Token: "tok",
 		Plan: response.ReconcilePlanDetail{
@@ -168,10 +169,35 @@ func TestProjectReconcilePlan_ExternalFromStaysAbsolute(t *testing.T) {
 			},
 		},
 	}
-	out := projectReconcilePlan(in, "/lib/Show")
+	out := projectReconcilePlan(in, "/lib/Show", "/inbox")
 	got := out.Changes[0]
-	if got.From != "/external/inbox/x.mkv" {
-		t.Fatalf("From = %q, want absolute external path", got.From)
+	if got.From != "x.mkv" {
+		t.Fatalf("From = %q, want basename", got.From)
+	}
+	if got.To != "Season 1/x.mkv" {
+		t.Fatalf("To = %q, want relative", got.To)
+	}
+}
+
+func TestProjectReconcilePlan_InboxFromBecomesSelector(t *testing.T) {
+	in := response.ReconcilePlan{
+		Token: "tok",
+		Plan: response.ReconcilePlanDetail{
+			Series: mustSeries(t, "Show"),
+			Changes: []response.ReconcileChange{
+				{
+					Kind:    "add",
+					Episode: mustEpisode(t, 1, 1),
+					From:    "/inbox/release/x.mkv",
+					To:      "/lib/Show/Season 1/x.mkv",
+				},
+			},
+		},
+	}
+	out := projectReconcilePlan(in, "/lib/Show", "/inbox")
+	got := out.Changes[0]
+	if got.From != "inbox:release/x.mkv" {
+		t.Fatalf("From = %q, want inbox selector", got.From)
 	}
 	if got.To != "Season 1/x.mkv" {
 		t.Fatalf("To = %q, want relative", got.To)
@@ -194,7 +220,7 @@ func TestProjectReconcilePlan_TrashItemsSurfaceAsRemovals(t *testing.T) {
 			}},
 		},
 	}
-	out := projectReconcilePlan(in, "/lib/Show")
+	out := projectReconcilePlan(in, "/lib/Show", "/inbox")
 	if len(out.TrashItems) != 1 {
 		t.Fatalf("TrashItems len = %d, want 1", len(out.TrashItems))
 	}
@@ -229,13 +255,13 @@ func TestProjectReconcilePlan_ExtrasProjectNormally(t *testing.T) {
 			}},
 		},
 	}
-	out := projectReconcilePlan(in, "/lib/Show")
+	out := projectReconcilePlan(in, "/lib/Show", "/inbox")
 	if len(out.Extras) != 1 {
 		t.Fatalf("Extras len = %d", len(out.Extras))
 	}
 	ex := out.Extras[0]
-	if ex.From != "/inbox/bts/intro.mp4" {
-		t.Fatalf("Extras.From = %q, want absolute external", ex.From)
+	if ex.From != "inbox:bts/intro.mp4" {
+		t.Fatalf("Extras.From = %q, want inbox selector", ex.From)
 	}
 	if ex.To != "Season 1/Extra/bts/intro.mp4" {
 		t.Fatalf("Extras.To = %q, want relative", ex.To)

@@ -31,6 +31,10 @@ type UntypedJob interface {
 	// Result returns the JSON-encoded successful result, or nil if
 	// the job is not terminal-success.
 	Result() json.RawMessage
+	// TerminalResult returns the JSON-encoded workflow result for any
+	// terminal job. Failed jobs may use this for partial-progress
+	// detail; callers must still treat Err()!=nil as failure.
+	TerminalResult() json.RawMessage
 	// Err returns the workflow error, or nil if the job is not
 	// terminal-failure. Includes jobs-internal errors like
 	// *JobTimeoutError and the shutdown sentinel.
@@ -77,6 +81,17 @@ func (e *entry) Result() json.RawMessage {
 		return nil
 	}
 	if e.resultJSON == nil {
+		return nil
+	}
+	out := make(json.RawMessage, len(e.resultJSON))
+	copy(out, e.resultJSON)
+	return out
+}
+
+func (e *entry) TerminalResult() json.RawMessage {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.state == StatusRunning || e.resultJSON == nil {
 		return nil
 	}
 	out := make(json.RawMessage, len(e.resultJSON))

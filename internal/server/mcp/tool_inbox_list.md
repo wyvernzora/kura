@@ -1,10 +1,10 @@
-List entries under the inbox root (where new media drops before being staged into the library). Returns plain text optimized for agent reading: one line per entry, columns `[kind size mtime path]`.
+List entries under the inbox root (where new media drops before being staged into the library). Returns structured `path`, `entries`, truncation, and hint fields.
 
 Use this tool to discover what's available to stage. Each output `path` value is an `inbox:<rel>` selector to pass back to `kura_stage`.
 
 Defaults:
 - `recursive` = false (one-level listing).
-- `limit` = 500. When exceeded, output is truncated and a hint footer suggests narrowing.
+- `limit` = 500. When exceeded, `truncated`, `elidedCount`, and `hint` suggest narrowing.
 - Hidden files (dotfiles, `*.partial`, `*.crdownload`, `*.!qB`) are skipped unless `includeHidden` = true.
 
 Sort: mtime descending (newest first), name ascending tiebreak.
@@ -36,4 +36,4 @@ kura_inbox_list(nameGlob="*.mkv")           # filter by basename pattern
 kura_inbox_list(kind="file")                # only files (or "dir" / "symlink")
 ```
 
-Output `path` values are already `inbox:` selectors; pass them to `kura_stage` verbatim. If the response is truncated, the footer suggests narrowing via `path`, `nameGlob`, or raising `limit` (up to 5000).
+Output `path` values are already `inbox:` selectors; pass them to `kura_stage` verbatim. If the response is truncated, narrow via `path`, `nameGlob`, or raise `limit` (up to 5000).

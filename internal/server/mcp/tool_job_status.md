@@ -1,9 +1,11 @@
-Look up the current status of an async job submitted by `kura_scan`, `kura_stage`, or `kura_reconcile_apply`. Returns the job's state, latest progress event, and on terminal state either the workflow result or the failure reason.
+Look up the current status of an async job submitted by `kura_scan`, `kura_stage`, or `kura_reconcile_apply`. Returns compact polling state by default: job identity, latest progress event, and terminal failure details.
 
 `state` values:
 - `running`: job is in flight; `progress` is the latest emitted event (`phase`, `status`, `message`, `current`, `total`). Absent only briefly at job start before the first event fires.
-- `succeeded`: job finished; `result` carries the workflow's typed return.
-- `failed`: job finished with an error; `error` carries kind + message + structured data.
+- `succeeded`: job finished. Pass `includeResult: true` when you need the workflow's typed terminal result.
+- `failed`: job finished with an error; `error` carries `kind`, `category`, `message`, and structured `data`.
+
+For failed `reconcile_apply` jobs that made partial progress, `error.data.result` carries the projected reconcile-apply result, including applied step counts and the failed step.
 
 `progress.current` / `progress.total` advance with each step for all job kinds (`scan`, `stage`, `reconcile_apply`). Poll until `state` is terminal; don't assume the job is stuck if `progress` hasn't changed — some steps (large file moves, NFS) take longer than the poll interval.
 
@@ -18,4 +20,5 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 
 
 - `jobId` (string, required) — job ID returned by `kura_scan`, `kura_stage`, or `kura_reconcile_apply` (26-char Crockford base32 ULID).
+- `includeResult` (bool, optional) — include terminal success result payload. Defaults to false for compact polling.
 <!-- /schema -->
