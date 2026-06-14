@@ -143,6 +143,10 @@ jobs:
       packages: write
     steps:
       - name: Delete untagged versions, keep last 10
+        # Best-effort cleanup. The action can race GHCR's package
+        # version API after partial deletion and report "Package not
+        # found"; publishing status should not depend on that.
+        continue-on-error: true
         uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
         with:
           package-name: kura
