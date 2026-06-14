@@ -76,7 +76,9 @@ func NewServer(deps Deps) *sdkmcp.Server {
 	s := sdkmcp.NewServer(&sdkmcp.Implementation{
 		Name:    serverName,
 		Version: version,
-	}, nil)
+	}, &sdkmcp.ServerOptions{
+		Instructions: forLLM(serverInstructions),
+	})
 	if deps.Logger != nil {
 		s.AddReceivingMiddleware(toolCallLoggingMiddleware(deps.Logger))
 	}

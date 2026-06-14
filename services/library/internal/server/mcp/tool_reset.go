@@ -14,7 +14,7 @@ import (
 )
 
 type resetInput struct {
-	Ref     string   `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Ref     string   `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
 	Episode string   `json:"episode,omitempty" jsonschema:"Episode marker (S01E03) or storage form (S01E0003)."`
 	Trash   []string `json:"trash,omitempty" jsonschema:"ULIDs of stagedTrash entries to drop."`
 	Extras  []string `json:"extras,omitempty" jsonschema:"ULIDs of stagedExtras entries to drop."`

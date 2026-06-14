@@ -14,7 +14,7 @@ import (
 )
 
 type scanInput struct {
-	Ref      string `json:"ref" jsonschema:"Metadata ref (e.g. \"tvdb:370070\") from kura_resolve."`
+	Ref      string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
 	Refresh  bool   `json:"refresh,omitempty" jsonschema:"Force re-run of mediainfo and source detection on every active record, even when size and mtime are unchanged. A freshly detected Unknown source will not overwrite an existing non-Unknown one. Use after fixing filename source tokens or when the on-disk record's source/resolution looks wrong."`
 	Ordering string `json:"ordering,omitempty" jsonschema:"Pin the per-series episode ordering and re-fetch the spine under it. One of: default, official, dvd, absolute, alternate, regional. Omit to keep the series's existing ordering."`
 }

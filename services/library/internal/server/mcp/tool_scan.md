@@ -1,4 +1,4 @@
-Walk the series's directory, parse each media file, refresh provider metadata, and update the per-episode active records. Returns a `jobId` immediately; poll `kura_job_status` for progress and final result.
+Walk the series's directory, parse each media file, refresh provider metadata, and update the per-episode active records. Returns a `jobId`.
 
 Scan can take seconds to minutes (NFS, mediainfo probing) so it runs as a tracked job. The agent can do other work while it finishes.
 

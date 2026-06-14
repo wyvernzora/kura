@@ -1,4 +1,4 @@
-Adopt an existing directory under the library root as a tracked series at the given metadata ref. Companion to `kura_add`, which creates a new directory; use `kura_import` when the directory already exists (operator dropped files in, or `kura_list` returned an `untracked` row).
+Adopt an existing directory under the library root as a tracked series at the given metadata ref. Use `kura_import` when the directory already exists, for example when `kura_list` returned an `untracked` row.
 
 Refuses if the directory is already tracked or doesn't exist on disk. To re-track a directory whose `.kura/series.json` is corrupted, an operator must use the CLI `--force` form; agents can't bypass.
 

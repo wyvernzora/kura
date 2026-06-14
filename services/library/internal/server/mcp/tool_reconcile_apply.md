@@ -1,4 +1,4 @@
-Execute a reconcile plan: move staged files into their canonical locations, archive any displaced active records to trash. Returns a `jobId` immediately; poll `kura_job_status` for progress and final result.
+Execute a reconcile plan: move staged files into their canonical locations and archive any displaced active records to trash. Returns a `jobId`.
 
 Apply can take seconds to minutes for large plans (file moves on NFS). It runs as a tracked job.
 
@@ -17,9 +17,7 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 - `token` (string, required) — plan token from `kura_reconcile_plan` (12-char hex).
 <!-- /schema -->
 
-## Workflow notes
-
-After apply completes, verify expected slot changes with `kura_show`. Do not re-scan just to confirm reconcile — reconcile already updates series state. Re-scan only when the filesystem still has ambiguity scan must resolve (e.g. after trashing duplicate-slot losers that scan needs to re-walk).
+## Failure and concurrency notes
 
 While a reconcile job is running, other mutating tools on the same series may be blocked — wait for terminal state before retrying.
 
