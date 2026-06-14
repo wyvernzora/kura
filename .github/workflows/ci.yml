@@ -3,15 +3,11 @@ name: ci
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
 
-# Cancel superseded runs on PRs and main-branch pushes; never cancel a
-# tag release (a half-pushed manifest list leaves the registry in a
-# confusing state).
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -178,14 +174,13 @@ jobs:
             exit 1
           fi
 
-  # Build & push the container image to GHCR. Gated on every test job
-  # so a red main commit can't ship a poisoned :dev tag and a red tag
-  # commit can't move :latest. Pull-request events skip this entirely
-  # (no push, no permission to GHCR from forks).
+  # Build & push the development container image to GHCR. Gated on every
+  # test job so a red main commit can't ship a poisoned :dev tag.
+  # Pull-request events skip this entirely (no push, no permission to
+  # GHCR from forks). Tagged releases are published by release.yaml.
   #
   # Tag rules:
-  #   push to main         → :dev (and VERSION=dev-<short_sha>)
-  #   push tag vX.Y.Z      → :vX.Y.Z + :latest (VERSION=vX.Y.Z)
+  #   push to main → :dev (and VERSION=dev-<short_sha>)
   build-push:
     name: build & push
     needs: [go, web, gen-check, e2e]
@@ -200,18 +195,13 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       # VERSION drives the -ldflags="-X main.Version=..." stamp baked
-      # into the kura binary. Tag pushes use the literal tag (e.g.
-      # v0.1.0); main-branch pushes use the short SHA prefixed with
-      # "dev-" so /api/v1/health on a :dev image still reports the
-      # exact commit it came from.
+      # into the kura binary. Main-branch pushes use the short SHA
+      # prefixed with "dev-" so /api/v1/health on a :dev image still
+      # reports the exact commit it came from.
       - name: Determine VERSION
         id: version
         run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-          fi
+          echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       # QEMU enables linux/arm64 emulation on the amd64 GH-hosted
       # runner. Slower than native arm64 but keeps the workflow on
@@ -231,9 +221,7 @@ jobs:
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
-            type=ref,event=tag
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=dev
           labels: |
             org.opencontainers.image.title=kura
             org.opencontainers.image.description=Anime-first library manager
@@ -256,8 +244,8 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
-  # Prune untagged GHCR image versions accumulated by repeated :dev /
-  # :latest moves. Each manifest-list push leaves the prior digest
+  # Prune untagged GHCR image versions accumulated by repeated :dev
+  # moves. Each manifest-list push leaves the prior digest
   # intact-but-untagged; without a sweep the package keeps growing.
   # Only untagged versions are eligible; named tags (:dev, :latest,
   # :vX.Y.Z) are never touched.
