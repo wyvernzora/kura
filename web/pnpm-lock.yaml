@@ -80,7 +80,7 @@ importers:
         version: 10.4.5(@testing-library/dom@10.4.0)(@types/react@19.2.17)(prettier@3.8.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       storybook-addon-pseudo-states:
         specifier: ^10.0.0
-        version: 10.4.5(storybook@10.4.5(@testing-library/dom@10.4.0)(@types/react@19.2.17)(prettier@3.8.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
+        version: 10.4.6(storybook@10.4.5(@testing-library/dom@10.4.0)(@types/react@19.2.17)(prettier@3.8.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
       tailwindcss:
         specifier: ^4.3.0
         version: 4.3.1
@@ -2024,10 +2024,10 @@ packages:
   std-env@4.1.0:
     resolution: {integrity: sha512-Rq7ybcX2RuC55r9oaPVEW7/xu3tj8u4GeBYHBWCychFtzMIr86A7e3PPEBPT37sHStKX3+TiX/Fr/ACmJLVlLQ==}
 
-  storybook-addon-pseudo-states@10.4.5:
-    resolution: {integrity: sha512-5myDPXvVJ7Tk+Eeu+5k5xrJCJ7wtIfptgZlHLg1yvvOL5lKRCI2H+WBbwj8mVZ7isf3Rxx6xL6A3OSBiwGDYpQ==}
+  storybook-addon-pseudo-states@10.4.6:
+    resolution: {integrity: sha512-yP6GgUTj2uju34ZLKzrFJz9uS+9Nn6uH3Wprei5x/KS6CSbLOuXf3pBhAfi+ur2y4Qm3l/thGyHYVcoACCbgIg==}
     peerDependencies:
-      storybook: ^10.4.5
+      storybook: ^10.4.6
 
   storybook@10.4.5:
     resolution: {integrity: sha512-QZuv1gS9Tf9RMCjDw5JOfv1XSB5IhU0uhSKQNS7l/N9zDpmSydirCspkCNT9e0zkFfPkZ9vmQUTzHY/BA07saA==}
@@ -3979,7 +3979,7 @@ snapshots:
 
   std-env@4.1.0: {}
 
-  storybook-addon-pseudo-states@10.4.5(storybook@10.4.5(@testing-library/dom@10.4.0)(@types/react@19.2.17)(prettier@3.8.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)):
+  storybook-addon-pseudo-states@10.4.6(storybook@10.4.5(@testing-library/dom@10.4.0)(@types/react@19.2.17)(prettier@3.8.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)):
     dependencies:
       storybook: 10.4.5(@testing-library/dom@10.4.0)(@types/react@19.2.17)(prettier@3.8.4)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
 
