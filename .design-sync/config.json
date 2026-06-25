@@ -1,0 +1,35 @@
+{
+  "shape": "storybook",
+  "pkg": "@kura/web",
+  "globalName": "KuraWeb",
+  "entry": "web/.design-sync-entry.tsx",
+  "tsconfig": "tsconfig.app.json",
+  "cssEntry": ".ds-styles.css",
+  "storybookConfigDir": "web/.storybook",
+  "storybookStatic": ".design-sync/sb-reference",
+  "buildCmd": "cd web && pnpm install --frozen-lockfile && pnpm build && cat dist/assets/index-*.css dist/assets/series-*.css > .ds-styles.css",
+  "titleMap": {
+    "QualityChip": "ResolutionChip"
+  },
+  "storyImports": {
+    "shim": ["@tanstack/react-query"]
+  },
+  "overrides": {
+    "GearMenu": { "cardMode": "single", "primaryStory": "Idle" },
+    "SeriesDetail": { "skip": ["compositions-seriesdetail--error-state"] },
+    "ScanDetailsModal": { "cardMode": "single", "primaryStory": "ErrorWithData" },
+    "SearchField": { "cardMode": "column" },
+    "Card": { "cardMode": "column" },
+    "Poster": { "cardMode": "column" },
+    "EpisodeRow": { "cardMode": "column" },
+    "SeasonPanel": { "cardMode": "column" },
+    "StatusDot": { "cardMode": "column" }
+  },
+  "provider": {
+    "component": "StoryRouter",
+    "inner": {
+      "component": "StoryProviders"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
