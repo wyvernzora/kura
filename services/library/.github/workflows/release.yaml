@@ -120,6 +120,37 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
+      - name: Compute n8n node tags + labels
+        id: n8n-meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
+        with:
+          images: ${{ env.IMAGE_NAME }}/n8n-nodes
+          tags: |
+            type=raw,value=${{ steps.version.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=kura-n8n-nodes
+            org.opencontainers.image.description=Kura custom nodes for n8n
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.verify.outputs.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build & push n8n nodes
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        with:
+          context: .
+          file: integrations/n8n/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.n8n-meta.outputs.tags }}
+          labels: ${{ steps.n8n-meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=release-n8n-nodes
+          cache-to: type=gha,mode=max,scope=release-n8n-nodes
+          provenance: false
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,4 +165,3 @@ jobs:
             --title "$VERSION" \
             --generate-notes \
             --verify-tag
-
