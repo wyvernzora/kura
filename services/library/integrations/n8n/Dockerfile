@@ -15,7 +15,7 @@ COPY integrations/n8n/ ./
 RUN corepack pnpm build
 RUN mkdir -p /pkg && cp -r package.json dist /pkg/
 
-FROM busybox:1.37-musl
+FROM busybox:1.38-musl
 LABEL org.opencontainers.image.source="https://github.com/wyvernzora/kura"
 COPY --from=build /pkg /kura-nodes
 COPY integrations/n8n/entrypoint.sh /entrypoint.sh
