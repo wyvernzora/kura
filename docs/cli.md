@@ -78,7 +78,7 @@ combinations or transport failures).
 
 | Verb | Purpose |
 |------|---------|
-| `kura list [--status complete\|incomplete\|airing\|untracked\|error]` | Fast library inventory; `--status` repeatable. |
+| `kura list [--status complete\|incomplete\|untracked\|error] [--airing\|--no-airing]` | Fast library inventory; `--status` repeatable. `--airing` / `--no-airing` filter by the independent airing flag. |
 | `kura show <selector>` | Full observed state for one series, with per-episode mediainfo + filesystem-issue surfacing. |
 | `kura resolve <selector> [--limit N]` | Resolve selector terms to candidate `MetadataRef`s without acting. |
 
@@ -137,6 +137,7 @@ kura trash empty <selector>                # permanently delete them
 | `KURA_TVDB_KEY` | TVDB API key. Lazy: only required by provider-needing verbs (`add`, `import`, `scan`, `resolve`). |
 | `KURA_PREFERRED_LANGUAGES` | Comma-separated BCP-47 preferred metadata languages. |
 | `KURA_MEDIAINFO_COMMAND` | Override the `mediainfo` executable path. |
+| `KURA_AIRING_TAIL_DAYS` | Integer days after a cour's last episode airs that the series still counts as airing. Default `7`; `0` disables the tail; empty / invalid / negative values fall back to default. |
 | `KURA_HOST_ID` | Override `os.Hostname()` for claim holder identity. Set in container deployments to a stable value. |
 | `KURA_UMASK` | Process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. Unset preserves the parent process default. |
 | `KURA_TOKEN` / `KURA_DISABLE_TOKEN` | Server bearer token (see [deployment.md](deployment.md)). |

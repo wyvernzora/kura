@@ -49,6 +49,12 @@ func TestSaveCASCreateThenLoad(t *testing.T) {
 	if loaded.Header.SchemaVersion != indexfile.SchemaVersion {
 		t.Fatalf("Header.SchemaVersion = %d, want %d", loaded.Header.SchemaVersion, indexfile.SchemaVersion)
 	}
+	if loaded.Header.BuildOptions == nil {
+		t.Fatal("Header.BuildOptions not parsed from header")
+	}
+	if *loaded.Header.BuildOptions != indexfile.DefaultBuildOptions() {
+		t.Fatalf("Header.BuildOptions = %+v, want %+v", *loaded.Header.BuildOptions, indexfile.DefaultBuildOptions())
+	}
 	if loaded.Header.LastMutated == nil {
 		t.Fatal("LastMutated not parsed from header")
 	}
@@ -59,6 +65,40 @@ func TestSaveCASCreateThenLoad(t *testing.T) {
 	// Rows are sorted by series ref.
 	if loaded.Rows[0].Series.String() != "Show A" {
 		t.Fatalf("Rows[0] = %s, want Show A", loaded.Rows[0].Series)
+	}
+}
+
+func TestLoadWithOptionsRejectsMismatchedBuildOptions(t *testing.T) {
+	root := t.TempDir()
+	opts := indexfile.DefaultBuildOptions()
+	opts.AiringTailDays = 3
+	rows := []indexfile.Row{
+		{Series: mustParseSeries(t, "Show"), Metadata: refs.Metadata("tvdb:42"), Title: "Show", Status: response.ListStatusComplete},
+	}
+	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Date(2026, 5, 2, 19, 14, 0, 0, time.UTC)}
+	if err := indexfile.SaveCASWithOptions(root, "", rows, mutator, opts); err != nil {
+		t.Fatalf("SaveCASWithOptions: %v", err)
+	}
+	if _, err := indexfile.LoadWithOptions(root, indexfile.DefaultBuildOptions()); !errors.Is(err, indexfile.ErrBuildOptionsMismatch) {
+		t.Fatalf("LoadWithOptions mismatch err = %v, want ErrBuildOptionsMismatch", err)
+	}
+	if _, err := indexfile.LoadWithOptions(root, opts); err != nil {
+		t.Fatalf("LoadWithOptions matching: %v", err)
+	}
+}
+
+func TestParseCASRejectsMissingBuildOptions(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	body := []byte(`{"$schema":4,"indexAsOf":"2026-01-01T00:00:00Z"}` + "\n")
+	if err := os.WriteFile(paths.IndexFile(root), body, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_, err := indexfile.LoadCAS(root)
+	if err == nil || !strings.Contains(err.Error(), "buildOptions is required") {
+		t.Fatalf("err = %v, want missing buildOptions error", err)
 	}
 }
 
@@ -218,7 +258,7 @@ func TestParseCASRejectsMalformedRows(t *testing.T) {
 	if err := os.MkdirAll(paths.LibraryKuraDir(root), 0o755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	bad := []byte(`{"$schema":3,"indexAsOf":"2026-01-01T00:00:00Z"}` + "\n" + `not-json` + "\n")
+	bad := []byte(`{"$schema":4,"indexAsOf":"2026-01-01T00:00:00Z","buildOptions":{"airingTailDays":7}}` + "\n" + `not-json` + "\n")
 	if err := os.WriteFile(paths.IndexFile(root), bad, 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}

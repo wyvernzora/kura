@@ -121,7 +121,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
 		return response.AddResult{}, err
 	}
-	indexRow := indexfile.BuildRowFromModel(model, deps.Now())
+	indexRow := indexfile.BuildRowFromModelWithOptions(model, deps.Now(), rowBuildOptions(deps))
 	if err := withIndexCAS(ctx, deps, "import", replaceImportRow(ref, metadataRef, indexRow)); err != nil {
 		return response.AddResult{}, err
 	}

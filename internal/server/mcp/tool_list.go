@@ -14,7 +14,7 @@ import (
 
 type listInput struct {
 	Statuses   []string `json:"statuses,omitempty" jsonschema:"Optional status filter. Allowed values: complete, incomplete, error, untracked. Empty/omitted returns all four."`
-	Airing     *bool    `json:"airing,omitempty" jsonschema:"Optional airing-flag filter. true admits only currently-airing series (first episode aired or airs within 168h, with at least one future episode); false admits non-airing only. Omit for no filter."`
+	Airing     *bool    `json:"airing,omitempty" jsonschema:"Optional airing-flag filter. true admits series with a currently-airing cour (cour first episode aired or airs within 168h, and cour last episode is within the configured airing tail); false admits non-airing only. Split-cour gaps are non-airing until the next cour nears start. Omit for no filter."`
 	MaxResults int      `json:"maxResults,omitempty" jsonschema:"Maximum rows per response. 0 or omitted uses the server default (100). Values above 1000 are clamped."`
 	Cursor     string   `json:"cursor,omitempty" jsonschema:"Opaque pagination token from a previous response's nextCursor. Omit for the first page."`
 }

@@ -358,12 +358,17 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 	deps.Jobs = registry
 	deps.Logger = logger
 
+	rowOpts := indexfile.DefaultBuildOptions()
+	if deps.RowBuildOptions != nil {
+		rowOpts = *deps.RowBuildOptions
+	}
 	watch := indexfile.WatchConfig{
 		ProbeInterval:   envDuration(rt.Getenv, "KURA_INDEX_PROBE_INTERVAL", 2*time.Second),
 		RefreshInterval: envDuration(rt.Getenv, "KURA_INDEX_REFRESH_INTERVAL", 5*time.Minute),
 		RebuildInterval: envDuration(rt.Getenv, "KURA_INDEX_REBUILD_INTERVAL", time.Hour),
 		LibRootDebounce: envDuration(rt.Getenv, "KURA_INDEX_LIBROOT_DEBOUNCE", 3*time.Second),
-		Builder:         indexfile.BuildRow,
+		Builder:         indexfile.NewRowBuilder(rowOpts),
+		BuildOptions:    &rowOpts,
 		Logger:          logger,
 	}
 	return deps, registry, watch, nil

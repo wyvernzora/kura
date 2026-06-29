@@ -86,6 +86,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
 - `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura reindex` to rebuild it from per-series metadata.
 - `KURA_HOST_ID` overrides `os.Hostname()` for the identity Kura stamps into claim holders and CAS mutators. Set this in container deployments to a stable value (e.g. the underlying host's actual hostname) so a previous container's stuck claim is detected as same-host on restart and can be auto-broken; without it, every container restart mid-apply requires a manual `kura reconcile recover`.
+- `KURA_AIRING_TAIL_DAYS` controls how many days after a cour's last episode airs it still counts as airing. Default `7`; `0` disables the tail. Integer days; empty / invalid / negative values fall back to the default.
 - `KURA_LOG_RETENTION_DAYS` sets how long the periodic sweep retains forensic JSONL logs — reconcile plan logs at `<series>/.kura/reconcile/*.jsonl` and per-job history logs at `<library>/.kura/jobs/<ulid>.jsonl`. Default `7`. Integer days; empty / invalid / negative values fall back to the default.
 
 ### Current workflows
@@ -130,3 +131,4 @@ When the user corrects your approach, append a one-line rule here before ending 
 - When extracting an implementation subpackage, move the full cohesive workflow or leave it in place; do not leave runner/helper remnants in the facade package unless they are intentional public API.
 - Workflow responses must never carry raw filesystem paths. Every path field is a scheme-tagged selector: `series:<rel>` for files inside a series root, `inbox:<rel>` for files under the inbox root, `library:<rel>` for paths under `KURA_LIBRARY_ROOT` (e.g. `Show.Root` emits as `library:<series-dir>`). Use the `seriesSelector` / `inboxSelector` / `librarySelector` helpers in `internal/workflow/paths.go` at the response-construction boundary; they panic on outside-root paths so contract violations fail loudly. CLI table renderers strip the prefix for human display via `stripPathScheme`; JSON / MCP / REST keep the prefix.
 - Treat Kura's library as a single-writer personal anime library on low-IOPS storage, often NFS-backed; do not add high-throughput, multi-writer, or cloud-object-store durability machinery unless a real Kura workflow requires it.
+- Thread deploy-time row-building policy from `cmd/kura` through workflow/index builders; do not read env vars directly from storage packages.

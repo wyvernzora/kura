@@ -185,6 +185,56 @@ func TestBuildRowFromModel_AiringFlag_NoFutureEpisodes(t *testing.T) {
 	}
 }
 
+func TestBuildRowFromModel_AiringFlag_TailWindow(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	model := &series.Series{
+		Ref:      mustParseSeries(t, "Finale"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]series.Episode{
+			mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2026, Month: 4, Day: 24}, Active: rec},
+			mustEpisode(t, 1, 2): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 1}},
+		},
+	}
+	if row := indexfile.BuildRowFromModel(model, now); !row.IsAiring {
+		t.Fatal("default tail IsAiring = false, want true")
+	}
+	opts := indexfile.DefaultBuildOptions()
+	opts.AiringTailDays = 2
+	if row := indexfile.BuildRowFromModelWithOptions(model, now, opts); row.IsAiring {
+		t.Fatal("2-day tail IsAiring = true, want false")
+	}
+}
+
+func TestBuildRowFromModel_AiringFlag_ZeroTail(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	opts := indexfile.DefaultBuildOptions()
+	opts.AiringTailDays = 0
+
+	todayModel := &series.Series{
+		Ref:      mustParseSeries(t, "Today"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]series.Episode{
+			mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 4}, Active: rec},
+		},
+	}
+	if row := indexfile.BuildRowFromModelWithOptions(todayModel, now, opts); !row.IsAiring {
+		t.Fatal("same-day finale IsAiring = false, want true with zero tail")
+	}
+
+	yesterdayModel := &series.Series{
+		Ref:      mustParseSeries(t, "Yesterday"),
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]series.Episode{
+			mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 3}, Active: rec},
+		},
+	}
+	if row := indexfile.BuildRowFromModelWithOptions(yesterdayModel, now, opts); row.IsAiring {
+		t.Fatal("yesterday finale IsAiring = true, want false with zero tail")
+	}
+}
+
 // Helmode-style: cour 1 is fully aired (Jan-Mar 2026, weekly); E13
 // jumps to July 2026 — a split-cour gap of ~64 days. Cour 2 contains
 // only E13, whose first air date is beyond the 7d horizon, so the

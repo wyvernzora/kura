@@ -24,6 +24,10 @@ import (
 // at the current SchemaVersion.
 var ErrSchemaMismatch = errors.New("indexfile: schema version mismatch")
 
+// ErrBuildOptionsMismatch is returned by LoadWithOptions when the
+// materialized rows were computed with a different row-building policy.
+var ErrBuildOptionsMismatch = errors.New("indexfile: build options mismatch")
+
 // Loaded carries the parsed header, rows, and the file hash used by SaveCAS
 // for optimistic-concurrency comparison. Hash is the SHA-256 of the raw
 // on-disk bytes (header line + row lines + trailing newline).
@@ -68,6 +72,9 @@ func ParseCAS(data []byte) (Loaded, error) {
 	if out.Header.SchemaVersion != SchemaVersion {
 		return Loaded{}, fmt.Errorf("%w: got %d, want %d", ErrSchemaMismatch, out.Header.SchemaVersion, SchemaVersion)
 	}
+	if out.Header.BuildOptions == nil {
+		return Loaded{}, fmt.Errorf("indexfile: parse header: buildOptions is required")
+	}
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -99,6 +106,12 @@ func ParseCAS(data []byte) (Loaded, error) {
 //
 // Returns *coord.ConflictError on drift.
 func SaveCAS(root string, expected string, rows []Row, mutator coord.Mutator) error {
+	return SaveCASWithOptions(root, expected, rows, mutator, DefaultBuildOptions())
+}
+
+// SaveCASWithOptions atomically writes rows and stamps opts into the
+// header so later loads can detect stale materialized row policy.
+func SaveCASWithOptions(root string, expected string, rows []Row, mutator coord.Mutator, opts BuildOptions) error {
 	path := paths.IndexFile(root)
 	scope := coord.LibraryScope
 
@@ -122,9 +135,11 @@ func SaveCAS(root string, expected string, rows []Row, mutator coord.Mutator) er
 		return &coord.ConflictError{Scope: scope, Phase: "pre_write"}
 	}
 
+	buildOptions := opts
 	header := Header{
 		SchemaVersion: SchemaVersion,
 		IndexAsOf:     mutator.At.UTC().Format(time.RFC3339),
+		BuildOptions:  &buildOptions,
 	}
 	if mutator.Op != "" {
 		stamp := mutator

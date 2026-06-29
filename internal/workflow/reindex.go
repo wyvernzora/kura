@@ -24,7 +24,8 @@ func Reindex(ctx context.Context, deps Deps) *jobs.Job[response.ReindexResult] {
 		var result response.ReindexResult
 		err := deps.Coordinator.WithIndex(jobCtx, func() error {
 			return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
-				rebuilt, err := indexfile.Rebuild(jobCtx, deps.LibRoot, indexfile.BuildRow)
+				opts := rowBuildOptions(deps)
+				rebuilt, err := indexfile.Rebuild(jobCtx, deps.LibRoot, indexfile.NewRowBuilder(opts))
 				if err != nil {
 					return err
 				}
@@ -37,11 +38,11 @@ func Reindex(ctx context.Context, deps Deps) *jobs.Job[response.ReindexResult] {
 					expected = current.Hash
 				}
 				if deps.Index != nil {
-					if err := deps.Index.SaveAndAdopt(expected, rows, coord.NewMutator("reindex")); err != nil {
+					if err := deps.Index.SaveAndAdoptWithOptions(expected, rows, coord.NewMutator("reindex"), opts); err != nil {
 						return err
 					}
 				} else {
-					if err := indexfile.SaveCAS(deps.LibRoot, expected, rows, coord.NewMutator("reindex")); err != nil {
+					if err := indexfile.SaveCASWithOptions(deps.LibRoot, expected, rows, coord.NewMutator("reindex"), opts); err != nil {
 						return err
 					}
 				}
