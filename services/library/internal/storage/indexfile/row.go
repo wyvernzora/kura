@@ -12,17 +12,23 @@ import (
 // surfaces a schema mismatch via ErrSchemaMismatch so callers force a rebuild.
 //
 // v2 → v3: dropped ListStatusAiring; introduced row-level IsAiring flag.
-// IsAiring algorithm tweaks since v3 (e.g. cour-aware split) do not
-// change the wire shape — Row JSON is identical — so they don't bump
-// SchemaVersion. The next sweep / mutation rebuild picks up the new
-// computation; transiently-stale IsAiring values self-heal.
-const SchemaVersion = 3
+// v3 → v4: stamped row build options into the header so persisted IsAiring
+// values rebuild when the configured airing tail changes.
+const SchemaVersion = 4
+
+// BuildOptions controls policy that affects materialized row values.
+// Store it in the header because rows carry computed values such as
+// IsAiring; loading rows built under a different policy would be stale.
+type BuildOptions struct {
+	AiringTailDays int `json:"airingTailDays"`
+}
 
 // Header is the JSONL header line. One per file, line 1. Empty libraries
 // have just the header.
 type Header struct {
 	SchemaVersion int            `json:"$schema"`
 	IndexAsOf     string         `json:"indexAsOf"`
+	BuildOptions  *BuildOptions  `json:"buildOptions"`
 	LastMutated   *coord.Mutator `json:"lastMutated,omitempty"`
 }
 

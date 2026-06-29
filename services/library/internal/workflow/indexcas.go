@@ -28,9 +28,9 @@ func withIndexCAS(ctx context.Context, deps Deps, op string, mutate func(loaded 
 				return err
 			}
 			if deps.Index != nil {
-				return deps.Index.SaveAndAdopt(loaded.Hash, rows, coord.NewMutator(op))
+				return deps.Index.SaveAndAdoptWithOptions(loaded.Hash, rows, coord.NewMutator(op), rowBuildOptions(deps))
 			}
-			return indexfile.SaveCAS(deps.LibRoot, loaded.Hash, rows, coord.NewMutator(op))
+			return indexfile.SaveCASWithOptions(deps.LibRoot, loaded.Hash, rows, coord.NewMutator(op), rowBuildOptions(deps))
 		})
 	})
 }
@@ -44,6 +44,9 @@ func loadIndexEntries(deps Deps) (indexfile.Loaded, error) {
 			return indexfile.Loaded{}, nil
 		}
 		return indexfile.Loaded{}, err
+	}
+	if *loaded.Header.BuildOptions != rowBuildOptions(deps) {
+		return indexfile.Loaded{}, indexfile.ErrBuildOptionsMismatch
 	}
 	return loaded, nil
 }

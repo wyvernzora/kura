@@ -80,6 +80,17 @@ type Deps struct {
 	// disables the translation channel — only ASCII aliases + user
 	// aliases contribute to searchKey.
 	PreferredLanguages []string
+
+	// RowBuildOptions controls materialized index row policy. Nil uses
+	// Kura defaults; cmd/kura sets this from deploy-time config.
+	RowBuildOptions *indexfile.BuildOptions
+}
+
+func rowBuildOptions(deps Deps) indexfile.BuildOptions {
+	if deps.RowBuildOptions == nil {
+		return indexfile.DefaultBuildOptions()
+	}
+	return *deps.RowBuildOptions
 }
 
 // logFileMove emits one structured log line per filesystem move

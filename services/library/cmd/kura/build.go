@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,7 +56,8 @@ func buildDepsAsyncIndex(rt *runContext) (workflow.Deps, error) {
 	if err := validateLibraryRoot(libRoot); err != nil {
 		return workflow.Deps{}, err
 	}
-	index, err := loadOrRebuildIndex(rt.Context, libRoot)
+	rowBuildOptions := rowBuildOptionsFromEnv(rt.Getenv)
+	index, err := loadOrRebuildIndex(rt.Context, libRoot, rowBuildOptions)
 	if err != nil {
 		return workflow.Deps{}, err
 	}
@@ -89,6 +91,7 @@ func buildDepsAsyncIndex(rt *runContext) (workflow.Deps, error) {
 		Now:                time.Now,
 		Jobs:               registry,
 		PreferredLanguages: prefs.Tags(),
+		RowBuildOptions:    &rowBuildOptions,
 	}, nil
 }
 
@@ -195,21 +198,36 @@ func hasPathPrefix(child, parent string) bool {
 // create-path succeeds against an empty slot. Without the delete
 // the create-path would conflict with the existing (wrong-schema)
 // file and the rebuild would no-op.
-func loadOrRebuildIndex(ctx context.Context, libRoot string) (*indexfile.Index, error) {
-	index, err := indexfile.Load(libRoot)
+func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.BuildOptions) (*indexfile.Index, error) {
+	builder := indexfile.NewRowBuilder(opts)
+	index, err := indexfile.LoadWithOptions(libRoot, opts)
 	switch {
 	case errors.Is(err, indexfile.ErrNotFound):
 		index = indexfile.New(libRoot)
-		index.TriggerRebuild(ctx, libRoot, indexfile.BuildRow, coord.NewMutator("rebuild_cold"))
-	case errors.Is(err, indexfile.ErrSchemaMismatch):
+		index.TriggerRebuildWithOptions(ctx, libRoot, builder, coord.NewMutator("rebuild_cold"), opts)
+	case errors.Is(err, indexfile.ErrSchemaMismatch), errors.Is(err, indexfile.ErrBuildOptionsMismatch):
 		if rmErr := os.Remove(paths.IndexFile(libRoot)); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
 			return nil, rmErr
 		}
 		index = indexfile.New(libRoot)
-		index.TriggerRebuild(ctx, libRoot, indexfile.BuildRow, coord.NewMutator("rebuild_corruption"))
+		index.TriggerRebuildWithOptions(ctx, libRoot, builder, coord.NewMutator("rebuild_corruption"), opts)
 	case err != nil:
 		return nil, err
 	}
 	_ = os.Remove(paths.LegacyIndexFile(libRoot))
 	return index, nil
+}
+
+func rowBuildOptionsFromEnv(getenv func(string) string) indexfile.BuildOptions {
+	opts := indexfile.DefaultBuildOptions()
+	raw := strings.TrimSpace(getenv("KURA_AIRING_TAIL_DAYS"))
+	if raw == "" {
+		return opts
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return opts
+	}
+	opts.AiringTailDays = n
+	return opts
 }

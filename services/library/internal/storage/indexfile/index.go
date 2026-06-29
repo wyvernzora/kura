@@ -87,8 +87,9 @@ type Index struct {
 
 	// log + reader are set by Watch before any loop starts, then
 	// read-only thereafter. No locking needed for reads.
-	log     Logger
-	builder RowBuilder
+	log          Logger
+	builder      RowBuilder
+	buildOptions BuildOptions
 }
 
 func New(root string) *Index {
@@ -102,12 +103,21 @@ func New(root string) *Index {
 // Load reads index.jsonl and returns a populated Index. Returns ErrNotFound
 // when the file does not exist.
 func Load(root string) (*Index, error) {
+	return LoadWithOptions(root, DefaultBuildOptions())
+}
+
+// LoadWithOptions reads index.jsonl and returns a populated Index when
+// the persisted materialized rows were computed with opts.
+func LoadWithOptions(root string, opts BuildOptions) (*Index, error) {
 	loaded, err := LoadCAS(root)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, ErrNotFound
 		}
 		return nil, err
+	}
+	if *loaded.Header.BuildOptions != opts {
+		return nil, fmt.Errorf("%w: got %+v, want %+v", ErrBuildOptionsMismatch, *loaded.Header.BuildOptions, opts)
 	}
 	index := New(root)
 	if err := index.Replace(loaded.Rows); err != nil {
@@ -336,7 +346,13 @@ func (i *Index) ReplaceRows(rows []Row) {
 //
 // Cache stays unchanged on any error.
 func (i *Index) SaveAndAdopt(expected string, rows []Row, mutator coord.Mutator) error {
-	if err := SaveCAS(i.root, expected, rows, mutator); err != nil {
+	return i.SaveAndAdoptWithOptions(expected, rows, mutator, DefaultBuildOptions())
+}
+
+// SaveAndAdoptWithOptions is SaveAndAdopt with explicit row-building
+// policy stamped into index.jsonl.
+func (i *Index) SaveAndAdoptWithOptions(expected string, rows []Row, mutator coord.Mutator, opts BuildOptions) error {
+	if err := SaveCASWithOptions(i.root, expected, rows, mutator, opts); err != nil {
 		return err
 	}
 	bySeries, byMeta, err := buildRowMaps(rows)
@@ -441,6 +457,12 @@ func (i *Index) WaitReady(ctx context.Context) error {
 // conflict) the goroutine logs and exits without panicking; the next
 // trigger will retry.
 func (i *Index) TriggerRebuild(ctx context.Context, root string, builder RowBuilder, mutator coord.Mutator) {
+	i.TriggerRebuildWithOptions(ctx, root, builder, mutator, DefaultBuildOptions())
+}
+
+// TriggerRebuildWithOptions is TriggerRebuild with explicit row-building
+// policy stamped into index.jsonl after a successful rebuild.
+func (i *Index) TriggerRebuildWithOptions(ctx context.Context, root string, builder RowBuilder, mutator coord.Mutator, opts BuildOptions) {
 	if !i.rebuilding.CompareAndSwap(false, true) {
 		return
 	}
@@ -466,7 +488,7 @@ func (i *Index) TriggerRebuild(ctx context.Context, root string, builder RowBuil
 		priorEntries := len(i.bySeries)
 		i.mu.RUnlock()
 
-		if err := i.SaveAndAdopt(expected, rows, mutator); err != nil {
+		if err := i.SaveAndAdoptWithOptions(expected, rows, mutator, opts); err != nil {
 			if _, ok := errors.AsType[*coord.ConflictError](err); !ok {
 				if i.log != nil {
 					i.log.Warn("indexfile: rebuild save", "err", err)

@@ -157,6 +157,9 @@ func TestIndexWatch_LibRootMTimeTriggersRebuild(t *testing.T) {
 		select {
 		case ref := <-calls:
 			if ref == mustSeries(t, "BrandNew") {
+				if err := idx.WaitReady(t.Context()); err != nil {
+					t.Fatalf("WaitReady: %v", err)
+				}
 				return
 			}
 		default:
@@ -259,6 +262,44 @@ func TestIndexWatch_SchemaMismatchOverwritesStaleFile(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("schema-mismatched file was not overwritten with current SchemaVersion within 2s")
+}
+
+func TestIndexWatch_BuildOptionsMismatchOverwritesStaleFile(t *testing.T) {
+	root := t.TempDir()
+	oldOpts := indexfile.DefaultBuildOptions()
+	oldOpts.AiringTailDays = 3
+	if err := indexfile.SaveCASWithOptions(root, "", []indexfile.Row{
+		{Series: mustSeries(t, "Stale"), Metadata: refs.Metadata("tvdb:stale"), Title: "Stale"},
+	}, coord.NewMutator("seed"), oldOpts); err != nil {
+		t.Fatalf("SaveCASWithOptions: %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "Fresh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	idx, err := indexfile.LoadWithOptions(root, oldOpts)
+	if err != nil {
+		t.Fatalf("LoadWithOptions: %v", err)
+	}
+	opts := indexfile.DefaultBuildOptions()
+	builder := indexfile.NewRowBuilder(opts)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	idx.Watch(ctx, indexfile.WatchConfig{
+		ProbeInterval: 30 * time.Millisecond,
+		Builder:       builder,
+		BuildOptions:  &opts,
+	})
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		loaded, err := indexfile.LoadCAS(root)
+		if err == nil && loaded.Header.BuildOptions != nil && *loaded.Header.BuildOptions == opts {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("build-options-mismatched file was not overwritten with default BuildOptions within 2s")
 }
 
 // SaveAndAdopt must bump the watcher's probe baseline (hash + mtime +

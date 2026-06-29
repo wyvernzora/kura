@@ -182,10 +182,11 @@ export interface ListRow {
   status: ListStatus;
   /**
    * IsAiring is the observed-airing flag, independent of Status. A
-   * season counts toward IsAiring when it has at least one
-   * future-airdate episode AND the season's first episode has
-   * already aired (or airs within 168h). Specials (season 0) are
-   * excluded. Computed at row-build time; not persisted to series.json.
+   * cour counts toward IsAiring when its first episode has aired (or
+   * airs within the horizon) and its last episode is no older than the
+   * configured airing tail. Split-cour gaps are non-airing until the
+   * next cour nears start. Specials (season 0) are excluded. Computed
+   * at row-build time; not persisted to series.json.
    */
   isAiring?: boolean;
   staged?: boolean;

@@ -3,6 +3,7 @@ package indexfile
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -52,6 +53,9 @@ type WatchConfig struct {
 	// libRoot-trigger rebuild. Required if RebuildInterval > 0 or
 	// ProbeInterval > 0; ignored otherwise.
 	Builder RowBuilder
+	// BuildOptions is the policy expected for materialized rows read
+	// from index.jsonl. nil uses Kura defaults.
+	BuildOptions *BuildOptions
 	// Logger receives lifecycle warnings. nil means silent.
 	Logger Logger
 }
@@ -69,8 +73,13 @@ func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
 	if cfg.Logger == nil {
 		cfg.Logger = nopLogger{}
 	}
+	buildOptions := DefaultBuildOptions()
+	if cfg.BuildOptions != nil {
+		buildOptions = *cfg.BuildOptions
+	}
 	i.log = cfg.Logger
 	i.builder = cfg.Builder
+	i.buildOptions = buildOptions
 	i.libRootDebounce = cfg.LibRootDebounce
 
 	// Seed the index baseline so the first probe tick doesn't falsely fire.
@@ -84,9 +93,14 @@ func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
 		i.cachedMTime = mtime
 		i.cachedSize = size
 		i.mu.Unlock()
-		if _, parseErr := ParseCAS(data); errors.Is(parseErr, ErrSchemaMismatch) && cfg.Builder != nil {
-			cfg.Logger.Warn("indexfile: schema mismatch on watch seed, triggering rebuild", "err", parseErr)
-			i.TriggerRebuild(ctx, i.root, cfg.Builder, coord.NewMutator("rebuild_corruption"))
+		loaded, parseErr := ParseCAS(data)
+		buildOptionsMismatch := parseErr == nil && *loaded.Header.BuildOptions != buildOptions
+		if (errors.Is(parseErr, ErrSchemaMismatch) || buildOptionsMismatch) && cfg.Builder != nil {
+			if buildOptionsMismatch {
+				parseErr = ErrBuildOptionsMismatch
+			}
+			cfg.Logger.Warn("indexfile: index header mismatch on watch seed, triggering rebuild", "err", parseErr)
+			i.TriggerRebuildWithOptions(ctx, i.root, cfg.Builder, coord.NewMutator("rebuild_corruption"), buildOptions)
 		}
 	}
 	// Seed the libRoot baseline. Errors are non-fatal: probe will
@@ -188,7 +202,7 @@ func (i *Index) probeOnce(ctx context.Context) {
 // after the storm settles. Debounce 0 fires the rebuild inline.
 func (i *Index) scheduleLibRootRebuild(ctx context.Context) {
 	if i.libRootDebounce <= 0 {
-		i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("rebuild_libroot"))
+		i.TriggerRebuildWithOptions(ctx, i.root, i.builder, coord.NewMutator("rebuild_libroot"), i.buildOptions)
 		return
 	}
 	i.mu.Lock()
@@ -203,7 +217,7 @@ func (i *Index) scheduleLibRootRebuild(ctx context.Context) {
 		if i.Rebuilding() {
 			return
 		}
-		i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("rebuild_libroot"))
+		i.TriggerRebuildWithOptions(ctx, i.root, i.builder, coord.NewMutator("rebuild_libroot"), i.buildOptions)
 	})
 	i.mu.Unlock()
 }
@@ -226,18 +240,17 @@ func (i *Index) refreshLoop(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// handleRefreshError translates fullRefresh errors into either a
-// log line (transient) or a triggered rebuild (schema mismatch).
-// Centralizes the logic shared by probeOnce and refreshLoop so
-// schema-mismatch handling can't drift between them.
+// handleRefreshError translates fullRefresh errors into either a log
+// line (transient) or a triggered rebuild (schema / build-option
+// mismatch). Centralizes the logic shared by probeOnce and refreshLoop.
 func (i *Index) handleRefreshError(ctx context.Context, stage string, err error) {
-	if errors.Is(err, ErrSchemaMismatch) {
-		i.log.Warn("indexfile: schema mismatch on disk, triggering rebuild",
+	if errors.Is(err, ErrSchemaMismatch) || errors.Is(err, ErrBuildOptionsMismatch) {
+		i.log.Warn("indexfile: index header mismatch on disk, triggering rebuild",
 			"stage", stage,
 			"err", err,
 		)
 		if i.builder != nil {
-			i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("rebuild_corruption"))
+			i.TriggerRebuildWithOptions(ctx, i.root, i.builder, coord.NewMutator("rebuild_corruption"), i.buildOptions)
 		}
 		return
 	}
@@ -249,14 +262,13 @@ func (i *Index) handleRefreshError(ctx context.Context, stage string, err error)
 // baseline is updated regardless so cosmetic touches don't keep
 // firing the probe.
 //
-// On ErrSchemaMismatch the cache hash/mtime/size are still bumped to
-// the stale file's values so subsequent probe ticks don't re-fire on
-// the same unparseable bytes. Callers translate the error into a
-// TriggerRebuild call; the rebuild's SaveCAS uses the bumped cached
-// hash as `expected` and CAS-overwrites the stale file in place.
-// In-memory rows are intentionally left intact — they predate the
-// schema-future write and remain the best-effort view until rebuild
-// completes.
+// On ErrSchemaMismatch / ErrBuildOptionsMismatch the cache hash/mtime/size
+// are still bumped to the stale file's values so subsequent probe ticks
+// don't re-fire on the same bytes. Callers translate the error into a
+// TriggerRebuild call; the rebuild's SaveCAS uses the bumped cached hash
+// as `expected` and CAS-overwrites the stale file in place. In-memory rows
+// are intentionally left intact — they remain the best-effort view until
+// rebuild completes.
 func (i *Index) fullRefresh() error {
 	data, mtime, size, err := readIndexBytes(i.root)
 	if err != nil {
@@ -288,6 +300,14 @@ func (i *Index) fullRefresh() error {
 		}
 		return parseErr
 	}
+	if *parsed.Header.BuildOptions != i.buildOptions {
+		i.mu.Lock()
+		i.cachedHash = newHash
+		i.cachedMTime = mtime
+		i.cachedSize = size
+		i.mu.Unlock()
+		return fmt.Errorf("%w: got %+v, want %+v", ErrBuildOptionsMismatch, *parsed.Header.BuildOptions, i.buildOptions)
+	}
 	i.ReplaceRows(parsed.Rows)
 	i.mu.Lock()
 	i.cachedHash = newHash
@@ -313,7 +333,7 @@ func (i *Index) rebuildLoop(ctx context.Context, interval time.Duration) {
 			if i.builder == nil {
 				continue
 			}
-			i.TriggerRebuild(ctx, i.root, i.builder, coord.NewMutator("rebuild_periodic"))
+			i.TriggerRebuildWithOptions(ctx, i.root, i.builder, coord.NewMutator("rebuild_periodic"), i.buildOptions)
 		}
 	}
 }

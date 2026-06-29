@@ -19,6 +19,10 @@ const (
 	// in the future and still count as "airing now". One week.
 	airingHorizonDays = 7
 
+	// defaultAiringTailDays is the grace window after a cour's last
+	// episode airs where it still counts as airing for maintenance.
+	defaultAiringTailDays = 7
+
 	// airingCourGapDays is the minimum gap between two consecutive
 	// air dates that splits a season into separate cours. Anime
 	// weekly cadence is 7d; a one-week skip is 14d; this leaves
@@ -26,6 +30,20 @@ const (
 	// production-break gaps without false-splitting normal cadence.
 	airingCourGapDays = 30
 )
+
+// DefaultBuildOptions returns Kura's row-building policy defaults.
+func DefaultBuildOptions() BuildOptions {
+	return BuildOptions{
+		AiringTailDays: defaultAiringTailDays,
+	}
+}
+
+// NewRowBuilder returns a disk-backed row builder using opts.
+func NewRowBuilder(opts BuildOptions) RowBuilder {
+	return func(libRoot string, ref refs.Series, now time.Time) (Row, error) {
+		return BuildRowWithOptions(libRoot, ref, now, opts)
+	}
+}
 
 // RowBuilder produces a fully-populated Row for a given series ref. The
 // builder owns the policy for what a row looks like — counts, status,
@@ -51,6 +69,11 @@ type RowBuilder func(libRoot string, ref refs.Series, now time.Time) (Row, error
 //
 // UpdatedAt is stamped to now in every case.
 func BuildRow(libRoot string, ref refs.Series, now time.Time) (Row, error) {
+	return BuildRowWithOptions(libRoot, ref, now, DefaultBuildOptions())
+}
+
+// BuildRowWithOptions is BuildRow with explicit row-building policy.
+func BuildRowWithOptions(libRoot string, ref refs.Series, now time.Time, opts BuildOptions) (Row, error) {
 	if ref.IsZero() {
 		return Row{}, errors.New("indexfile: BuildRow requires non-zero ref")
 	}
@@ -106,13 +129,19 @@ func BuildRow(libRoot string, ref refs.Series, now time.Time) (Row, error) {
 		}, nil
 	}
 	model.Ref = ref
-	return BuildRowFromModel(model, now), nil
+	return BuildRowFromModelWithOptions(model, now, opts), nil
 }
 
 // BuildRowFromModel computes a Row from an already-loaded *series.Series.
 // Pure function; no I/O. Used by mutators after a successful series.json
 // SaveCAS to refresh the index without re-reading the file.
 func BuildRowFromModel(model *series.Series, now time.Time) Row {
+	return BuildRowFromModelWithOptions(model, now, DefaultBuildOptions())
+}
+
+// BuildRowFromModelWithOptions computes a Row from model using explicit
+// row-building policy.
+func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts BuildOptions) Row {
 	row := Row{
 		Series:      model.Ref,
 		Metadata:    model.Metadata,
@@ -125,7 +154,7 @@ func BuildRowFromModel(model *series.Series, now time.Time) Row {
 	}
 	row.CanonicalTitle = model.CanonicalTitle.String()
 
-	summary := summarizeSeries(model, now)
+	summary := summarizeSeries(model, now, opts)
 	row.SeasonsAvailable = summary.seasonsActive
 	row.SeasonCount = summary.seasons
 	row.EpisodesAvailable = summary.episodesActive
@@ -173,7 +202,7 @@ type seasonAirDates struct {
 	dates []civil.Date
 }
 
-func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
+func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) seriesSummary {
 	var s seriesSummary
 	seasons := map[int]struct{}{}
 	seasonsActive := map[int]struct{}{}
@@ -225,7 +254,7 @@ func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
 	}
 	s.seasons = len(seasons)
 	s.seasonsActive = len(seasonsActive)
-	s.airing = computeAiring(perSeason, now)
+	s.airing = computeAiring(perSeason, now, opts.AiringTailDays)
 	return s
 }
 
@@ -234,13 +263,15 @@ func summarizeSeries(model *series.Series, now time.Time) seriesSummary {
 // episode air dates and starting a new cour wherever the gap between
 // consecutive dates exceeds airingCourGapDays. A cour qualifies when
 // (a) its first air date has already passed or falls within
-// airingHorizonDays AND (b) at least one of its dates is still in the
-// future. Far-ahead schedule announcements (first ep beyond the
-// horizon) and split-cour hiatuses (the active cour ended before
-// today; the next cour's first ep is months out) are both filtered.
-func computeAiring(perSeason map[int]*seasonAirDates, now time.Time) bool {
+// airingHorizonDays AND (b) its last date is no older than the
+// configured airing tail. Far-ahead schedule announcements (first ep
+// beyond the horizon) and split-cour hiatuses (the active cour ended
+// before the tail; the next cour's first ep is months out) are both
+// filtered.
+func computeAiring(perSeason map[int]*seasonAirDates, now time.Time, tailDays int) bool {
 	today := civil.DateOf(now)
 	horizon := today.AddDays(airingHorizonDays)
+	tailStart := today.AddDays(-tailDays)
 	for _, sa := range perSeason {
 		if len(sa.dates) == 0 {
 			continue
@@ -255,7 +286,7 @@ func computeAiring(perSeason map[int]*seasonAirDates, now time.Time) bool {
 			if first.After(horizon) {
 				continue
 			}
-			if last.After(today) {
+			if !last.Before(tailStart) {
 				return true
 			}
 		}

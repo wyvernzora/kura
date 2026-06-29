@@ -91,7 +91,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		sources:     stringSet(in.Source),
 		resolutions: stringSet(in.Resolution),
 	}
-	row := indexfile.BuildRowFromModel(model, now)
+	row := indexfile.BuildRowFromModelWithOptions(model, now, rowBuildOptions(deps))
 	out := response.Show{
 		MetadataRef:    model.Metadata,
 		Ref:            in.Ref,

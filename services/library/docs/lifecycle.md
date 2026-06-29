@@ -381,12 +381,15 @@ the library root may live on slow network storage.
 - `incomplete` — there are zero known non-special episodes, or at
   least one known non-special episode without active/staged media has
   aired or lacks an air date.
-- `airing` — at least one known non-special episode lacks
-  active/staged media, and all such missing non-special episodes have
-  future air dates.
 - `untracked` — visible direct child directory with no
   `.kura/series.json`.
 - `error` — `.kura/series.json` exists but cannot be read or decoded.
+
+`isAiring` is independent of series status. A non-special cour counts
+as airing when its first episode has aired or is within the near-start
+horizon, and its last episode is no older than the configured
+`KURA_AIRING_TAIL_DAYS` window. Split-cour gaps are non-airing until
+the next cour nears start.
 
 Specials do not affect status, season count, episode count, or the
 staged marker. Staged records satisfy their episode for status

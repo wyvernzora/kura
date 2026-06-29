@@ -81,7 +81,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("add")); err != nil {
 		return response.AddResult{}, err
 	}
-	indexRow := indexfile.BuildRowFromModel(model, deps.Now())
+	indexRow := indexfile.BuildRowFromModelWithOptions(model, deps.Now(), rowBuildOptions(deps))
 	if err := withIndexCAS(ctx, deps, "add", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
 		// Re-check after fresh load: a peer add could have landed for
 		// the same metadataRef between our pre-check and our load here.

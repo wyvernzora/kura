@@ -16,7 +16,7 @@ import (
 // touch in_progress (claim acquire / release) skip it — the row doesn't
 // reflect that state, and the extra CAS write would just contend.
 func updateIndexRow(ctx context.Context, deps Deps, model *series.Series, op string) error {
-	row := indexfile.BuildRowFromModel(model, deps.Now())
+	row := indexfile.BuildRowFromModelWithOptions(model, deps.Now(), rowBuildOptions(deps))
 	return withIndexCAS(ctx, deps, op, func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
 		return appendOrReplaceRow(loaded.Rows, row), nil
 	})

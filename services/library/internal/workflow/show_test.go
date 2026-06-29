@@ -3,15 +3,21 @@ package workflow
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"cloud.google.com/go/civil"
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/internal/textnorm"
 )
 
 func TestShow_PrecancelledCtxReturnsEarly(t *testing.T) {
@@ -25,6 +31,94 @@ func TestShow_PrecancelledCtxReturnsEarly(t *testing.T) {
 	_, err = Show(ctx, deps, ShowInput{Ref: ref})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+func TestShow_UsesConfiguredAiringTail(t *testing.T) {
+	root := t.TempDir()
+	ref, err := refs.ParseSeries("Finale")
+	if err != nil {
+		t.Fatalf("ParseSeries: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ref.String()), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	resolution, err := media.NewResolution(1920, 1080)
+	if err != nil {
+		t.Fatalf("NewResolution: %v", err)
+	}
+	activePath := filepath.Join(root, ref.String(), "Season 1", "Finale - S01E01.mkv")
+	if err := os.MkdirAll(filepath.Dir(activePath), 0o755); err != nil {
+		t.Fatalf("MkdirAll active: %v", err)
+	}
+	if err := os.WriteFile(activePath, []byte("media"), 0o644); err != nil {
+		t.Fatalf("WriteFile active: %v", err)
+	}
+	rec := &media.Record{Path: activePath, Source: media.SourceWebRip, Resolution: resolution, Size: 1}
+	e1, _ := refs.NewEpisode(1, 1)
+	e2, _ := refs.NewEpisode(1, 2)
+	model := &domainseries.Series{
+		Ref:            ref,
+		Metadata:       refs.Metadata("tvdb:1"),
+		PreferredTitle: textnorm.NFC("Finale"),
+		Episodes: map[refs.Episode]domainseries.Episode{
+			e1: {AirDate: civil.Date{Year: 2026, Month: 4, Day: 24}, Active: rec},
+			e2: {AirDate: civil.Date{Year: 2026, Month: 5, Day: 1}},
+		},
+	}
+	if err := seriesfile.SaveCAS(root, model, coord.NewMutator("test")); err != nil {
+		t.Fatalf("SaveCAS: %v", err)
+	}
+	opts := indexfile.DefaultBuildOptions()
+	opts.AiringTailDays = 2
+	deps := Deps{
+		LibRoot:         root,
+		Now:             func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+		RowBuildOptions: &opts,
+	}
+	out, err := Show(context.Background(), deps, ShowInput{Ref: ref})
+	if err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+	if out.IsAiring {
+		t.Fatal("IsAiring = true, want false with 2-day tail")
+	}
+}
+
+func TestUpdateIndexRowRejectsBuildOptionsMismatch(t *testing.T) {
+	root := t.TempDir()
+	ref, err := refs.ParseSeries("Show")
+	if err != nil {
+		t.Fatalf("ParseSeries: %v", err)
+	}
+	oldOpts := indexfile.DefaultBuildOptions()
+	oldOpts.AiringTailDays = 3
+	rows := []indexfile.Row{
+		{Series: ref, Metadata: refs.Metadata("tvdb:1"), Title: "Show", Status: response.ListStatusComplete},
+	}
+	if err := indexfile.SaveCASWithOptions(root, "", rows, coord.NewMutator("seed"), oldOpts); err != nil {
+		t.Fatalf("SaveCASWithOptions: %v", err)
+	}
+	model := &domainseries.Series{
+		Ref:      ref,
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]domainseries.Episode{},
+	}
+	deps := Deps{
+		LibRoot:     root,
+		Coordinator: coord.NewMCPCoordinator(),
+		Now:         time.Now,
+	}
+	err = updateIndexRow(context.Background(), deps, model, "test")
+	if !errors.Is(err, indexfile.ErrBuildOptionsMismatch) {
+		t.Fatalf("updateIndexRow err = %v, want ErrBuildOptionsMismatch", err)
+	}
+	loaded, err := indexfile.LoadCAS(root)
+	if err != nil {
+		t.Fatalf("LoadCAS: %v", err)
+	}
+	if *loaded.Header.BuildOptions != oldOpts {
+		t.Fatalf("BuildOptions = %+v, want old %+v", *loaded.Header.BuildOptions, oldOpts)
 	}
 }
 
