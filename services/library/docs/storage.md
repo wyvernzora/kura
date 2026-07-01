@@ -12,7 +12,7 @@ workflows that produce these files, see [lifecycle.md](lifecycle.md).
 ```
 <library>/
   .kura/
-    index.jsonl                     # library-wide row cache
+    index.jsonl                     # rebuildable library source snapshot
     jobs/<ulid>.jsonl               # per-job forensic log (server only)
   <SeriesRef>/
     .kura/
@@ -31,10 +31,11 @@ workflows that produce these files, see [lifecycle.md](lifecycle.md).
 
 - All Kura-generated JSON files include a top-level `schemaVersion`.
 - Writes are atomic: write to a temp file, rename. No partial JSON.
-- Mutating writes are CAS-guarded (compare-and-swap on a content
-  hash). The writer reads, mutates in memory, and writes only if the
-  on-disk hash still matches; on conflict the writer reloads and
-  retries. Implemented in `internal/coord/`.
+- `series.json` mutating writes are CAS-guarded (compare-and-swap on a
+  content hash). The writer reads, mutates in memory, and writes only
+  if the on-disk hash still matches; on conflict the writer reloads
+  and retries. `index.jsonl` is a rebuildable source snapshot; see its
+  section below.
 - Every mutating write stamps a `mutator` tuple
   (`{op, pid, host, at}`) onto the file for forensic context.
 - Every in-progress claim records a `holder` tuple
@@ -86,27 +87,36 @@ metadata file for a series.
 - Reads: `seriesfile.Load(libRoot, ref)`. Writes: `SaveCAS(libRoot,
   series, mutator)` returns the new content hash.
 
-## `index.jsonl` (schema v2+)
+## `index.jsonl` (schema v5)
 
-Path: `<library>/.kura/index.jsonl`. Library-wide cache mapping
-MetadataRefs to SeriesRefs plus per-series rollups for the `list`
-verb. JSON-lines:
+Path: `<library>/.kura/index.jsonl`. Library-wide source snapshot used
+for fast selector lookup and `list` projections. JSON-lines:
 
 ```jsonl
-{"type":"header","version":2,"count":42}
-{"type":"row","series":"Bocchi the Rock!","metadata":"tvdb:370070","title":"Bocchi the Rock!","status":"tracked"}
-{"type":"row","series":"My Other Show","metadata":"","title":"My Other Show*","status":"untracked"}
+{"$schema":5,"indexAsOf":"2026-07-01T12:34:56Z","lastMutated":{"op":"reindex","pid":123,"host":"kura","at":"2026-07-01T12:34:56Z"}}
+{"series":"Bocchi the Rock!","model":{"schemaVersion":3,"metadataRef":"tvdb:12345","preferredTitle":"Bocchi the Rock!","episodes":{},"last_mutated":{"op":"scan","pid":123,"host":"kura","at":"2026-07-01T12:00:00Z"}}}
+{"series":"My Other Show"}
+{"series":"Broken Show","error":"series.json missing from .kura/ — file disappeared under index walk"}
 ...
 ```
 
-- Header is line 1, then one row per visible direct child of the
-  library root (tracked + untracked).
+- Header is line 1, then one entry per visible direct child of the
+  library root.
+- Tracked entries carry compact `series.json` source data. Active
+  media paths are series-relative in the embedded model, matching
+  `series.json` storage.
+- Untracked entries carry only `series`; broken tracked directories
+  carry `series` plus `error`.
+- Materialized rows for `list` are projected in memory from these
+  entries at query time, using deploy-time row policy such as
+  `KURA_AIRING_TAIL_DAYS`.
 - Not authoritative. Regenerate from per-series metadata at any time
   via `kura reindex`.
-- Read via `indexfile.Load()`. Mutated via `indexfile.SaveCAS()`.
-  In-memory shape: `bySeries` map, `byMeta` selector lookup, sorted
-  order slice. The server watches the file and reloads on peer
-  mutation.
+- Read via `indexfile.Load()`. Mutated via `Index.SaveModel`,
+  `Index.Delete`, and `Index.RebuildNow` under the process index
+  coordinator. The server watches library-root mtime plus a periodic
+  interval and rebuilds from source; it does not treat peer writes to
+  `index.jsonl` as authoritative.
 
 ## Reconcile plan files (schema v2)
 

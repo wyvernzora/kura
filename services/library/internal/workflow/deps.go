@@ -35,9 +35,8 @@ type Deps struct {
 	InboxRoot string
 
 	// Index is the in-memory metadata-ref → series-ref cache loaded at
-	// startup. Workflows resolve refs through it; mutations go through
-	// indexfile.SaveCAS and may leave Index stale (acceptable for the
-	// CLI, which exits at end of command).
+	// startup. Workflows resolve refs through it; mutations update the
+	// source snapshot after the owning series.json write succeeds.
 	Index *indexfile.Index
 
 	// Coordinator serializes mutations against the same series (and the
@@ -81,7 +80,7 @@ type Deps struct {
 	// aliases contribute to searchKey.
 	PreferredLanguages []string
 
-	// RowBuildOptions controls materialized index row policy. Nil uses
+	// RowBuildOptions controls list/show row projection policy. Nil uses
 	// Kura defaults; cmd/kura sets this from deploy-time config.
 	RowBuildOptions *indexfile.BuildOptions
 }

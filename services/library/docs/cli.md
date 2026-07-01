@@ -29,7 +29,7 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 | `trash list <selector> \| --all` | CLI + REST (operator) | Safety boundary | List trashed files. `--older-than DURATION` filters by age. |
 | `trash empty <selector> \| --all --confirm` | CLI + REST (operator + confirm) | Safety boundary | Permanently delete trashed files. The only verb that destroys content. |
 | `trash restore <selector> <ULID>` | CLI + REST (operator) | Safety boundary | Move a trashed entry's files back to their recorded paths. Run `scan` afterward to re-adopt. |
-| `reindex` | CLI + REST (operator) | Context efficiency | Walk library, regenerate `.kura/index.jsonl` from per-series metadata. |
+| `reindex` | CLI + REST (operator) | Context efficiency | Walk library, regenerate `.kura/index.jsonl` source snapshots from per-series metadata. |
 | `remove <selector> [--purge --confirm]` | CLI + REST (operator + confirm for `--purge`) | Operator judgment | Untrack a series. Default: delete `.kura/`, leave media. `--purge --confirm`: wholesale delete the entire series directory. |
 
 Surface exclusions fall into three categories:
@@ -106,7 +106,7 @@ combinations or transport failures).
 
 | Verb | Purpose |
 |------|---------|
-| `kura reindex` | Rebuild `.kura/index.jsonl` from per-series metadata. |
+| `kura reindex` | Rebuild `.kura/index.jsonl` source snapshots from per-series metadata. |
 | `kura reconcile recover <selector> [--force]` | Clear a stuck `in_progress` claim. Without `--force`, only breaks claims whose holder process is gone on the same host. |
 
 ## Output
