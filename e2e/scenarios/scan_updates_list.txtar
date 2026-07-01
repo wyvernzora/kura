@@ -1,0 +1,13 @@
+# scan_updates_list: scan persists index changes so list reflects adopted
+# media immediately, without a reindex.
+
+kura_add stub:1001
+kura_list
+! stdout '"episodesAvailable":1'
+
+kura_write_series_file $KURA_LAST_REF Season 1/show.s01e01.mp4
+kura_scan $KURA_LAST_REF
+stdout '"status":"added"'
+
+kura_list
+stdout '"episodesAvailable":1'

@@ -6,6 +6,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/scan"
@@ -62,6 +63,7 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult,
 	}
 	runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger, deps.PreferredLanguages)
 	var out response.ScanResult
+	var modelForIndex *series.Series
 	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
 		return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
 			internal, runErr := runner.Scan(ctx, scan.Input{
@@ -74,11 +76,18 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult,
 				return translateScanError(runErr)
 			}
 			out = toScanResponse(seriesRoot, internal)
+			modelForIndex = internal.Model
 			return nil
 		})
 	})
 	if err != nil {
 		return response.ScanResult{}, err
+	}
+	if modelForIndex != nil {
+		// ponytail: scan_all persists once per series; batch the index write if bulk scan ever becomes hot.
+		if err := updateIndexRow(ctx, deps, modelForIndex, "scan"); err != nil {
+			return response.ScanResult{}, err
+		}
 	}
 	return out, nil
 }
