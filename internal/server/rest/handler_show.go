@@ -20,14 +20,29 @@ import (
 //
 // Response: response.Show, content-derived ETag.
 func (s *Server) handleShow(w http.ResponseWriter, r *http.Request) {
-	ref, err := s.resolveRefPath(r.PathValue("ref"))
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-
 	q := r.URL.Query()
-	in := workflow.ShowInput{Ref: ref}
+
+	// preview=true renders a not-yet-added series from live provider
+	// metadata, addressed directly by metadata ref (no index lookup).
+	preview := q.Get("preview") == "true" || q.Get("preview") == "1"
+	var in workflow.ShowInput
+	if preview {
+		metaRef, err := refs.ParseMetadata(r.PathValue("ref"))
+		if err != nil {
+			writeError(w, &validationError{
+				msg: fmt.Sprintf("invalid metadata ref %q (expected provider:id, e.g. tvdb:370070): %v", r.PathValue("ref"), err),
+			})
+			return
+		}
+		in = workflow.ShowInput{Preview: true, MetadataRef: metaRef}
+	} else {
+		ref, err := s.resolveRefPath(r.PathValue("ref"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		in = workflow.ShowInput{Ref: ref}
+	}
 
 	if raw := q.Get("episodes"); raw != "" {
 		sel, perr := refs.ParseEpisodeSelector(raw)

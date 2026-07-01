@@ -71,6 +71,7 @@ func (c *client) seriesExtended(ctx context.Context, id string) (seriesExtendedR
 
 func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episodeRecord, preferredByID map[int]string) provider.Series {
 	seasons := normalizeSeasons(record.Seasons, episodes, preferredByID)
+	poster := p.selectPoster(record.Artworks)
 	series := provider.Series{
 		SeriesSummary: p.normalizeSeriesSummary(seriesSummaryInput{
 			ref:              providerIntRef(record.ID),
@@ -82,12 +83,13 @@ func (p *Provider) normalizeSeries(record seriesExtendedRecord, episodes []episo
 			year:             yearFromDate(record.FirstAired),
 			genres:           normalizeGenres(record.Genres),
 			titles:           seriesTitleCandidates(record),
+			poster:           poster,
 		}),
 		LastAired:        normalizeDate(record.LastAired),
 		Seasons:          seasons,
 		TranslatedTitles: seriesExtendedTranslatedTitles(record),
 		Aliases:          seriesExtendedAliases(record),
-		Poster:           p.selectPoster(record.Artworks),
+		Poster:           poster,
 	}
 	return series
 }

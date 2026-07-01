@@ -91,6 +91,12 @@ type SeriesSummary struct {
 	FirstAired       string
 
 	Genres []string
+
+	// Poster is a lightweight series-level poster reference suitable for
+	// candidate lists. For search results it comes straight from the
+	// search response (no extra request per candidate); for full series
+	// views it mirrors the selected Series.Poster.
+	Poster Artwork
 }
 
 // Series is the source-neutral metadata shape used by Kura read workflows.

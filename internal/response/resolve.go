@@ -19,15 +19,17 @@ type Resolution struct {
 // or other textnorm types) so MCP and CLI --json output can serialize
 // uniformly. Add fields here only when at least one surface needs them.
 type Candidate struct {
-	Ref              refs.Metadata `json:"ref"`
-	PreferredTitle   string        `json:"preferredTitle"`
-	CanonicalTitle   string        `json:"canonicalTitle,omitempty"`
-	Year             int           `json:"year,omitempty"`
-	FirstAired       string        `json:"firstAired,omitempty"`
-	OriginalLanguage string        `json:"originalLanguage,omitempty"`
-	OriginalCountry  string        `json:"originalCountry,omitempty"`
-	Genres           []string      `json:"genres,omitempty"`
-	Evidence         []Evidence    `json:"evidence,omitempty"`
+	Ref                refs.Metadata `json:"ref"`
+	PreferredTitle     string        `json:"preferredTitle"`
+	CanonicalTitle     string        `json:"canonicalTitle,omitempty"`
+	Year               int           `json:"year,omitempty"`
+	FirstAired         string        `json:"firstAired,omitempty"`
+	OriginalLanguage   string        `json:"originalLanguage,omitempty"`
+	OriginalCountry    string        `json:"originalCountry,omitempty"`
+	Genres             []string      `json:"genres,omitempty"`
+	PosterURL          string        `json:"posterUrl,omitempty"`
+	PosterThumbnailURL string        `json:"posterThumbnailUrl,omitempty"`
+	Evidence           []Evidence    `json:"evidence,omitempty"`
 }
 
 // Evidence is one term's contribution to a candidate. Surfaces use

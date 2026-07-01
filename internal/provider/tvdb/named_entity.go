@@ -39,6 +39,7 @@ type seriesSummaryInput struct {
 	year             int
 	genres           []string
 	titles           []titleCandidate
+	poster           provider.Artwork
 }
 
 func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) provider.SeriesSummary {
@@ -54,6 +55,7 @@ func (p *Provider) normalizeSeriesSummary(input seriesSummaryInput) provider.Ser
 		OriginalCountry:  normalizeCountry(input.originalCountry),
 		FirstAired:       normalizeDate(input.firstAired),
 		Genres:           input.genres,
+		Poster:           input.poster,
 	}
 }
 
