@@ -447,9 +447,16 @@ func TestBuildRow_UntrackedDir(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(libRoot, ref.String()), 0o755); err != nil {
 		t.Fatalf("Mkdir: %v", err)
 	}
-	row, err := indexfile.BuildRow(libRoot, ref, time.Now().UTC())
-	if err != nil {
-		t.Fatalf("BuildRow: %v", err)
+	idx := indexfile.New(libRoot, indexfile.Config{
+		BuildOptions: indexfile.DefaultBuildOptions(),
+		Now:          func() time.Time { return time.Now().UTC() },
+	})
+	if err := idx.RebuildNow(context.Background(), "test"); err != nil {
+		t.Fatalf("RebuildNow: %v", err)
+	}
+	row, ok := idx.GetRow(ref)
+	if !ok {
+		t.Fatalf("GetRow(%s) absent", ref)
 	}
 	if row.Status != response.ListStatusUntracked {
 		t.Fatalf("Status = %s, want untracked", row.Status)
@@ -475,9 +482,16 @@ func TestBuildRow_LoadedFromDisk(t *testing.T) {
 	if err := seriesfile.SaveCAS(libRoot, model, coord.NewMutator("test")); err != nil {
 		t.Fatalf("SaveCAS: %v", err)
 	}
-	row, err := indexfile.BuildRow(libRoot, ref, time.Now().UTC())
-	if err != nil {
-		t.Fatalf("BuildRow: %v", err)
+	idx := indexfile.New(libRoot, indexfile.Config{
+		BuildOptions: indexfile.DefaultBuildOptions(),
+		Now:          func() time.Time { return time.Now().UTC() },
+	})
+	if err := idx.RebuildNow(context.Background(), "test"); err != nil {
+		t.Fatalf("RebuildNow: %v", err)
+	}
+	row, ok := idx.GetRow(ref)
+	if !ok {
+		t.Fatalf("GetRow(%s) absent", ref)
 	}
 	if row.Title != "Ascendance of a Bookworm" {
 		t.Fatalf("Title = %q, want preferred title", row.Title)
@@ -508,9 +522,9 @@ func TestRebuild_IncludesUntrackedAndSkipsDotDirs(t *testing.T) {
 		t.Fatalf("SaveCAS: %v", err)
 	}
 
-	idx, err := indexfile.Rebuild(context.Background(), libRoot, indexfile.BuildRow)
-	if err != nil {
-		t.Fatalf("Rebuild: %v", err)
+	idx := indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	if err := idx.RebuildNow(context.Background(), "test"); err != nil {
+		t.Fatalf("RebuildNow: %v", err)
 	}
 	rows := idx.Rows()
 	if len(rows) != 2 {
@@ -536,16 +550,15 @@ func TestRebuild_IncludesUntrackedAndSkipsDotDirs(t *testing.T) {
 }
 
 func TestIndex_GetRow(t *testing.T) {
-	idx := indexfile.New(t.TempDir())
-	now := time.Now().UTC()
-	rows := []indexfile.Row{
-		{Series: mustParseSeries(t, "Zebra"), Metadata: refs.Metadata("tvdb:3"), Title: "Zebra", Status: response.ListStatusComplete, UpdatedAt: now.Format(time.RFC3339)},
-		{Series: mustParseSeries(t, "Apple"), Metadata: refs.Metadata("tvdb:1"), Title: "Apple", Status: response.ListStatusComplete, UpdatedAt: now.Format(time.RFC3339)},
-		{Series: mustParseSeries(t, "Mango"), Metadata: refs.Metadata("tvdb:2"), Title: "Mango", Status: response.ListStatusComplete, UpdatedAt: now.Format(time.RFC3339)},
+	idx := indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	models := []*series.Series{
+		minimalModel(t, "Zebra", refs.Metadata("tvdb:3")),
+		minimalModel(t, "Apple", refs.Metadata("tvdb:1")),
+		minimalModel(t, "Mango", refs.Metadata("tvdb:2")),
 	}
-	for _, row := range rows {
-		if err := idx.Upsert(row); err != nil {
-			t.Fatalf("Upsert(%s): %v", row.Series, err)
+	for _, model := range models {
+		if err := idx.Upsert(indexfile.Entry{Model: model}); err != nil {
+			t.Fatalf("Upsert(%s): %v", model.Ref, err)
 		}
 	}
 
@@ -563,21 +576,16 @@ func TestIndex_GetRow(t *testing.T) {
 }
 
 func TestIndex_RemoveDropsBothMaps(t *testing.T) {
-	idx := indexfile.New(t.TempDir())
-	row := indexfile.Row{
-		Series:   mustParseSeries(t, "Bookworm"),
-		Metadata: refs.Metadata("tvdb:370070"),
-		Title:    "Bookworm",
-		Status:   response.ListStatusComplete,
-	}
-	if err := idx.Upsert(row); err != nil {
+	idx := indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	model := minimalModel(t, "Bookworm", refs.Metadata("tvdb:370070"))
+	if err := idx.Upsert(indexfile.Entry{Model: model}); err != nil {
 		t.Fatal(err)
 	}
-	idx.Remove(row.Series)
-	if _, ok := idx.GetRow(row.Series); ok {
+	idx.Remove(model.Ref)
+	if _, ok := idx.GetRow(model.Ref); ok {
 		t.Fatal("GetRow after Remove should be absent")
 	}
-	if _, ok, _ := idx.Get(row.Metadata); ok {
+	if _, ok, _ := idx.Get(model.Metadata); ok {
 		t.Fatal("Get(metadata) after Remove should be absent")
 	}
 }

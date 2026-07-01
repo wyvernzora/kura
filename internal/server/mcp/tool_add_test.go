@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -68,7 +67,7 @@ func mcpAddImportDeps(t *testing.T) Deps {
 	t.Cleanup(func() { registry.Shutdown(time.Second) })
 	return Deps{Workflow: workflow.Deps{
 		LibRoot:     libRoot,
-		Index:       indexfile.New(filepath.Join(libRoot, ".kura")),
+		Index:       indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()}),
 		Coordinator: coord.NewCLICoordinator(),
 		Provider: func() (provider.Source, error) {
 			return mcpMetadataSource{}, nil

@@ -12,7 +12,6 @@ import (
 	domainseries "github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/internal/storage/trashfile"
@@ -68,16 +67,7 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 	// Drop the index entry first (CAS); only after success do we touch
 	// the filesystem. CAS rejection on the index leaves the series fully
 	// tracked exactly as before.
-	if err := withIndexCAS(ctx, deps, "remove", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
-		filtered := make([]indexfile.Row, 0, len(loaded.Rows))
-		for _, row := range loaded.Rows {
-			if row.Series == in.Ref {
-				continue
-			}
-			filtered = append(filtered, row)
-		}
-		return filtered, nil
-	}); err != nil {
+	if err := deps.Index.Delete(ctx, in.Ref, coord.NewMutator("remove")); err != nil {
 		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
 		return response.Remove{}, err
 	}

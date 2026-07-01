@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +18,7 @@ import (
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	libRoot := t.TempDir()
-	idx := indexfile.New(filepath.Join(libRoot, ".kura"))
+	idx := indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	registry := jobs.NewRegistry(context.Background(), jobs.Config{
 		JobTimeout:     time.Hour,
 		Retention:      time.Hour,

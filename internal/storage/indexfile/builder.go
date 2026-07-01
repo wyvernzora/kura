@@ -1,6 +1,7 @@
 package indexfile
 
 import (
+	"context"
 	"errors"
 	"os"
 	"sort"
@@ -38,98 +39,45 @@ func DefaultBuildOptions() BuildOptions {
 	}
 }
 
-// NewRowBuilder returns a disk-backed row builder using opts.
-func NewRowBuilder(opts BuildOptions) RowBuilder {
-	return func(libRoot string, ref refs.Series, now time.Time) (Row, error) {
-		return BuildRowWithOptions(libRoot, ref, now, opts)
-	}
-}
-
-// RowBuilder produces a fully-populated Row for a given series ref. The
-// builder owns the policy for what a row looks like — counts, status,
-// quality rollups — and is shared between Rebuild (full disk walk),
-// the watcher's rebuild loop, and synchronous-mutation row updates.
-type RowBuilder func(libRoot string, ref refs.Series, now time.Time) (Row, error)
-
-// BuildRow loads <libRoot>/<ref>/.kura/series.json and returns a Row
-// describing the series. Behaviors:
+// diskEntryBuilder loads <libRoot>/<ref>/.kura/series.json and returns a source
+// entry describing the series. Behaviors:
 //
-//   - series.json present and parseable: Row reflects the model
-//     (counts, quality rollups, lastScanned).
-//   - .kura/ directory absent: Row{Status: untracked, Title: ref}.
+//   - series.json present and parseable: tracked model entry.
+//   - .kura/ directory absent: untracked entry.
 //     The directory has never been a tracked series.
-//   - .kura/ directory present but series.json missing: Row{Status:
-//     error, Error: ...}. Genuine "lost the file" condition (transient
-//     I/O on a network volume, partial crash mid-write, hand deletion).
+//   - .kura/ directory present but series.json missing: error entry. Genuine
+//     "lost the file" condition (transient I/O on a network volume, partial
+//     crash mid-write, hand deletion).
 //     Surfacing as untracked here would silently drop the metadataRef
 //     from the index, hiding the corruption.
-//   - series.json present but unreadable / malformed: Row{Status: error,
-//     Error: msg, Title: ref}. The error is captured in the row, not
-//     returned, so a single broken series doesn't fail the whole walk.
-//
-// UpdatedAt is stamped to now in every case.
-func BuildRow(libRoot string, ref refs.Series, now time.Time) (Row, error) {
-	return BuildRowWithOptions(libRoot, ref, now, DefaultBuildOptions())
-}
-
-// BuildRowWithOptions is BuildRow with explicit row-building policy.
-func BuildRowWithOptions(libRoot string, ref refs.Series, now time.Time, opts BuildOptions) (Row, error) {
+//   - series.json present but unreadable / malformed: error entry. The error is
+//     captured in the entry, not returned, so a single broken series doesn't
+//     fail the whole walk.
+func diskEntryBuilder(_ context.Context, libRoot string, ref refs.Series) (Entry, error) {
 	if ref.IsZero() {
-		return Row{}, errors.New("indexfile: BuildRow requires non-zero ref")
+		return Entry{}, errors.New("indexfile: disk entry builder requires non-zero ref")
 	}
 	exists, err := seriesfile.Exists(libRoot, ref)
 	if err != nil {
-		return Row{
-			Series:    ref,
-			Title:     ref.String(),
-			Status:    response.ListStatusError,
-			Error:     err.Error(),
-			UpdatedAt: now.UTC().Format(time.RFC3339),
-		}, nil
+		return Entry{Series: ref, Error: err.Error()}, nil
 	}
 	if !exists {
-		// Distinguish "this is an untracked media folder" from "we
-		// lost the metadata file". `.kura/` presence is the signal:
-		// it only exists when a series was tracked at some point.
 		kuraDir := paths.SeriesKuraDir(libRoot, ref)
 		info, statErr := os.Stat(kuraDir)
 		if statErr == nil && info.IsDir() {
-			return Row{
-				Series:    ref,
-				Title:     ref.String(),
-				Status:    response.ListStatusError,
-				Error:     "series.json missing from .kura/ — file disappeared under index walk",
-				UpdatedAt: now.UTC().Format(time.RFC3339),
-			}, nil
+			return Entry{Series: ref, Error: "series.json missing from .kura/ — file disappeared under index walk"}, nil
 		}
 		if statErr != nil && !errors.Is(statErr, os.ErrNotExist) {
-			return Row{
-				Series:    ref,
-				Title:     ref.String(),
-				Status:    response.ListStatusError,
-				Error:     statErr.Error(),
-				UpdatedAt: now.UTC().Format(time.RFC3339),
-			}, nil
+			return Entry{Series: ref, Error: statErr.Error()}, nil
 		}
-		return Row{
-			Series:    ref,
-			Title:     ref.String(),
-			Status:    response.ListStatusUntracked,
-			UpdatedAt: now.UTC().Format(time.RFC3339),
-		}, nil
+		return Entry{Series: ref}, nil
 	}
 	model, err := seriesfile.Load(libRoot, ref)
 	if err != nil {
-		return Row{
-			Series:    ref,
-			Title:     ref.String(),
-			Status:    response.ListStatusError,
-			Error:     err.Error(),
-			UpdatedAt: now.UTC().Format(time.RFC3339),
-		}, nil
+		return Entry{Series: ref, Error: err.Error()}, nil
 	}
 	model.Ref = ref
-	return BuildRowFromModelWithOptions(model, now, opts), nil
+	return Entry{Model: model}, nil
 }
 
 // BuildRowFromModel computes a Row from an already-loaded *series.Series.

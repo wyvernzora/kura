@@ -81,18 +81,8 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("add")); err != nil {
 		return response.AddResult{}, err
 	}
-	indexRow := indexfile.BuildRowFromModelWithOptions(model, deps.Now(), rowBuildOptions(deps))
-	if err := withIndexCAS(ctx, deps, "add", func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
-		// Re-check after fresh load: a peer add could have landed for
-		// the same metadataRef between our pre-check and our load here.
-		for _, row := range loaded.Rows {
-			if row.Metadata == metadataRef && row.Series != ref {
-				return nil, &MetadataRefConflictError{Ref: metadataRef, Existing: row.Series, Next: ref}
-			}
-		}
-		return appendOrReplaceRow(loaded.Rows, indexRow), nil
-	}); err != nil {
-		return response.AddResult{}, err
+	if err := updateIndexRow(ctx, deps, model, "add"); err != nil {
+		return response.AddResult{}, translateIndexDuplicate(err)
 	}
 	progress.Success(ctx, "add", fmt.Sprintf("Added %s", ref), 1)
 	return response.AddResult{
@@ -100,6 +90,14 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult
 		Ref:            ref,
 		PreferredTitle: metadataSeries.PreferredTitle.String(),
 	}, nil
+}
+
+func translateIndexDuplicate(err error) error {
+	var dup indexfile.DuplicateRefError
+	if errors.As(err, &dup) {
+		return &MetadataRefConflictError{Ref: dup.Ref, Existing: dup.Existing, Next: dup.Next}
+	}
+	return err
 }
 
 // resolveAddRef returns the explicit caller-supplied ref when set,

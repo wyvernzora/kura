@@ -3,14 +3,18 @@ package workflow_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/textnorm"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -28,18 +32,46 @@ func mustParseSeries(t *testing.T, name string) refs.Series {
 // upserts doesn't matter; the index sorts by lower-cased title.
 func listFixture(t *testing.T, rows ...indexfile.Row) workflow.Deps {
 	t.Helper()
-	idx := indexfile.New(t.TempDir())
+	libRoot := t.TempDir()
+	idx := indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	for _, row := range rows {
-		if err := idx.Upsert(row); err != nil {
+		if err := idx.Upsert(entryForListRow(t, libRoot, row)); err != nil {
 			t.Fatalf("Upsert(%s): %v", row.Series, err)
 		}
 	}
 	return workflow.Deps{
-		LibRoot:     t.TempDir(),
+		LibRoot:     libRoot,
 		Index:       idx,
 		Coordinator: coord.NewMCPCoordinator(),
 		Now:         time.Now,
 	}
+}
+
+func entryForListRow(t *testing.T, libRoot string, row indexfile.Row) indexfile.Entry {
+	t.Helper()
+	if row.Status == response.ListStatusUntracked {
+		return indexfile.Entry{Series: row.Series}
+	}
+	if row.Status == response.ListStatusError {
+		return indexfile.Entry{Series: row.Series, Error: "test error"}
+	}
+	metadata := row.Metadata
+	if metadata == "" {
+		metadata = refs.Metadata("tvdb:" + row.Series.String())
+	}
+	ep, err := refs.NewEpisode(1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return indexfile.Entry{Model: &series.Series{
+		Ref:            row.Series,
+		Metadata:       metadata,
+		PreferredTitle: textnorm.NFC(row.Title),
+		Episodes: map[refs.Episode]series.Episode{
+			ep: {Active: &media.Record{Path: filepath.Join(libRoot, row.Series.String(), "Season 1", "episode.mkv"), Size: 1}},
+		},
+		LastMutated: coord.Mutator{Op: "test", PID: 1, Host: "test", At: time.Unix(0, 0).UTC()},
+	}}
 }
 
 func makeRow(t *testing.T, title string, status response.ListStatus) indexfile.Row {
@@ -172,7 +204,7 @@ func TestList_PaginationDataChangedWhenIndexMutates(t *testing.T) {
 	}
 
 	// Mutate the index between pages.
-	if err := deps.Index.Upsert(makeRow(t, "BB", response.ListStatusComplete)); err != nil {
+	if err := deps.Index.Upsert(entryForListRow(t, deps.LibRoot, makeRow(t, "BB", response.ListStatusComplete))); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 

@@ -26,7 +26,7 @@ func newStartupRecoveryDeps(t *testing.T, refStrs ...string) (workflow.Deps, []r
 	if err != nil {
 		t.Fatalf("Hostname: %v", err)
 	}
-	idx := indexfile.New(root)
+	idx := indexfile.New(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	mut := func(op string) coord.Mutator {
 		return coord.Mutator{Op: op, PID: os.Getpid(), Host: host, At: time.Now().UTC().Truncate(time.Second)}
 	}
@@ -46,7 +46,7 @@ func newStartupRecoveryDeps(t *testing.T, refStrs ...string) (workflow.Deps, []r
 		if err := seriesfile.SaveCAS(root, model, mut("test_seed")); err != nil {
 			t.Fatalf("seed series.json for %s: %v", ref, err)
 		}
-		if err := idx.Upsert(indexfile.Row{Series: ref, Metadata: meta, Title: ref.String()}); err != nil {
+		if err := idx.Upsert(indexfile.Entry{Model: model}); err != nil {
 			t.Fatalf("idx.Upsert(%s): %v", ref, err)
 		}
 	}

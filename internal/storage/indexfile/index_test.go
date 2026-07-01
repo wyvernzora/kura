@@ -2,10 +2,10 @@ package indexfile_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -13,26 +13,14 @@ import (
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
-func mustSeries(t *testing.T, value string) refs.Series {
-	t.Helper()
-	ref, err := refs.ParseSeries(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return ref
-}
-
 func TestIndexSaveLoad(t *testing.T) {
 	root := t.TempDir()
-	idx := indexfile.New(root)
-	honzuki := mustSeries(t, "Honzuki")
-	if err := idx.Put(refs.Metadata("tvdb:370070"), honzuki); err != nil {
+	idx := indexfile.New(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	model := minimalModel(t, "Honzuki", refs.Metadata("tvdb:370070"))
+	if err := idx.SaveModel(context.Background(), model, coord.NewMutator("test")); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Save(coord.NewMutator("test")); err != nil {
-		t.Fatal(err)
-	}
-	loaded, err := indexfile.Load(root)
+	loaded, err := indexfile.Load(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,43 +28,46 @@ func TestIndexSaveLoad(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ok || got != honzuki {
+	if !ok || got != model.Ref {
 		t.Fatalf("index get = %q, %v", got, ok)
+	}
+	row, ok := loaded.GetRow(model.Ref)
+	if !ok || row.Title != "Honzuki" || row.Metadata != model.Metadata {
+		t.Fatalf("GetRow = (%+v, %v)", row, ok)
 	}
 }
 
 func TestIndexRejectsDuplicateMetadataRef(t *testing.T) {
-	idx := indexfile.New(t.TempDir())
-	if err := idx.Put(refs.Metadata("tvdb:370070"), mustSeries(t, "A")); err != nil {
+	idx := indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	if err := idx.Upsert(indexfile.Entry{Model: minimalModel(t, "A", refs.Metadata("tvdb:370070"))}); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Put(refs.Metadata("tvdb:370070"), mustSeries(t, "B")); err == nil {
-		t.Fatal("expected duplicate ref error")
+	err := idx.Upsert(indexfile.Entry{Model: minimalModel(t, "B", refs.Metadata("tvdb:370070"))})
+	var dup indexfile.DuplicateRefError
+	if !errors.As(err, &dup) {
+		t.Fatalf("Upsert duplicate err = %v, want DuplicateRefError", err)
 	}
 }
 
 func TestIndexRemove(t *testing.T) {
-	idx := indexfile.New(t.TempDir())
-	bookworm := mustSeries(t, "Bookworm")
-	other := mustSeries(t, "Other")
-	if err := idx.Put(refs.Metadata("tvdb:370070"), bookworm); err != nil {
+	idx := indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	bookworm := minimalModel(t, "Bookworm", refs.Metadata("tvdb:370070"))
+	other := minimalModel(t, "Other", refs.Metadata("tvdb:111111"))
+	if err := idx.Upsert(indexfile.Entry{Model: bookworm}); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Put(refs.Metadata("tvdb:999999"), bookworm); err != nil {
+	if err := idx.Upsert(indexfile.Entry{Model: other}); err != nil {
 		t.Fatal(err)
 	}
-	if err := idx.Put(refs.Metadata("tvdb:111111"), other); err != nil {
-		t.Fatal(err)
-	}
-	idx.Remove(bookworm)
-	if _, ok, err := idx.Get(refs.Metadata("tvdb:370070")); err != nil || ok {
+	idx.Remove(bookworm.Ref)
+	if _, ok, err := idx.Get(bookworm.Metadata); err != nil || ok {
 		t.Fatalf("Get old ref = _, %v, %v; want absent", ok, err)
 	}
-	if _, ok, err := idx.Get(refs.Metadata("tvdb:999999")); err != nil || ok {
-		t.Fatalf("Get second old ref = _, %v, %v; want absent", ok, err)
+	if _, ok := idx.GetRow(bookworm.Ref); ok {
+		t.Fatal("GetRow after Remove should be absent")
 	}
-	if got, ok, err := idx.Get(refs.Metadata("tvdb:111111")); err != nil || !ok || got != other {
-		t.Fatalf("Get other = %q, %v, %v; want %q, true, nil", got, ok, err, other)
+	if got, ok, err := idx.Get(other.Metadata); err != nil || !ok || got != other.Ref {
+		t.Fatalf("Get other = %q, %v, %v; want %q, true, nil", got, ok, err, other.Ref)
 	}
 }
 
@@ -89,10 +80,11 @@ func TestRebuildReportsProgress(t *testing.T) {
 	ctx := progress.With(context.Background(), func(_ context.Context, event progress.Event) {
 		events = append(events, event)
 	})
-	_, err := indexfile.Rebuild(ctx, root, func(_ string, ref refs.Series, _ time.Time) (indexfile.Row, error) {
-		return indexfile.Row{Series: ref, Metadata: refs.Metadata("tvdb:370070"), Title: ref.String()}, nil
+	idx := indexfile.New(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	idx.SetEntryBuilderForTest(func(context.Context, string, refs.Series) (indexfile.Entry, error) {
+		return indexfile.Entry{Model: minimalModel(t, "Bookworm", refs.Metadata("tvdb:370070"))}, nil
 	})
-	if err != nil {
+	if err := idx.RebuildNow(ctx, "test"); err != nil {
 		t.Fatal(err)
 	}
 	if len(events) < 3 {

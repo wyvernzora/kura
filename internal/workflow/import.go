@@ -10,7 +10,6 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 	"github.com/wyvernzora/kura/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/internal/storage/seriesfile"
@@ -25,26 +24,6 @@ type ImportInput struct {
 	Ref      refs.Series
 	Force    bool
 	Ordering string
-}
-
-// replaceImportRow returns the index-CAS callback Import uses on the
-// final commit: drops any prior row pointing at `ref` (Force-replace
-// path), rejects conflicting rows for `metadataRef` pointing elsewhere,
-// and appends the new row.
-func replaceImportRow(ref refs.Series, metadataRef refs.Metadata, indexRow indexfile.Row) func(indexfile.Loaded) ([]indexfile.Row, error) {
-	return func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
-		filtered := make([]indexfile.Row, 0, len(loaded.Rows))
-		for _, row := range loaded.Rows {
-			if row.Series == ref {
-				continue
-			}
-			if row.Metadata == metadataRef && row.Series != ref {
-				return nil, &MetadataRefConflictError{Ref: metadataRef, Existing: row.Series, Next: ref}
-			}
-			filtered = append(filtered, row)
-		}
-		return append(filtered, indexRow), nil
-	}
 }
 
 // validateImportTarget checks the on-disk preconditions for Import:
@@ -121,9 +100,8 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
 		return response.AddResult{}, err
 	}
-	indexRow := indexfile.BuildRowFromModelWithOptions(model, deps.Now(), rowBuildOptions(deps))
-	if err := withIndexCAS(ctx, deps, "import", replaceImportRow(ref, metadataRef, indexRow)); err != nil {
-		return response.AddResult{}, err
+	if err := updateIndexRow(ctx, deps, model, "import"); err != nil {
+		return response.AddResult{}, translateIndexDuplicate(err)
 	}
 	progress.Success(ctx, "import", fmt.Sprintf("Imported %s", ref), 1)
 	return response.AddResult{

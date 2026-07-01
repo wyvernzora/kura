@@ -1,13 +1,11 @@
 package indexfile
 
-import "time"
+import (
+	"context"
 
-// ProbeBaselineForTest returns the watcher's cached (hash, mtime, size).
-// Test-only: lets external tests assert that synchronous mutation paths
-// (e.g. SaveAndAdopt) keep the probe baseline aligned with the on-disk
-// file so the next probe tick does not fire a no-op fullRefresh.
-func (i *Index) ProbeBaselineForTest() (hash string, mtime time.Time, size int64) {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	return i.cachedHash, i.cachedMTime, i.cachedSize
+	"github.com/wyvernzora/kura/internal/domain/refs"
+)
+
+func (i *Index) SetEntryBuilderForTest(build func(context.Context, string, refs.Series) (Entry, error)) {
+	i.builder = build
 }
