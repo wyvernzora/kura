@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 
 import type { ScanJobState } from '@/api/scanJob';
 import type { Show } from '@/api/types';
+import { AddToLibraryButton } from '@/components/series/AddToLibraryButton';
 import { ScanButton } from '@/components/series/ScanButton';
 import { ScanDetailsModal, type ScanDetailsView } from '@/components/series/ScanDetailsModal';
 import { SeriesStatusCornerPill } from '@/components/series/SeriesStatusCornerPill';
@@ -17,6 +18,8 @@ const DETAIL_TILT_DEG = 14;
 
 interface SeriesPosterCardProps {
   show: Show;
+  /** Preview mode: show "Add to library" instead of the scan action. */
+  preview?: boolean;
   className?: string;
 }
 
@@ -31,7 +34,7 @@ interface SeriesPosterCardProps {
  * The card sticks below `md:` so the right-column episode tables can
  * scroll independently without losing context of the series identity.
  */
-export function SeriesPosterCard({ show, className }: SeriesPosterCardProps) {
+export function SeriesPosterCard({ show, preview = false, className }: SeriesPosterCardProps) {
   const status = primaryStatus(withAiring(show.status, !!show.isAiring));
   const title = show.preferredTitle || show.canonicalTitle || show.ref;
   const posterUrl = show.artwork?.poster?.thumbnailUrl ?? show.artwork?.poster?.url;
@@ -75,12 +78,18 @@ export function SeriesPosterCard({ show, className }: SeriesPosterCardProps) {
       <h1 className="m-0 font-sans text-[26px] leading-tight font-semibold text-ink tracking-[-0.4px] [word-break:break-word]">
         {title}
       </h1>
-      <ScanButton
-        metadataRef={show.metadataRef}
-        lastScanned={show.lastScanned}
-        onShowDetails={handleShowDetails}
-      />
-      <ScanDetailsModal open={modalOpen} onOpenChange={setModalOpen} view={view} />
+      {preview ? (
+        <AddToLibraryButton metadataRef={show.metadataRef} />
+      ) : (
+        <>
+          <ScanButton
+            metadataRef={show.metadataRef}
+            lastScanned={show.lastScanned}
+            onShowDetails={handleShowDetails}
+          />
+          <ScanDetailsModal open={modalOpen} onOpenChange={setModalOpen} view={view} />
+        </>
+      )}
     </aside>
   );
 }
@@ -91,7 +100,7 @@ interface PosterFrameProps {
   status: ReturnType<typeof primaryStatus>;
 }
 
-function PosterFrame({ title, posterUrl, status }: PosterFrameProps) {
+export function PosterFrame({ title, posterUrl, status }: PosterFrameProps) {
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const showImage = !!posterUrl && !imgError;
