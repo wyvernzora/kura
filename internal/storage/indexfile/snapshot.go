@@ -32,55 +32,78 @@ func readSnapshot(root string) (map[refs.Series]entry, error) {
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 0, 64*1024), 8<<20)
-	if !scanner.Scan() {
-		if err := scanner.Err(); err != nil {
-			return nil, fmt.Errorf("indexfile: parse: %w", err)
-		}
-		return nil, fmt.Errorf("indexfile: parse: missing header")
-	}
-	var header Header
-	if err := json.Unmarshal(scanner.Bytes(), &header); err != nil {
-		return nil, fmt.Errorf("indexfile: parse header: %w", err)
-	}
-	if header.SchemaVersion != SchemaVersion {
-		return nil, fmt.Errorf("%w: got %d, want %d", ErrSchemaMismatch, header.SchemaVersion, SchemaVersion)
+	if err := readHeader(scanner); err != nil {
+		return nil, err
 	}
 
 	out := map[refs.Series]entry{}
 	byMeta := map[refs.Metadata]refs.Series{}
 	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(bytes.TrimSpace(line)) == 0 {
+		if len(bytes.TrimSpace(scanner.Bytes())) == 0 {
 			continue
 		}
-		var wire snapshotLine
-		if err := json.Unmarshal(line, &wire); err != nil {
-			return nil, fmt.Errorf("indexfile: parse entry: %w", err)
+		e, err := parseEntry(root, scanner.Bytes(), byMeta)
+		if err != nil {
+			return nil, err
 		}
-		if wire.Series.IsZero() {
-			return nil, fmt.Errorf("indexfile: parse entry: series is required")
-		}
-		e := entry{series: wire.Series, err: wire.Error}
-		if len(wire.Model) > 0 {
-			model, err := seriesfile.Decode(root, wire.Series, wire.Model)
-			if err != nil {
-				return nil, fmt.Errorf("indexfile: parse model %s: %w", wire.Series, err)
-			}
-			if model.Metadata != "" {
-				if existing, ok := byMeta[model.Metadata]; ok && existing != wire.Series {
-					return nil, DuplicateRefError{Ref: model.Metadata, Existing: existing, Next: wire.Series}
-				}
-				byMeta[model.Metadata] = wire.Series
-			}
-			e.model = model
-			e.raw = append(json.RawMessage(nil), wire.Model...)
-		}
-		out[wire.Series] = e
+		out[e.series] = e
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("indexfile: parse: %w", err)
 	}
 	return out, nil
+}
+
+func readHeader(scanner *bufio.Scanner) error {
+	if !scanner.Scan() {
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("indexfile: parse: %w", err)
+		}
+		return fmt.Errorf("indexfile: parse: missing header")
+	}
+	var header Header
+	if err := json.Unmarshal(scanner.Bytes(), &header); err != nil {
+		return fmt.Errorf("indexfile: parse header: %w", err)
+	}
+	if header.SchemaVersion != SchemaVersion {
+		return fmt.Errorf("%w: got %d, want %d", ErrSchemaMismatch, header.SchemaVersion, SchemaVersion)
+	}
+	return nil
+}
+
+func parseEntry(root string, line []byte, byMeta map[refs.Metadata]refs.Series) (entry, error) {
+	var wire snapshotLine
+	if err := json.Unmarshal(line, &wire); err != nil {
+		return entry{}, fmt.Errorf("indexfile: parse entry: %w", err)
+	}
+	if wire.Series.IsZero() {
+		return entry{}, fmt.Errorf("indexfile: parse entry: series is required")
+	}
+	e := entry{series: wire.Series, err: wire.Error}
+	if len(wire.Model) == 0 {
+		return e, nil
+	}
+	model, err := seriesfile.Decode(root, wire.Series, wire.Model)
+	if err != nil {
+		return entry{}, fmt.Errorf("indexfile: parse model %s: %w", wire.Series, err)
+	}
+	if err := recordMetadataRef(byMeta, model.Metadata, wire.Series); err != nil {
+		return entry{}, err
+	}
+	e.model = model
+	e.raw = append(json.RawMessage(nil), wire.Model...)
+	return e, nil
+}
+
+func recordMetadataRef(byMeta map[refs.Metadata]refs.Series, metadata refs.Metadata, series refs.Series) error {
+	if metadata == "" {
+		return nil
+	}
+	if existing, ok := byMeta[metadata]; ok && existing != series {
+		return DuplicateRefError{Ref: metadata, Existing: existing, Next: series}
+	}
+	byMeta[metadata] = series
+	return nil
 }
 
 func writeSnapshot(root string, entries []entry, mutator coord.Mutator) error {
