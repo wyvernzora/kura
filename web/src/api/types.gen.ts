@@ -149,8 +149,9 @@ export type ListStatus = 'untracked' | 'complete' | 'incomplete' | 'error';
  */
 export const ListStatusUntracked: ListStatus = 'untracked';
 /**
- * ListStatusComplete: every aired episode has present media, no
- * pending air dates, no missing entries.
+ * ListStatusComplete: every currently actionable episode has active
+ * or staged media. Pending-only series are complete because there is
+ * no missing media to act on yet.
  */
 export const ListStatusComplete: ListStatus = 'complete';
 /**
