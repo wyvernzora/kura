@@ -2,6 +2,19 @@
 
 Notable release changes for Kura.
 
+## v0.2.0 - 2026-07-01
+
+### Highlights
+
+- Web UI can add series from search results, preview provider-backed series
+  before they are tracked, and flip to the tracked view after add.
+- Resolve candidates now include poster artwork from TVDB search results, and
+  live series previews report untracked episodes as missing.
+- Added release-published Kura n8n custom nodes.
+- Added configurable airing-tail handling through `KURA_AIRING_TAIL_DAYS`.
+- Kept dependencies current across Go, web, n8n, Docker, and GitHub Actions,
+  and stopped release cleanup from pruning GHCR image manifests.
+
 ## v0.1.0 - 2026-06-14
 
 Initial release of Kura, an anime-first personal library manager.

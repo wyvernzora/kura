@@ -133,7 +133,7 @@ auth as a deploy gate (auto-generated and persisted at
 `KURA_DISABLE_TOKEN=1` when fronting with an authenticating proxy).
 
 ```sh
-docker build --build-arg VERSION=v0.1.0 -t kura:v0.1.0 .
+docker build --build-arg VERSION=v0.2.0 -t kura:v0.2.0 .
 docker run --rm \
   -e KURA_LIBRARY_ROOT=/library \
   -e KURA_INBOX_ROOT=/inbox \
@@ -141,7 +141,7 @@ docker run --rm \
   -v /downloads:/inbox \
   -v kura-token:/var/lib/kura \
   -p 8080:8080 \
-  kura:v0.1.0 serve --rest=:8080
+  kura:v0.2.0 serve --rest=:8080
 ```
 
 For Kubernetes manifests, NFS / UID matching, and the stuck-claim
