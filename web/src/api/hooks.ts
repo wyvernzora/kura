@@ -1,9 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useDebounced } from '@/lib/useDebounced';
 
 import { api } from './client';
-import type { ListResult, ListRow, Resolution, ResolveRequest, Show } from './types';
+import type {
+  AddRequest,
+  AddResult,
+  ListResult,
+  ListRow,
+  Resolution,
+  ResolveRequest,
+  Show,
+} from './types';
 
 const PAGE_SIZE = 100;
 
@@ -87,12 +95,13 @@ const RESOLVE_MIN_QUERY_LENGTH = 2;
  * not yet hydrated) so consumers can call `useShow(ref)` from a
  * conditionally-mounted component without guarding.
  */
-export function useShow(ref: string | undefined) {
+export function useShow(ref: string | undefined, preview = false) {
   return useQuery({
-    queryKey: ['series', 'show', ref],
+    queryKey: ['series', 'show', ref, preview],
     enabled: !!ref,
     staleTime: 30_000,
-    queryFn: () => api<Show>(`/api/v1/series/${encodeURIComponent(ref ?? '')}`),
+    queryFn: () =>
+      api<Show>(`/api/v1/series/${encodeURIComponent(ref ?? '')}${preview ? '?preview=true' : ''}`),
   });
 }
 
@@ -109,5 +118,22 @@ export function useResolveSearch(query: string) {
         method: 'POST',
         body: JSON.stringify({ terms: [debounced] } satisfies ResolveRequest),
       }),
+  });
+}
+
+/**
+ * Add a series to the library by metadata ref (POST /api/v1/series).
+ * On success invalidates the library list so the new series lands in the
+ * grid; callers navigate to the returned metadataRef.
+ */
+export function useAddSeries() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AddRequest) =>
+      api<AddResult>('/api/v1/series', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['series'] }),
   });
 }

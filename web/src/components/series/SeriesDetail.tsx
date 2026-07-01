@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { useShow } from '@/api/hooks';
+import type { Show } from '@/api/types';
 import { SeasonPanel } from '@/components/series/SeasonPanel';
 import { SeriesDetailSkeleton } from '@/components/series/SeriesDetailSkeleton';
 import { SeriesPosterCard } from '@/components/series/SeriesPosterCard';
@@ -10,6 +11,12 @@ import { cn } from '@/lib/cn';
 interface SeriesDetailProps {
   /** Metadata ref (provider:id) from the route params. */
   seriesRef: string | undefined;
+  /**
+   * Preview mode: fetch the page from live provider metadata for a
+   * series not yet in the library (all episodes render as missing, and
+   * the scan action is replaced with "Add to library").
+   */
+  preview?: boolean;
 }
 
 /**
@@ -18,9 +25,12 @@ interface SeriesDetailProps {
  *   - pending  → `SeriesDetailSkeleton`
  *   - error    → centered `Card` with the error message
  *   - success  → poster card + per-season panels
+ *
+ * In `preview` mode the same layout renders from provider data with an
+ * "Add to library" action instead of scan.
  */
-export function SeriesDetail({ seriesRef }: SeriesDetailProps) {
-  const { data, isPending, isError, error } = useShow(seriesRef);
+export function SeriesDetail({ seriesRef, preview = false }: SeriesDetailProps) {
+  const { data, isPending, error } = useShow(seriesRef, preview);
 
   // Specials (season 0) belong at the bottom — they're a footnote,
   // not the headline. Sort regular seasons ascending and append
@@ -37,9 +47,19 @@ export function SeriesDetail({ seriesRef }: SeriesDetailProps) {
   if (isPending) {
     return <SeriesDetailSkeleton />;
   }
-  if (isError || !data) {
+  if (!data) {
     return <ErrorState error={error} />;
   }
+  return <SeriesDetailBody data={data} orderedSeasons={orderedSeasons} preview={preview} />;
+}
+
+interface SeriesDetailBodyProps {
+  data: Show;
+  orderedSeasons: Show['seasons'];
+  preview: boolean;
+}
+
+function SeriesDetailBody({ data, orderedSeasons, preview }: SeriesDetailBodyProps) {
   return (
     <div
       className={cn(
@@ -47,7 +67,7 @@ export function SeriesDetail({ seriesRef }: SeriesDetailProps) {
         'md:grid-cols-[300px_1fr]',
       )}
     >
-      <SeriesPosterCard show={data} />
+      <SeriesPosterCard show={data} preview={preview} />
       <div className="min-w-0">
         {data.truncated && <TruncatedNotice />}
         {orderedSeasons.length === 0 ? (

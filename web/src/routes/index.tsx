@@ -3,6 +3,7 @@ import { useCallback, useMemo } from 'react';
 
 import { useSeriesList } from '@/api/hooks';
 import type { ListRow } from '@/api/types';
+import { AddCandidates } from '@/components/AddCandidates';
 import { ClearFiltersButton } from '@/components/ClearFiltersButton';
 import { SortDropdown } from '@/components/SortDropdown';
 import { StatusFilterDropdown } from '@/components/StatusFilterDropdown';
@@ -72,6 +73,13 @@ function LibraryHome() {
   const isSearching = trimmed.length > 0;
 
   const allRows = seriesQuery.data ?? [];
+
+  // Metadata refs already in the library — used by AddCandidates to
+  // drop provider matches the user already owns.
+  const libraryRefs = useMemo(
+    () => new Set(allRows.map((r) => r.metadataRef).filter((ref): ref is string => !!ref)),
+    [allRows],
+  );
 
   const counts = useMemo(() => {
     const c: Partial<Record<Status, number>> = {};
@@ -149,6 +157,8 @@ function LibraryHome() {
           <SortDropdown value={sort} onChange={setSort} />
         </header>
       )}
+
+      {isSearching && <AddCandidates query={trimmed} libraryRefs={libraryRefs} />}
 
       {isSearching && (
         <header className="mb-4 flex items-baseline gap-3 text-sm">

@@ -17,6 +17,8 @@
 // working — there is no conflict with `lib/status.ts` where `Status`
 // names the library-status enum (= generated `ListStatus`).
 export type {
+  // Add
+  AddResult,
   ArtworkShow,
   Candidate,
   CompanionShow,
@@ -107,4 +109,15 @@ export interface LibraryResponse {
  */
 export interface ResolveRequest {
   terms: string[];
+}
+
+/**
+ * `POST /api/v1/series` request body. Hand-written: request shapes have
+ * not been hoisted into a shared Go package yet. `ref` is a metadata ref
+ * (provider:id); `dirname` / `ordering` are optional overrides.
+ */
+export interface AddRequest {
+  ref: string;
+  dirname?: string;
+  ordering?: string;
 }

@@ -150,6 +150,24 @@ html[data-k-theme="dark"] .kura-focusable:focus-visible {
   outline: none;
 }
 
+/*
+ * Keyboard-only variant of the focus glow. Unlike .kura-focusable it
+ * omits :focus-within, so plain buttons don't light up on mouse click
+ * (:focus-within matches a pressed button); the ring appears only when
+ * tabbed to (:focus-visible).
+ */
+.kura-focusable-kb:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(96, 142, 220, 0.22),
+    0 4px 18px rgba(96, 142, 220, 0.3);
+}
+html[data-k-theme="dark"] .kura-focusable-kb:focus-visible {
+  box-shadow:
+    0 0 0 3px rgba(120, 168, 240, 0.3),
+    0 4px 22px rgba(120, 168, 240, 0.45);
+}
+
 ::selection {
   background: color-mix(in srgb, var(--color-status-airing) 30%, transparent);
 }
