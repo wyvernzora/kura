@@ -32,6 +32,8 @@ type searchRecord struct {
 	FirstAired      string             `json:"first_air_time"`
 	PrimaryLanguage string             `json:"primary_language"`
 	Country         string             `json:"country"`
+	ImageURL        string             `json:"image_url"`
+	Thumbnail       string             `json:"thumbnail"`
 	RemoteIDs       []remoteID         `json:"remote_ids"`
 }
 
@@ -67,6 +69,9 @@ func (p *Provider) normalizeSearchResult(record searchRecord) provider.SearchRes
 			year:             parseInt(record.Year.String()),
 			genres:           record.Genres.Values,
 			titles:           searchTitleCandidates(record),
+			// Search carries a series poster URL directly, so candidate
+			// lists get artwork without a per-result extended fetch.
+			poster: provider.Artwork{URL: record.ImageURL, ThumbnailURL: record.Thumbnail},
 		}),
 		Score:       record.Score,
 		MatchSource: "query",

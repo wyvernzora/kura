@@ -443,6 +443,8 @@ export interface Candidate {
   originalLanguage?: string;
   originalCountry?: string;
   genres?: string[];
+  posterUrl?: string;
+  posterThumbnailUrl?: string;
   evidence?: Evidence[];
 }
 /**

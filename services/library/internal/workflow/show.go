@@ -25,12 +25,19 @@ import (
 // load. Status / Source / Resolution are sets; an empty slice means
 // "any."
 type ShowInput struct {
-	Ref        refs.Series
-	Now        time.Time
-	Episodes   refs.EpisodeSelector
-	Status     []response.Status
-	Source     []string
-	Resolution []string
+	Ref refs.Series
+	// MetadataRef + Preview drive the live-provider preview path: when
+	// Preview is set, Show ignores Ref and builds the response from the
+	// provider's metadata for MetadataRef instead of local series.json.
+	// Used to render a series' detail page before it's added to the
+	// library. All episodes report as missing.
+	MetadataRef refs.Metadata
+	Preview     bool
+	Now         time.Time
+	Episodes    refs.EpisodeSelector
+	Status      []response.Status
+	Source      []string
+	Resolution  []string
 }
 
 // Show returns the full observed state for one series: persisted
@@ -41,6 +48,9 @@ type ShowInput struct {
 func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 	if err := ctx.Err(); err != nil {
 		return response.Show{}, err
+	}
+	if in.Preview {
+		return showPreview(ctx, deps, in)
 	}
 	if in.Ref.IsZero() {
 		return response.Show{}, &NotFoundError{Ref: in.Ref}
@@ -101,22 +111,79 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		CanonicalTitle: model.CanonicalTitle.String(),
 		Status:         row.Status,
 		IsAiring:       row.IsAiring,
-		Seasons:        buildSeasons(seriesRoot, model, now, filter),
+		Seasons:        buildSeasons(seriesRoot, model, now, filter, false),
 		StagedTrash:    buildStagedTrash(seriesRoot, model.StagedTrash),
 		StagedExtras:   buildStagedExtras(deps.InboxRoot, model.StagedExtras),
-	}
-	if !model.Artwork.IsZero() {
-		artwork := &response.ArtworkShow{}
-		if !model.Artwork.Poster.IsZero() {
-			artwork.Poster = &response.PosterShow{
-				URL:          model.Artwork.Poster.URL,
-				ThumbnailURL: model.Artwork.Poster.ThumbnailURL,
-				Language:     model.Artwork.Poster.Language,
-			}
-		}
-		out.Artwork = artwork
+		Artwork:        artworkShow(model.Artwork),
 	}
 	return out, nil
+}
+
+// showPreview builds a Show from live provider metadata for a series
+// that isn't in the library yet (MetadataRef, not a local series.json).
+// The episode spine comes from the provider; every episode reports as
+// missing since nothing is on disk. Backs the UI's pre-add preview
+// (GET /series/{ref}?preview=true).
+func showPreview(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
+	metadataSeries, metadataRef, err := fetchSeriesMetadata(ctx, deps, in.MetadataRef, "")
+	if err != nil {
+		return response.Show{}, err
+	}
+	// Derive the directory name the series would get on add, so the
+	// preview shows its eventual Ref.
+	ref, err := resolveAddRef(refs.Series{}, metadataSeries)
+	if err != nil {
+		return response.Show{}, err
+	}
+	model, err := seriesfile.NewFromMetadata(metadataRef, "", metadataSeries)
+	if err != nil {
+		return response.Show{}, err
+	}
+	model.Ref = ref
+	now := in.Now
+	if now.IsZero() {
+		now = deps.Now()
+	}
+	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
+	filter := episodeFilter{
+		selector:    in.Episodes,
+		statuses:    statusSet(in.Status),
+		sources:     stringSet(in.Source),
+		resolutions: stringSet(in.Resolution),
+	}
+	row := indexfile.BuildRowFromModelWithOptions(model, now, rowBuildOptions(deps))
+	preferredTitle := model.PreferredTitle.String()
+	if preferredTitle == "" {
+		preferredTitle = ref.String()
+	}
+	return response.Show{
+		MetadataRef:    metadataRef,
+		Ref:            ref,
+		Root:           librarySelector(deps.LibRoot, seriesRoot),
+		PreferredTitle: preferredTitle,
+		CanonicalTitle: model.CanonicalTitle.String(),
+		Status:         row.Status,
+		IsAiring:       row.IsAiring,
+		Seasons:        buildSeasons(seriesRoot, model, now, filter, true),
+		Artwork:        artworkShow(model.Artwork),
+	}, nil
+}
+
+// artworkShow maps persisted series artwork to its response shape.
+// Returns nil when there's no artwork so the field omits cleanly.
+func artworkShow(a domainseries.Artwork) *response.ArtworkShow {
+	if a.IsZero() {
+		return nil
+	}
+	out := &response.ArtworkShow{}
+	if !a.Poster.IsZero() {
+		out.Poster = &response.PosterShow{
+			URL:          a.Poster.URL,
+			ThumbnailURL: a.Poster.ThumbnailURL,
+			Language:     a.Poster.Language,
+		}
+	}
+	return out
 }
 
 func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) []response.TrashItemShow {
@@ -240,15 +307,21 @@ func stringSet(in []string) map[string]struct{} {
 	return out
 }
 
-func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, filter episodeFilter) []response.SeasonShow {
+func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, filter episodeFilter, forceMissing bool) []response.SeasonShow {
 	bySeason := map[int][]response.EpisodeShow{}
 	allSeasons := map[int]struct{}{}
 	for ref, episode := range model.Episodes {
 		allSeasons[ref.Season()] = struct{}{}
+		status := computeEpisodeStatus(episode, now)
+		if forceMissing {
+			// Preview: nothing is on disk, so every episode reads as
+			// missing (collapses pending/future into missing too).
+			status = response.StatusMissing
+		}
 		view := response.EpisodeShow{
 			Episode:        ref,
 			Aired:          formatAirDate(episode.AirDate),
-			Status:         computeEpisodeStatus(episode, now),
+			Status:         status,
 			PreferredTitle: episode.PreferredTitle.String(),
 			CanonicalTitle: episode.CanonicalTitle.String(),
 		}

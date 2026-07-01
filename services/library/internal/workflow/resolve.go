@@ -41,14 +41,17 @@ func Resolve(ctx context.Context, deps Deps, in ResolveInput) (response.Resoluti
 		progress.Failure(ctx, "resolve", "Failed to resolve series", 0, 0)
 		return response.Resolution{}, err
 	}
-	// Search results carry no genres on TVDB (search endpoint omits
-	// them). Enrich ambiguous results with a parallel detail fetch so
-	// the agent can tell an anime adaptation from a live-action one.
-	// Single-match results skip the round-trip — no disambiguation
-	// needed.
-	var genreByRef map[string][]string
+	// Search results carry no genres or artwork on TVDB (search endpoint
+	// omits them). Enrich ambiguous results with a parallel detail fetch
+	// so the agent can tell an anime adaptation from a live-action one
+	// and UI surfaces can show candidate posters. Single-match results
+	// skip the round-trip — no disambiguation needed.
+	//
+	// ponytail: singleton resolve shows placeholder art; drop the >1 gate
+	// if posters are wanted on unique matches too.
+	var enriched map[string]enrichment
 	if len(res.Results) > 1 {
-		genreByRef = fetchGenres(ctx, source, res.Results)
+		enriched = enrichCandidates(ctx, source, res.Results)
 	}
 	progress.Success(ctx, "resolve", "Resolved series", len(res.Results))
 
@@ -57,44 +60,61 @@ func Resolve(ctx context.Context, deps Deps, in ResolveInput) (response.Resoluti
 	}
 	for _, r := range res.Results {
 		genres := r.Summary.Genres
-		if g, ok := genreByRef[r.Summary.MetadataRef.String()]; ok {
-			genres = g
+		// Poster comes from the search response (reliable, one request);
+		// the enrichment fetch only supplies genres and a poster
+		// fallback for the rare record with no search image.
+		poster := r.Summary.Poster
+		if got, ok := enriched[r.Summary.MetadataRef.String()]; ok {
+			genres = got.genres
+			if poster.URL == "" {
+				poster = provider.Artwork{URL: got.posterURL, ThumbnailURL: got.posterThumb}
+			}
 		}
-		out.Candidates = append(out.Candidates, candidateFrom(r, genres))
+		out.Candidates = append(out.Candidates, candidateFrom(r, genres, poster))
 	}
 	return out, nil
 }
 
-// candidateFrom builds a response.Candidate from a resolve.Result,
-// substituting an externally-fetched genres slice when available.
-func candidateFrom(r resolve.Result, genres []string) response.Candidate {
+// enrichment holds the per-candidate facts pulled from a detail fetch
+// that the lightweight search result lacks.
+type enrichment struct {
+	genres      []string
+	posterURL   string
+	posterThumb string
+}
+
+// candidateFrom builds a response.Candidate from a resolve.Result plus
+// the resolved genres and poster.
+func candidateFrom(r resolve.Result, genres []string, poster provider.Artwork) response.Candidate {
 	evidence := make([]response.Evidence, 0, len(r.Evidence))
-	for _, e := range r.Evidence {
+	for _, ev := range r.Evidence {
 		evidence = append(evidence, response.Evidence{
-			Term:        e.Term,
-			Rank:        e.Rank,
-			MatchSource: e.MatchSource,
-			Annotations: e.Annotations,
+			Term:        ev.Term,
+			Rank:        ev.Rank,
+			MatchSource: ev.MatchSource,
+			Annotations: ev.Annotations,
 		})
 	}
 	return response.Candidate{
-		Ref:              r.Summary.MetadataRef,
-		PreferredTitle:   r.Summary.PreferredTitle.String(),
-		CanonicalTitle:   r.Summary.CanonicalTitle.String(),
-		Year:             r.Summary.Year,
-		FirstAired:       r.Summary.FirstAired,
-		OriginalLanguage: r.Summary.OriginalLanguage,
-		OriginalCountry:  r.Summary.OriginalCountry,
-		Genres:           append([]string(nil), genres...),
-		Evidence:         evidence,
+		Ref:                r.Summary.MetadataRef,
+		PreferredTitle:     r.Summary.PreferredTitle.String(),
+		CanonicalTitle:     r.Summary.CanonicalTitle.String(),
+		Year:               r.Summary.Year,
+		FirstAired:         r.Summary.FirstAired,
+		OriginalLanguage:   r.Summary.OriginalLanguage,
+		OriginalCountry:    r.Summary.OriginalCountry,
+		Genres:             append([]string(nil), genres...),
+		PosterURL:          poster.URL,
+		PosterThumbnailURL: poster.ThumbnailURL,
+		Evidence:           evidence,
 	}
 }
 
-// fetchGenres pulls per-candidate genres in parallel via
-// source.GetSeries. Failures per-candidate fall back to no genres
-// (best-effort enrichment, never breaks the resolve).
-func fetchGenres(ctx context.Context, source provider.Source, results []resolve.Result) map[string][]string {
-	out := make(map[string][]string, len(results))
+// enrichCandidates pulls per-candidate genres and poster art in parallel
+// via source.GetSeries. Failures per-candidate fall back to no
+// enrichment (best-effort, never breaks the resolve).
+func enrichCandidates(ctx context.Context, source provider.Source, results []resolve.Result) map[string]enrichment {
+	out := make(map[string]enrichment, len(results))
 	var mu sync.Mutex
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(8)
@@ -106,7 +126,11 @@ func fetchGenres(ctx context.Context, source provider.Source, results []resolve.
 				return nil
 			}
 			mu.Lock()
-			out[ref.String()] = append([]string(nil), series.SeriesSummary.Genres...)
+			out[ref.String()] = enrichment{
+				genres:      append([]string(nil), series.SeriesSummary.Genres...),
+				posterURL:   series.Poster.URL,
+				posterThumb: series.Poster.ThumbnailURL,
+			}
 			mu.Unlock()
 			return nil
 		})
