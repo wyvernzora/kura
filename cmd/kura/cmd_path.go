@@ -1,13 +1,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 
-	clipkg "github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/internal/cli/client"
 	"github.com/wyvernzora/kura/internal/cli/stdio"
-	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
-	"github.com/wyvernzora/kura/internal/workflow"
 )
 
 type pathCmd struct {
@@ -16,24 +17,36 @@ type pathCmd struct {
 }
 
 func (cmd *pathCmd) Run(rt *runContext) error {
-	deps, err := buildDeps(rt)
+	libRoot := rt.Getenv("KURA_LIBRARY_ROOT")
+	if libRoot == "" {
+		return errors.New("KURA_LIBRARY_ROOT is required")
+	}
+	c := clientFromRT(rt)
+	io := stdio.From(rt.Context)
+	ref, err := resolveTermsToRef(rt, c, io, cmd.Terms)
 	if err != nil {
 		return err
 	}
-	io := stdio.From(rt.Context)
-	return clipkg.WithResolve(rt.Context, io, deps, cmd.Terms, func(metadataRef refs.Metadata) error {
-		seriesRef, ok, err := deps.Index.Get(metadataRef)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return &workflow.MetadataRefNotIndexedError{Ref: metadataRef}
-		}
-		out := paths.SeriesDir(deps.LibRoot, seriesRef)
-		if cmd.SeriesFile {
-			out = paths.SeriesMetadata(deps.LibRoot, seriesRef)
-		}
-		_, err = fmt.Fprintln(rt.Stdout, out)
+	show, err := c.ShowSeries(rt.Context, ref, client.ShowOptions{})
+	if err != nil {
 		return err
-	})
+	}
+	rel, err := libraryRel(show.Root)
+	if err != nil {
+		return err
+	}
+	out := filepath.Join(libRoot, filepath.FromSlash(rel))
+	if cmd.SeriesFile {
+		out = filepath.Join(out, paths.KuraDir, paths.SeriesFileName)
+	}
+	_, err = fmt.Fprintln(rt.Stdout, out)
+	return err
+}
+
+func libraryRel(selector string) (string, error) {
+	scheme, rel, ok := strings.Cut(selector, ":")
+	if !ok || scheme != "library" || rel == "" {
+		return "", fmt.Errorf("expected library selector, got %q", selector)
+	}
+	return rel, nil
 }

@@ -28,26 +28,6 @@ func buildSourceFromFlags(rt *runContext, flags *cli) (provider.Source, error) {
 	})
 }
 
-// buildDeps constructs the workflow.Deps used by every workflow call.
-// CLI commands need a ready index before any workflow runs, so this
-// blocks on any in-flight rebuild via WaitReady. buildServeDeps uses
-// buildDepsAsyncIndex to skip the wait and let transports come up
-// while the rebuild proceeds in the background.
-//
-// The metadata provider is wrapped in a sync.Once factory so local-only
-// commands run without KURA_TVDB_KEY; provider-needing workflows surface
-// the missing-key error only when actually required.
-func buildDeps(rt *runContext) (workflow.Deps, error) {
-	deps, err := buildDepsAsyncIndex(rt)
-	if err != nil {
-		return deps, err
-	}
-	if err := deps.Index.WaitReady(rt.Context); err != nil {
-		return workflow.Deps{}, err
-	}
-	return deps, nil
-}
-
 // buildDepsAsyncIndex constructs Deps without blocking on the index
 // rebuild. Used by serve to surface KindServerNotReady to early
 // requests instead of delaying transport startup.
