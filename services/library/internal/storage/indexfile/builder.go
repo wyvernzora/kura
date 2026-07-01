@@ -313,7 +313,7 @@ func splitIntoCours(sorted []civil.Date, gapDays int) [][]civil.Date {
 }
 
 func listStatusFor(summary seriesSummary) response.ListStatus {
-	if summary.episodes == 0 {
+	if summary.episodes == 0 && summary.pending == 0 {
 		return response.ListStatusIncomplete
 	}
 	if summary.missing > 0 {

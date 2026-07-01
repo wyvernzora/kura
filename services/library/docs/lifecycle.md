@@ -376,11 +376,12 @@ the library root may live on slow network storage.
 
 **Series status:**
 
-- `complete` — every known non-special episode has an active or
-  staged media record.
+- `complete` — every currently actionable non-special episode has an
+  active or staged media record. A pending-only spine is complete
+  because there is no missing media to act on yet.
 - `incomplete` — there are zero known non-special episodes, or at
-  least one known non-special episode without active/staged media has
-  aired or lacks an air date.
+  least one currently actionable non-special episode without
+  active/staged media has aired.
 - `untracked` — visible direct child directory with no
   `.kura/series.json`.
 - `error` — `.kura/series.json` exists but cannot be read or decoded.

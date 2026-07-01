@@ -28,7 +28,7 @@ In MCP output, a staged replacement is reported as `staged` with both `active` a
 
 Library-list row status values:
 
-- `complete`: every currently trackable aired episode has active media.
+- `complete`: every currently trackable aired episode has active or staged media; pending-only series are complete because there is nothing to fetch yet.
 - `incomplete`: at least one currently trackable aired episode is missing media, or the series has no episodes.
 - `untracked`: Kura can see the series, but does not manage it yet.
 - `error`: Kura could not compute the row; the row carries an error message.
