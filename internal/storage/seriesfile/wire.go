@@ -103,6 +103,19 @@ type companionRecordV1 struct {
 // search key) are empty by default; populated by scan + alias
 // mutations.
 func encode(s seriesV3) ([]byte, error) {
+	normalizeWire(&s)
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	data = append(data, '\n')
+	if err := validateSeries(currentSchemaVersion, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func normalizeWire(s *seriesV3) {
 	s.SchemaVersion = currentSchemaVersion
 	if s.Episodes == nil {
 		s.Episodes = map[string]episodeV2{}
@@ -133,15 +146,6 @@ func encode(s seriesV3) ([]byte, error) {
 	if len(s.UserAliases) == 0 {
 		s.UserAliases = nil
 	}
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	data = append(data, '\n')
-	if err := validateSeries(currentSchemaVersion, data); err != nil {
-		return nil, err
-	}
-	return data, nil
 }
 
 type schemaHeader struct {
@@ -152,6 +156,10 @@ type schemaHeader struct {
 // — operators on legacy files must re-scan to upgrade. v4+ rejected
 // as forward-incompatible.
 func decode(data []byte) (seriesV3, error) {
+	return decodeWire(data, true)
+}
+
+func decodeWire(data []byte, validate bool) (seriesV3, error) {
 	var header schemaHeader
 	if err := json.Unmarshal(data, &header); err != nil {
 		return seriesV3{}, fmt.Errorf("seriesfile: decode: %w", err)
@@ -159,8 +167,10 @@ func decode(data []byte) (seriesV3, error) {
 	if header.SchemaVersion != currentSchemaVersion {
 		return seriesV3{}, fmt.Errorf("seriesfile: unsupported schemaVersion %d", header.SchemaVersion)
 	}
-	if err := validateSeries(currentSchemaVersion, data); err != nil {
-		return seriesV3{}, err
+	if validate {
+		if err := validateSeries(currentSchemaVersion, data); err != nil {
+			return seriesV3{}, err
+		}
 	}
 	var s seriesV3
 	if err := json.Unmarshal(data, &s); err != nil {
