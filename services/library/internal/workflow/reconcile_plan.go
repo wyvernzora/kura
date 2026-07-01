@@ -68,7 +68,6 @@ func reconcileDeps(deps Deps) reconcile.Deps {
 		Now:         deps.Now,
 		Coordinator: deps.Coordinator,
 		Logger:      deps.Logger,
-		Index:       deps.Index,
 		Jobs:        deps.Jobs,
 	}
 	rd.UpdateIndex = func(ctx context.Context, model *domainseries.Series, op string) error {

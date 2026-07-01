@@ -21,7 +21,6 @@ import (
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 // Deps is the cross-call dependency set the reconcile package needs.
@@ -49,9 +48,6 @@ type Deps struct {
 	// (file moves, claim acquire/release) to. Optional — nil disables
 	// audit logging.
 	Logger *slog.Logger
-
-	// Index is the in-memory metadata-ref → series-ref cache.
-	Index *indexfile.Index
 
 	// Jobs is the registry that backs the async Apply job. Required
 	// for Apply; unused by Plan / Recover.
