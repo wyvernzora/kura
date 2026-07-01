@@ -12,6 +12,8 @@ Notable release changes for Kura.
   live series previews report untracked episodes as missing.
 - Added release-published Kura n8n custom nodes.
 - Added configurable airing-tail handling through `KURA_AIRING_TAIL_DAYS`.
+- Changed `.kura/index.jsonl` to schema v5 source snapshots so deploy-time
+  row policy is applied at read time instead of persisted into row-cache data.
 - Kept dependencies current across Go, web, n8n, Docker, and GitHub Actions,
   and stopped release cleanup from pruning GHCR image manifests.
 

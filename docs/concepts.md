@@ -57,11 +57,11 @@ spine entries.
 **Mutator** — identity tuple stamped on every metadata write:
 `{op, pid, host, at}`. Records who last wrote the file.
 
-**CAS (compare-and-swap)** — write semantics for `series.json` and
-`index.jsonl`. The writer reads a hash with the file, mutates in
-memory, then writes only if the on-disk hash still matches. On
-conflict, the writer reloads and retries. Implemented in
-`internal/coord/`.
+**CAS (compare-and-swap)** — write semantics for `series.json`. The
+writer reads a hash with the file, mutates in memory, then writes only
+if the on-disk hash still matches. On conflict, the writer reloads and
+retries. `index.jsonl` is serialized by the process index coordinator
+and is rebuildable from per-series metadata.
 
 **ULID** — universally unique lexicographically sortable identifier.
 Used for trash entry directories and job IDs.
@@ -76,8 +76,8 @@ nested or non-standard layouts. The library layout is generally
 compatible with common media servers like Plex and Jellyfin.
 
 The library root contains one library-wide artifact:
-`.kura/index.jsonl`, a regenerable lookup cache from MetadataRefs to
-SeriesRefs (plus per-series metadata roll-ups). The index is not
+`.kura/index.jsonl`, a regenerable source snapshot for MetadataRef to
+SeriesRef lookup plus fast `list` projections. The index is not
 authoritative — it can be deleted and rebuilt at any time from
 per-series metadata via `kura reindex`.
 
@@ -401,8 +401,9 @@ These are the contracts Kura enforces at all times.
 7. **State is derived from metadata, not probed live.** Local
    metadata records the spine and media records, not states.
    Observable states are derived at query time from `series.json`
-   only. Filesystem truth is reconciled by `scan`, not by read
-   operations.
+   source data, including the source snapshots embedded in
+   `index.jsonl`. Filesystem truth is reconciled by `scan`, not by
+   read operations.
 8. **Scan is disallowed on series with staged records.** Stage and
    scan write to the same metadata; running them concurrently or in
    the wrong order can clobber staged intent. Caller must `reconcile`

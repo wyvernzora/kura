@@ -10,9 +10,7 @@ import (
 // v5 persists source-data entries; row projections are computed at query time.
 const SchemaVersion = 5
 
-// BuildOptions controls policy that affects materialized row values.
-// Store it in the header because rows carry computed values such as
-// IsAiring; loading rows built under a different policy would be stale.
+// BuildOptions controls policy that affects projected row values.
 type BuildOptions struct {
 	AiringTailDays int `json:"airingTailDays"`
 }
@@ -25,11 +23,8 @@ type Header struct {
 	LastMutated   *coord.Mutator `json:"lastMutated,omitempty"`
 }
 
-// Row is the materialized view of one library entry. Persisted at one
-// JSON object per line under the JSONL header. Untracked directories
-// (no series.json) are persisted with Status="untracked" and no
-// metadata; those rows still occupy a line so the read path can answer
-// kura_list without a disk walk.
+// Row is the materialized view of one library entry, projected from the
+// source snapshot kept in index.jsonl.
 //
 // All counts and rollups exclude specials (season 0); those rules live
 // in the builder and are the single source of truth for what a row
@@ -43,8 +38,7 @@ type Row struct {
 
 	Status response.ListStatus `json:"status"`
 	// IsAiring is the observed-airing flag, independent of Status. See
-	// builder.go:summarizeSeries for the per-season rule. Recomputed at
-	// row-build time; index rebuilds carry it across.
+	// builder.go:summarizeSeries for the per-season rule.
 	IsAiring bool `json:"isAiring,omitempty"`
 	Staged   bool `json:"staged,omitempty"`
 
