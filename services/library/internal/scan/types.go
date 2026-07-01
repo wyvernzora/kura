@@ -5,6 +5,7 @@ import (
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/series"
 )
 
 type Input struct {
@@ -40,6 +41,7 @@ type Result struct {
 	Synced      []ScannedEpisode `json:"synced"`
 	Skipped     []ImportSkip     `json:"skipped"`
 	OrphanSlots []refs.Episode   `json:"orphanSlots"`
+	Model       *series.Series   `json:"-"`
 }
 
 type ImportSkip struct {

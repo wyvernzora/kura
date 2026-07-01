@@ -106,6 +106,7 @@ func (s *scanner) run(ctx context.Context) (err error) {
 		if err := seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
 			return err
 		}
+		s.setResultModel()
 		progress.Success(ctx, "scan", fmt.Sprintf("Refreshed metadata for %s", s.ref), 0)
 		return nil
 	}
@@ -134,8 +135,14 @@ func (s *scanner) run(ctx context.Context) (err error) {
 	if err := seriesfile.SaveCAS(s.root, &s.model, s.input.Mutator); err != nil {
 		return err
 	}
+	s.setResultModel()
 	progress.Success(ctx, "scan", fmt.Sprintf("Scanned %s", s.ref), len(discovered))
 	return nil
+}
+
+func (s *scanner) setResultModel() {
+	model := s.model
+	s.result.Model = &model
 }
 
 func (s *scanner) discoverSeriesEpisodes() ([]DiscoveredFile, []ImportSkip, error) {
