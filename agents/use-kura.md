@@ -45,9 +45,9 @@ metadata.
 
 **Series-level rollups (`kura_list`):**
 
-- `complete` — every aired episode is present.
+- `complete` — every actionable aired episode is present; pending-only series are complete.
 - `incomplete` — at least one aired episode is missing.
-- `airing` — current episodes present, future ones still pending.
+- `isAiring` — independent flag for a currently airing cour.
 - `untracked` — directory not registered with Kura.
 - `error` — couldn't read the series.
 
@@ -161,8 +161,9 @@ Group rows by `status`. Recommended attention order:
 1. `error` — fix or surface to user.
 2. `incomplete` — investigate per series with `kura_show`.
 3. `untracked` — adopt with §4.b.
-4. `airing` — informational.
-5. `complete` — leave alone unless user wants upgrades.
+4. `complete` — leave alone unless user wants upgrades.
+
+Use `isAiring` as informational context inside those groups.
 
 ### 4.b Adopt an untracked directory
 

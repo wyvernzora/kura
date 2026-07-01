@@ -42,6 +42,8 @@ type Provider struct {
 //   - stub:1002 "Pending Show" — 1 season, 2 aired (2020) + 2
 //     far-future-aired (2099) episodes. Used by scenarios that need
 //     pending-episode semantics (e.g. count rollups, IsAiring).
+//   - stub:1003 "All Pending Show" — 1 season, 2 far-future-aired
+//     episodes. Used by all-pending status scenarios.
 func NewDefaultProvider() *Provider {
 	ep1, _ := refs.NewEpisode(1, 1)
 	ep2, _ := refs.NewEpisode(1, 2)
@@ -116,6 +118,33 @@ func NewDefaultProvider() *Provider {
 								Aired:          "2099-01-08",
 								PreferredTitle: textnorm.NFC("E4"),
 								CanonicalTitle: textnorm.NFC("E4"),
+							},
+						},
+					},
+				},
+			},
+			"1003": {
+				SeriesSummary: provider.SeriesSummary{
+					MetadataRef:    "stub:1003",
+					PreferredTitle: textnorm.NFC("All Pending Show"),
+					CanonicalTitle: textnorm.NFC("All Pending Show"),
+					Status:         provider.SeriesStatusContinuing,
+				},
+				Seasons: []provider.Season{
+					{
+						Number: 1,
+						Episodes: []provider.Episode{
+							{
+								Ref:            ep1,
+								Aired:          "2099-01-01",
+								PreferredTitle: textnorm.NFC("Future 1"),
+								CanonicalTitle: textnorm.NFC("Future 1"),
+							},
+							{
+								Ref:            ep2,
+								Aired:          "2099-01-08",
+								PreferredTitle: textnorm.NFC("Future 2"),
+								CanonicalTitle: textnorm.NFC("Future 2"),
 							},
 						},
 					},

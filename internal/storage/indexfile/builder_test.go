@@ -59,6 +59,45 @@ func TestBuildRowFromModel_EmptyEpisodes(t *testing.T) {
 	}
 }
 
+func TestBuildRowFromModel_AllPendingIsComplete(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name     string
+		episodes map[refs.Episode]series.Episode
+	}{
+		{
+			name: "future dated",
+			episodes: map[refs.Episode]series.Episode{
+				mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2099, Month: 1, Day: 1}},
+				mustEpisode(t, 1, 2): {AirDate: civil.Date{Year: 2099, Month: 1, Day: 8}},
+			},
+		},
+		{
+			name: "tba placeholders",
+			episodes: map[refs.Episode]series.Episode{
+				mustEpisode(t, 1, 1): {},
+				mustEpisode(t, 1, 2): {},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := &series.Series{
+				Ref:      mustParseSeries(t, "Show"),
+				Metadata: refs.Metadata("tvdb:1"),
+				Episodes: tt.episodes,
+			}
+			row := indexfile.BuildRowFromModel(model, now)
+			if row.Status != response.ListStatusComplete {
+				t.Fatalf("Status = %s, want complete (all episodes pending)", row.Status)
+			}
+			if row.EpisodeCount != 0 || row.EpisodesAvailable != 0 {
+				t.Fatalf("episode counts = %d/%d, want 0/0", row.EpisodesAvailable, row.EpisodeCount)
+			}
+		})
+	}
+}
+
 func TestBuildRowFromModel_AllActiveIsComplete(t *testing.T) {
 	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
 	rec := &media.Record{

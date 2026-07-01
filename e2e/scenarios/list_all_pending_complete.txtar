@@ -1,0 +1,11 @@
+# list_all_pending_complete: all episodes are pending, so there is no
+# actionable missing media. The series should be complete with 0/0
+# currently-trackable episodes.
+
+kura_add stub:1003
+kura_list
+stdout '"title":"All Pending Show"'
+stdout '"episodesAvailable":0'
+stdout '"episodeCount":0'
+stdout '"status":"complete"'
+! stdout '"status":"incomplete"'
