@@ -8,8 +8,9 @@ ARG VERSION=dev
 
 FROM node:24-alpine AS build
 WORKDIR /src/integrations/n8n
+ENV CI=true
 RUN corepack enable
-COPY integrations/n8n/package.json integrations/n8n/pnpm-lock.yaml ./
+COPY integrations/n8n/package.json integrations/n8n/pnpm-lock.yaml integrations/n8n/pnpm-workspace.yaml ./
 RUN corepack pnpm install --frozen-lockfile
 COPY integrations/n8n/ ./
 RUN corepack pnpm build
