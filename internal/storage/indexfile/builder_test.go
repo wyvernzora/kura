@@ -535,7 +535,7 @@ func TestRebuild_IncludesUntrackedAndSkipsDotDirs(t *testing.T) {
 	}
 }
 
-func TestIndex_GetRowAndOrderedSeries(t *testing.T) {
+func TestIndex_GetRow(t *testing.T) {
 	idx := indexfile.New(t.TempDir())
 	now := time.Now().UTC()
 	rows := []indexfile.Row{
@@ -546,18 +546,6 @@ func TestIndex_GetRowAndOrderedSeries(t *testing.T) {
 	for _, row := range rows {
 		if err := idx.Upsert(row); err != nil {
 			t.Fatalf("Upsert(%s): %v", row.Series, err)
-		}
-	}
-
-	// Order is alphabetical by title.
-	ordered := idx.OrderedSeries()
-	if len(ordered) != 3 {
-		t.Fatalf("OrderedSeries length = %d, want 3", len(ordered))
-	}
-	want := []string{"Apple", "Mango", "Zebra"}
-	for i, ref := range ordered {
-		if ref.String() != want[i] {
-			t.Fatalf("ordered[%d] = %s, want %s", i, ref, want[i])
 		}
 	}
 

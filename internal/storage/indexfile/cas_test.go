@@ -268,24 +268,6 @@ func TestParseCASRejectsMalformedRows(t *testing.T) {
 	}
 }
 
-func TestReadHashOnly(t *testing.T) {
-	root := t.TempDir()
-	mutator := coord.Mutator{Op: "add", PID: 1, Host: "ws", At: time.Now().UTC()}
-	if err := indexfile.SaveCAS(root, "", []indexfile.Row{
-		{Series: mustParseSeries(t, "A"), Metadata: refs.Metadata("tvdb:1"), Title: "A", Status: response.ListStatusComplete},
-	}, mutator); err != nil {
-		t.Fatalf("SaveCAS: %v", err)
-	}
-	hash, err := indexfile.ReadHashOnly(root)
-	if err != nil {
-		t.Fatalf("ReadHashOnly: %v", err)
-	}
-	loaded, _ := indexfile.LoadCAS(root)
-	if hash != loaded.Hash {
-		t.Fatalf("hash mismatch: %s vs %s", hash, loaded.Hash)
-	}
-}
-
 func TestSaveCASMutatorHostWithSpaces(t *testing.T) {
 	root := t.TempDir()
 	mutator := coord.Mutator{Op: "add", PID: 1, Host: "my host", At: time.Now().UTC()}

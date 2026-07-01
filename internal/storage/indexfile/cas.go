@@ -172,16 +172,6 @@ func SaveCASWithOptions(root string, expected string, rows []Row, mutator coord.
 	return nil
 }
 
-// ReadHashOnly returns the SHA-256 of the on-disk file bytes without
-// parsing. Used by the watcher's fast probe to detect peer mutations.
-func ReadHashOnly(root string) (string, error) {
-	data, err := os.ReadFile(paths.IndexFile(root))
-	if err != nil {
-		return "", err
-	}
-	return hashHex(data), nil
-}
-
 func encode(header Header, rows []Row) ([]byte, error) {
 	sorted := make([]Row, len(rows))
 	copy(sorted, rows)

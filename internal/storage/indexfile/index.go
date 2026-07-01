@@ -303,16 +303,6 @@ func (i *Index) Rows() []Row {
 	return out
 }
 
-// OrderedSeries returns the in-memory ordering as a slice of series refs.
-// Used by pagination to compute the view hash without copying full rows.
-func (i *Index) OrderedSeries() []refs.Series {
-	i.mu.RLock()
-	defer i.mu.RUnlock()
-	out := make([]refs.Series, len(i.order))
-	copy(out, i.order)
-	return out
-}
-
 // Replace swaps the in-memory state with the given rows in one shot.
 // Used after a successful CAS load/write to keep the cached view in sync.
 // Rejects internal duplicate metadata refs in the input.
