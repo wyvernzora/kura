@@ -1,22 +1,15 @@
 // Package indexfile owns reading and writing <library>/.kura/index.jsonl. The
-// JSONL file is a materialized view: one header line plus one Row per library
-// entry (tracked series and untracked directories). The Index value caches
-// the view in memory; mutators rewrite the file via SaveCAS and reload via
-// Load.
+// JSONL file is a source-data snapshot: one header line plus one entry per
+// library directory. Tracked entries carry compact series.json wire data;
+// untracked and error entries carry only the series ref plus optional error.
 //
-// The in-memory state is split between three structures kept in lockstep
-// under one RWMutex:
-//
-//   - bySeries: primary, full-row map keyed by series ref.
-//   - byMeta:   selector lookup (metadata-ref → series-ref), derived.
-//   - order:    sorted seriesRef slice for List iteration; recomputed on
-//     mutation. Sort key is (lower-cased title, series ref).
-//
-// Selector lookup (Index.Get) stays O(1). Full-row reads use GetRow / Rows.
+// The Index value keeps decoded entries in memory and projects Rows on demand.
+// Methods are safe for concurrent use.
 package indexfile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,8 +23,11 @@ import (
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
 // ErrNotReady is returned by Snapshot when a rebuild is in flight and
@@ -40,6 +36,10 @@ import (
 var ErrNotReady = errors.New("indexfile: not ready")
 
 var ErrNotFound = errors.New("indexfile: not found")
+
+// ErrSchemaMismatch is returned when the on-disk header carries a schema
+// version this build cannot read.
+var ErrSchemaMismatch = errors.New("indexfile: schema version mismatch")
 
 type DuplicateRefError struct {
 	Ref      refs.Metadata
@@ -51,149 +51,98 @@ func (e DuplicateRefError) Error() string {
 	return fmt.Sprintf("indexfile: %s is already tracked at %q", e.Ref, e.Existing)
 }
 
-// Index is the in-memory view of index.jsonl. It is constructed empty by
-// New, populated by Load or Rebuild, and persisted by Save / SaveCAS.
-//
-// Methods are safe for concurrent use: kura serve has multiple goroutines
-// (request handlers + the Watch loops) reading and writing the same Index.
+// GuardFunc serializes index writes. nil means run inline.
+type GuardFunc func(context.Context, func() error) error
+
+type Config struct {
+	BuildOptions BuildOptions
+	Now          func() time.Time
+	Guard        GuardFunc
+}
+
+// Entry is one source-data index entry. Model means tracked; Error means a
+// broken tracked directory; neither means untracked.
+type Entry struct {
+	Series refs.Series
+	Model  *series.Series
+	Error  string
+}
+
+type entry struct {
+	series refs.Series
+	model  *series.Series
+	raw    json.RawMessage
+	err    string
+}
+
+type entryBuilder func(context.Context, string, refs.Series) (Entry, error)
+
+// Index is the in-memory view of index.jsonl.
 type Index struct {
 	root string
 
-	mu       sync.RWMutex
-	bySeries map[refs.Series]Row
-	byMeta   map[refs.Metadata]refs.Series
-	order    []refs.Series
+	mu      sync.RWMutex
+	entries map[refs.Series]entry
+	byMeta  map[refs.Metadata]refs.Series
+	order   []refs.Series
 
-	// Watch baseline. Tracks the on-disk file state so the probe loop
-	// can detect peer mutations without re-reading the file every tick.
-	cachedHash         string
-	cachedMTime        time.Time
-	cachedSize         int64
-	cachedLibRootMTime time.Time
-
-	// rebuilding flips true while a TriggerRebuild goroutine is in
-	// flight. rebuildWG lets callers (CLI bootstrap) block on the
-	// in-flight rebuild via WaitReady.
 	rebuilding atomic.Bool
 	rebuildWG  sync.WaitGroup
 
-	// libRootRebuildTimer coalesces a burst of libRoot-mtime probes
-	// into a single TriggerRebuild call after the storm settles.
-	// Reset on every observed mtime change so the rebuild only fires
-	// once filesystem activity has been quiet for libRootDebounce.
-	// Guarded by mu.
 	libRootRebuildTimer *time.Timer
 	libRootDebounce     time.Duration
+	cachedLibRootMTime  time.Time
 
-	// log + reader are set by Watch before any loop starts, then
-	// read-only thereafter. No locking needed for reads.
-	log          Logger
-	builder      RowBuilder
 	buildOptions BuildOptions
+	now          func() time.Time
+	guard        GuardFunc
+	builder      entryBuilder
+	log          Logger
 }
 
-func New(root string) *Index {
+func New(root string, cfg Config) *Index {
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	guard := cfg.Guard
+	if guard == nil {
+		guard = func(_ context.Context, fn func() error) error { return fn() }
+	}
 	return &Index{
-		root:     root,
-		bySeries: map[refs.Series]Row{},
-		byMeta:   map[refs.Metadata]refs.Series{},
+		root:         root,
+		entries:      map[refs.Series]entry{},
+		byMeta:       map[refs.Metadata]refs.Series{},
+		buildOptions: cfg.BuildOptions,
+		now:          now,
+		guard:        guard,
+		builder:      diskEntryBuilder,
+		log:          nopLogger{},
 	}
 }
 
 // Load reads index.jsonl and returns a populated Index. Returns ErrNotFound
 // when the file does not exist.
-func Load(root string) (*Index, error) {
-	return LoadWithOptions(root, DefaultBuildOptions())
-}
-
-// LoadWithOptions reads index.jsonl and returns a populated Index when
-// the persisted materialized rows were computed with opts.
-func LoadWithOptions(root string, opts BuildOptions) (*Index, error) {
-	loaded, err := LoadCAS(root)
+func Load(root string, cfg Config) (*Index, error) {
+	entries, err := readSnapshot(root)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
-	if *loaded.Header.BuildOptions != opts {
-		return nil, fmt.Errorf("%w: got %+v, want %+v", ErrBuildOptionsMismatch, *loaded.Header.BuildOptions, opts)
-	}
-	index := New(root)
-	if err := index.Replace(loaded.Rows); err != nil {
+	index := New(root, cfg)
+	if err := index.replace(entries); err != nil {
 		return nil, fmt.Errorf("indexfile: load: %w", err)
 	}
 	return index, nil
 }
 
-// Rebuild walks root, calls build for each parseable subdirectory, and
-// returns a populated Index. Untracked directories (no series.json) are
-// included as Status=untracked rows. Directories whose names don't parse
-// as series refs are skipped silently — a single weirdly-named dir must
-// not block the whole rebuild. Progress events fire under "reindex".
-func Rebuild(ctx context.Context, root string, build RowBuilder) (*Index, error) {
-	progress.Start(ctx, "reindex", "Rebuilding library index", progress.TotalIndeterminate)
-	// Pair the existing post-rebuild log line. Operators tracking
-	// "what triggered this rebuild" benefit from a start marker that
-	// includes the libRoot — multiple rebuilds (cold, libroot-mtime,
-	// periodic, schema-mismatch, manual reindex) can interleave on a
-	// busy server; the start log makes their cadence visible.
-	slog.Info("indexfile: rebuild starting", "root", root)
-	dir, err := os.Open(root)
-	if err != nil {
-		progress.Failure(ctx, "reindex", "Failed to rebuild library index", 0, 0)
-		return nil, err
-	}
-	defer dir.Close()
-
-	now := time.Now().UTC()
-	index := New(root)
-	scanned := 0
-	for {
-		entries, err := dir.ReadDir(64)
-		if err != nil && !errors.Is(err, io.EOF) {
-			progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
-			return nil, err
-		}
-		for _, entry := range entries {
-			name := entry.Name()
-			if !entry.IsDir() || strings.HasPrefix(name, ".") || name == paths.KuraDir {
-				continue
-			}
-			seriesRef, parseErr := refs.ParseSeries(name)
-			if parseErr != nil {
-				continue
-			}
-			scanned++
-			progress.Update(ctx, "reindex", fmt.Sprintf("Indexing %s", seriesRef), scanned, progress.TotalIndeterminate)
-			row, err := build(root, seriesRef, now)
-			if err != nil {
-				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
-				return nil, err
-			}
-			if err := index.Upsert(row); err != nil {
-				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
-				return nil, err
-			}
-		}
-		if errors.Is(err, io.EOF) {
-			break
-		}
-	}
-	progress.Success(ctx, "reindex", fmt.Sprintf("Rebuilt library index (%d series)", len(index.bySeries)), scanned)
-	slog.Info("indexfile: rebuild complete",
-		"root", root,
-		"rows", len(index.bySeries),
-		"scanned", scanned,
-	)
-	return index, nil
-}
-
-// Len returns the number of rows in memory (tracked + untracked).
+// Len returns the number of entries in memory (tracked + untracked + error).
 func (i *Index) Len() int {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	return len(i.bySeries)
+	return len(i.entries)
 }
 
 // Get returns the series ref tracking the given metadata ref. O(1).
@@ -207,221 +156,83 @@ func (i *Index) Get(ref refs.Metadata) (refs.Series, bool, error) {
 	return seriesRef, ok, nil
 }
 
-// GetRow returns the full row for a series ref. O(1).
+// GetRow returns the projected row for a series ref. O(1).
 func (i *Index) GetRow(ref refs.Series) (Row, bool) {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	row, ok := i.bySeries[ref]
-	return row, ok
-}
-
-// Put inserts a sparse row containing only Series + Metadata. Rejects a
-// metadata-ref already mapped to a different series with DuplicateRefError.
-// Kept for selector-only callers (tests, simple bootstrap); production
-// mutators use Upsert with full rows from BuildRow / BuildRowFromModel.
-func (i *Index) Put(metadataRef refs.Metadata, seriesRef refs.Series) error {
-	if metadataRef == "" {
-		return errors.New("indexfile: metadata ref is required")
-	}
-	if seriesRef.IsZero() {
-		return errors.New("indexfile: series ref is required")
-	}
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	if existing, ok := i.byMeta[metadataRef]; ok && existing != seriesRef {
-		return DuplicateRefError{Ref: metadataRef, Existing: existing, Next: seriesRef}
-	}
-	row, ok := i.bySeries[seriesRef]
+	e, ok := i.entries[ref]
 	if !ok {
-		row = Row{Series: seriesRef, Title: seriesRef.String()}
+		return Row{}, false
 	}
-	if row.Metadata != "" && row.Metadata != metadataRef {
-		delete(i.byMeta, row.Metadata)
-	}
-	row.Metadata = metadataRef
-	i.bySeries[seriesRef] = row
-	i.byMeta[metadataRef] = seriesRef
-	i.recomputeOrderLocked()
-	return nil
+	return i.rowForEntry(e), true
 }
 
-// Upsert inserts or replaces the row for row.Series. Rejects a
-// metadata-ref already mapped to a different series.
-func (i *Index) Upsert(row Row) error {
-	if row.Series.IsZero() {
-		return errors.New("indexfile: row series ref is required")
+// Upsert inserts or replaces an in-memory entry. It does not persist.
+func (i *Index) Upsert(in Entry) error {
+	e, err := i.prepareEntry(in)
+	if err != nil {
+		return err
 	}
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	return i.upsertLocked(row)
+	return i.upsertLocked(e)
 }
 
-func (i *Index) upsertLocked(row Row) error {
-	prev, existed := i.bySeries[row.Series]
-	if row.Metadata != "" {
-		if winner, ok := i.byMeta[row.Metadata]; ok && winner != row.Series {
-			return DuplicateRefError{Ref: row.Metadata, Existing: winner, Next: row.Series}
-		}
-	}
-	if existed && prev.Metadata != "" && prev.Metadata != row.Metadata {
-		delete(i.byMeta, prev.Metadata)
-	}
-	i.bySeries[row.Series] = row
-	if row.Metadata != "" {
-		i.byMeta[row.Metadata] = row.Series
-	}
-	i.recomputeOrderLocked()
-	return nil
-}
-
-// Remove drops the row for seriesRef and any metadata mapping it carries.
-// No-op if absent.
+// Remove drops the in-memory entry for seriesRef and any metadata mapping it
+// carries. No-op if absent. It does not persist.
 func (i *Index) Remove(seriesRef refs.Series) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	row, ok := i.bySeries[seriesRef]
-	if !ok {
-		return
-	}
-	delete(i.bySeries, seriesRef)
-	if row.Metadata != "" {
-		delete(i.byMeta, row.Metadata)
-	}
-	i.recomputeOrderLocked()
+	i.removeLocked(seriesRef)
 }
 
-// Rows returns a snapshot of every row in memory, sorted by (title,
-// seriesRef). Used by List and by callers that need the full materialized
-// view.
+// SaveModel updates the in-memory model entry and persists the snapshot.
+func (i *Index) SaveModel(ctx context.Context, model *series.Series, mutator coord.Mutator) error {
+	return i.guard(ctx, func() error {
+		if err := i.Upsert(Entry{Model: model}); err != nil {
+			return err
+		}
+		return i.persist(mutator)
+	})
+}
+
+// Delete removes an entry from memory and persists the snapshot.
+func (i *Index) Delete(ctx context.Context, ref refs.Series, mutator coord.Mutator) error {
+	return i.guard(ctx, func() error {
+		i.Remove(ref)
+		return i.persist(mutator)
+	})
+}
+
+// Rows returns a projected snapshot of every row, sorted by title/ref.
 func (i *Index) Rows() []Row {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	out := make([]Row, 0, len(i.order))
 	for _, ref := range i.order {
-		out = append(out, i.bySeries[ref])
+		out = append(out, i.rowForEntry(i.entries[ref]))
 	}
 	return out
 }
 
-// Replace swaps the in-memory state with the given rows in one shot.
-// Used after a successful CAS load/write to keep the cached view in sync.
-// Rejects internal duplicate metadata refs in the input.
-func (i *Index) Replace(rows []Row) error {
-	bySeries, byMeta, err := buildRowMaps(rows)
-	if err != nil {
-		return err
-	}
-	i.mu.Lock()
-	i.applyMapsLocked(bySeries, byMeta)
-	i.mu.Unlock()
-	return nil
-}
-
-// ReplaceRows is the no-error variant of Replace used by hot paths that
-// know their input is already deduped (CAS-write follow-ups). Falls back
-// to Replace's logic but discards the duplicate-ref error; callers
-// preferring strict checks should call Replace directly.
-func (i *Index) ReplaceRows(rows []Row) {
-	_ = i.Replace(rows)
-}
-
-// SaveAndAdopt is the sync-mutation entry point: writes rows via SaveCAS
-// then, under one lock, swaps the in-memory rows AND bumps the probe
-// cache (hash/mtime/size) so the next probe tick treats this write as
-// already observed. Without this, every successful sync index mutation
-// triggers a no-op fullRefresh on the next probe tick.
-//
-// expected mirrors SaveCAS: SHA-256 hex of the on-disk bytes the caller
-// loaded before mutating; "" means "expect file does not exist".
-//
-// Cache stays unchanged on any error.
-func (i *Index) SaveAndAdopt(expected string, rows []Row, mutator coord.Mutator) error {
-	return i.SaveAndAdoptWithOptions(expected, rows, mutator, DefaultBuildOptions())
-}
-
-// SaveAndAdoptWithOptions is SaveAndAdopt with explicit row-building
-// policy stamped into index.jsonl.
-func (i *Index) SaveAndAdoptWithOptions(expected string, rows []Row, mutator coord.Mutator, opts BuildOptions) error {
-	if err := SaveCASWithOptions(i.root, expected, rows, mutator, opts); err != nil {
-		return err
-	}
-	bySeries, byMeta, err := buildRowMaps(rows)
-	if err != nil {
-		return err
-	}
-	data, mtime, size, err := readIndexBytes(i.root)
-	if err != nil {
-		// Write succeeded but stat failed — extremely rare. Leave the
-		// cache stale; the next probe tick will fullRefresh and recover.
-		return err
-	}
-	i.mu.Lock()
-	i.applyMapsLocked(bySeries, byMeta)
-	i.cachedHash = hashHex(data)
-	i.cachedMTime = mtime
-	i.cachedSize = size
-	i.mu.Unlock()
-	return nil
-}
-
-func buildRowMaps(rows []Row) (bySeries map[refs.Series]Row, byMeta map[refs.Metadata]refs.Series, err error) {
-	bySeries = make(map[refs.Series]Row, len(rows))
-	byMeta = make(map[refs.Metadata]refs.Series, len(rows))
-	for _, row := range rows {
-		if row.Series.IsZero() {
-			continue
-		}
-		if row.Metadata != "" {
-			if existing, ok := byMeta[row.Metadata]; ok && existing != row.Series {
-				return nil, nil, DuplicateRefError{Ref: row.Metadata, Existing: existing, Next: row.Series}
-			}
-			byMeta[row.Metadata] = row.Series
-		}
-		bySeries[row.Series] = row
-	}
-	return bySeries, byMeta, nil
-}
-
-func (i *Index) applyMapsLocked(bySeries map[refs.Series]Row, byMeta map[refs.Metadata]refs.Series) {
-	i.bySeries = bySeries
-	i.byMeta = byMeta
-	i.recomputeOrderLocked()
-}
-
-// Save writes the in-memory state to index.jsonl via SaveCAS in
-// create-only mode. Used by tests and by bootstrap on a fresh library;
-// production mutators go through SaveCAS directly.
-func (i *Index) Save(mutator coord.Mutator) error {
-	rows := i.Rows()
-	return SaveCAS(i.root, "", rows, mutator)
-}
-
-// Snapshot returns a sorted slice of every row in memory. While a
-// rebuild is in flight AND the map is empty (cold start, corruption
-// recovery), returns ErrNotReady so read callers can surface a
-// not-ready response. Once any prior snapshot exists, reads keep
-// flowing through it during the rebuild.
+// Snapshot returns sorted projected rows, or ErrNotReady during a cold rebuild.
 func (i *Index) Snapshot() ([]Row, error) {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
-	if i.rebuilding.Load() && len(i.bySeries) == 0 {
+	if i.rebuilding.Load() && len(i.entries) == 0 {
 		return nil, ErrNotReady
 	}
 	out := make([]Row, 0, len(i.order))
 	for _, ref := range i.order {
-		out = append(out, i.bySeries[ref])
+		out = append(out, i.rowForEntry(i.entries[ref]))
 	}
 	return out, nil
 }
 
-// Rebuilding reports whether a background rebuild is currently in flight.
 func (i *Index) Rebuilding() bool {
 	return i.rebuilding.Load()
 }
 
-// WaitReady blocks until any in-flight rebuild completes or ctx is
-// cancelled. Used by CLI bootstrap to keep its sync semantics on top
-// of the unified async rebuild mechanism.
 func (i *Index) WaitReady(ctx context.Context) error {
 	done := make(chan struct{})
 	go func() {
@@ -436,91 +247,220 @@ func (i *Index) WaitReady(ctx context.Context) error {
 	}
 }
 
-// TriggerRebuild kicks off a background rebuild + SaveCAS + Replace.
-// Idempotent: if a rebuild is already in flight, returns immediately
-// without spawning another. The builder + mutator are captured by the
-// in-flight goroutine; subsequent calls during a rebuild use the
-// already-captured values.
-//
-// On success the in-memory rows are replaced and the watcher baseline
-// is refreshed. On failure (rebuild error, parse error, peer-write
-// conflict) the goroutine logs and exits without panicking; the next
-// trigger will retry.
-func (i *Index) TriggerRebuild(ctx context.Context, root string, builder RowBuilder, mutator coord.Mutator) {
-	i.TriggerRebuildWithOptions(ctx, root, builder, mutator, DefaultBuildOptions())
+// RebuildNow walks the library, swaps the in-memory entries, and persists.
+func (i *Index) RebuildNow(ctx context.Context, op string) error {
+	return i.guard(ctx, func() error {
+		entries, err := i.buildEntries(ctx)
+		if err != nil {
+			return err
+		}
+		if err := i.replace(entries); err != nil {
+			return err
+		}
+		return i.persist(coord.NewMutator(op))
+	})
 }
 
-// TriggerRebuildWithOptions is TriggerRebuild with explicit row-building
-// policy stamped into index.jsonl after a successful rebuild.
-func (i *Index) TriggerRebuildWithOptions(ctx context.Context, root string, builder RowBuilder, mutator coord.Mutator, opts BuildOptions) {
+// TriggerRebuild kicks off an idempotent background rebuild.
+func (i *Index) TriggerRebuild(ctx context.Context, op string) {
 	if !i.rebuilding.CompareAndSwap(false, true) {
 		return
 	}
 	i.rebuildWG.Go(func() {
 		defer i.rebuilding.Store(false)
-
 		started := time.Now()
 		if i.log != nil {
-			i.log.Info("indexfile: rebuild starting", "op", mutator.Op)
+			i.log.Info("indexfile: rebuild starting", "op", op)
 		}
-
-		rebuilt, err := Rebuild(ctx, root, builder)
-		if err != nil {
+		prior := i.Len()
+		if err := i.RebuildNow(ctx, op); err != nil {
 			if i.log != nil {
 				i.log.Warn("indexfile: rebuild", "err", err)
 			}
 			return
 		}
-		rows := rebuilt.Rows()
-
-		i.mu.RLock()
-		expected := i.cachedHash
-		priorEntries := len(i.bySeries)
-		i.mu.RUnlock()
-
-		if err := i.SaveAndAdoptWithOptions(expected, rows, mutator, opts); err != nil {
-			if _, ok := errors.AsType[*coord.ConflictError](err); !ok {
-				if i.log != nil {
-					i.log.Warn("indexfile: rebuild save", "err", err)
-				}
-				return
-			}
-			// Peer wrote during the walk; their state is on disk.
-			// Adopt it via the probe path on the next tick. Don't
-			// Replace our stale view here.
-			if i.log != nil {
-				i.log.Info("indexfile: rebuild conflicted with peer; deferring to next probe",
-					"duration_ms", time.Since(started).Milliseconds(),
-				)
-			}
-			return
-		}
-
 		if i.log != nil {
 			i.log.Info("indexfile: rebuild complete",
-				"priorEntries", priorEntries,
-				"newEntries", len(rows),
+				"priorEntries", prior,
+				"newEntries", i.Len(),
 				"duration_ms", time.Since(started).Milliseconds(),
 			)
 		}
 	})
 }
 
-// recomputeOrderLocked rebuilds the sorted order slice. Sort key is
-// (lower-cased title, series ref) for stable, case-insensitive
-// alphabetical ordering. Caller must hold i.mu.
+func (i *Index) buildEntries(ctx context.Context) (map[refs.Series]entry, error) {
+	progress.Start(ctx, "reindex", "Rebuilding library index", progress.TotalIndeterminate)
+	slog.Info("indexfile: rebuild starting", "root", i.root)
+	dir, err := os.Open(i.root)
+	if err != nil {
+		progress.Failure(ctx, "reindex", "Failed to rebuild library index", 0, 0)
+		return nil, err
+	}
+	defer dir.Close()
+
+	out := map[refs.Series]entry{}
+	scanned := 0
+	for {
+		dirents, err := dir.ReadDir(64)
+		if err != nil && !errors.Is(err, io.EOF) {
+			progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
+			return nil, err
+		}
+		for _, dirent := range dirents {
+			name := dirent.Name()
+			if !dirent.IsDir() || strings.HasPrefix(name, ".") || name == paths.KuraDir {
+				continue
+			}
+			ref, parseErr := refs.ParseSeries(name)
+			if parseErr != nil {
+				continue
+			}
+			scanned++
+			progress.Update(ctx, "reindex", fmt.Sprintf("Indexing %s", ref), scanned, progress.TotalIndeterminate)
+			in, err := i.builder(ctx, i.root, ref)
+			if err != nil {
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
+				return nil, err
+			}
+			e, err := i.prepareEntry(in)
+			if err != nil {
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
+				return nil, err
+			}
+			out[e.series] = e
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+	}
+	progress.Success(ctx, "reindex", fmt.Sprintf("Rebuilt library index (%d series)", len(out)), scanned)
+	slog.Info("indexfile: rebuild complete", "root", i.root, "rows", len(out), "scanned", scanned)
+	return out, nil
+}
+
+func (i *Index) prepareEntry(in Entry) (entry, error) {
+	ref := in.Series
+	if ref.IsZero() && in.Model != nil {
+		ref = in.Model.Ref
+	}
+	if ref.IsZero() {
+		return entry{}, errors.New("indexfile: entry series ref is required")
+	}
+	if in.Model == nil {
+		return entry{series: ref, err: in.Error}, nil
+	}
+	model := *in.Model
+	model.Ref = ref
+	raw, err := seriesfile.Encode(i.root, &model)
+	if err != nil {
+		return entry{}, err
+	}
+	copyModel, err := seriesfile.Decode(i.root, ref, raw)
+	if err != nil {
+		return entry{}, err
+	}
+	return entry{series: ref, model: copyModel, raw: append(json.RawMessage(nil), raw...)}, nil
+}
+
+func (i *Index) replace(entries map[refs.Series]entry) error {
+	byMeta := map[refs.Metadata]refs.Series{}
+	for ref, e := range entries {
+		if e.model == nil || e.model.Metadata == "" {
+			continue
+		}
+		if existing, ok := byMeta[e.model.Metadata]; ok && existing != ref {
+			return DuplicateRefError{Ref: e.model.Metadata, Existing: existing, Next: ref}
+		}
+		byMeta[e.model.Metadata] = ref
+	}
+	i.mu.Lock()
+	i.entries = entries
+	i.byMeta = byMeta
+	i.recomputeOrderLocked()
+	i.mu.Unlock()
+	return nil
+}
+
+func (i *Index) upsertLocked(e entry) error {
+	prev, existed := i.entries[e.series]
+	if e.model != nil && e.model.Metadata != "" {
+		if winner, ok := i.byMeta[e.model.Metadata]; ok && winner != e.series {
+			return DuplicateRefError{Ref: e.model.Metadata, Existing: winner, Next: e.series}
+		}
+	}
+	if existed && prev.model != nil && prev.model.Metadata != "" {
+		delete(i.byMeta, prev.model.Metadata)
+	}
+	i.entries[e.series] = e
+	if e.model != nil && e.model.Metadata != "" {
+		i.byMeta[e.model.Metadata] = e.series
+	}
+	i.recomputeOrderLocked()
+	return nil
+}
+
+func (i *Index) removeLocked(ref refs.Series) {
+	e, ok := i.entries[ref]
+	if !ok {
+		return
+	}
+	delete(i.entries, ref)
+	if e.model != nil && e.model.Metadata != "" {
+		delete(i.byMeta, e.model.Metadata)
+	}
+	i.recomputeOrderLocked()
+}
+
+func (i *Index) persist(mutator coord.Mutator) error {
+	i.mu.RLock()
+	entries := make([]entry, 0, len(i.order))
+	for _, ref := range i.order {
+		entries = append(entries, i.entries[ref])
+	}
+	i.mu.RUnlock()
+	return writeSnapshot(i.root, entries, mutator)
+}
+
+func (i *Index) rowForEntry(e entry) Row {
+	now := i.now().UTC()
+	if e.model != nil {
+		return BuildRowFromModelWithOptions(e.model, now, i.buildOptions)
+	}
+	if e.err != "" {
+		return Row{
+			Series:    e.series,
+			Title:     e.series.String(),
+			Status:    response.ListStatusError,
+			Error:     e.err,
+			UpdatedAt: now.Format(time.RFC3339),
+		}
+	}
+	return UntrackedRow(e.series, now)
+}
+
 func (i *Index) recomputeOrderLocked() {
-	order := make([]refs.Series, 0, len(i.bySeries))
-	for ref := range i.bySeries {
+	order := make([]refs.Series, 0, len(i.entries))
+	for ref := range i.entries {
 		order = append(order, ref)
 	}
 	sort.Slice(order, func(a, b int) bool {
-		ta := strings.ToLower(i.bySeries[order[a]].Title)
-		tb := strings.ToLower(i.bySeries[order[b]].Title)
+		ta := strings.ToLower(entryTitle(i.entries[order[a]]))
+		tb := strings.ToLower(entryTitle(i.entries[order[b]]))
 		if ta != tb {
 			return ta < tb
 		}
 		return order[a].String() < order[b].String()
 	})
 	i.order = order
+}
+
+func entryTitle(e entry) string {
+	if e.model == nil {
+		return e.series.String()
+	}
+	if !e.model.PreferredTitle.IsZero() {
+		return e.model.PreferredTitle.String()
+	}
+	return e.series.String()
 }

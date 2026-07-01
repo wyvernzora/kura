@@ -21,7 +21,7 @@ func newInboxTestServer(t *testing.T) (server *Server, inboxRoot string) {
 	t.Helper()
 	libRoot := t.TempDir()
 	inboxRoot = t.TempDir()
-	idx := indexfile.New(filepath.Join(libRoot, ".kura"))
+	idx := indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	registry := jobs.NewRegistry(context.Background(), jobs.Config{
 		JobTimeout:     time.Hour,
 		Retention:      time.Hour,

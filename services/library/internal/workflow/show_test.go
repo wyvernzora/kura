@@ -85,40 +85,35 @@ func TestShow_UsesConfiguredAiringTail(t *testing.T) {
 	}
 }
 
-func TestUpdateIndexRowRejectsBuildOptionsMismatch(t *testing.T) {
+func TestUpdateIndexRowPersistsModelSnapshot(t *testing.T) {
 	root := t.TempDir()
 	ref, err := refs.ParseSeries("Show")
 	if err != nil {
 		t.Fatalf("ParseSeries: %v", err)
 	}
-	oldOpts := indexfile.DefaultBuildOptions()
-	oldOpts.AiringTailDays = 3
-	rows := []indexfile.Row{
-		{Series: ref, Metadata: refs.Metadata("tvdb:1"), Title: "Show", Status: response.ListStatusComplete},
-	}
-	if err := indexfile.SaveCASWithOptions(root, "", rows, coord.NewMutator("seed"), oldOpts); err != nil {
-		t.Fatalf("SaveCASWithOptions: %v", err)
-	}
 	model := &domainseries.Series{
-		Ref:      ref,
-		Metadata: refs.Metadata("tvdb:1"),
-		Episodes: map[refs.Episode]domainseries.Episode{},
+		Ref:            ref,
+		Metadata:       refs.Metadata("tvdb:1"),
+		PreferredTitle: textnorm.NFC("Show"),
+		Episodes:       map[refs.Episode]domainseries.Episode{},
+		LastMutated:    coord.Mutator{Op: "test", PID: 1, Host: "test", At: time.Unix(0, 0).UTC()},
 	}
 	deps := Deps{
 		LibRoot:     root,
+		Index:       indexfile.New(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()}),
 		Coordinator: coord.NewMCPCoordinator(),
 		Now:         time.Now,
 	}
-	err = updateIndexRow(context.Background(), deps, model, "test")
-	if !errors.Is(err, indexfile.ErrBuildOptionsMismatch) {
-		t.Fatalf("updateIndexRow err = %v, want ErrBuildOptionsMismatch", err)
+	if err := updateIndexRow(context.Background(), deps, model, "test"); err != nil {
+		t.Fatalf("updateIndexRow: %v", err)
 	}
-	loaded, err := indexfile.LoadCAS(root)
+	loaded, err := indexfile.Load(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	if err != nil {
-		t.Fatalf("LoadCAS: %v", err)
+		t.Fatalf("Load: %v", err)
 	}
-	if *loaded.Header.BuildOptions != oldOpts {
-		t.Fatalf("BuildOptions = %+v, want old %+v", *loaded.Header.BuildOptions, oldOpts)
+	got, ok, err := loaded.Get(model.Metadata)
+	if err != nil || !ok || got != ref {
+		t.Fatalf("Get(%s) = %s, %v, %v; want %s, true, nil", model.Metadata, got, ok, err, ref)
 	}
 }
 

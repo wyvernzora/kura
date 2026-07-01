@@ -10,12 +10,15 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/errkind"
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/reconcile"
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/textnorm"
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
@@ -105,9 +108,15 @@ func TestKuraJobStatus_NotFoundReturnsCodedError(t *testing.T) {
 func TestProjectJobStatus_ReversesSeriesToMetadataRef(t *testing.T) {
 	registry := jobs.NewRegistry(context.Background(), jobs.Config{}, nil)
 	t.Cleanup(func() { registry.Shutdown(time.Second) })
-	idx := indexfile.New(t.TempDir())
+	idx := indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	want := mustSeries(t, "Bookworm")
-	if err := idx.Put(refs.Metadata("tvdb:370070"), want); err != nil {
+	if err := idx.Upsert(indexfile.Entry{Model: &series.Series{
+		Ref:            want,
+		Metadata:       refs.Metadata("tvdb:370070"),
+		PreferredTitle: textnorm.NFC("Bookworm"),
+		Episodes:       map[refs.Episode]series.Episode{},
+		LastMutated:    coord.Mutator{Op: "test", PID: 1, Host: "test", At: time.Unix(0, 0).UTC()},
+	}}); err != nil {
 		t.Fatal(err)
 	}
 	finish := make(chan struct{})
@@ -180,7 +189,7 @@ func TestProjectJobStatus_ResultRequiresIncludeResult(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	compact, err := projectJobStatus(view, indexfile.New(t.TempDir()), false)
+	compact, err := projectJobStatus(view, indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()}), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +197,7 @@ func TestProjectJobStatus_ResultRequiresIncludeResult(t *testing.T) {
 		t.Fatalf("compact Result = %s, want omitted", compact.Result)
 	}
 
-	full, err := projectJobStatus(view, indexfile.New(t.TempDir()), true)
+	full, err := projectJobStatus(view, indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()}), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +224,7 @@ func TestProjectJobStatus_ProjectsReconcileApplySuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := projectJobStatus(view, indexfile.New(t.TempDir()), true)
+	out, err := projectJobStatus(view, indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()}), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +271,7 @@ func TestProjectJobStatus_FailedReconcileApplyIncludesCategoryAndPartialResult(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := projectJobStatus(view, indexfile.New(t.TempDir()), false)
+	out, err := projectJobStatus(view, indexfile.New(t.TempDir(), indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()}), false)
 	if err != nil {
 		t.Fatal(err)
 	}

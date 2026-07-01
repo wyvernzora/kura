@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,13 +32,13 @@ func buildSourceFromFlags(rt *runContext, flags *cli) (provider.Source, error) {
 // buildDepsAsyncIndex constructs Deps without blocking on the index
 // rebuild. Used by serve to surface KindServerNotReady to early
 // requests instead of delaying transport startup.
-func buildDepsAsyncIndex(rt *runContext) (workflow.Deps, error) {
+func buildDepsAsyncIndex(rt *runContext, coordinator coord.Coordinator) (workflow.Deps, error) {
 	libRoot := rt.Getenv("KURA_LIBRARY_ROOT")
 	if err := validateLibraryRoot(libRoot); err != nil {
 		return workflow.Deps{}, err
 	}
 	rowBuildOptions := rowBuildOptionsFromEnv(rt.Getenv)
-	index, err := loadOrRebuildIndex(rt.Context, libRoot, rowBuildOptions)
+	index, err := loadOrRebuildIndex(rt.Context, libRoot, rowBuildOptions, coordinator.WithIndex)
 	if err != nil {
 		return workflow.Deps{}, err
 	}
@@ -52,10 +53,8 @@ func buildDepsAsyncIndex(rt *runContext) (workflow.Deps, error) {
 	if err != nil {
 		hostName = "unknown"
 	}
-	coordImpl := coord.NewCLICoordinator()
-	// CLI registry: parent ctx is the CLI invocation's ctx. Goroutines
-	// die with the process; no Shutdown needed. Reaper / retention
-	// disabled — invocation is short-lived, nothing accumulates.
+	// Placeholder registry: buildServeDeps replaces it with a long-lived
+	// registry configured from KURA_JOB_* before transports start.
 	registry := jobs.NewRegistry(rt.Context, jobs.Config{}, nil)
 	prefs, err := config.ParsePreferredLanguages(rt.Getenv("KURA_PREFERRED_LANGUAGES"))
 	if err != nil {
@@ -64,7 +63,7 @@ func buildDepsAsyncIndex(rt *runContext) (workflow.Deps, error) {
 	return workflow.Deps{
 		LibRoot:            libRoot,
 		Index:              index,
-		Coordinator:        coordImpl,
+		Coordinator:        coordinator,
 		HostName:           hostName,
 		Provider:           provider,
 		Inspector:          inspector,
@@ -165,34 +164,21 @@ func hasPathPrefix(child, parent string) bool {
 }
 
 // loadOrRebuildIndex returns an Index for libRoot. If index.jsonl is
-// present and parseable at the current SchemaVersion, it's loaded
-// synchronously and returned ready. If absent OR the on-disk schema
-// doesn't match this build, a fresh Index is returned with a
-// background rebuild already triggered; callers that need the rebuild
-// to finish before returning (CLI) call idx.WaitReady. After a
-// successful path either way, the legacy index.tsv is removed
-// best-effort so the artifact doesn't linger.
-//
-// Schema mismatch handling: the stale file is removed before
-// triggering the rebuild so the rebuild's SaveCAS(expected="")
-// create-path succeeds against an empty slot. Without the delete
-// the create-path would conflict with the existing (wrong-schema)
-// file and the rebuild would no-op.
-func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.BuildOptions) (*indexfile.Index, error) {
-	builder := indexfile.NewRowBuilder(opts)
-	index, err := indexfile.LoadWithOptions(libRoot, opts)
+// present and parseable at the current SchemaVersion, it is loaded
+// synchronously and returned ready. If absent or unreadable, a fresh Index is
+// returned with a background rebuild already triggered; early list requests
+// see server_not_ready until the rebuild publishes entries.
+func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.BuildOptions, guard indexfile.GuardFunc) (*indexfile.Index, error) {
+	cfg := indexfile.Config{BuildOptions: opts, Guard: guard}
+	index, err := indexfile.Load(libRoot, cfg)
 	switch {
 	case errors.Is(err, indexfile.ErrNotFound):
-		index = indexfile.New(libRoot)
-		index.TriggerRebuildWithOptions(ctx, libRoot, builder, coord.NewMutator("rebuild_cold"), opts)
-	case errors.Is(err, indexfile.ErrSchemaMismatch), errors.Is(err, indexfile.ErrBuildOptionsMismatch):
-		if rmErr := os.Remove(paths.IndexFile(libRoot)); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
-			return nil, rmErr
-		}
-		index = indexfile.New(libRoot)
-		index.TriggerRebuildWithOptions(ctx, libRoot, builder, coord.NewMutator("rebuild_corruption"), opts)
+		index = indexfile.New(libRoot, cfg)
+		index.TriggerRebuild(ctx, "rebuild_cold")
 	case err != nil:
-		return nil, err
+		slog.Warn("indexfile: load failed, triggering rebuild", "err", err)
+		index = indexfile.New(libRoot, cfg)
+		index.TriggerRebuild(ctx, "rebuild_corruption")
 	}
 	_ = os.Remove(paths.LegacyIndexFile(libRoot))
 	return index, nil

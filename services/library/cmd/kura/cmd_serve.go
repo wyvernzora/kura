@@ -51,9 +51,8 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 	}
 
 	logger := newServerLogger(rt.Stderr, rt.Getenv)
-	// Bind as the process default so package-level slog calls (storage
-	// SaveCAS DEBUG hooks, etc.) flow through the same handler + level
-	// as the explicit deps.Logger plumbing.
+	// Bind as the process default so package-level slog calls flow through
+	// the same handler + level as the explicit deps.Logger plumbing.
 	slog.SetDefault(logger)
 
 	// Suppress the CLI spinner globally for the server lifetime BEFORE
@@ -317,12 +316,10 @@ func serverTransports(cmd *serveCmd) []string {
 	return out
 }
 
-// buildServeDeps wraps buildDeps and swaps the in-process serializer
-// (CLI no-op → MCP per-series mutex) plus a long-lived jobs registry
-// configured from KURA_JOB_* envs. Returns the WatchConfig the caller
-// should pass to deps.Index.Watch under the signal-cancellable ctx.
-// The CLI registry from buildDeps is discarded; it never received a
-// Submit so no goroutines leak.
+// buildServeDeps constructs the workflow deps with the server serializer plus
+// a long-lived jobs registry configured from KURA_JOB_* envs. Returns the
+// WatchConfig the caller should pass to deps.Index.Watch under the
+// signal-cancellable ctx.
 //
 // The supplied logger is bound to the jobs registry so job lifecycle
 // events ("job submitted", "job terminal", "reaper evicted") flow
@@ -331,11 +328,11 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 	// Async index path: any cold-start rebuild proceeds in the
 	// background. kura_list returns server_not_ready until the rebuild
 	// completes; transports come up immediately.
-	deps, err := buildDepsAsyncIndex(rt)
+	coordinator := coord.NewMCPCoordinator()
+	deps, err := buildDepsAsyncIndex(rt, coordinator)
 	if err != nil {
 		return workflow.Deps{}, nil, indexfile.WatchConfig{}, err
 	}
-	deps.Coordinator = coord.NewMCPCoordinator()
 
 	// Inbox is mandatory for `kura serve` (where stage / kura_inbox_list
 	// run). CLI invocations never touch inbox locally; they delegate to
@@ -358,17 +355,10 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 	deps.Jobs = registry
 	deps.Logger = logger
 
-	rowOpts := indexfile.DefaultBuildOptions()
-	if deps.RowBuildOptions != nil {
-		rowOpts = *deps.RowBuildOptions
-	}
 	watch := indexfile.WatchConfig{
 		ProbeInterval:   envDuration(rt.Getenv, "KURA_INDEX_PROBE_INTERVAL", 2*time.Second),
-		RefreshInterval: envDuration(rt.Getenv, "KURA_INDEX_REFRESH_INTERVAL", 5*time.Minute),
 		RebuildInterval: envDuration(rt.Getenv, "KURA_INDEX_REBUILD_INTERVAL", time.Hour),
 		LibRootDebounce: envDuration(rt.Getenv, "KURA_INDEX_LIBROOT_DEBOUNCE", 3*time.Second),
-		Builder:         indexfile.NewRowBuilder(rowOpts),
-		BuildOptions:    &rowOpts,
 		Logger:          logger,
 	}
 	return deps, registry, watch, nil

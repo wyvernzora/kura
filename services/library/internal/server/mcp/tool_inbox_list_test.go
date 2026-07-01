@@ -20,7 +20,7 @@ func connectInMemoryWithInboxList(t *testing.T, inboxRoot string) *sdkmcp.Client
 	t.Helper()
 	ctx := context.Background()
 	libRoot := t.TempDir()
-	idx := indexfile.New(filepath.Join(libRoot, ".kura"))
+	idx := indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	registry := jobs.NewRegistry(ctx, jobs.Config{
 		JobTimeout:     time.Hour,
 		Retention:      time.Hour,
@@ -133,7 +133,7 @@ func TestKuraInboxList_NotConfigured(t *testing.T) {
 	// Empty inbox root → InboxNotConfiguredError surfaces.
 	ctx := context.Background()
 	libRoot := t.TempDir()
-	idx := indexfile.New(filepath.Join(libRoot, ".kura"))
+	idx := indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	registry := jobs.NewRegistry(ctx, jobs.Config{
 		JobTimeout:     time.Hour,
 		Retention:      time.Hour,

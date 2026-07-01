@@ -3,8 +3,8 @@ package workflow
 import (
 	"context"
 
+	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/series"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 // updateIndexRow rebuilds the row for model from its current state and
@@ -16,21 +16,8 @@ import (
 // touch in_progress (claim acquire / release) skip it — the row doesn't
 // reflect that state, and the extra CAS write would just contend.
 func updateIndexRow(ctx context.Context, deps Deps, model *series.Series, op string) error {
-	row := indexfile.BuildRowFromModelWithOptions(model, deps.Now(), rowBuildOptions(deps))
-	return withIndexCAS(ctx, deps, op, func(loaded indexfile.Loaded) ([]indexfile.Row, error) {
-		return appendOrReplaceRow(loaded.Rows, row), nil
-	})
-}
-
-// appendOrReplaceRow inserts row, replacing any existing row keyed by
-// the same series ref. The slice is rewritten; callers downstream of
-// SaveCAS rely on the return value, not in-place mutation.
-func appendOrReplaceRow(rows []indexfile.Row, row indexfile.Row) []indexfile.Row {
-	for i := range rows {
-		if rows[i].Series == row.Series {
-			rows[i] = row
-			return rows
-		}
+	if deps.Index == nil {
+		return nil
 	}
-	return append(rows, row)
+	return deps.Index.SaveModel(ctx, model, coord.NewMutator(op))
 }

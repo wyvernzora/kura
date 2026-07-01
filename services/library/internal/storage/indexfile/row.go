@@ -7,14 +7,8 @@ import (
 )
 
 // SchemaVersion is the on-disk schema version stamped into the JSONL header.
-// Bump when row-computation rules change in a way that invalidates rebuilt
-// rows (e.g. specials start counting toward EpisodesAvailable). LoadCAS
-// surfaces a schema mismatch via ErrSchemaMismatch so callers force a rebuild.
-//
-// v2 → v3: dropped ListStatusAiring; introduced row-level IsAiring flag.
-// v3 → v4: stamped row build options into the header so persisted IsAiring
-// values rebuild when the configured airing tail changes.
-const SchemaVersion = 4
+// v5 persists source-data entries; row projections are computed at query time.
+const SchemaVersion = 5
 
 // BuildOptions controls policy that affects materialized row values.
 // Store it in the header because rows carry computed values such as
@@ -23,12 +17,11 @@ type BuildOptions struct {
 	AiringTailDays int `json:"airingTailDays"`
 }
 
-// Header is the JSONL header line. One per file, line 1. Empty libraries
-// have just the header.
+// Header is the JSONL header line. One per file, line 1. Empty libraries have
+// just the header.
 type Header struct {
 	SchemaVersion int            `json:"$schema"`
 	IndexAsOf     string         `json:"indexAsOf"`
-	BuildOptions  *BuildOptions  `json:"buildOptions"`
 	LastMutated   *coord.Mutator `json:"lastMutated,omitempty"`
 }
 
