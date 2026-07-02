@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/cli/style"
 	"github.com/wyvernzora/kura/internal/response"
 )
@@ -96,11 +95,11 @@ func renderInboxKind(kind string, styled bool) string {
 	}
 	switch kind {
 	case "file":
-		return chalk.Green.Color(kind)
+		return style.Green(kind)
 	case "dir":
-		return chalk.Blue.Color(kind)
+		return style.Blue(kind)
 	case "symlink":
-		return chalk.Yellow.Color(kind)
+		return style.Yellow(kind)
 	default:
 		return kind
 	}

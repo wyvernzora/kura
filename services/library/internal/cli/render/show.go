@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/cli/style"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/response"
@@ -61,7 +60,7 @@ func writeShowHeader(w io.Writer, result response.Show, styled bool) error {
 	for _, row := range rows {
 		label := row.label
 		if styled {
-			label = chalk.Bold.TextStyle(chalk.White.Color(label))
+			label = style.Bold(style.White(label))
 		}
 		if _, err := fmt.Fprintf(w, "%s: %s\n", label, row.value); err != nil {
 			return err
@@ -115,7 +114,7 @@ func styleShowValue(value string, styled bool) string {
 	if !styled || value == "" {
 		return value
 	}
-	return chalk.Yellow.Color(value)
+	return style.Yellow(value)
 }
 
 func writeStagedTrashTable(w io.Writer, items []response.TrashItemShow) error {

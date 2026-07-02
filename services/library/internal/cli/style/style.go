@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/cli/stdio"
 )
 
@@ -44,10 +43,10 @@ func WriteStyledTable(w io.Writer, tw table.Writer, dimLine func(string) bool) e
 		if width > 0 {
 			lines[0] = PadRight(lines[0], width)
 		}
-		lines[0] = chalk.Inverse.TextStyle(chalk.Bold.TextStyle(lines[0]))
+		lines[0] = Inverse(Bold(lines[0]))
 		for index := 1; index < len(lines); index++ {
 			if dimLine != nil && dimLine(lines[index]) {
-				lines[index] = chalk.Dim.TextStyle(lines[index])
+				lines[index] = Dim(lines[index])
 			}
 		}
 	}
@@ -77,3 +76,23 @@ func Orange(value string) string {
 func Gray(value string) string {
 	return "\x1b[90m" + value + "\x1b[39m"
 }
+
+func Green(value string) string { return "\x1b[32m" + value + "\x1b[39m" }
+
+func Yellow(value string) string { return "\x1b[33m" + value + "\x1b[39m" }
+
+func Blue(value string) string { return "\x1b[34m" + value + "\x1b[39m" }
+
+func Red(value string) string { return "\x1b[31m" + value + "\x1b[39m" }
+
+func White(value string) string { return "\x1b[37m" + value + "\x1b[39m" }
+
+func Bold(value string) string { return "\x1b[1m" + value + "\x1b[22m" }
+
+func Dim(value string) string { return "\x1b[2m" + value + "\x1b[22m" }
+
+func Strikethrough(value string) string { return "\x1b[9m" + value + "\x1b[29m" }
+
+func Inverse(value string) string { return "\x1b[7m" + value + "\x1b[27m" }
+
+func WhiteOnBlue(value string) string { return "\x1b[37;44m" + value + "\x1b[39;49m" }

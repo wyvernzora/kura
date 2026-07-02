@@ -5,7 +5,6 @@
 #   - govet         standard go vet checks; baseline correctness.
 #   - gocritic      opinionated diagnostic + performance + style checks.
 #   - cyclop        cyclomatic complexity ceiling per function.
-#   - decorder      enforces declaration ordering inside files.
 #   - contextcheck  catches functions that should accept ctx but don't.
 #   - staticcheck   honnef.co static analysis suite (rolls in stylecheck,
 #                   simple, unused).
@@ -22,7 +21,6 @@ linters:
   enable:
     - contextcheck
     - cyclop
-    - decorder
     - gocritic
     - govet
     - staticcheck
@@ -30,10 +28,6 @@ linters:
     cyclop:
       max-complexity: 15
       package-average: 0
-    decorder:
-      disable-dec-num-check: true
-      disable-dec-order-check: true
-      disable-init-func-first-check: true
     gocritic:
       disabled-checks:
         - paramTypeCombine
