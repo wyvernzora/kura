@@ -96,7 +96,6 @@ func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts Buil
 		Title:       model.Ref.String(),
 		DateAdded:   formatOptionalTime(model.DateAdded),
 		LastScanned: formatOptionalTime(model.LastScanned),
-		UpdatedAt:   now.UTC().Format(time.RFC3339),
 	}
 	if !model.PreferredTitle.IsZero() {
 		row.Title = model.PreferredTitle.String()
@@ -127,10 +126,9 @@ func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts Buil
 // Used by Rebuild when walking libRoot dirents.
 func UntrackedRow(ref refs.Series, now time.Time) Row {
 	return Row{
-		Series:    ref,
-		Title:     ref.String(),
-		Status:    response.ListStatusUntracked,
-		UpdatedAt: now.UTC().Format(time.RFC3339),
+		Series: ref,
+		Title:  ref.String(),
+		Status: response.ListStatusUntracked,
 	}
 }
 

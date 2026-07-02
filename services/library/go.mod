@@ -12,7 +12,6 @@ require (
 require (
 	cloud.google.com/go v0.123.0
 	github.com/AlecAivazis/survey/v2 v2.3.7
-	github.com/briandowns/spinner v1.23.2
 	github.com/google/renameio/v2 v2.0.2
 	github.com/jedib0t/go-pretty/v6 v6.8.1
 	github.com/lmittmann/tint v1.1.3
@@ -29,7 +28,6 @@ require (
 )
 
 require (
-	github.com/fatih/color v1.13.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect

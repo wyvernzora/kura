@@ -7,21 +7,14 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/wyvernzora/kura/internal/cli/stdio"
-	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/resolve"
 )
 
 // runContext is the per-invocation harness bound to kong as a pointer so
 // run() can enrich Context after flag parsing. After run() returns from
 // parser.Parse, Context carries:
-//   - stdio.Stdio          (always; via stdio.With)
-//   - progress.Reporter    (always; disabled automatically for non-terminals)
-//   - lazy provider.Source (via provider.WithSource)
-//   - lazy *resolve.Resolver (via resolve.WithResolver)
+//   - stdio.Stdio (always; via stdio.With)
 //
-// Commands receive *runContext via kong.Bind and read these via stdio.From,
-// provider.SourceFrom, and resolve.ResolverFrom respectively.
+// Commands receive *runContext via kong.Bind and read stdio via stdio.From.
 type runContext struct {
 	Context context.Context
 	Stdin   io.Reader
@@ -69,19 +62,5 @@ func run(args []string, rt runContext) error {
 	}
 
 	rt.Context = stdio.With(rt.Context, stdio.New(rt.Stdin, rt.Stdout, rt.Stderr))
-	rt.Context = progress.With(rt.Context, newProgressReporter(rt.Stderr))
-	rt.Context = provider.WithSource(rt.Context, func() (provider.Source, error) {
-		return buildSourceFromFlags(&rt, flags)
-	})
-	rt.Context = resolve.WithResolver(rt.Context, func() (*resolve.Resolver, error) {
-		src, err := provider.SourceFrom(rt.Context)
-		if err != nil {
-			return nil, err
-		}
-		return resolve.New(
-			resolve.NewMetadataIDStrategy(src),
-			resolve.NewTextSearchStrategy(src),
-		), nil
-	})
 	return kctx.Run()
 }

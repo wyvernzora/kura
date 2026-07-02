@@ -20,8 +20,7 @@ import (
 	"github.com/wyvernzora/kura/internal/workflow"
 )
 
-// buildSourceFromFlags constructs the metadata source from the global CLI
-// flags. Used by run.go to seed the lazy provider.WithSource builder.
+// buildSourceFromFlags constructs the metadata source from the global CLI flags.
 func buildSourceFromFlags(rt *runContext, flags *cli) (provider.Source, error) {
 	return config.BuildMetadataSource(config.MetadataSourceOptions{
 		TVDBBaseURL: flags.TVDBBaseURL,
@@ -49,10 +48,6 @@ func buildDepsAsyncIndex(rt *runContext, coordinator coord.Coordinator, logger *
 	provider := workflow.NewProviderFactory(func() (provider.Source, error) {
 		return buildSourceFromFlags(rt, rt.flags)
 	})
-	hostName, err := os.Hostname()
-	if err != nil {
-		hostName = "unknown"
-	}
 	// Placeholder registry: buildServeDeps replaces it with a long-lived
 	// registry configured from KURA_JOB_* before transports start.
 	registry := jobs.NewRegistry(rt.Context, jobs.Config{}, nil)
@@ -64,7 +59,6 @@ func buildDepsAsyncIndex(rt *runContext, coordinator coord.Coordinator, logger *
 		LibRoot:            libRoot,
 		Index:              index,
 		Coordinator:        coordinator,
-		HostName:           hostName,
 		Provider:           provider,
 		Inspector:          inspector,
 		Now:                time.Now,

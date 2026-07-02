@@ -21,7 +21,7 @@ This is **layer 3** in Kura's documentation stack:
 
 ## How to use
 
-### Generic agent (Cursor, Zed, Claude Desktop, ChatGPT, custom)
+### Generic agent
 
 Paste the body of [use-kura.md](use-kura.md) into the agent's system
 prompt. The YAML frontmatter at the top is harmless if left in place,
@@ -32,18 +32,5 @@ The agent also needs a working MCP connection to a `kura serve
 [../docs/mcp.md](../docs/mcp.md) and
 [../docs/deployment.md](../docs/deployment.md).
 
-### Claude Code
-
-Install as a skill:
-
-```sh
-mkdir -p ~/.claude/skills
-ln -s "$(pwd)/agents/use-kura.md" ~/.claude/skills/use-kura.md
-```
-
-Or copy the file in if you'd rather not symlink. The frontmatter's
-`description` field tells Claude Code when to auto-trigger the skill;
-adjust it to match how you phrase Kura tasks.
-
-For project-scoped install (only active inside this repo), use
-`.claude/skills/` instead of `~/.claude/skills/`.
+If your agent supports reusable prompt or skill files, install
+[use-kura.md](use-kura.md) using that agent's normal mechanism.

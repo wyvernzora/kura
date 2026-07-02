@@ -113,7 +113,7 @@ host shell into the container when set:
 | 6274 | Inspector UI (browser) | `127.0.0.1:$INSPECTOR_PORT` |
 | 6277 | Inspector proxy (browser ↔ MCP) | `127.0.0.1:$INSPECTOR_PROXY_PORT` |
 
-## Use with Claude Code
+## Use with local MCP clients
 
 The project ships a `.mcp.json` entry for `kura` that points at
 `http://127.0.0.1:8081/mcp` and reads the bearer token from `KURA_TOKEN`:
@@ -136,11 +136,11 @@ make devserver-run                  # logs the bearer token on first start
 
 # in a second shell:
 export KURA_TOKEN=<copied-from-container-stderr>
-claude                              # picks up .mcp.json from project root
 ```
 
-Inside Claude Code, run `/mcp` to confirm `kura` is connected and list
-its tools (`kura_list`, `kura_show`, `kura_scan`, ...).
+Point your MCP client at the project `.mcp.json` entry, then confirm
+that `kura` is connected and listing tools (`kura_list`, `kura_show`,
+`kura_scan`, ...).
 
 For zero-friction usage (skip the bearer gate):
 

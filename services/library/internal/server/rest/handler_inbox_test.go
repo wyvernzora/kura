@@ -33,7 +33,6 @@ func newInboxTestServer(t *testing.T) (server *Server, inboxRoot string) {
 		InboxRoot:   inboxRoot,
 		Index:       idx,
 		Coordinator: coord.NewCLICoordinator(),
-		HostName:    "test",
 		Now:         time.Now,
 		Jobs:        registry,
 	}

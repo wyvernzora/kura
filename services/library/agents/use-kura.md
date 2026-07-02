@@ -360,10 +360,9 @@ kura_show(ref=<chosen metadata ref>)
 # - Missing slots that this release fills → candidate to stage.
 ```
 
-**Subagent fan-out.** If the harness supports subagents (Claude
-Code's Agent tool, similar), spawn one per candidate (or per small
-cluster) and have it execute steps 1–3 in isolation, then return
-just the recommendation summary. Benefits:
+**Subagent fan-out.** If the harness supports subagents, spawn one per
+candidate (or per small cluster) and have it execute steps 1–3 in
+isolation, then return just the recommendation summary. Benefits:
 
 - Isolated context per candidate keeps the main agent's window
   small even with dozens of releases under consideration.

@@ -31,15 +31,12 @@ func newRecoverDeps(t *testing.T) (workflow.Deps, refs.Series, string) {
 		Metadata: refs.Metadata("tvdb:42"),
 		Episodes: map[refs.Episode]series.Episode{},
 	}
-	if err := seriesfile.SaveCAS(root, model, coord.Mutator{
-		Op: "test_seed", PID: os.Getpid(), Host: host, At: time.Now().UTC().Truncate(time.Second),
-	}); err != nil {
+	if err := seriesfile.SaveCAS(root, model, coord.NewMutator("test_seed")); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	deps := workflow.Deps{
 		LibRoot:     root,
 		Coordinator: coord.NewCLICoordinator(),
-		HostName:    host,
 		Now:         time.Now,
 	}
 	return deps, ref, host

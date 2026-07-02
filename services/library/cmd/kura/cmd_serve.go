@@ -18,7 +18,6 @@ import (
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/server/auth"
 	mcpserver "github.com/wyvernzora/kura/internal/server/mcp"
 	restserver "github.com/wyvernzora/kura/internal/server/rest"
@@ -32,7 +31,7 @@ import (
 const defaultShutdownTimeout = 10 * time.Second
 
 type serveCmd struct {
-	MCPStdio        bool     `name:"mcp-stdio" help:"Run MCP transport over stdio (Claude Desktop, mcp inspector --stdio)."`
+	MCPStdio        bool     `name:"mcp-stdio" help:"Run MCP transport over stdio (AI desktop apps, mcp inspector --stdio)."`
 	MCPHTTP         string   `name:"mcp-http" placeholder:"ADDR" help:"Run MCP transport over streamable HTTP at the given address (e.g. ':8080' or '127.0.0.1:8080')."`
 	REST            string   `name:"rest" placeholder:"ADDR" help:"Run REST transport at the given address (e.g. '127.0.0.1:8080' or ':8080'). Access requires the bearer token at /var/lib/kura/token unless KURA_DISABLE_TOKEN=1."`
 	RESTCORSOrigins []string `name:"rest-cors-origin" placeholder:"ORIGIN" help:"Add an Origin to the REST CORS allow-list (repeatable, or '*' to allow any origin). Empty list disables CORS headers."`
@@ -54,14 +53,6 @@ func (cmd *serveCmd) Run(rt *runContext) error {
 	// Bind as the process default so package-level slog calls flow through
 	// the same handler + level as the explicit deps.Logger plumbing.
 	slog.SetDefault(logger)
-
-	// Suppress the CLI spinner globally for the server lifetime BEFORE
-	// any registry / coordinator captures rt.Context. Otherwise the
-	// jobs registry's parentCtx retains the spinner reporter installed
-	// by run.go, and every async job's progress events tee back into
-	// the spinner — emitting ANSI control sequences into the log
-	// stream. Lifecycle visibility comes from structured logs instead.
-	rt.Context = progress.With(rt.Context, func(context.Context, progress.Event) {})
 
 	deps, registry, watch, err := buildServeDeps(rt, logger)
 	if err != nil {
@@ -184,7 +175,6 @@ func launchServerTransports(
 	g.Go(func() error {
 		return sweep.Run(gctx, deps.LibRoot, sweep.Config{
 			Interval:     envDuration(rt.Getenv, "KURA_SWEEP_INTERVAL", 0),
-			Jitter:       envDuration(rt.Getenv, "KURA_SWEEP_JITTER", 0),
 			LogRetention: envDays(rt.Getenv, "KURA_LOG_RETENTION_DAYS", 0),
 			Registry:     deps.Jobs,
 		}, logger)

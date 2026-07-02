@@ -161,8 +161,8 @@ func (r *Registry) Shutdown(grace time.Duration) int {
 //     installed.
 //   - Existing job for the same series with the same kind: the
 //     existing typed *Job[T] is returned (de-dupe). No new goroutine.
-//   - Existing job for the same series with a different kind: a
-//     pre-resolved Failed *Job[T] carrying *JobBusyError is returned.
+//   - Existing job for the same series with a different kind: an untracked
+//     failed *Job[T] carrying *JobBusyError is returned.
 //     No registration, no goroutine.
 //
 // Submit returns within milliseconds in all three branches. Errors
@@ -195,7 +195,7 @@ func Submit[T any](
 			if !ok {
 				// Programmer error: same kind submitted with mismatched T.
 				// Should never happen if KindX↔T binding is honored.
-				return Failed[T](&typeMismatchError{kind: kind})
+				return failed[T](&typeMismatchError{kind: kind})
 			}
 			return typed
 		}
@@ -207,7 +207,7 @@ func Submit[T any](
 			StartedAt: existing.startedAt,
 		}
 		r.mu.Unlock()
-		return Failed[T](&JobBusyError{Series: series, Existing: busyHandle})
+		return failed[T](&JobBusyError{Series: series, Existing: busyHandle})
 	}
 
 	id := generateID()

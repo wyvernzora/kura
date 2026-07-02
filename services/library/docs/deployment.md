@@ -99,7 +99,6 @@ secret:
 | `KURA_AIRING_TAIL_DAYS` | Integer days after a cour's last episode airs that it still appears in airing filters. Default `7`; `0` disables the tail; empty / invalid / negative values fall back to default. | Tune only if finale-week maintenance is too short or too sticky for your workflow. |
 | `KURA_LOG_RETENTION_DAYS` | Days of forensic JSONL logs to keep (reconcile plan logs, per-job history logs). Default `7`. | Override only if you need longer retention for incident review. |
 | `KURA_SWEEP_INTERVAL` | Period between scheduled forensic-log pruning sweeps. Go duration, default `1h`. | Usually leave at default; startup recovery and the scheduled sweep are enough for a single personal library. |
-| `KURA_SWEEP_JITTER` | Optional random offset applied to each scheduled sweep interval. Go duration, default `0`. | Leave unset unless you deliberately run many independent Kura instances and want their sweeps de-correlated. |
 | `KURA_JOB_TIMEOUT` | Per-job deadline. Unset means no timeout. | Set if you want runaway jobs killed. |
 
 Permission normalization after moving media is best-effort. On NFS

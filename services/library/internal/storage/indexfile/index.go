@@ -459,11 +459,10 @@ func (i *Index) rowForEntry(e entry) Row {
 	}
 	if e.err != "" {
 		return Row{
-			Series:    e.series,
-			Title:     e.series.String(),
-			Status:    response.ListStatusError,
-			Error:     e.err,
-			UpdatedAt: now.Format(time.RFC3339),
+			Series: e.series,
+			Title:  e.series.String(),
+			Status: response.ListStatusError,
+			Error:  e.err,
 		}
 	}
 	return UntrackedRow(e.series, now)

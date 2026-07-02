@@ -32,7 +32,6 @@ func connectInMemoryWithInboxList(t *testing.T, inboxRoot string) *sdkmcp.Client
 		InboxRoot:   inboxRoot,
 		Index:       idx,
 		Coordinator: coord.NewCLICoordinator(),
-		HostName:    "test",
 		Now:         time.Now,
 		Jobs:        registry,
 	}}
@@ -144,7 +143,6 @@ func TestKuraInboxList_NotConfigured(t *testing.T) {
 		LibRoot:     libRoot,
 		Index:       idx,
 		Coordinator: coord.NewCLICoordinator(),
-		HostName:    "test",
 		Now:         time.Now,
 		Jobs:        registry,
 	}}

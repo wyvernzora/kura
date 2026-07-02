@@ -1,4 +1,4 @@
 commit-msg:
   commands:
-    block-claude:
-      run: ./.githooks/block-claude-commit-msg.sh {1}
+    block-ai-brand:
+      run: ./.githooks/block-ai-brand-commit-msg.sh {1}

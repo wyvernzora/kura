@@ -54,9 +54,6 @@ func TestBuildRowFromModel_EmptyEpisodes(t *testing.T) {
 	if row.EpisodeCount != 0 || row.SeasonCount != 0 {
 		t.Fatalf("counts non-zero: %+v", row)
 	}
-	if row.UpdatedAt == "" {
-		t.Fatal("UpdatedAt empty")
-	}
 }
 
 func TestBuildRowFromModel_AllPendingIsComplete(t *testing.T) {

@@ -29,7 +29,6 @@ func newTestServer(t *testing.T) *Server {
 		LibRoot:     libRoot,
 		Index:       idx,
 		Coordinator: coord.NewCLICoordinator(),
-		HostName:    "test",
 		Now:         time.Now,
 		Jobs:        registry,
 	}

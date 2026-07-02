@@ -54,7 +54,6 @@ func newStartupRecoveryDeps(t *testing.T, refStrs ...string) (workflow.Deps, []r
 		LibRoot:     root,
 		Index:       idx,
 		Coordinator: coord.NewCLICoordinator(),
-		HostName:    host,
 		Now:         time.Now,
 	}
 	return deps, parsed, host
@@ -67,9 +66,7 @@ func plantStartupClaim(t *testing.T, deps workflow.Deps, ref refs.Series, holder
 		t.Fatalf("Load(%s): %v", ref, err)
 	}
 	model.InProgress = &holder
-	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.Mutator{
-		Op: "test_plant", PID: os.Getpid(), Host: deps.HostName, At: time.Now().UTC().Truncate(time.Second),
-	}); err != nil {
+	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("test_plant")); err != nil {
 		t.Fatalf("plant(%s): %v", ref, err)
 	}
 }
