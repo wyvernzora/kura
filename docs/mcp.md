@@ -3,9 +3,8 @@
 Kura exposes its workflow surface as MCP tools for AI agents. Two
 transports:
 
-- `kura serve --mcp-stdio` — stdio MCP, for agents launched as a
-  child process (Claude Desktop, Cursor, Zed). Unauthenticated; the
-  process boundary already trusts the parent.
+- `kura serve --mcp-stdio` — stdio MCP, for agents launched as a child
+  process. Unauthenticated; the process boundary already trusts the parent.
 - `kura serve --mcp-http=:port` — MCP-over-HTTP. Auth gated by the
   same bearer token as REST (see [rest-api.md](rest-api.md#auth)).
 

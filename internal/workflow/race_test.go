@@ -44,21 +44,17 @@ func seedSeries(t *testing.T) (workflow.Deps, refs.Series) {
 	if err != nil {
 		t.Fatalf("ParseSeries: %v", err)
 	}
-	host, _ := os.Hostname()
 	model := &series.Series{
 		Ref:      ref,
 		Metadata: refs.Metadata("tvdb:42"),
 		Episodes: map[refs.Episode]series.Episode{},
 	}
-	if err := seriesfile.SaveCAS(root, model, coord.Mutator{
-		Op: "test_seed", PID: os.Getpid(), Host: host, At: time.Now().UTC().Truncate(time.Second),
-	}); err != nil {
+	if err := seriesfile.SaveCAS(root, model, coord.NewMutator("test_seed")); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	deps := workflow.Deps{
 		LibRoot:     root,
 		Coordinator: coord.NewMCPCoordinator(),
-		HostName:    host,
 		Now:         time.Now,
 	}
 	return deps, ref
@@ -126,7 +122,7 @@ func TestRace_PeerWriteCausesPreWriteConflict(t *testing.T) {
 	peerMutator := coord.Mutator{
 		Op:   "peer_op",
 		PID:  99999,
-		Host: deps.HostName,
+		Host: "test-host",
 		At:   time.Now().UTC().Truncate(time.Second),
 	}
 	if err := seriesfile.SaveCAS(deps.LibRoot, peer, peerMutator); err != nil {
@@ -137,7 +133,7 @@ func TestRace_PeerWriteCausesPreWriteConflict(t *testing.T) {
 	model.Hash = originalHash
 	model.LastScanned = model.LastScanned.Add(time.Second)
 	err = seriesfile.SaveCAS(deps.LibRoot, model, coord.Mutator{
-		Op: "ours", PID: os.Getpid(), Host: deps.HostName, At: time.Now().UTC().Truncate(time.Second),
+		Op: "ours", PID: os.Getpid(), Host: "test-host", At: time.Now().UTC().Truncate(time.Second),
 	})
 	var conflict *coord.ConflictError
 	if !errors.As(err, &conflict) {
@@ -177,12 +173,12 @@ func TestRace_RetryRecoversFromConflict(t *testing.T) {
 			peer, _ := seriesfile.Load(deps.LibRoot, ref)
 			peer.LastScanned = peer.LastScanned.Add(time.Second)
 			_ = seriesfile.SaveCAS(deps.LibRoot, peer, coord.Mutator{
-				Op: "peer", PID: 99999, Host: deps.HostName, At: time.Now().UTC().Truncate(time.Second),
+				Op: "peer", PID: 99999, Host: "test-host", At: time.Now().UTC().Truncate(time.Second),
 			})
 		}
 		model.LastScanned = model.LastScanned.Add(2 * time.Second)
 		return seriesfile.SaveCAS(deps.LibRoot, model, coord.Mutator{
-			Op: "ours", PID: os.Getpid(), Host: deps.HostName, At: time.Now().UTC().Truncate(time.Second),
+			Op: "ours", PID: os.Getpid(), Host: "test-host", At: time.Now().UTC().Truncate(time.Second),
 		})
 	})
 	if err != nil {

@@ -57,7 +57,7 @@ func TestErrorPayload_WorkflowNotFoundIsCoded(t *testing.T) {
 
 func TestErrorPayload_CoordBusyHasHolder(t *testing.T) {
 	got := errorPayload(&coord.BusyError{
-		Scope:  coord.LibraryScope,
+		Scope:  "library",
 		Holder: coord.Holder{Op: "scan", PID: 42, Host: "h"},
 	})
 	if got["kind"] != errkind.KindBusy {

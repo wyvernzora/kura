@@ -123,7 +123,7 @@ For the full CLI, REST, and MCP surfaces, see the table below.
 | Web UI  | Browse and inspect the library from a browser. Served at the REST port (default `:8080`). Read-only / dashboard — mutations go through CLI, MCP, or REST. | embedded in the binary |
 | CLI     | Manual or scripted use from a shell. | [docs/cli.md](docs/cli.md) |
 | REST    | A custom UI or a remote agent. | [docs/rest-api.md](docs/rest-api.md) |
-| MCP     | A local AI agent (Claude, Cursor, etc.). | [docs/mcp.md](docs/mcp.md) |
+| MCP     | A local AI agent. | [docs/mcp.md](docs/mcp.md) |
 
 ## Deployment
 

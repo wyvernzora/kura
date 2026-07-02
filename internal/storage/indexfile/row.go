@@ -67,7 +67,6 @@ type Row struct {
 	DateAdded   string `json:"dateAdded,omitempty"`
 	LastAired   string `json:"lastAired,omitempty"`
 	LastScanned string `json:"lastScanned,omitempty"`
-	UpdatedAt   string `json:"updatedAt,omitempty"`
 
 	// SearchKey is the folded blob from `internal/searchkey.Compute`,
 	// shipped to clients for local fuzzy search. Populated by

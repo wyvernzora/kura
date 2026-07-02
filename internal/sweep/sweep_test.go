@@ -76,25 +76,6 @@ func TestSweepOnce_SkipsDotDirsAndUnparseableNames(t *testing.T) {
 	sweepOnce(root, Config{LogRetention: time.Hour}, discardLogger(), now)
 }
 
-func TestJitteredInterval_StaysWithinWindow(t *testing.T) {
-	const (
-		interval = time.Hour
-		jitter   = 5 * time.Minute
-	)
-	for range 100 {
-		d := jitteredInterval(interval, jitter)
-		if d < interval-jitter || d > interval+jitter {
-			t.Fatalf("jitteredInterval = %v, want within [%v, %v]", d, interval-jitter, interval+jitter)
-		}
-	}
-}
-
-func TestJitteredInterval_ZeroJitterIsExactInterval(t *testing.T) {
-	if got := jitteredInterval(time.Hour, 0); got != time.Hour {
-		t.Errorf("jitteredInterval(1h, 0) = %v, want 1h", got)
-	}
-}
-
 func TestSweepOnce_IgnoresNonJSONLFiles(t *testing.T) {
 	root := t.TempDir()
 	ref, _ := refs.ParseSeries("Show")

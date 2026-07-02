@@ -172,8 +172,8 @@ func addShowTool(s *sdkmcp.Server, deps Deps) {
 }
 
 // mcpShowTruncateBytes is the JSON-bytes ceiling for kura_show MCP
-// responses. Set ~20% under typical Claude Code tool-result ceilings
-// (~100 KB) to leave headroom for protocol framing.
+// responses. Set ~20% under typical tool-result ceilings (~100 KB) to leave
+// headroom for protocol framing.
 const mcpShowTruncateBytes = 80 * 1024
 
 // truncateMCPShow drops episode bodies from the tail (in spine order)

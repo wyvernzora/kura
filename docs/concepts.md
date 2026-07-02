@@ -9,9 +9,9 @@ user-facing nouns; this doc is for everything underneath.
 **User** — the human owner of the library. Interacts directly via CLI,
 indirectly via an AI agent, or via the bundled web dashboard.
 
-**Agent** — an AI agent (Claude, Cursor, custom) that consumes Kura's
-MCP tool surface. Acts on behalf of the user. May operate autonomously
-or with user confirmation for ambiguous cases.
+**Agent** — an AI agent that consumes Kura's MCP tool surface. Acts on
+behalf of the user. May operate autonomously or with user confirmation
+for ambiguous cases.
 
 **Operator** — the human running the deployment. The only actor allowed
 to invoke permanently-destructive verbs (`trash empty`, `remove --purge`).

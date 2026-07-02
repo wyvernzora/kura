@@ -32,13 +32,8 @@ func (s Status) String() string {
 	}
 }
 
-// Job is the result-or-handle returned by every long workflow and by
-// the constructors used by short workflows. Callers either Wait for
-// the typed value or read identity/state for handoff.
-//
-// Pre-resolved jobs (Resolved/Failed) have IsTracked()==false and
-// ID()=="". Tracked jobs (Submit) have IsTracked()==true and a
-// non-empty ID.
+// Job is the result-or-handle returned by registered long workflows. Callers
+// either Wait for the typed value or read identity/state for handoff.
 type Job[T any] struct {
 	id        string
 	kind      JobKind
@@ -55,8 +50,7 @@ type Job[T any] struct {
 	doneCh   chan struct{}
 }
 
-// Wait blocks until the job is terminal or ctx is cancelled. For
-// pre-resolved jobs (already terminal) Wait returns immediately.
+// Wait blocks until the job is terminal or ctx is cancelled.
 func (j *Job[T]) Wait(ctx context.Context) (T, error) {
 	select {
 	case <-j.doneCh:
@@ -70,14 +64,12 @@ func (j *Job[T]) Wait(ctx context.Context) (T, error) {
 }
 
 // IsTracked reports whether the job is registered with a Registry.
-// True iff the job was produced by Submit; false for Resolved/Failed.
-// Implies ID() != "".
 func (j *Job[T]) IsTracked() bool { return j.tracked }
 
-// ID returns the registry-assigned ID. Empty for pre-resolved jobs.
+// ID returns the registry-assigned ID.
 func (j *Job[T]) ID() string { return j.id }
 
-// Kind returns the JobKind label. Empty for pre-resolved jobs.
+// Kind returns the JobKind label.
 func (j *Job[T]) Kind() string { return string(j.kind) }
 
 // Series returns the target series. Empty refs.Series if not
@@ -97,8 +89,7 @@ func (j *Job[T]) State() Status {
 
 // LatestProgress returns a copy of the most recent progress event
 // captured by the job goroutine, or nil if no event has been
-// recorded. Surfaces (CLI spinner, MCP polling, REST SSE) call this
-// to render progress; pre-resolved jobs always return nil.
+// recorded. Surfaces call this to render progress.
 func (j *Job[T]) LatestProgress() *progress.Event {
 	j.mu.RLock()
 	defer j.mu.RUnlock()

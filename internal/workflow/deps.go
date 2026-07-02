@@ -4,9 +4,9 @@
 //
 //	func Op(ctx context.Context, deps Deps, in OpInput) (response.OpResult, error)
 //
-// Deps is constructed once at startup (cmd/kura/build.go,
-// cmd/kura-mcp/build.go) and passed by value to every workflow call. Do
-// not stash state across calls; workflows execute, return, and forget.
+// Deps is constructed once at startup (cmd/kura/build.go) and passed by value
+// to every workflow call. Do not stash state across calls; workflows execute,
+// return, and forget.
 package workflow
 
 import (
@@ -44,11 +44,6 @@ type Deps struct {
 	// the guard around snapshot writes. kura serve constructs the
 	// serializing variant; tests use the no-op one.
 	Coordinator coord.Coordinator
-
-	// HostName is os.Hostname() captured once at startup. Used by
-	// coord.NewHolder / NewMutator stamps so workflows don't reach into
-	// os each call.
-	HostName string
 
 	// Provider yields a provider.Source on first call and caches the
 	// result. Local-only workflows never invoke it; provider-needing
