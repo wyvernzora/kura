@@ -119,7 +119,7 @@ function LibraryHome() {
   }, [allRows, active, activeSources, activeResolutions, isSearching, trimmed, sort]);
 
   // Clear button is gated on at least one filter being active. Sort
-  // is intentionally excluded — there's no "off" state for sort.
+  // is intentionally excluded; default sort is title asc.
   const hasActiveFilters = active.size + activeSources.size + activeResolutions.size > 0;
 
   return (

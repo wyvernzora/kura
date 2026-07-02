@@ -3,15 +3,13 @@ import { ChevronDown } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MaterialIcon } from '@/components/ui/material-icon';
 import { cn } from '@/lib/cn';
-import type { SortDirection, SortKey, SortSpec } from '@/lib/library';
+import { nextSortForKey, type SortDirection, type SortKey, type SortSpec } from '@/lib/library';
 
 interface SortDropdownProps {
   value: SortSpec;
@@ -21,37 +19,28 @@ interface SortDropdownProps {
 
 const KEY_LABELS: Record<SortKey, string> = {
   title: 'Title',
-  episodes: 'Episodes',
+  episodes: 'Episode',
   status: 'Status',
+  dateAdded: 'Date Added',
+  lastAired: 'Last Aired',
 };
 
 const DIRECTION_GLYPH: Record<SortDirection, string> = {
-  asc: '↑',
-  desc: '↓',
+  asc: '▲',
+  desc: '▼',
 };
 
-const KEY_ORDER: readonly SortKey[] = ['title', 'episodes', 'status'];
-
-const VALUE_SEP = '|';
-
-function encode(spec: SortSpec): string {
-  return `${spec.key}${VALUE_SEP}${spec.direction}`;
-}
-
-function decode(value: string): SortSpec {
-  const [key, direction] = value.split(VALUE_SEP) as [SortKey, SortDirection];
-  return { key, direction };
-}
+const KEY_ORDER: readonly SortKey[] = ['title', 'episodes', 'status', 'dateAdded', 'lastAired'];
 
 /**
  * Sort selector. Trigger shows the active key + direction inline so
  * the user sees the current state without opening the menu.
  *
- * Encodes the (key, direction) pair as a single radio value because
- * Radix RadioGroup only takes one string value at a time. The pipe
- * separator is internal — neither key nor direction contains it.
+ * Selecting a new key starts ascending. Selecting the active key
+ * toggles between ascending and descending.
  */
 export function SortDropdown({ value, onChange, className }: SortDropdownProps) {
+  const label = `${KEY_LABELS[value.key]} ${DIRECTION_GLYPH[value.direction]}`;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -60,9 +49,7 @@ export function SortDropdown({ value, onChange, className }: SortDropdownProps) 
           aria-label="Sort"
           className={cn(
             // Square icon button on mobile (h-9 w-9, centered glyph) →
-            // expanded pill on sm+ (auto width, gap-2, px-3). Sort has
-            // no "all" state, so no active-dot indicator — the icon by
-            // itself is the affordance.
+            // expanded pill on sm+ (auto width, gap-2, px-3).
             'inline-flex h-9 w-9 items-center justify-center sm:w-auto sm:justify-start sm:gap-2 sm:px-3',
             'rounded-md border border-line-soft bg-surface text-sm text-ink shadow-card',
             'transition-[transform,box-shadow,background-color,color] duration-[160ms] ease-out',
@@ -78,38 +65,36 @@ export function SortDropdown({ value, onChange, className }: SortDropdownProps) 
           */}
           <MaterialIcon name="sort" />
           <span className="hidden text-muted lg:inline">Sort</span>
-          <span className="hidden sm:inline">
-            {KEY_LABELS[value.key]} {DIRECTION_GLYPH[value.direction]}
-          </span>
+          <span className="hidden sm:inline">{label}</span>
           <ChevronDown aria-hidden="true" className="hidden h-3.5 w-3.5 text-muted sm:inline" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={encode(value)} onValueChange={(v) => onChange(decode(v))}>
-          {KEY_ORDER.map((key, i) => (
-            <SortKeyGroup key={key} sortKey={key} showDivider={i > 0} />
-          ))}
-        </DropdownMenuRadioGroup>
+        {KEY_ORDER.map((key) => (
+          <SortKeyItem key={key} value={value} sortKey={key} onChange={onChange} />
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function SortKeyGroup({ sortKey, showDivider }: { sortKey: SortKey; showDivider: boolean }) {
+function SortKeyItem({
+  value,
+  sortKey,
+  onChange,
+}: {
+  value: SortSpec;
+  sortKey: SortKey;
+  onChange: (next: SortSpec) => void;
+}) {
+  const selected = value.key === sortKey;
   return (
-    <>
-      {showDivider && <DropdownMenuSeparator />}
-      {(['asc', 'desc'] as const).map((direction) => (
-        <DropdownMenuRadioItem
-          key={`${sortKey}-${direction}`}
-          value={encode({ key: sortKey, direction })}
-        >
-          <span>
-            {KEY_LABELS[sortKey]} {DIRECTION_GLYPH[direction]}
-          </span>
-        </DropdownMenuRadioItem>
-      ))}
-    </>
+    <DropdownMenuItem className="pl-7" onSelect={() => onChange(nextSortForKey(value, sortKey))}>
+      <span className="absolute left-2 inline-flex h-3.5 w-3.5 items-center justify-center">
+        {selected ? DIRECTION_GLYPH[value.direction] : null}
+      </span>
+      <span>{KEY_LABELS[sortKey]}</span>
+    </DropdownMenuItem>
   );
 }

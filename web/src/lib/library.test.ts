@@ -8,6 +8,7 @@ import {
   filterByMultiValuedField,
   filterByStatus,
   intersectWithCandidates,
+  nextSortForKey,
   sortRows,
 } from './library';
 
@@ -127,11 +128,47 @@ describe('sortRows', () => {
     ]);
   });
 
+  it('sorts by date added with missing values last', () => {
+    const a = row({ title: 'A', dateAdded: '2026-04-01T00:00:00Z' });
+    const b = row({ title: 'B' });
+    const c = row({ title: 'C', dateAdded: '2026-03-01T00:00:00Z' });
+    const sorted = sortRows([a, b, c], { key: 'dateAdded', direction: 'asc' });
+    expect(sorted.map((r) => r.title)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('sorts by last aired descending with missing values last', () => {
+    const a = row({ title: 'A', lastAired: '2026-04-01' });
+    const b = row({ title: 'B' });
+    const c = row({ title: 'C', lastAired: '2026-05-01' });
+    const sorted = sortRows([a, b, c], { key: 'lastAired', direction: 'desc' });
+    expect(sorted.map((r) => r.title)).toEqual(['C', 'A', 'B']);
+  });
+
   it('does not mutate the input', () => {
     const input = [SPY, FRIEREN, ATTACK];
     const snapshot = [...input];
     sortRows(input, { key: 'title', direction: 'asc' });
     expect(input).toEqual(snapshot);
+  });
+});
+
+describe('nextSortForKey', () => {
+  it('toggles the active key between asc and desc', () => {
+    expect(nextSortForKey({ key: 'status', direction: 'asc' }, 'status')).toEqual({
+      key: 'status',
+      direction: 'desc',
+    });
+    expect(nextSortForKey({ key: 'status', direction: 'desc' }, 'status')).toEqual({
+      key: 'status',
+      direction: 'asc',
+    });
+  });
+
+  it('switching keys starts the new key ascending', () => {
+    expect(nextSortForKey({ key: 'episodes', direction: 'desc' }, 'dateAdded')).toEqual({
+      key: 'dateAdded',
+      direction: 'asc',
+    });
   });
 });
 

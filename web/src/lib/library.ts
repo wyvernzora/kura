@@ -5,7 +5,7 @@ import type { Status } from '@/lib/status';
  * Sortable columns the library home exposes via the sort dropdown.
  * Wire-friendly stable strings so URL sync (P1+) can persist them.
  */
-export type SortKey = 'title' | 'episodes' | 'status';
+export type SortKey = 'title' | 'episodes' | 'status' | 'dateAdded' | 'lastAired';
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortSpec {
@@ -35,6 +35,29 @@ const STATUS_SORT_ORDER: Record<Status, number> = {
 
 function compareTitles(a: string, b: string): number {
   return a.localeCompare(b, undefined, { sensitivity: 'base' });
+}
+
+function compareOptionalDate(a: string | undefined, b: string | undefined, dir: number): number {
+  if (!a && !b) {
+    return 0;
+  }
+  if (!a) {
+    return 1;
+  }
+  if (!b) {
+    return -1;
+  }
+  return a.localeCompare(b) * dir;
+}
+
+export function nextSortForKey(current: SortSpec, key: SortKey): SortSpec {
+  if (current.key !== key) {
+    return { key, direction: 'asc' };
+  }
+  if (current.direction === 'asc') {
+    return { key, direction: 'desc' };
+  }
+  return { key, direction: 'asc' };
 }
 
 /**
@@ -149,9 +172,18 @@ export function sortRows(rows: readonly ListRow[], sort: SortSpec): readonly Lis
       case 'status':
         cmp = STATUS_SORT_ORDER[displayStatus(a)] - STATUS_SORT_ORDER[displayStatus(b)];
         break;
+      case 'dateAdded':
+        cmp = compareOptionalDate(a.dateAdded, b.dateAdded, dir);
+        break;
+      case 'lastAired':
+        cmp = compareOptionalDate(a.lastAired, b.lastAired, dir);
+        break;
     }
     if (cmp === 0) {
       cmp = compareTitles(a.title, b.title);
+    }
+    if (sort.key === 'dateAdded' || sort.key === 'lastAired') {
+      return cmp;
     }
     return cmp * dir;
   });

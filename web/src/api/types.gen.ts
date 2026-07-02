@@ -208,6 +208,8 @@ export interface ListRow {
    */
   posterUrl?: string;
   posterThumbnailUrl?: string;
+  dateAdded?: string;
+  lastAired?: string;
   lastScanned?: string;
   /**
    * SearchKey is the per-row folded search blob the client feeds

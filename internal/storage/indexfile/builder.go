@@ -94,6 +94,7 @@ func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts Buil
 		Series:      model.Ref,
 		Metadata:    model.Metadata,
 		Title:       model.Ref.String(),
+		DateAdded:   formatOptionalTime(model.DateAdded),
 		LastScanned: formatOptionalTime(model.LastScanned),
 		UpdatedAt:   now.UTC().Format(time.RFC3339),
 	}
@@ -110,6 +111,9 @@ func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts Buil
 	row.Staged = summary.hasStaged
 	row.Status = listStatusFor(summary)
 	row.IsAiring = summary.airing
+	if summary.lastAired.IsValid() {
+		row.LastAired = summary.lastAired.String()
+	}
 	row.Resolutions, row.Sources = collectActiveQuality(model)
 	if !model.Artwork.Poster.IsZero() {
 		row.PosterURL = model.Artwork.Poster.URL
@@ -142,6 +146,7 @@ type seriesSummary struct {
 	pending        int
 	hasStaged      bool
 	airing         bool
+	lastAired      civil.Date
 }
 
 // seasonAirDates holds the valid AirDates for one non-special season.
@@ -152,6 +157,7 @@ type seasonAirDates struct {
 
 func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) seriesSummary {
 	var s seriesSummary
+	today := civil.DateOf(now)
 	seasons := map[int]struct{}{}
 	seasonsActive := map[int]struct{}{}
 	perSeason := map[int]*seasonAirDates{}
@@ -171,6 +177,9 @@ func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) ser
 		}
 		if episode.AirDate.IsValid() {
 			sa.dates = append(sa.dates, episode.AirDate)
+			if !episode.AirDate.After(today) && (!s.lastAired.IsValid() || s.lastAired.Before(episode.AirDate)) {
+				s.lastAired = episode.AirDate
+			}
 		}
 
 		if episode.Staged != nil {

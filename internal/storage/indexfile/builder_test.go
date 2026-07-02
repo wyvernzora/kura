@@ -146,6 +146,28 @@ func TestBuildRowFromModel_StagedFlag(t *testing.T) {
 	}
 }
 
+func TestBuildRowFromModel_DateAddedAndLastAired(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	model := &series.Series{
+		Ref:       mustParseSeries(t, "Show"),
+		Metadata:  refs.Metadata("tvdb:1"),
+		DateAdded: time.Date(2026, 4, 2, 3, 4, 5, 0, time.FixedZone("JST", 9*60*60)),
+		Episodes: map[refs.Episode]series.Episode{
+			mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2026, Month: 4, Day: 20}},
+			mustEpisode(t, 1, 2): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 4}},
+			mustEpisode(t, 1, 3): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 11}},
+			mustEpisode(t, 0, 1): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 5}},
+		},
+	}
+	row := indexfile.BuildRowFromModel(model, now)
+	if row.DateAdded != "2026-04-01T18:04:05Z" {
+		t.Fatalf("DateAdded = %q, want UTC RFC3339", row.DateAdded)
+	}
+	if row.LastAired != "2026-05-04" {
+		t.Fatalf("LastAired = %q, want latest non-special air date not after today", row.LastAired)
+	}
+}
+
 // Single-cour weekly run with a future episode within cadence: cour 1
 // has E1 (2 weeks ago) and E2 (3 days out). Cour 1's first date is in
 // the past, last date is in the future → airing.

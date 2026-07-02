@@ -64,6 +64,8 @@ type Row struct {
 	PosterURL          string `json:"posterUrl,omitempty"`
 	PosterThumbnailURL string `json:"posterThumbnailUrl,omitempty"`
 
+	DateAdded   string `json:"dateAdded,omitempty"`
+	LastAired   string `json:"lastAired,omitempty"`
 	LastScanned string `json:"lastScanned,omitempty"`
 	UpdatedAt   string `json:"updatedAt,omitempty"`
 

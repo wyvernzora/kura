@@ -198,6 +198,8 @@ func rowToListRow(row indexfile.Row) response.ListRow {
 		Sources:            row.Sources,
 		PosterURL:          row.PosterURL,
 		PosterThumbnailURL: row.PosterThumbnailURL,
+		DateAdded:          row.DateAdded,
+		LastAired:          row.LastAired,
 		LastScanned:        row.LastScanned,
 		SearchKey:          row.SearchKey,
 		Error:              row.Error,
