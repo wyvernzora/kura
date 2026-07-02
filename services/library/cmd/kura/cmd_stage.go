@@ -27,7 +27,7 @@ type stageEpisodeCmd struct {
 	Companions []string `name:"companion" help:"Companion inbox selector (e.g. inbox:[BDrip] Show/E03.en.srt)."`
 	Replace    bool     `name:"replace" help:"Stage over an active episode or replace an existing staged entry for the same season and episode."`
 	JSON       bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
-	Args       []string `arg:"" required:"" help:"Selector terms, episode marker (e.g. S01E03), and an inbox: selector (use 'kura inbox list' to discover)."`
+	Args       []string `arg:"" required:"" help:"Selector terms, episode marker (e.g. S01E03), and an inbox: media selector, or series: for in-place metadata override."`
 }
 
 type stageTrashCmd struct {

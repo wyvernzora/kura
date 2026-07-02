@@ -44,8 +44,8 @@ kura serve --rest=:8080 --mcp-http=:8081 --rest-cors-origin=https://ui.local
 Per [concepts.md](concepts.md#actors), permanently-destructive verbs
 are operator-only. REST enforces this with two headers:
 
-- `X-Kura-Operator: 1` — required for trash mutations, remove,
-  reindex, and reconcile recover.
+- `X-Kura-Operator: 1` — required for trash mutations, purge remove,
+  and reconcile recover.
 - `X-Confirm: 1` — additionally required for trash empty and
   `remove --purge`.
 
@@ -78,7 +78,7 @@ SeriesRef in the request body as `dirname`.
 | GET    | `/api/v1/series/{ref}` | — | `Show` (series + episodes) | ETag, query: `episodes`, `status`, `source`, `resolution` |
 | POST   | `/api/v1/series` | `{ref, dirname?, ordering?}` | Series spine | — |
 | POST   | `/api/v1/series/import` | `{ref, dirname, force?, ordering?}` | Series spine | — |
-| DELETE | `/api/v1/series/{ref}` | — | — | `X-Kura-Operator + X-Confirm` if `?purge=1` |
+| DELETE | `/api/v1/series/{ref}` | — | — | `X-Kura-Operator + X-Confirm` if `?purge=1`; no operator header for untrack-only removal |
 | POST   | `/api/v1/series/{ref}/reset` | `{episode?, trash?, extras?, all?}` | Reset summary | — |
 | POST   | `/api/v1/series/{ref}/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 {jobId, kind, statusUrl, streamUrl, submittedAt}` | async |
 | POST   | `/api/v1/series/{ref}/stage` | `{episodes[], trash[], extras[]}` | `202 Job` | async |
@@ -94,7 +94,7 @@ SeriesRef in the request body as `dirname`.
 | POST   | `/api/v1/series/{ref}/trash/{ulid}/restore` | — | Trash restore result | `X-Kura-Operator` |
 | DELETE | `/api/v1/series/{ref}/trash` | — | Trash empty result | `X-Kura-Operator + X-Confirm` |
 | DELETE | `/api/v1/trash` | — | Library-wide empty result | `X-Kura-Operator + X-Confirm` |
-| POST   | `/api/v1/library/reindex` | — | `202 Job` | `X-Kura-Operator`, async |
+| POST   | `/api/v1/library/reindex` | — | `202 Job` | async |
 | POST   | `/api/v1/library/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 Job` | async |
 | GET    | `/api/v1/inbox` | — | Inbox listing | ETag |
 | GET    | `/api/v1/jobs/{job}` | — | Job status | — |

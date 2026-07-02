@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Find untracked series under $KURA_LIBRARY_ROOT, take the first N,
+# Find untracked series from the running Kura server, take the first N,
 # and run `kura import` + `kura scan` for each.
 #
 # Usage: tools/scripts/import-untracked.sh [LIMIT]
 #   LIMIT defaults to 10.
 #
-# Requires: kura on PATH, jq, KURA_LIBRARY_ROOT set, KURA_TVDB_KEY set
-# (import resolves metadata via TVDB).
+# Requires: kura on PATH, jq, and access to the running Kura REST server.
+# The server needs its library root and metadata provider configured.
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ while IFS= read -r line; do
 done < <(kura list --status untracked --json | jq -r '.[].title' | head -n "$LIMIT")
 
 if [ "${#dirs[@]}" -eq 0 ]; then
-  echo "No untracked series under \$KURA_LIBRARY_ROOT."
+  echo "No untracked series in the server index."
   exit 0
 fi
 
