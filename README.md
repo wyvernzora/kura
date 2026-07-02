@@ -75,7 +75,7 @@ moves files and sends displaced media to trash.
 The Docker image runs `kura serve --rest=:8080 --mcp-http=:8081` by default.
 
 ```sh
-docker build --build-arg VERSION=v0.2.0 -t kura:v0.2.0 .
+docker build --build-arg VERSION=v0.3.0 -t kura:v0.3.0 .
 docker run --rm \
   -e KURA_LIBRARY_ROOT=/library \
   -e KURA_INBOX_ROOT=/inbox \
@@ -85,7 +85,7 @@ docker run --rm \
   -v kura-token:/var/lib/kura \
   -p 8080:8080 \
   -p 8081:8081 \
-  kura:v0.2.0
+  kura:v0.3.0
 ```
 
 Run one writer per library. Kura targets a single personal library, not

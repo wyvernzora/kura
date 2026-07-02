@@ -2,12 +2,19 @@
 
 Notable release changes for Kura.
 
-## Unreleased
+## v0.3.0 - 2026-07-02
 
 ### Highlights
 
 - Changed `.kura/index.jsonl` to schema v5 source snapshots so deploy-time
   row policy is applied at read time instead of persisted into row-cache data.
+- Added `dateAdded` to `series.json`, defaulting older files from
+  `lastScanned`, and exposed Date Added / Last Aired library sorting.
+- Fixed index updates after scan plus cold-start/rebuild races around the
+  library index.
+- Routed the `path` CLI command through the REST server and refreshed the
+  README, docs entrypoints, MCP docs, and agent guide for the current
+  server-backed flow.
 
 ## v0.2.0 - 2026-07-01
 
