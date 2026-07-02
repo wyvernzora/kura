@@ -32,13 +32,13 @@ func buildSourceFromFlags(rt *runContext, flags *cli) (provider.Source, error) {
 // buildDepsAsyncIndex constructs Deps without blocking on the index
 // rebuild. Used by serve to surface KindServerNotReady to early
 // requests instead of delaying transport startup.
-func buildDepsAsyncIndex(rt *runContext, coordinator coord.Coordinator) (workflow.Deps, error) {
+func buildDepsAsyncIndex(rt *runContext, coordinator coord.Coordinator, logger *slog.Logger) (workflow.Deps, error) {
 	libRoot := rt.Getenv("KURA_LIBRARY_ROOT")
 	if err := validateLibraryRoot(libRoot); err != nil {
 		return workflow.Deps{}, err
 	}
 	rowBuildOptions := rowBuildOptionsFromEnv(rt.Getenv)
-	index, err := loadOrRebuildIndex(rt.Context, libRoot, rowBuildOptions, coordinator.WithIndex)
+	index, err := loadOrRebuildIndex(rt.Context, libRoot, rowBuildOptions, coordinator.WithIndex, logger)
 	if err != nil {
 		return workflow.Deps{}, err
 	}
@@ -168,8 +168,13 @@ func hasPathPrefix(child, parent string) bool {
 // synchronously and returned ready. If absent or unreadable, a fresh Index is
 // returned with a background rebuild already triggered; early list requests
 // see server_not_ready until the rebuild publishes entries.
-func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.BuildOptions, guard indexfile.GuardFunc) (*indexfile.Index, error) {
+func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.BuildOptions, guard indexfile.GuardFunc, logger *slog.Logger) (*indexfile.Index, error) {
 	cfg := indexfile.Config{BuildOptions: opts, Guard: guard}
+	if logger != nil {
+		// Assign inside a nil check: a nil *slog.Logger stored in the
+		// interface field would pass indexfile's nil test and panic.
+		cfg.Logger = logger
+	}
 	index, err := indexfile.Load(libRoot, cfg)
 	switch {
 	case errors.Is(err, indexfile.ErrNotFound):

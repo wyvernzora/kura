@@ -58,7 +58,7 @@ func TestLoadOrRebuildIndexColdRebuild(t *testing.T) {
 		t.Fatalf("Mkdir: %v", err)
 	}
 
-	idx, err := loadOrRebuildIndex(context.Background(), root, indexfile.DefaultBuildOptions(), coord.NewCLICoordinator().WithIndex)
+	idx, err := loadOrRebuildIndex(context.Background(), root, indexfile.DefaultBuildOptions(), coord.NewCLICoordinator().WithIndex, nil)
 	if err != nil {
 		t.Fatalf("loadOrRebuildIndex: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestLoadOrRebuildIndexCorruptRebuild(t *testing.T) {
 		t.Fatalf("Mkdir: %v", err)
 	}
 
-	idx, err := loadOrRebuildIndex(context.Background(), root, indexfile.DefaultBuildOptions(), coord.NewCLICoordinator().WithIndex)
+	idx, err := loadOrRebuildIndex(context.Background(), root, indexfile.DefaultBuildOptions(), coord.NewCLICoordinator().WithIndex, nil)
 	if err != nil {
 		t.Fatalf("loadOrRebuildIndex: %v", err)
 	}

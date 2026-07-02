@@ -58,6 +58,10 @@ type Config struct {
 	BuildOptions BuildOptions
 	Now          func() time.Time
 	Guard        GuardFunc
+	// Logger receives rebuild lifecycle logs. nil means silent. Set at
+	// construction and immutable afterwards so background rebuild
+	// goroutines never race a later assignment.
+	Logger Logger
 }
 
 // Entry is one source-data index entry. Model means tracked; Error means a
@@ -109,6 +113,10 @@ func New(root string, cfg Config) *Index {
 	if guard == nil {
 		guard = func(_ context.Context, fn func() error) error { return fn() }
 	}
+	log := cfg.Logger
+	if log == nil {
+		log = nopLogger{}
+	}
 	return &Index{
 		root:         root,
 		entries:      map[refs.Series]entry{},
@@ -117,7 +125,7 @@ func New(root string, cfg Config) *Index {
 		now:          now,
 		guard:        guard,
 		builder:      diskEntryBuilder,
-		log:          nopLogger{},
+		log:          log,
 	}
 }
 

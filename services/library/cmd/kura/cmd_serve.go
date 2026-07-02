@@ -329,7 +329,7 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 	// background. kura_list returns server_not_ready until the rebuild
 	// completes; transports come up immediately.
 	coordinator := coord.NewMCPCoordinator()
-	deps, err := buildDepsAsyncIndex(rt, coordinator)
+	deps, err := buildDepsAsyncIndex(rt, coordinator, logger)
 	if err != nil {
 		return workflow.Deps{}, nil, indexfile.WatchConfig{}, err
 	}
@@ -359,7 +359,6 @@ func buildServeDeps(rt *runContext, logger *slog.Logger) (workflow.Deps, *jobs.R
 		ProbeInterval:   envDuration(rt.Getenv, "KURA_INDEX_PROBE_INTERVAL", 2*time.Second),
 		RebuildInterval: envDuration(rt.Getenv, "KURA_INDEX_REBUILD_INTERVAL", time.Hour),
 		LibRootDebounce: envDuration(rt.Getenv, "KURA_INDEX_LIBROOT_DEBOUNCE", 3*time.Second),
-		Logger:          logger,
 	}
 	return deps, registry, watch, nil
 }
