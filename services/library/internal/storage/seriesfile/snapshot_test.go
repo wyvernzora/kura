@@ -61,6 +61,9 @@ func TestSnapshotEncodeDecodeRoundTrip(t *testing.T) {
 	if !bytes.Contains(data, []byte(`"schemaVersion":3`)) {
 		t.Fatalf("snapshot missing schemaVersion 3: %s", data)
 	}
+	if !bytes.Contains(data, []byte(`"dateAdded":"2026-04-20T03:00:00Z"`)) {
+		t.Fatalf("snapshot missing dateAdded: %s", data)
+	}
 	if bytes.Contains(data, []byte(seriesDir)) {
 		t.Fatalf("snapshot leaked absolute series dir: %s", data)
 	}
@@ -74,6 +77,9 @@ func TestSnapshotEncodeDecodeRoundTrip(t *testing.T) {
 	}
 	if decoded.Hash != "" {
 		t.Fatalf("Hash = %q, want empty", decoded.Hash)
+	}
+	if !decoded.DateAdded.Equal(model.DateAdded) {
+		t.Fatalf("DateAdded = %v, want %v", decoded.DateAdded, model.DateAdded)
 	}
 	ep1 := mustEpisode(t, "S01E0001")
 	if got := decoded.Episodes[ep1].Active.Path; got != filepath.Join(seriesDir, "Season 1", "Bookworm - S01E01 (BDRip 1080p).mkv") {

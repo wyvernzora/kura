@@ -446,6 +446,9 @@ func TestLoadFixtureCarriesClaimFields(t *testing.T) {
 	if model.LastMutated.Op == "" {
 		t.Fatal("LastMutated not loaded from fixture")
 	}
+	if !model.DateAdded.Equal(model.LastScanned) {
+		t.Fatalf("DateAdded = %v, want LastScanned %v for old fixture", model.DateAdded, model.LastScanned)
+	}
 	// SaveCAS overwrites last_mutated with the new mutator and reloads
 	// preserve it byte-stable.
 	if err := seriesfile.SaveCAS(libRoot, model, coord.Mutator{Op: "stage", PID: 1, Host: "h", At: time.Now()}); err != nil {
@@ -457,5 +460,15 @@ func TestLoadFixtureCarriesClaimFields(t *testing.T) {
 	}
 	if reloaded.LastMutated.Op != "stage" {
 		t.Fatalf("LastMutated.Op = %q, want stage after SaveCAS", reloaded.LastMutated.Op)
+	}
+	if !reloaded.DateAdded.Equal(model.DateAdded) {
+		t.Fatalf("DateAdded = %v, want preserved %v", reloaded.DateAdded, model.DateAdded)
+	}
+	data, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if !strings.Contains(string(data), `"dateAdded": "2026-04-20T03:00:00Z"`) {
+		t.Fatalf("saved series.json missing dateAdded:\n%s", data)
 	}
 }

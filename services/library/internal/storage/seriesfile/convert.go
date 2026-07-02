@@ -23,6 +23,14 @@ func fromWire(in seriesV3) (*series.Series, error) {
 	if err != nil {
 		return nil, fmt.Errorf("seriesfile: invalid lastScanned %q: %w", in.LastScanned, err)
 	}
+	dateAdded := lastScanned
+	if in.DateAdded != "" {
+		parsed, err := time.Parse(time.RFC3339, in.DateAdded)
+		if err != nil {
+			return nil, fmt.Errorf("seriesfile: invalid dateAdded %q: %w", in.DateAdded, err)
+		}
+		dateAdded = parsed
+	}
 	mutator, err := mutatorFromWire(in.LastMutated)
 	if err != nil {
 		return nil, err
@@ -43,6 +51,7 @@ func fromWire(in seriesV3) (*series.Series, error) {
 		Metadata:       metadataRef,
 		PreferredTitle: textnorm.NFC(in.PreferredTitle),
 		CanonicalTitle: textnorm.NFC(in.CanonicalTitle),
+		DateAdded:      dateAdded.UTC(),
 		LastScanned:    lastScanned,
 		Ordering:       in.Ordering,
 		Artwork:        artworkFromWire(in.Artwork),
@@ -186,11 +195,16 @@ func mutatorToWire(in coord.Mutator) mutatorV1 {
 }
 
 func toWire(in *series.Series) seriesV3 {
+	dateAdded := in.DateAdded
+	if dateAdded.IsZero() {
+		dateAdded = in.LastScanned
+	}
 	out := seriesV3{
 		SchemaVersion:  currentSchemaVersion,
 		MetadataRef:    in.Metadata.String(),
 		PreferredTitle: in.PreferredTitle.String(),
 		CanonicalTitle: in.CanonicalTitle.String(),
+		DateAdded:      dateAdded.UTC().Format(time.RFC3339),
 		LastScanned:    in.LastScanned.UTC().Format(time.RFC3339),
 		Ordering:       in.Ordering,
 		Artwork:        artworkToWire(in.Artwork),

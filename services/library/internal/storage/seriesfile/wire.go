@@ -15,6 +15,7 @@ type seriesV3 struct {
 	MetadataRef    string               `json:"metadataRef"`
 	PreferredTitle string               `json:"preferredTitle,omitempty"`
 	CanonicalTitle string               `json:"canonicalTitle,omitempty"`
+	DateAdded      string               `json:"dateAdded,omitempty"`
 	LastScanned    string               `json:"lastScanned"`
 	Ordering       string               `json:"ordering,omitempty"`
 	Artwork        artworkV2            `json:"artwork"`
