@@ -65,7 +65,7 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult,
 	var out response.ScanResult
 	var modelForIndex *series.Series
 	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
-		return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
+		if err := coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
 			internal, runErr := runner.Scan(ctx, scan.Input{
 				Refresh:      in.Refresh,
 				MetadataOnly: in.MetadataOnly,
@@ -78,16 +78,19 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult,
 			out = toScanResponse(seriesRoot, internal)
 			modelForIndex = internal.Model
 			return nil
-		})
+		}); err != nil {
+			return err
+		}
+		if modelForIndex != nil {
+			// ponytail: scan_all persists once per series; batch the index write if bulk scan ever becomes hot.
+			if err := updateIndexModel(ctx, deps, modelForIndex, "scan"); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return response.ScanResult{}, err
-	}
-	if modelForIndex != nil {
-		// ponytail: scan_all persists once per series; batch the index write if bulk scan ever becomes hot.
-		if err := updateIndexModel(ctx, deps, modelForIndex, "scan"); err != nil {
-			return response.ScanResult{}, err
-		}
 	}
 	return out, nil
 }

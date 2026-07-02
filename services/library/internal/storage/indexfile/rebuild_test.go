@@ -105,6 +105,20 @@ func TestTriggerRebuild_IsIdempotent(t *testing.T) {
 	}
 }
 
+func TestRebuildNow_StopsWhenContextCancelled(t *testing.T) {
+	libRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(libRoot, "Bookworm"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	idx := indexfile.New(libRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := idx.RebuildNow(ctx, "test"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("RebuildNow err = %v, want context.Canceled", err)
+	}
+}
+
 func waitFor(t *testing.T, ok func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

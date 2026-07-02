@@ -13,6 +13,7 @@ import (
 	"github.com/wyvernzora/kura/internal/jobs"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/internal/storage/indexfile"
 )
 
 // defaultScanAllConcurrency caps fan-out when ScanAllInput.Concurrency
@@ -59,7 +60,13 @@ func runScanAll(ctx context.Context, deps Deps, in ScanAllInput) (response.ScanA
 	if deps.Index == nil {
 		return response.ScanAllResult{}, errors.New("scan_all: index not available")
 	}
-	rows := deps.Index.Rows()
+	rows, err := deps.Index.Snapshot()
+	if errors.Is(err, indexfile.ErrNotReady) {
+		return response.ScanAllResult{}, &ServerNotReadyError{Reason: "library index is rebuilding"}
+	}
+	if err != nil {
+		return response.ScanAllResult{}, err
+	}
 	targets := make([]refs.Series, 0, len(rows))
 	for _, row := range rows {
 		if row.Status == response.ListStatusUntracked {
