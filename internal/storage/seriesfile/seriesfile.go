@@ -224,12 +224,14 @@ func Exists(libRoot string, ref refs.Series) (bool, error) {
 // per-series spine ordering (e.g. "dvd", "absolute"); empty means unset
 // (TVDB applies its default).
 func NewFromMetadata(metadataRef refs.Metadata, ordering string, m provider.Series) (*series.Series, error) {
+	now := time.Now().UTC()
 	out := &series.Series{
 		Metadata:       metadataRef,
 		PreferredTitle: m.PreferredTitle,
 		CanonicalTitle: m.CanonicalTitle,
 		Ordering:       ordering,
-		LastScanned:    time.Now().UTC(),
+		DateAdded:      now,
+		LastScanned:    now,
 		Episodes:       map[refs.Episode]series.Episode{},
 		StagedTrash:    []series.StagedTrashItem{},
 		StagedExtras:   []series.StagedExtraItem{},

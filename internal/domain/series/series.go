@@ -51,6 +51,7 @@ type Series struct {
 	Metadata       refs.Metadata
 	PreferredTitle textnorm.NFCString
 	CanonicalTitle textnorm.NFCString
+	DateAdded      time.Time
 	LastScanned    time.Time
 	Ordering       string
 	Episodes       map[refs.Episode]Episode

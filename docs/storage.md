@@ -53,6 +53,7 @@ metadata file for a series.
   "metadataRef": "tvdb:370070",
   "preferredTitle": "Bocchi the Rock!",
   "canonicalTitle": "Bocchi the Rock!",
+  "dateAdded": "2026-04-29T18:01:33Z",
   "lastScanned": "2026-04-29T18:01:33Z",
   "ordering": "default",
   "artwork": { ... },
@@ -79,6 +80,8 @@ metadata file for a series.
   key order matches natural episode order.
 - Each episode value carries `airDate` plus optional preferred /
   canonical titles for that episode.
+- `dateAdded` is written by current Kura versions. Older files without
+  it load with `dateAdded = lastScanned`.
 - `active` and `staged` are mediaRecord v1: `{path, source,
   resolution, codec, size, mtime, companions[]}`. `path` is stored
   series-relative on disk and absolutized on load.
