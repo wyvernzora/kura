@@ -16,11 +16,9 @@ concurrent writers safe on a shared filesystem, and the homelab /
 single-tenant shape it targets does not benefit from horizontal
 scaling. For Kubernetes, use `replicas: 1` with `strategy: Recreate`.
 
-Manual `kura` CLI invocations against the same library while
-`kura serve` is running is an accepted short-term race window; today
-the operator is responsible for not overlapping them. Future work
-routes the CLI through the server's REST API so the server is the
-sole writer.
+Normal `kura` CLI invocations talk to the server's REST API, so the server
+remains the sole writer. Do not run a second `kura serve` against the same
+library.
 
 The library may live on local disk, NFS, or SMB. Correctness depends
 on the single-writer rule, not on the underlying filesystem.
