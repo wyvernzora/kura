@@ -1,11 +1,10 @@
 // Package client is the HTTP client the CLI uses to talk to a running
-// `kura serve --rest`. Once Phase 6 completes, every cmd/kura verb
-// constructs a Client and dispatches through it instead of importing
-// internal/workflow directly. The server becomes the sole writer per
-// scratch/Product.md "Single writer at any moment."
+// `kura serve --rest`. CLI verbs dispatch through this package instead
+// of importing internal/workflow directly, keeping the server as the
+// normal filesystem writer.
 //
 // Discovery: `KURA_SERVER_URL` (default `http://127.0.0.1:8080`).
-// Operator-only verbs (trash empty/restore, remove --purge, reindex,
+// Operator-only verbs (trash empty/restore, remove --purge,
 // reconcile recover) set the X-Kura-Operator: 1 header. Destructive
 // ops (trash empty, remove --purge) also set X-Confirm: 1.
 package client

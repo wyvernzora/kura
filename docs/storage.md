@@ -29,7 +29,8 @@ workflows that produce these files, see [lifecycle.md](lifecycle.md).
 
 ## Conventions
 
-- All Kura-generated JSON files include a top-level `schemaVersion`.
+- Kura-generated JSON files include schema metadata. Most use a top-level
+  `schemaVersion`; `index.jsonl` uses `$schema` in its header line.
 - Writes are atomic: write to a temp file, rename. No partial JSON.
 - `series.json` mutating writes are CAS-guarded (compare-and-swap on a
   content hash). The writer reads, mutates in memory, and writes only

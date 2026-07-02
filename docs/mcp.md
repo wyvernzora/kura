@@ -13,25 +13,26 @@ journey, see [lifecycle.md](lifecycle.md).
 
 ## Tools
 
-12 tools registered in `internal/server/mcp/server.go`. Each tool has
+13 tools registered in `internal/server/mcp/server.go`. Each tool has
 a tool-specific markdown brief alongside its handler
 (`internal/server/mcp/tool_<name>.md`); those briefs are what the
 agent sees.
 
 | Tool | Input | Output | Sync / async |
 |------|-------|--------|--------------|
+| `kura_aliases` | `{ref}` | Alias/title list | sync |
 | `kura_resolve` | `{terms: string[]}` | Candidate list | sync |
 | `kura_list` | `{statuses?, airing?, maxResults?, cursor?}` | Paginated series list | sync |
-| `kura_show` | `{ref, episodes?, status[], source[], resolution[]?}` | Series + episodes detail (no trash) | sync |
+| `kura_show` | `{ref, episodes?, status[], source[], resolution[]?}` | Series + episodes detail, including staged trash/extras | sync |
 | `kura_add` | `{ref, dirname?, ordering?}` | Add result | sync |
 | `kura_import` | `{ref, dirname, ordering?}` | Import result | sync |
-| `kura_stage` | `{ref, episodes[], trash[], extras[]}` | Stage result | sync |
+| `kura_stage` | `{ref, episodes[], trash[], extras[]}` | `{jobId}` | async |
 | `kura_reset` | `{ref, episode?, trash[], extras[], all?}` | `{cleared, trashRemoved[], extraRemoved[]}` | sync |
 | `kura_reconcile_plan` | `{ref}` | `{token, changes[], trashItems[], extras[]}` | sync |
 | `kura_scan` | `{ref, refresh?, ordering?}` | `{jobId}` | async |
 | `kura_reconcile_apply` | `{ref, token}` | Job handle | async |
-| `kura_job_status` | `{jobId}` | Status + progress + result/error | sync |
-| `kura_inbox_list` | `{maxResults?, cursor?}` | Paginated inbox files | sync |
+| `kura_job_status` | `{jobId, includeResult?}` | Status + progress + result/error | sync |
+| `kura_inbox_list` | `{path?, recursive?, depth?, limit?, kind?, nameGlob?, includeHidden?}` | Structured inbox listing | sync |
 
 Async tools return a job handle; the agent polls `kura_job_status`.
 See [lifecycle.md §Async jobs](lifecycle.md#async-jobs).
@@ -53,8 +54,9 @@ Specifically:
   via `trash restore` (CLI / REST operator).
 - **Scan re-derives metadata from filesystem reality.** Does not
   modify files.
-- **Trash is invisible on agent surfaces.** `kura_show` omits trash
-  data; no `trash list / empty / restore` tools exist.
+- **Permanent trash is invisible on agent surfaces.** No
+  `trash list / empty / restore` tools exist. `kura_show` only
+  exposes staged trash intent that the agent can still reset.
 - **Permanent deletion is operator-only.** `trash empty` and
   `remove --purge` require explicit CLI invocation, or REST with
   operator + confirm headers. Operator review is the durability

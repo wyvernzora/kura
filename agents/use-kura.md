@@ -61,9 +61,10 @@ are accepted as input.
 | Tool | Effect on library |
 |---|---|
 | `kura_resolve` | None. Looks up metadata refs from titles. |
+| `kura_aliases` | None. Returns provider titles plus user aliases for a tracked series. |
 | `kura_list` | None. Returns one page of series with summary state. Paginated — default 100 rows/page, max 1000. See §12. |
 | `kura_show` | None. Returns full state of one series. |
-| `kura_inbox_list` | None. Lists files under `KURA_INBOX_ROOT` so you can discover what's available to stage. Plain-text output, mtime-desc sorted. See §4.d + §13. |
+| `kura_inbox_list` | None. Lists files under `KURA_INBOX_ROOT` so you can discover what's available to stage. Structured output, mtime-desc sorted. See §4.d + §13. |
 | `kura_add` | Creates a new tracked series. Empty directory. |
 | `kura_import` | Marks an existing untracked directory as tracked. |
 | `kura_stage` | Queues a batch of staging changes against one series: episode stages, trash items, extras placements. Files are **not** moved until reconcile. **Async.** See §4.d. |
@@ -541,10 +542,11 @@ Escalate to the user only when:
     install it. Discover via `kura_inbox_list`, stage with `inbox:`
     selector.
   - File is in the series directory but in the wrong subdirectory or
-    with a non-canonical name. (Scope-limited today: stage media
-    must come from the inbox, so to relocate an in-library file
-    you'd copy it to inbox first, stage it, then trash the misplaced
-    original via `series:` selector in the same batch.)
+    with a non-canonical name. Episode media can use a `series:`
+    selector only for an in-place metadata override of that same
+    episode's active file; relocating an unrelated in-library file
+    still means copying it to inbox, staging it, then trashing the
+    misplaced original via `series:` selector in the same batch.
   - One of several duplicate-slot files in the series directory
     needs to be picked. Trash the losers via `series:` selectors;
     if the winner also needs to come from inbox, stage it as
@@ -602,7 +604,7 @@ busy-recovery guidance.
 | Source column shows resolution string (e.g. `1920x1080`) | Filename suffix has only resolution, no source token. Records show `Unknown` correctly on fresh scans of recent binaries. | Re-scan; if still wrong, override via `kura_stage(source=...)`. |
 | `kura_reconcile_plan` shows the active or staged file as `Unknown` source | Kura's filename parser missed the source token on the originally-staged file (uncommon naming, parser gap). | Check the **original** filename (before kura's rename) for a source token (`BluRay`, `WebRip`, `WEBDL`, `HDTV`, etc.). If present, re-stage the affected file with an explicit source override using a `series:` media selector (in-place override): `kura_stage` episode item with `media: "series:<active-path>"`, `replace: true`, `source: "<token>"`, no companions. Reconcile_apply rewrites the persisted source and renames the file to its corrected canonical filename without moving it through the inbox. |
 | `kura_stage` errors with episode-already-exists | Slot already has a recorded file at a different path. | Confirm with user, then re-call with `replace: true` on the episode item. |
-| `kura_stage` rejects with "expected inbox: scheme" / "expected series: scheme" | Selector type wrong for the field. Episode `media` + companions + extras `source` need `inbox:` selectors; trash `path` + companions need `series:` selectors. | Re-build the selector with the right scheme. |
+| `kura_stage` rejects with "expected inbox: scheme" / "expected series: scheme" | Selector type wrong for the field. Episode `media` accepts `inbox:` normally and `series:` only for in-place metadata override; episode companions and extras `source` need `inbox:` selectors; trash `path` + companions need `series:` selectors. | Re-build the selector with the right scheme. |
 | `kura_stage` rejects with "missing scheme" / "selector escapes root" / "leading slash not allowed" | Bare path or absolute path passed where a selector was expected. Selectors look like `inbox:<rel>` or `series:<rel>`, never `/abs/path`. | Discover the right selector via `kura_inbox_list`; rebuild and retry. |
 | `kura_inbox_list` returns `path does not exist` | Subpath doesn't exist under `KURA_INBOX_ROOT`. | List the parent dir; correct the path. |
 | `kura_stage` rejects whole batch with `invalid_params` (Phase 1) | Trash invariant violated (path is active record / companion / inside a staged record), duplicate episode in batch, duplicate path across batch, or extras destination collision. Error message names the offender. | Fix the offending item and re-submit the whole batch. |
@@ -636,11 +638,12 @@ exactly `maxResults` rows.
 
 ## 13. What you cannot do via MCP today
 
-- **Inspect or restore trashed files.** CLI only
+- **Inspect or restore trashed files.** CLI or REST operator route
   (`kura trash list/restore/empty`).
-- **Recover a stuck reconcile.** CLI only
+- **Recover a stuck reconcile.** CLI or REST operator route
   (`kura reconcile recover <ref>`).
-- **Untrack or delete a series.** CLI only (`kura remove`).
+- **Untrack or delete a series.** CLI or REST operator route
+  (`kura remove`).
 - **Cross-series moves or merges.** Not modeled.
 - **Reach files outside `KURA_INBOX_ROOT` or a series root.**
   Selectors gate every path-bearing input. To stage a file the agent

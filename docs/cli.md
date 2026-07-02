@@ -19,7 +19,7 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 | Operation | Surface | Reason for exclusions | Purpose |
 |---|---|---|---|
 | `add <selector> [--dirname NAME]` | CLI + MCP + REST | — | Register a new series in the library: resolve metadata, create a directory, and initialize metadata. `--dirname` overrides the directory name. |
-| `import <dirname> [terms...]` | CLI + MCP + REST | — | Register identity on an existing untracked directory under library root. CLI exposes `--force` to overwrite a corrupted `.kura/series.json`; MCP and REST do not. |
+| `import <dirname> [terms...]` | CLI + MCP + REST | — | Register identity on an existing untracked directory under library root. CLI and REST expose `force` to overwrite a corrupted `.kura/series.json`; MCP does not. |
 | `scan <selector>` | CLI + MCP + REST | — | Re-sync local metadata with current reality. Hard-fails if the provider is unreachable. Job-shaped. |
 | `stage episode|trash|extra ...` | CLI + MCP + REST | — | Record staged intent for episode media, queued trash, or extras. Files are not moved. |
 | `reset <selector> [--episode S01E03 \| --trash ULID \| --extra ULID \| --all]` | CLI + MCP + REST | — | Remove staged record(s). Does not touch staged files on disk. |
@@ -28,11 +28,11 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 | `reconcile recover <selector>` | CLI + REST (operator) | Operator judgment | Clear a stale `in_progress` claim left by a crashed `reconcile apply`. |
 | `resolve <selector>` | CLI + MCP + REST | — | Resolve selector terms to candidate `MetadataRef`s. Returns the candidate list without auto-picking. |
 | `list` | CLI + MCP + REST | — | Fast metadata inventory of the library. Untracked rows are surfaced on every surface. |
-| `show <selector>` | CLI + MCP + REST | — | Return full observed state for a series. MCP and REST omit trash data. |
+| `show <selector>` | CLI + MCP + REST | — | Return full observed state for a series. Agent-facing surfaces omit permanent trash listings. |
 | `trash list <selector> \| --all` | CLI + REST (operator) | Safety boundary | List trashed files. `--older-than DURATION` filters by age. |
-| `trash empty <selector> \| --all --confirm` | CLI + REST (operator + confirm) | Safety boundary | Permanently delete trashed files. The only verb that destroys content. |
+| `trash empty <selector> \| --all --confirm` | CLI + REST (operator; REST also requires confirm) | Safety boundary | Permanently delete trashed files. CLI requires `--confirm` only with `--all`. |
 | `trash restore <selector> <ULID>` | CLI + REST (operator) | Safety boundary | Move a trashed entry's files back to their recorded paths. Run `scan` afterward to re-adopt. |
-| `reindex` | CLI + REST (operator) | Context efficiency | Walk library, regenerate `.kura/index.jsonl` source snapshots from per-series metadata. |
+| `reindex` | CLI + REST | Context efficiency | Walk library, regenerate `.kura/index.jsonl` source snapshots from per-series metadata. |
 | `remove <selector> [--purge --confirm]` | CLI + REST (operator + confirm for `--purge`) | Operator judgment | Untrack a series. Default: delete `.kura/`, leave media. `--purge --confirm`: wholesale delete the entire series directory. |
 
 Surface exclusions fall into three categories:
@@ -49,7 +49,7 @@ Bulk library queries (e.g. "list all series with sub-1080p episodes")
 are deferred. Every such query requires a full library walk plus
 per-file metadata inspection; they are infrequent and will be
 designed when needed. `list` is the basic inventory exception: it
-performs only the library root walk and per-series metadata reads.
+projects rows from the server's library index.
 
 ## Selectors
 
@@ -74,7 +74,7 @@ combinations or transport failures).
 | Verb | Purpose |
 |------|---------|
 | `kura add <selector> [--dirname NAME]` | Register a new series; create its directory and write the persisted spine. |
-| `kura import <SeriesRef> [terms...]` | Adopt an existing untracked directory under the library root. |
+| `kura import <dirname> [terms...]` | Adopt an existing untracked directory under the library root. |
 | `kura remove <selector> [--purge --confirm]` | Untrack a series (default: drop `.kura/`, leave media). `--purge --confirm` wholesale deletes the directory. |
 
 ## Inspection
@@ -89,7 +89,7 @@ combinations or transport failures).
 
 | Verb | Purpose |
 |------|---------|
-| `kura scan <selector> [--replace]` | Re-sync a series with provider + filesystem; report orphan slots and skipped files. |
+| `kura scan <selector> [--refresh] [--metadata-only] [--ordering ORDERING]` | Re-sync a series with provider + filesystem; report orphan slots and skipped files. |
 | `kura stage episode <selector> S01E03 <inbox:media> [--source WebRip] [--replace] [--companion inbox:PATH]` | Record staged intent for one episode. Same-path stage is a metadata refresh and does not require `--replace`. |
 | `kura reset --episode S01E03 <selector>` / `kura reset --all <selector>` | Drop one staged record or all of them. Does not touch staged files on disk. |
 | `kura reconcile plan <selector>` | Compute and persist a reconcile plan under `<series>/.kura/reconcile/<token>.jsonl`; print the token. Same series state always produces the same token (snapshot-derived). Apply re-validates the snapshot at execute time, so a stale plan (series state changed) is rejected by token mismatch. |
@@ -130,7 +130,7 @@ kura reconcile plan <selector>             # inspect what will move
 kura reconcile apply <selector> <token>    # execute the plan
 kura show <selector>                       # verify
 kura trash list <selector>                 # review displaced files
-kura trash empty <selector> --confirm      # permanently delete them
+kura trash empty <selector>                # permanently delete them
 ```
 
 ## Configuration

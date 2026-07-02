@@ -328,8 +328,10 @@ are real.
 - **Selectors, not paths.** Operations on tracked series identify
   their target by selector — text terms or MetadataRefs. Kura owns
   canonical path construction; callers never specify destination
-  paths. The sole exception is `add`, which takes a literal SeriesRef
-  because the series does not yet exist for a selector to resolve to.
+  paths. `add` and `import` accept a directory name because the
+  series directory is being created or adopted; staging accepts
+  scheme-tagged source selectors (`inbox:` / `series:`), never raw
+  destination paths.
 - **Staging is a working tree; reconcile is the commit.** `stage`
   records intent in metadata. `reconcile` performs filesystem moves
   and updates metadata to reflect the new active state. `reset`
@@ -355,11 +357,10 @@ are real.
   sharing one Coordinator + index cache.
 - **Single writer at any moment.** Kura is built for single-replica
   deployment. The library has at most one active mutator process at a
-  time. Multi-replica setups are not supported. The remaining same-host
-  overlap between `kura serve` and manual `kura` CLI invocations is an
-  accepted short-term risk; the structural fix is the
-  CLI-as-REST-client migration once the REST API and web dashboard are
-  fully wired up. See [deployment.md](deployment.md).
+  time. Multi-replica setups are not supported. Normal CLI use talks
+  to the running REST server instead of touching the library directly,
+  so the server process remains the writer. See
+  [deployment.md](deployment.md).
 - **Kura returns facts; callers reason.** Upgrade candidacy,
   preference matching, fuzzy title disambiguation — these belong to
   the caller. Kura surfaces structured data and enforces invariants.
@@ -393,9 +394,10 @@ These are the contracts Kura enforces at all times.
 4. **Kura owns path construction.** Callers never specify destination
    paths. Canonical paths derive from series title, season, and
    episode number per the naming convention.
-5. **`add` is the sole exception to selector-based addressing.** It
-   takes a literal SeriesRef because the series does not yet exist for
-   a selector to resolve to.
+5. **Constructive verbs name directories explicitly.** `add` may take
+   a directory override and `import` takes an existing directory name;
+   all existing-series operations resolve a selector to the tracked
+   series first.
 6. **Metadata writes are atomic.** Write to a temp file, rename. No
    partially-written `series.json`.
 7. **State is derived from metadata, not probed live.** Local
@@ -464,12 +466,11 @@ is honest about its edges.
 - **Per-series intent flags** (watching/complete/abandoned). May be
   added later if needed for agent decisioning. Currently, the
   presence of a tracked series implies "wanted."
-- **Cross-process concurrent mutation.** Resolved structurally by the
-  CLI-as-REST-client architecture: `kura serve` is the sole writer;
-  `kura` CLI becomes a thin REST client that never touches disk. Same-
-  host overlap between server and CLI is no longer possible. NFS /
-  SMB-mounted libraries are supported under the single-writer
-  constraint; multi-replica deployment is explicitly out of scope.
+- **Cross-process concurrent mutation.** Normal CLI use is already a
+  thin REST client of `kura serve`, so same-host CLI/server overlap is
+  not the target problem. NFS / SMB-mounted libraries are supported
+  under the single-writer constraint; multi-replica deployment and
+  other direct disk-writing peers are explicitly out of scope.
 - **In-place file replacement detection.** A file replaced in place
   without changing mtime/size is not re-mediainfo'd by `scan`.
   Explicit accepted limitation; full-rehash flag exists for paranoid

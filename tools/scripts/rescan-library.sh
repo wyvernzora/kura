@@ -50,7 +50,7 @@ done < <(kura list --json | jq -r '.[] | select(.status != "untracked" and .stat
 
 total=${#refs[@]}
 if [ "$total" -eq 0 ]; then
-  echo "No tracked series under \$KURA_LIBRARY_ROOT."
+  echo "No tracked series in the server index."
   exit 0
 fi
 

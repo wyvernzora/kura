@@ -5,9 +5,9 @@ supports — adding a new series, scanning, staging files, reconciling
 moves, recovering from failure, managing trash, bootstrapping an
 existing library, and removing a series.
 
-The README's "How it works" section is the user-facing version of the
-same material. This doc is the engineer-facing one: edge cases, error
-modes, and operator surgery.
+The project README is the short user-facing entrypoint. This doc is
+the engineer-facing version: edge cases, error modes, and operator
+surgery.
 
 For the underlying terms (MetadataRef, SeriesRef, EpisodeRef, spine,
 claim, mutator, CAS, ULID), see [concepts.md](concepts.md).
@@ -40,13 +40,11 @@ hole-filling target.
 
 **Journey:**
 
-1. User or agent calls `add <SeriesRef> [terms...]`.
-2. Kura runs series resolution. The SeriesRef is used as a text term;
-   additional terms aggregate as in normal resolution. If any term is
-   a MetadataRef, it is the sole identity term and the SeriesRef is
-   no longer a text term (MetadataRef + text term combinations follow
-   the general "conflicting terms" rule).
-3. **Resolved:** Kura creates `<library-root>/<SeriesRef>/`, fetches
+1. User or agent resolves a MetadataRef for the series. The CLI does
+   this from `add <terms...>`; MCP/REST receive the resolved ref.
+2. Caller may supply a directory-name override. Otherwise Kura uses
+   the provider preferred title.
+3. **Resolved:** Kura creates `<library-root>/<dirname>/`, fetches
    the full spine from the provider, writes initial `series.json`
    containing the resolved MetadataRef and spine, sets `lastScanned`
    to the time of the spine fetch, and updates the index. The series
@@ -64,8 +62,8 @@ hole-filling target.
 - Resolved MetadataRef is already tracked at a different SeriesRef →
   error. The series exists somewhere else in this library.
 
-`add` is the only operation that takes a literal SeriesRef as a
-constructive parameter rather than a selector. See
+`add` is a constructive operation: it resolves metadata first, then
+creates the directory selected by `--dirname` or the provider title. See
 [concepts.md §Selectors, not paths](concepts.md#design-model-internal-invariants).
 
 ### 2. Import an existing directory
@@ -78,9 +76,10 @@ one.
 
 1. Series directory exists under library root with files but no
    `.kura/` content.
-2. User or agent calls `import <SeriesRef> [terms...]`.
-3. Kura runs series resolution using the SeriesRef as a text term plus
-   any additional terms.
+2. User or agent calls `import <dirname> [terms...]`. The CLI uses the
+   dirname as a text resolution term unless the supplied terms already
+   include a MetadataRef; MCP/REST receive `{ref, dirname}` directly.
+3. Kura runs series resolution.
 4. **Resolved:** Kura fetches the full spine from the provider,
    writes initial `series.json` with the resolved MetadataRef and
    spine, sets `lastScanned`, and updates the index. The series is
@@ -167,7 +166,7 @@ missing media records, refresh mediainfo. Does not move files.
 1. New file exists somewhere on disk (typically a download landing
    area).
 2. User or agent calls
-   `stage <selector> <EpisodeRef> <path> [companions...]`.
+   `stage episode <selector> <EpisodeRef> <inbox:media> [--companion inbox:path]`.
 3. Kura inspects the file: runs mediainfo, records size and mtime.
    Writes the staged record into the slot's `staged` field in
    `series.json`, alongside companion paths. Does not move anything.
@@ -212,7 +211,7 @@ missing media records, refresh mediainfo. Does not move files.
 
 1. Better version available on disk.
 2. User or agent calls
-   `stage <selector> <EpisodeRef> <path> --replace [companions...]`.
+   `stage episode <selector> <EpisodeRef> <inbox:media> --replace [--companion inbox:path]`.
 3. Kura records the staged record on the slot. The slot now has both
    `active` and `staged` records.
 4. User or agent calls `reconcile plan <selector>` then
@@ -268,7 +267,7 @@ Either for a single episode or for all staged records in the series.
 **Journey (single episode):**
 
 1. User or agent calls `show <selector>` to inspect staged records.
-2. User or agent calls `reset <selector> <EpisodeRef>`.
+2. User or agent calls `reset <selector> --episode <EpisodeRef>`.
 3. Kura removes the slot's `staged` field from `series.json`. The
    staged file on disk is untouched.
 4. If an active record existed beneath a staged-replacement, it
@@ -349,10 +348,10 @@ performing a full filesystem audit.
 **Journey:**
 
 1. User or agent calls `list`.
-2. Kura walks direct visible child directories of the library root.
-   Dot-prefixed directories, including the library root `.kura/`,
-   are ignored.
-3. For each directory:
+2. Kura reads the in-memory library index snapshot. If the server has
+   not finished its initial rebuild, the call returns a not-ready
+   error and the caller retries shortly.
+3. For each indexed direct child directory:
    - If `.kura/series.json` is absent, Kura returns an `untracked`
      row. The row title is the directory name suffixed with `*` to
      indicate it is not a provider-backed title.
@@ -368,11 +367,10 @@ performing a full filesystem audit.
    Callers may pass repeated `--status` filters to include only
    matching aggregate statuses.
 
-`list` is intentionally metadata-only after the library root walk. It
-does not stat every recorded media path, so it cannot report
-`Unavailable`. Filesystem drift is surfaced by `show` and repaired by
-`scan`. The library walk is incremental and reports progress because
-the library root may live on slow network storage.
+`list` is intentionally index-backed and metadata-only. It does not
+stat every recorded media path, so it cannot report `Unavailable`.
+Filesystem drift is repaired by `scan`; library directory drift is
+picked up by the server's index rebuild/watch path or by `reindex`.
 
 **Series status:**
 
@@ -402,7 +400,7 @@ display suffix. For example, a series whose missing regular episodes
 are all staged is filtered as `complete`, even though the displayed
 status is `complete*`.
 
-### 12. Bootstrap an existing library
+### 10. Bootstrap an existing library
 
 **Intent:** Adopt an existing on-disk library into Kura tracking. One-
 time per library; not an agent steady-state operation.
@@ -417,7 +415,7 @@ time per library; not an agent steady-state operation.
    1. Resolve a MetadataRef. Either operator picks one, or agent
       calls `kura_resolve` with the directory name and inspects
       candidates.
-   2. Call `import <SeriesRef> <metadataRef>` to adopt the directory
+   2. Call `import <dirname> <metadataRef>` to adopt the directory
       at the chosen identity.
    3. Call `scan <selector>` to adopt existing files into metadata.
 3. After adoption, normal workflows resume.
@@ -439,7 +437,7 @@ escape hatch.
   series → `import` resolves to one show; subsequent `scan` returns
   the unrelated files as orphans. Operator handles them out of band.
 
-### 13. Remove a series
+### 11. Remove a series
 
 **Intent:** Stop tracking a series. Infrequent operator action.
 
@@ -574,9 +572,9 @@ is designed assuming this escape hatch exists.
 
 | Situation | Recovery |
 |---|---|
-| `.kura/` totally gone or `series.json` missing/corrupt | Operator removes any partial `.kura/series.json` content. Then `import <SeriesRef> [terms...]` to re-establish identity and spine. Then `scan <selector>` to adopt files. Trash and logs are preserved through this flow. |
+| `.kura/` totally gone or `series.json` missing/corrupt | Operator removes any partial `.kura/series.json` content. Then `import <dirname> [terms...]` to re-establish identity and spine. Then `scan <selector>` to adopt files. Trash and logs are preserved through this flow. |
 | Staged records reference stale or unreachable files but `series.json` is parseable | `reset <selector> --all`, then `scan <selector>`. |
-| `series.json` is parseable but logically wedged in some other way | Operator removes `series.json`. Then `import <SeriesRef> [terms...]` and `scan <selector>` to rebuild from filesystem + provider. |
+| `series.json` is parseable but logically wedged in some other way | Operator removes `series.json`. Then `import <dirname> [terms...]` and `scan <selector>` to rebuild from filesystem + provider. |
 | Wedged plan log files | Operator removes the offending JSONL files in `<series>/.kura/reconcile/`. They are append-only forensic; no verb consults them outside `reconcile apply`'s own token lookup. |
 | Spine is significantly out of date relative to current TVDB state | `scan <selector>` to refresh. |
 | A reconcile failed mid-execution and the series is in an inconsistent state | Standard verbs (`stage`, `reconcile`, `scan`) plus targeted surgery resolve it. Inspect the plan JSONL or trash `meta.json` for what already happened. |
