@@ -22,16 +22,12 @@ type WatchConfig struct {
 	ProbeInterval   time.Duration
 	RebuildInterval time.Duration
 	LibRootDebounce time.Duration
-	Logger          Logger
 }
 
 // Watch attaches background freshness loops to this Index and returns
-// immediately. All loops exit when ctx is cancelled.
+// immediately. All loops exit when ctx is cancelled. Logging goes to
+// the Config.Logger the Index was constructed with.
 func (i *Index) Watch(ctx context.Context, cfg WatchConfig) {
-	if cfg.Logger == nil {
-		cfg.Logger = nopLogger{}
-	}
-	i.log = cfg.Logger
 	i.libRootDebounce = cfg.LibRootDebounce
 	if stat, err := os.Stat(i.root); err == nil {
 		i.mu.Lock()
