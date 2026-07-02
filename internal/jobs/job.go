@@ -18,7 +18,7 @@ const (
 	StatusFailed
 )
 
-// String returns the lowercase wire form used in response.JobStatus.
+// String returns the lowercase wire form used in job-status responses.
 func (s Status) String() string {
 	switch s {
 	case StatusRunning:
