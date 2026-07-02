@@ -100,7 +100,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
 		return response.AddResult{}, err
 	}
-	if err := updateIndexRow(ctx, deps, model, "import"); err != nil {
+	if err := updateIndexModel(ctx, deps, model, "import"); err != nil {
 		return response.AddResult{}, translateIndexDuplicate(err)
 	}
 	progress.Success(ctx, "import", fmt.Sprintf("Imported %s", ref), 1)

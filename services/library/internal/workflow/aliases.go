@@ -84,7 +84,7 @@ func mutateUserAliases[T any](
 			if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator(op)); err != nil {
 				return err
 			}
-			if err := updateIndexRow(ctx, deps, model, op); err != nil {
+			if err := updateIndexModel(ctx, deps, model, op); err != nil {
 				return err
 			}
 			out = response.UserAliasList{Aliases: userAliasStrings(model.UserAliases)}

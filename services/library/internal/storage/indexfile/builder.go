@@ -81,8 +81,8 @@ func diskEntryBuilder(_ context.Context, libRoot string, ref refs.Series) (Entry
 }
 
 // BuildRowFromModel computes a Row from an already-loaded *series.Series.
-// Pure function; no I/O. Used by mutators after a successful series.json
-// SaveCAS to refresh the index without re-reading the file.
+// Pure function; no I/O. Used by the Index's query-time projections and by
+// Show to build response rollups from a freshly loaded model.
 func BuildRowFromModel(model *series.Series, now time.Time) Row {
 	return BuildRowFromModelWithOptions(model, now, DefaultBuildOptions())
 }

@@ -85,7 +85,7 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult,
 	}
 	if modelForIndex != nil {
 		// ponytail: scan_all persists once per series; batch the index write if bulk scan ever becomes hot.
-		if err := updateIndexRow(ctx, deps, modelForIndex, "scan"); err != nil {
+		if err := updateIndexModel(ctx, deps, modelForIndex, "scan"); err != nil {
 			return response.ScanResult{}, err
 		}
 	}

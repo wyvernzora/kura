@@ -39,10 +39,10 @@ type Deps struct {
 	// source snapshot after the owning series.json write succeeds.
 	Index *indexfile.Index
 
-	// Coordinator serializes mutations against the same series (and the
-	// library index) within this process and bundles the standard CAS
-	// retry policy. CLI uses the no-op variant; long-running consumers
-	// (MCP) use the real one.
+	// Coordinator serializes mutations against the same series within
+	// this process; its WithIndex mutex is also wired into the Index as
+	// the guard around snapshot writes. kura serve constructs the
+	// serializing variant; tests use the no-op one.
 	Coordinator coord.Coordinator
 
 	// HostName is os.Hostname() captured once at startup. Used by
