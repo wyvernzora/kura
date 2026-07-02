@@ -38,47 +38,55 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
 		return response.Remove{}, &NotFoundError{Ref: in.Ref}
 	}
-	seriesDir := paths.SeriesDir(deps.LibRoot, in.Ref)
-	if _, err := os.Stat(seriesDir); err != nil {
-		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
-		if os.IsNotExist(err) {
-			return response.Remove{}, &SeriesNotFoundError{Ref: in.Ref}
+	var out response.Remove
+	err := deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
+		seriesDir := paths.SeriesDir(deps.LibRoot, in.Ref)
+		if _, err := os.Stat(seriesDir); err != nil {
+			progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
+			if os.IsNotExist(err) {
+				return &SeriesNotFoundError{Ref: in.Ref}
+			}
+			return err
 		}
-		return response.Remove{}, err
-	}
-	model, err := loadRemoveModel(deps, in.Ref)
+		model, err := loadRemoveModel(deps, in.Ref)
+		if err != nil {
+			progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
+			return err
+		}
+		// Pre-check series.json: refuse on active claim and (default mode)
+		// on staged records. This happens before any mutation.
+		if err := preCheckRemove(model, in); err != nil {
+			progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
+			return err
+		}
+
+		target := paths.SeriesKuraDir(deps.LibRoot, in.Ref)
+		if in.Purge {
+			target = seriesDir
+		}
+		bytes := estimatedRemoveBytes(deps.LibRoot, in.Ref, in.Purge, model)
+
+		// Drop the index entry (and persist the snapshot) first; only after
+		// success do we touch the filesystem. A failed index write leaves
+		// the series fully tracked exactly as before.
+		if err := deps.Index.Delete(ctx, in.Ref, coord.NewMutator("remove")); err != nil {
+			progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
+			return err
+		}
+
+		if err := os.RemoveAll(target); err != nil {
+			progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
+			return err
+		}
+
+		progress.Success(ctx, "remove", fmt.Sprintf("Removed %s", in.Ref), 0)
+		out = response.Remove{ReclaimedBytes: bytes}
+		return nil
+	})
 	if err != nil {
-		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
 		return response.Remove{}, err
 	}
-	// Pre-check series.json: refuse on active claim and (default mode)
-	// on staged records. This happens before any mutation.
-	if err := preCheckRemove(model, in); err != nil {
-		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
-		return response.Remove{}, err
-	}
-
-	target := paths.SeriesKuraDir(deps.LibRoot, in.Ref)
-	if in.Purge {
-		target = seriesDir
-	}
-	bytes := estimatedRemoveBytes(deps.LibRoot, in.Ref, in.Purge, model)
-
-	// Drop the index entry (and persist the snapshot) first; only after
-	// success do we touch the filesystem. A failed index write leaves
-	// the series fully tracked exactly as before.
-	if err := deps.Index.Delete(ctx, in.Ref, coord.NewMutator("remove")); err != nil {
-		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
-		return response.Remove{}, err
-	}
-
-	if err := os.RemoveAll(target); err != nil {
-		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
-		return response.Remove{}, err
-	}
-
-	progress.Success(ctx, "remove", fmt.Sprintf("Removed %s", in.Ref), 0)
-	return response.Remove{ReclaimedBytes: bytes}, nil
+	return out, nil
 }
 
 func loadRemoveModel(deps Deps, ref refs.Series) (*domainseries.Series, error) {

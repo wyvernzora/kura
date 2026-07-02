@@ -175,7 +175,9 @@ func applyLocked(ctx context.Context, deps Deps, in ApplyInput) (ApplyResult, er
 		if released {
 			return
 		}
-		_ = releaseClaim(deps, in.Ref, holder, claimedHash)
+		if err := releaseClaim(deps, in.Ref, holder, claimedHash); err != nil {
+			log.Error("apply claim release failed", "err", err)
+		}
 	}()
 
 	exec := &executor{

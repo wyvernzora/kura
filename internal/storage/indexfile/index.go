@@ -91,12 +91,13 @@ type Index struct {
 	order   []refs.Series
 
 	rebuilding atomic.Bool
-	rebuildWG  sync.WaitGroup
 
 	libRootRebuildTimer *time.Timer
 	libRootDebounce     time.Duration
 	cachedLibRootMTime  time.Time
 
+	rebuildMu    sync.Mutex
+	rebuildDone  chan struct{}
 	buildOptions BuildOptions
 	now          func() time.Time
 	guard        GuardFunc
@@ -242,11 +243,12 @@ func (i *Index) Rebuilding() bool {
 }
 
 func (i *Index) WaitReady(ctx context.Context) error {
-	done := make(chan struct{})
-	go func() {
-		i.rebuildWG.Wait()
-		close(done)
-	}()
+	i.rebuildMu.Lock()
+	done := i.rebuildDone
+	i.rebuildMu.Unlock()
+	if done == nil {
+		return nil
+	}
 	select {
 	case <-done:
 		return nil
@@ -274,8 +276,20 @@ func (i *Index) TriggerRebuild(ctx context.Context, op string) {
 	if !i.rebuilding.CompareAndSwap(false, true) {
 		return
 	}
-	i.rebuildWG.Go(func() {
-		defer i.rebuilding.Store(false)
+	done := make(chan struct{})
+	i.rebuildMu.Lock()
+	i.rebuildDone = done
+	i.rebuildMu.Unlock()
+	go func() {
+		defer func() {
+			i.rebuildMu.Lock()
+			if i.rebuildDone == done {
+				close(done)
+				i.rebuildDone = nil
+			}
+			i.rebuildMu.Unlock()
+			i.rebuilding.Store(false)
+		}()
 		started := time.Now()
 		if i.log != nil {
 			i.log.Info("indexfile: rebuild starting", "op", op)
@@ -294,7 +308,7 @@ func (i *Index) TriggerRebuild(ctx context.Context, op string) {
 				"duration_ms", time.Since(started).Milliseconds(),
 			)
 		}
-	})
+	}()
 }
 
 func (i *Index) buildEntries(ctx context.Context) (map[refs.Series]entry, error) {
@@ -310,12 +324,20 @@ func (i *Index) buildEntries(ctx context.Context) (map[refs.Series]entry, error)
 	out := map[refs.Series]entry{}
 	scanned := 0
 	for {
+		if err := ctx.Err(); err != nil {
+			progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
+			return nil, err
+		}
 		dirents, err := dir.ReadDir(64)
 		if err != nil && !errors.Is(err, io.EOF) {
 			progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
 			return nil, err
 		}
 		for _, dirent := range dirents {
+			if err := ctx.Err(); err != nil {
+				progress.Failure(ctx, "reindex", "Failed to rebuild library index", scanned, progress.TotalIndeterminate)
+				return nil, err
+			}
 			name := dirent.Name()
 			if !dirent.IsDir() || strings.HasPrefix(name, ".") || name == paths.KuraDir {
 				continue
