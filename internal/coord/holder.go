@@ -1,20 +1,21 @@
 // Package coord provides the coordination primitives that protect
-// concurrent access to series.json and index.tsv.
+// concurrent access to series.json and the index.jsonl snapshot.
 //
 // Two layers compose:
 //
-//   - Per-file CAS via content hash. Mutating workflows load a file,
-//     compute new state, and atomically write iff the disk file still
-//     hashes to the loaded value. The coord package defines the error
-//     types and helpers; storage/seriesfile and storage/indexfile own
-//     the actual hash + write logic.
+//   - Per-file CAS via content hash for series.json. Mutating
+//     workflows load the file, compute new state, and atomically
+//     write iff the disk file still hashes to the loaded value. The
+//     coord package defines the error types and helpers;
+//     storage/seriesfile owns the actual hash + write logic.
 //
 //   - In-process serialization via Coordinator. Two goroutines in the
 //     same process can both pass a hash check and race the rename;
 //     the serializing impl (NewMCPCoordinator) holds a per-key mutex
-//     around the whole CAS + retry sequence to prevent that. The CLI
-//     binary uses NewCLICoordinator (no-op) since each invocation runs
-//     a single goroutine.
+//     around the whole CAS + retry sequence to prevent that. Its
+//     WithIndex mutex is handed to storage/indexfile as the guard
+//     around index snapshot writes, which are plain atomic renames
+//     with no hash check (single-writer server process).
 //
 // One workflow (reconcile apply) holds an explicit claim recorded in
 // series.json's in_progress field; everything else relies on hash CAS

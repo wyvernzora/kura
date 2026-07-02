@@ -165,7 +165,7 @@ func stageBatch(ctx context.Context, deps Deps, in StageInput) (response.StageRe
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("stage")); err != nil {
 		return response.StageResult{}, err
 	}
-	if err := updateIndexRow(ctx, deps, model, "stage"); err != nil {
+	if err := updateIndexModel(ctx, deps, model, "stage"); err != nil {
 		return response.StageResult{}, err
 	}
 

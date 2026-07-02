@@ -59,8 +59,8 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 }
 
 // reconcileDeps builds a reconcile.Deps from a workflow.Deps. Binds
-// UpdateIndex to the workflow-side updateIndexRow so reconcile can
-// invoke index-CAS without importing workflow.
+// UpdateIndex to the workflow-side updateIndexModel so reconcile can
+// persist index snapshot updates without importing workflow.
 func reconcileDeps(deps Deps) reconcile.Deps {
 	rd := reconcile.Deps{
 		LibRoot:     deps.LibRoot,
@@ -71,7 +71,7 @@ func reconcileDeps(deps Deps) reconcile.Deps {
 		Jobs:        deps.Jobs,
 	}
 	rd.UpdateIndex = func(ctx context.Context, model *domainseries.Series, op string) error {
-		return updateIndexRow(ctx, deps, model, op)
+		return updateIndexModel(ctx, deps, model, op)
 	}
 	return rd
 }

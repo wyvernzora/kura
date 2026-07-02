@@ -12,20 +12,21 @@ import (
 //
 // Two impls exist:
 //
-//   - NewCLICoordinator returns a no-op serializer. The CLI binary
-//     runs one mutation per invocation; intra-process serialization
-//     buys nothing. The ctx is consulted for a fast-fail check so
-//     the contract is uniform.
+//   - NewCLICoordinator returns a no-op serializer for single-goroutine
+//     contexts (tests, one-shot tooling). The ctx is consulted for a
+//     fast-fail check so the contract is uniform.
 //
 //   - NewMCPCoordinator holds a per-key channel-semaphore (sync.Map-
 //     backed) so concurrent goroutine-served requests don't race the
-//     same series. Acquisition is cancellable via ctx, so a queued
-//     goroutine behind a long apply returns ctx.Err() on shutdown
-//     instead of blocking past Shutdown(grace).
+//     same series. kura serve uses it, and also passes WithIndex into
+//     indexfile as the guard serializing index snapshot writes.
+//     Acquisition is cancellable via ctx, so a queued goroutine behind
+//     a long apply returns ctx.Err() on shutdown instead of blocking
+//     past Shutdown(grace).
 //
 // Retry policy is composed at the call site: callers needing CAS
-// retry wrap RetryOnConflict inside the lock closure (see
-// internal/workflow/indexcas.go for the canonical pattern). The
+// retry wrap RetryOnConflict inside the lock closure (see the
+// series-mutation workflows, e.g. internal/workflow/scan.go). The
 // closure ordering keeps retry inside the mutex so peers can't sneak
 // a write between attempts.
 //

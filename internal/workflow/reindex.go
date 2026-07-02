@@ -8,9 +8,10 @@ import (
 	"github.com/wyvernzora/kura/internal/response"
 )
 
-// Reindex walks the library root, materializes a row per series from
-// per-series series.json, and rewrites index.jsonl via hash CAS.
-// Conflict (peer mutated mid-walk) triggers retry per coord policy.
+// Reindex walks the library root, reloads every series.json into the
+// in-memory index, and rewrites the index.jsonl source snapshot. The
+// rebuild holds the index guard for the whole walk, so concurrent
+// mutators queue behind it instead of interleaving.
 //
 // Job-shaped: returns *jobs.Job[response.ReindexResult] so callers
 // can stream progress events via the registry. CLI consumes them via

@@ -53,10 +53,10 @@ type Deps struct {
 	// for Apply; unused by Plan / Recover.
 	Jobs *jobs.Registry
 
-	// UpdateIndex is the workflow-side callback that updates the
-	// indexfile row for the given series after a successful
-	// SaveCAS. Reconcile calls back into workflow because the index
-	// CAS dance lives there. Required for Apply.
+	// UpdateIndex is the workflow-side callback that writes the given
+	// series model into the index snapshot after a successful
+	// series.json SaveCAS. Reconcile calls back into workflow because
+	// the index write lives there. Required for Apply.
 	UpdateIndex func(ctx context.Context, model *series.Series, op string) error
 }
 

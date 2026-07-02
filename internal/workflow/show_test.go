@@ -104,8 +104,8 @@ func TestUpdateIndexRowPersistsModelSnapshot(t *testing.T) {
 		Coordinator: coord.NewMCPCoordinator(),
 		Now:         time.Now,
 	}
-	if err := updateIndexRow(context.Background(), deps, model, "test"); err != nil {
-		t.Fatalf("updateIndexRow: %v", err)
+	if err := updateIndexModel(context.Background(), deps, model, "test"); err != nil {
+		t.Fatalf("updateIndexModel: %v", err)
 	}
 	loaded, err := indexfile.Load(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
 	if err != nil {

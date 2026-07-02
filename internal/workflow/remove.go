@@ -64,9 +64,9 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 	}
 	bytes := estimatedRemoveBytes(deps.LibRoot, in.Ref, in.Purge, model)
 
-	// Drop the index entry first (CAS); only after success do we touch
-	// the filesystem. CAS rejection on the index leaves the series fully
-	// tracked exactly as before.
+	// Drop the index entry (and persist the snapshot) first; only after
+	// success do we touch the filesystem. A failed index write leaves
+	// the series fully tracked exactly as before.
 	if err := deps.Index.Delete(ctx, in.Ref, coord.NewMutator("remove")); err != nil {
 		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
 		return response.Remove{}, err

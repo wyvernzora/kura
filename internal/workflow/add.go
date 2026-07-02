@@ -81,7 +81,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("add")); err != nil {
 		return response.AddResult{}, err
 	}
-	if err := updateIndexRow(ctx, deps, model, "add"); err != nil {
+	if err := updateIndexModel(ctx, deps, model, "add"); err != nil {
 		return response.AddResult{}, translateIndexDuplicate(err)
 	}
 	progress.Success(ctx, "add", fmt.Sprintf("Added %s", ref), 1)

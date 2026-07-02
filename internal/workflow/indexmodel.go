@@ -7,7 +7,7 @@ import (
 	"github.com/wyvernzora/kura/internal/domain/series"
 )
 
-// updateIndexRow writes model into the index source snapshot. Used after a
+// updateIndexModel writes model into the index source snapshot. Used after a
 // successful series.json SaveCAS so selector lookup and list projections see
 // the same source data as the series file.
 //
@@ -15,7 +15,7 @@ import (
 // quality, staged flag, lastScanned) must call this. Mutations that only
 // touch in_progress (claim acquire / release) skip it — the row doesn't
 // reflect that state, and the extra index write would just contend.
-func updateIndexRow(ctx context.Context, deps Deps, model *series.Series, op string) error {
+func updateIndexModel(ctx context.Context, deps Deps, model *series.Series, op string) error {
 	if deps.Index == nil {
 		return nil
 	}

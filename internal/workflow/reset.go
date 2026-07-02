@@ -69,7 +69,7 @@ func resetAttempt(ctx context.Context, deps Deps, in ResetInput, seriesRoot stri
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {
 		return response.ResetResult{}, err
 	}
-	if err := updateIndexRow(ctx, deps, model, "reset"); err != nil {
+	if err := updateIndexModel(ctx, deps, model, "reset"); err != nil {
 		return response.ResetResult{}, err
 	}
 	return response.ResetResult{
@@ -151,7 +151,7 @@ func resetAllInPlace(ctx context.Context, deps Deps, _ refs.Series, seriesRoot s
 		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {
 			return response.ResetResult{}, err
 		}
-		if err := updateIndexRow(ctx, deps, model, "reset"); err != nil {
+		if err := updateIndexModel(ctx, deps, model, "reset"); err != nil {
 			return response.ResetResult{}, err
 		}
 	}
