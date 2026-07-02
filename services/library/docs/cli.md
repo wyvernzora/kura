@@ -1,9 +1,12 @@
 # CLI reference
 
-`kura <verb>` operates on a library root configured via
-`KURA_LIBRARY_ROOT`. Verbs that take a `<selector>` resolve text
-terms or `tvdb:<id>` refs through the metadata provider; supplying a
-metadata ref bypasses fuzzy search.
+`kura <verb>` talks to a running `kura serve --rest` instance. The CLI discovers
+the server from `KURA_SERVER_URL`, defaulting to `http://127.0.0.1:8080`.
+
+The server owns `KURA_LIBRARY_ROOT`, `KURA_INBOX_ROOT`, metadata provider
+configuration, and all filesystem writes. Verbs that take a `<selector>` resolve
+text terms or `tvdb:<id>` refs through the server; supplying a metadata ref
+bypasses fuzzy search.
 
 For underlying terms, see [concepts.md](concepts.md). For the journey
 each verb implements, see [lifecycle.md](lifecycle.md).
@@ -15,11 +18,11 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 
 | Operation | Surface | Reason for exclusions | Purpose |
 |---|---|---|---|
-| `add <SeriesRef> [terms...]` | CLI + MCP + REST | — | Register a new series in the library: create directory `<SeriesRef>` and initialize metadata. The SeriesRef is the literal directory name to create; it also contributes as a text term in resolution. |
-| `import <SeriesRef> [terms...]` | CLI + MCP + REST | — | Register identity on an existing untracked directory under library root. CLI exposes `--force` to overwrite a corrupted `.kura/series.json`; MCP and REST do not. |
+| `add <selector> [--dirname NAME]` | CLI + MCP + REST | — | Register a new series in the library: resolve metadata, create a directory, and initialize metadata. `--dirname` overrides the directory name. |
+| `import <dirname> [terms...]` | CLI + MCP + REST | — | Register identity on an existing untracked directory under library root. CLI exposes `--force` to overwrite a corrupted `.kura/series.json`; MCP and REST do not. |
 | `scan <selector>` | CLI + MCP + REST | — | Re-sync local metadata with current reality. Hard-fails if the provider is unreachable. Job-shaped. |
-| `stage <selector> <EpisodeRef> <path> [--replace] [companions...]` | CLI + MCP + REST | — | Record intent that `<path>` should become the active media file for the EpisodeRef. Files are not moved. |
-| `reset <selector> [<EpisodeRef> \| --all]` | CLI + MCP + REST | — | Remove staged record(s). Does not touch staged files on disk. |
+| `stage episode|trash|extra ...` | CLI + MCP + REST | — | Record staged intent for episode media, queued trash, or extras. Files are not moved. |
+| `reset <selector> [--episode S01E03 \| --trash ULID \| --extra ULID \| --all]` | CLI + MCP + REST | — | Remove staged record(s). Does not touch staged files on disk. |
 | `reconcile plan <selector>` | CLI + MCP + REST | — | Compute the planned filesystem changes for a series and persist them to `<series>/.kura/reconcile/<token>.jsonl`. Returns the plan plus a token (token is a hash of the series snapshot; apply re-validates the snapshot at execute time). No filesystem moves. |
 | `reconcile apply <selector> <token>` | CLI + MCP + REST | — | Validate the persisted plan against current state and execute it. Job-shaped. All-or-nothing in intent; failures leave the series in an inconsistent state for manual resolution. |
 | `reconcile recover <selector>` | CLI + REST (operator) | Operator judgment | Clear a stale `in_progress` claim left by a crashed `reconcile apply`. |
@@ -87,7 +90,7 @@ combinations or transport failures).
 | Verb | Purpose |
 |------|---------|
 | `kura scan <selector> [--replace]` | Re-sync a series with provider + filesystem; report orphan slots and skipped files. |
-| `kura stage --episode S01E03 <selector> [--source WebRip] [--replace] [--companion PATH] <media-path>` | Record staged intent for one episode. Same-path stage is a metadata refresh and does not require `--replace`. |
+| `kura stage episode <selector> S01E03 <inbox:media> [--source WebRip] [--replace] [--companion inbox:PATH]` | Record staged intent for one episode. Same-path stage is a metadata refresh and does not require `--replace`. |
 | `kura reset --episode S01E03 <selector>` / `kura reset --all <selector>` | Drop one staged record or all of them. Does not touch staged files on disk. |
 | `kura reconcile plan <selector>` | Compute and persist a reconcile plan under `<series>/.kura/reconcile/<token>.jsonl`; print the token. Same series state always produces the same token (snapshot-derived). Apply re-validates the snapshot at execute time, so a stale plan (series state changed) is rejected by token mismatch. |
 | `kura reconcile apply <selector> <token>` | Validate the persisted plan against current state and execute the moves. |
@@ -118,29 +121,32 @@ non-TTY gets JSON.
 ## Typical flow
 
 ```sh
+export KURA_SERVER_URL=http://127.0.0.1:8080
+
 kura add <selector>                        # register a new series
 kura scan <selector>                       # adopt existing files
-kura stage --episode S01E03 <selector> --source WebRip /path/to/file.mkv
+kura stage episode <selector> S01E03 inbox:path/to/file.mkv --source WebRip
 kura reconcile plan <selector>             # inspect what will move
 kura reconcile apply <selector> <token>    # execute the plan
 kura show <selector>                       # verify
 kura trash list <selector>                 # review displaced files
-kura trash empty <selector>                # permanently delete them
+kura trash empty <selector> --confirm      # permanently delete them
 ```
 
 ## Configuration
 
 | Env / flag | Purpose |
 |------------|---------|
-| `KURA_LIBRARY_ROOT` | Library root directory (required). |
-| `KURA_INBOX_ROOT` | Inbox root for staged downloads (required for `kura serve`). Must be disjoint from `KURA_LIBRARY_ROOT`. |
-| `KURA_TVDB_KEY` | TVDB API key. Lazy: only required by provider-needing verbs (`add`, `import`, `scan`, `resolve`). |
-| `KURA_PREFERRED_LANGUAGES` | Comma-separated BCP-47 preferred metadata languages. |
-| `KURA_MEDIAINFO_COMMAND` | Override the `mediainfo` executable path. |
-| `KURA_AIRING_TAIL_DAYS` | Integer days after a cour's last episode airs that the series still counts as airing. Default `7`; `0` disables the tail; empty / invalid / negative values fall back to default. |
-| `KURA_HOST_ID` | Override `os.Hostname()` for claim holder identity. Set in container deployments to a stable value. |
-| `KURA_UMASK` | Process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. Unset preserves the parent process default. |
-| `KURA_TOKEN` / `KURA_DISABLE_TOKEN` | Server bearer token (see [deployment.md](deployment.md)). |
-| `KURA_LOG_RETENTION_DAYS` | Days to retain forensic JSONL logs (reconcile plan + per-job). Default `7`. |
-| `KURA_JOB_TIMEOUT` | Per-job deadline duration (e.g. `60m`). Unset means no timeout. |
-| `--tvdb-base-url` | Override the TVDB API base URL (test/dev). |
+| `KURA_SERVER_URL` | REST server URL for CLI commands. Default `http://127.0.0.1:8080`. |
+| `KURA_TOKEN` / `KURA_DISABLE_TOKEN` | Bearer token behavior for both server and CLI. See [deployment.md](deployment.md). |
+| `KURA_LIBRARY_ROOT` | Server-side library root directory (required by `kura serve`). |
+| `KURA_INBOX_ROOT` | Server-side inbox root for staged downloads (required by `kura serve`). Must be disjoint from `KURA_LIBRARY_ROOT`. |
+| `KURA_TVDB_KEY` | Server-side TVDB API key. Required by provider-needing verbs (`add`, `import`, `scan`, `resolve`). |
+| `KURA_PREFERRED_LANGUAGES` | Server-side comma-separated BCP-47 preferred metadata languages. |
+| `KURA_MEDIAINFO_COMMAND` | Server-side override for the `mediainfo` executable path. |
+| `KURA_AIRING_TAIL_DAYS` | Server-side integer days after a cour's last episode airs that the series still counts as airing. Default `7`; `0` disables the tail; empty / invalid / negative values fall back to default. |
+| `KURA_HOST_ID` | Server-side override for claim holder identity. Set in container deployments to a stable value. |
+| `KURA_UMASK` | Server-side process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. |
+| `KURA_LOG_RETENTION_DAYS` | Server-side days to retain forensic JSONL logs (reconcile plan + per-job). Default `7`. |
+| `KURA_JOB_TIMEOUT` | Server-side per-job deadline duration (e.g. `60m`). Unset means no timeout. |
+| `--tvdb-base-url` | Server-side TVDB API base URL override (test/dev). |

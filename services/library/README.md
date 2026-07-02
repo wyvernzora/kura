@@ -1,173 +1,115 @@
 # Kura
 
-Anime-first library manager. Keeps your shows tidy, consistently
-named, and matched against an online metadata source so Plex /
-Jellyfin pick them up cleanly — without you renaming files by hand.
+Kura is an anime-first personal library manager for Plex-style series folders.
+It tracks provider metadata, stages incoming media, previews filesystem moves,
+and keeps replaced files in per-series trash instead of deleting them.
 
-## What Kura is
+Kura is not a downloader, request system, notification service, or multi-user
+media server. Bring your own inbox/download tooling; Kura organizes the files
+you point at it.
 
-Kura watches a folder of anime. You drop new episode files in, tell
-Kura which episode they are, preview the moves, and apply. Episodes
-get renamed to a canonical layout. Files that get replaced go to a
-per-show trash bin instead of being deleted.
-
-What makes it different: anime conventions drive the design (Sonarr-
-style tools handle anime awkwardly); the same workflows are reachable
-from a CLI, a REST API, and an MCP tool surface, so it works equally
-well for a human at a terminal, a script, or an AI agent; nothing
-happens to your files until you ask.
-
-## Tenets
-
-- **Anime first, other series usable.** Anime release conventions
-  drive the design. Non-anime works where the model fits, but isn't
-  the focus.
-- **Agent first, human usable.** Designed to be driven by an AI
-  agent (MCP) or a script (CLI / REST). The bundled web UI is a
-  browse-and-dashboard experience for humans; anything that mutates
-  state still goes through CLI, MCP, or REST.
-- **Only manages your library.** No downloading, no torrent or
-  Usenet integration, no notifications, no calendar, no requests
-  system. Bring your own everything-else; Kura organizes what's in
-  your library or what you point at it.
-- **Self-hosted, single-tenant.** One process per library, runs on
-  your hardware. Not a SaaS, not multi-user — homelab-shaped.
-- **Nothing happens without your say-so.** Destructive operations
-  are explicit, preview-before-apply, and recoverable from trash.
-  You won't wake up to renamed files you didn't ask for.
-- **Open files, no lock-in.** Your library is a normal folder of
-  normal files. Kura's bookkeeping is plain JSON next to each show
-  (`<series>/.kura/`) — rename a show's directory or move the whole
-  library to another disk and the metadata travels with it. You can
-  read it, edit it, or walk away from Kura without exporting
-  anything.
-
-## How it works
-
-A typical journey, in plain terms:
-
-1. **Tell Kura about a show.** Kura looks it up online and remembers
-   the season / episode list.
-2. **Point Kura at the folder.** Kura reads what's already there
-   and matches each file to an episode.
-3. **Add a new file.** When you download a new episode, you tell
-   Kura "this file is episode X." Nothing has moved yet — Kura is
-   just making notes.
-4. **Preview the changes.** Kura shows you what it would rename and
-   where it would put each file.
-5. **Apply.** Kura performs the moves. Files being replaced go into
-   a per-show trash folder so nothing is lost.
-6. **Clean up later.** Once you're sure the new files work, you can
-   empty the trash. If something went wrong, you can restore from
-   it.
-
-For the engineer-facing version with edge cases, see
-[docs/lifecycle.md](docs/lifecycle.md).
-
-## Glossary
-
-The words you'll actually see — the same vocabulary a future web UI
-would expose:
-
-- **Library** — the folder where all your shows live.
-- **Series** — one show. A subfolder of the library.
-- **Episode** — one slot in a show's episode list. Each episode
-  can have a file attached.
-- **Staged file** — a file you've told Kura about that hasn't been
-  moved into place yet. Reversible until you apply.
-- **Trash** — a per-show holding area for files Kura replaced. They
-  stay there until you empty them; you can restore from it.
-- **Metadata source** — the online service Kura uses to look shows
-  up. Currently TVDB.
-
-For the engineer-facing terms (MetadataRef, SeriesRef, EpisodeRef,
-spine, claim, mutator, CAS, ULID, on-disk JSON layout), see
-[docs/concepts.md](docs/concepts.md).
-
-## Quick start
+## Install
 
 Requirements:
 
 - Go 1.26.3 or newer.
-- `mediainfo` on `PATH` (or set `KURA_MEDIAINFO_COMMAND`).
-- Docker, if building or running the container image.
+- `mediainfo` on `PATH`, or `KURA_MEDIAINFO_COMMAND` set to its path.
+- Docker if you want the container image.
 
-Build and install:
+Build the CLI/server binary:
 
 ```sh
-make build      # builds bin/kura
-make install    # rebuilds and installs to $(go env GOBIN) or $GOPATH/bin
+make build
 ```
 
-Set the library root (and a TVDB key if you want metadata workflows):
+The binary is written to `bin/kura`. `make install` also builds the embedded web
+bundle before installing the binary to your Go bin directory.
+
+## Quick Start
+
+Start one Kura server for the library:
 
 ```sh
 export KURA_LIBRARY_ROOT=/media/anime
+export KURA_INBOX_ROOT=/media/inbox
 export KURA_TVDB_KEY=...
+export KURA_DISABLE_TOKEN=1
+
+bin/kura serve --rest=:8080
 ```
 
-Three-line walkthrough:
+Then use the CLI from another shell. It talks to the REST server at
+`KURA_SERVER_URL` and defaults to `http://127.0.0.1:8080`.
 
 ```sh
-kura add "Bocchi the Rock!"            # register a new series
-kura scan "Bocchi the Rock!"           # adopt existing files
-kura show "Bocchi the Rock!"           # inspect state
+export KURA_SERVER_URL=http://127.0.0.1:8080
+export KURA_DISABLE_TOKEN=1
+
+bin/kura add "Bocchi the Rock!"
+bin/kura scan "Bocchi the Rock!"
+bin/kura show "Bocchi the Rock!"
 ```
 
-For the full CLI, REST, and MCP surfaces, see the table below.
+The normal episode flow is:
+
+```sh
+bin/kura stage episode "Bocchi the Rock!" S01E03 'inbox:Bocchi/file.mkv'
+bin/kura reconcile plan "Bocchi the Rock!"
+bin/kura reconcile apply "Bocchi the Rock!" <token>
+```
+
+`stage` records intent only. `reconcile plan` previews moves. `reconcile apply`
+moves files and sends displaced media to trash.
 
 ## Surfaces
 
-| Surface | When to use it | Reference |
+| Surface | Use it for | Docs |
 |---|---|---|
-| Web UI  | Browse and inspect the library from a browser. Served at the REST port (default `:8080`). Read-only / dashboard — mutations go through CLI, MCP, or REST. | embedded in the binary |
-| CLI     | Manual or scripted use from a shell. | [docs/cli.md](docs/cli.md) |
-| REST    | A custom UI or a remote agent. | [docs/rest-api.md](docs/rest-api.md) |
-| MCP     | A local AI agent. | [docs/mcp.md](docs/mcp.md) |
+| CLI | Human/scripted operations against a running server. | [docs/cli.md](docs/cli.md) |
+| REST | Custom UI, automation, and the CLI transport. | [docs/rest-api.md](docs/rest-api.md) |
+| MCP | Local agent workflows with no permanent-delete tools. | [docs/mcp.md](docs/mcp.md) |
+| Web UI | Browser dashboard served by `kura serve --rest`. | [docs/deployment.md](docs/deployment.md) |
 
 ## Deployment
 
-Alpine-based Docker image, single-writer per library, bearer-token
-auth as a deploy gate (auto-generated and persisted at
-`/var/lib/kura/token` on first start; bypass with
-`KURA_DISABLE_TOKEN=1` when fronting with an authenticating proxy).
+The Docker image runs `kura serve --rest=:8080 --mcp-http=:8081` by default.
 
 ```sh
 docker build --build-arg VERSION=v0.2.0 -t kura:v0.2.0 .
 docker run --rm \
   -e KURA_LIBRARY_ROOT=/library \
   -e KURA_INBOX_ROOT=/inbox \
+  -e KURA_TVDB_KEY=... \
   -v /media/anime:/library \
   -v /downloads:/inbox \
   -v kura-token:/var/lib/kura \
   -p 8080:8080 \
-  kura:v0.2.0 serve --rest=:8080
+  -p 8081:8081 \
+  kura:v0.2.0
 ```
 
-For Kubernetes manifests, NFS / UID matching, and the stuck-claim
-recovery rules, see [docs/deployment.md](docs/deployment.md).
+Run one writer per library. Kura targets a single personal library, not
+multi-replica writes against the same filesystem. See
+[docs/deployment.md](docs/deployment.md) for auth, UID/GID, Kubernetes, and
+stuck-claim recovery.
 
 ## Documentation
 
-Index of the engineer-facing docs lives in
-[docs/README.md](docs/README.md):
-
-- [Concepts](docs/concepts.md) — vocabulary, domain model,
-  invariants.
-- [Lifecycle](docs/lifecycle.md) — every workflow with edge cases.
-- [CLI](docs/cli.md) — every `kura <verb>`.
-- [REST API](docs/rest-api.md) — endpoint catalog, auth, jobs.
+- [Docs index](docs/README.md) — reading order and reference map.
+- [Concepts](docs/concepts.md) — vocabulary and invariants.
+- [Lifecycle](docs/lifecycle.md) — add, import, scan, stage, reconcile, trash.
+- [CLI](docs/cli.md) — commands, selectors, configuration.
+- [REST API](docs/rest-api.md) — endpoints, auth, async jobs.
 - [MCP](docs/mcp.md) — tools and agent-safety properties.
-- [Deployment](docs/deployment.md) — Docker, Kubernetes,
-  single-writer.
-- [Storage](docs/storage.md) — on-disk file formats.
+- [Storage](docs/storage.md) — on-disk JSON/JSONL formats.
 - [Changelog](CHANGELOG.md) — release notes.
 
-## Contributing
-
-[AGENTS.md](AGENTS.md) is the operating manual for both human and
-coding-agent contributors. Read it before opening a PR.
+## Development
 
 ```sh
-make check      # gofmt + vet + gopls + tests + binary build
+make check
+go test ./...
 ```
+
+Read [AGENTS.md](AGENTS.md) before contributing. It contains the repo-specific
+rules for code changes, tests, and e2e scenarios.
