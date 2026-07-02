@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/cli/style"
 	"github.com/wyvernzora/kura/internal/response"
 )
@@ -119,9 +118,9 @@ func progressCell(available, total int, status response.ListStatus, styled bool)
 		return text
 	}
 	if available == total {
-		return chalk.Green.Color(text)
+		return style.Green(text)
 	}
-	return chalk.Red.Color(text)
+	return style.Red(text)
 }
 
 func scannedCell(lastScanned string, status response.ListStatus, now time.Time) string {
@@ -158,7 +157,7 @@ func relativeAge(d time.Duration) string {
 
 // airingBadge is the white-on-blue " airing " chip appended to the
 // status cell when row.IsAiring is true. One space pad each side.
-var airingBadge = chalk.White.NewStyle().WithBackground(chalk.Blue).Style(" airing ")
+var airingBadge = style.WhiteOnBlue(" airing ")
 
 func renderListStatus(status string, isAiring, styled bool) string {
 	value := strings.TrimSpace(status)
@@ -173,13 +172,13 @@ func renderListStatus(status string, isAiring, styled bool) string {
 	var rendered string
 	switch base {
 	case string(response.ListStatusUntracked):
-		rendered = chalk.Dim.TextStyle(style.Gray(base)) + suffix
+		rendered = style.Dim(style.Gray(base)) + suffix
 	case string(response.ListStatusComplete):
-		rendered = chalk.Green.Color(base) + suffix
+		rendered = style.Green(base) + suffix
 	case string(response.ListStatusIncomplete):
-		rendered = chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
+		rendered = style.Bold(style.Red(base)) + suffix
 	case string(response.ListStatusError):
-		rendered = chalk.Bold.TextStyle(chalk.Red.Color(base)) + suffix
+		rendered = style.Bold(style.Red(base)) + suffix
 	default:
 		rendered = value
 	}

@@ -2,11 +2,8 @@
 // unexported; callers use *series.Series. Active record paths are absolute in
 // memory and relative on disk; the package translates on Load and Save.
 //
-// Coordination: Load populates Series.Hash with the SHA-256 of the file
-// bytes; SaveCAS uses it as the expected on-disk hash for the optimistic
-// check. Save (no CAS) is preserved for the migration window in commits 4-7
-// but should be replaced with SaveCAS at all call sites by the end of
-// phase 2 (plan/locking.md).
+// Coordination: Load populates Series.Hash with the SHA-256 of the file bytes;
+// SaveCAS uses it as the expected on-disk hash for the optimistic check.
 package seriesfile
 
 import (

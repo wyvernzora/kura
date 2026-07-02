@@ -3,7 +3,6 @@ package style
 import (
 	"strings"
 
-	"github.com/ttacon/chalk"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/response"
 )
@@ -19,11 +18,11 @@ func EpisodeStatus(status string, styled bool) string {
 	case string(response.StatusMissing):
 		return Orange(value)
 	case string(response.StatusPresent):
-		return chalk.Green.Color(value)
+		return Green(value)
 	case string(response.StatusPending):
-		return chalk.Dim.TextStyle(Gray(value))
+		return Dim(Gray(value))
 	case string(response.StatusStaged), string(response.StatusStagedReplacement):
-		return chalk.Yellow.Color(value)
+		return Yellow(value)
 	default:
 		return value
 	}
@@ -42,15 +41,15 @@ func MediaSource(source string, styled bool) string {
 	}
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "bdrip", "bluray", "blu-ray":
-		return chalk.Green.Color(value)
+		return Green(value)
 	case "web-dl", "webdl", "web-rip", "webrip":
-		return chalk.Yellow.Color(value)
+		return Yellow(value)
 	case "tv", "hdtv", "tvrip", "tv-rip":
 		return Orange(value)
 	case "unknown":
 		// Dim/gray, not red — Unknown is a "we don't have a source
 		// tag" state, not an error to fix.
-		return chalk.Dim.TextStyle(Gray(value))
+		return Dim(Gray(value))
 	default:
 		return value
 	}
@@ -68,11 +67,11 @@ func MediaResolution(resolution string, styled bool) string {
 	}
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "4k":
-		return chalk.Blue.Color(value)
+		return Blue(value)
 	case "1080p":
-		return chalk.Green.Color(value)
+		return Green(value)
 	case "720p":
-		return chalk.Red.Color(value)
+		return Red(value)
 	case "":
 		return value
 	default:
@@ -87,5 +86,5 @@ func Retired(value string) string {
 	if value == "" {
 		return ""
 	}
-	return chalk.Dim.TextStyle(chalk.Strikethrough.TextStyle(value))
+	return Dim(Strikethrough(value))
 }

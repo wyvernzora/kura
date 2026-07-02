@@ -36,7 +36,7 @@ type Holder struct {
 }
 
 // Mutator stamps the most recent successful CAS write for diagnostics
-// (last_mutated on series.json and the header line on index.tsv).
+// (last_mutated on series.json and the header line on index.jsonl).
 // Surfaces in ConflictError messages so a losing writer can identify
 // who won the race.
 type Mutator struct {

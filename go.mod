@@ -19,7 +19,6 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/oklog/ulid/v2 v2.1.1
-	github.com/ttacon/chalk v0.0.0-20160626202418-22c06c80ed31
 	golang.org/x/sync v0.21.0
 	golang.org/x/sys v0.46.0
 	golang.org/x/term v0.44.0
