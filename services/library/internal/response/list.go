@@ -65,6 +65,8 @@ type ListRow struct {
 	// to a placeholder when both are empty.
 	PosterURL          string `json:"posterUrl,omitempty"`
 	PosterThumbnailURL string `json:"posterThumbnailUrl,omitempty"`
+	DateAdded          string `json:"dateAdded,omitempty"`
+	LastAired          string `json:"lastAired,omitempty"`
 	LastScanned        string `json:"lastScanned,omitempty"`
 	// SearchKey is the per-row folded search blob the client feeds
 	// into local fuzzy search. Server-side data only — never displayed.
