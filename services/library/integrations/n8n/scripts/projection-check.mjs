@@ -70,6 +70,10 @@ assert.deepEqual(
 							source: 'WebRip',
 							resolution: '1080p',
 							codec: 'HEVC',
+							attrs: {
+								origin: 'takuhai',
+								release_group: 'SubsPlease',
+							},
 							size: 123,
 							file: 'series:Season 1/Bookworm - S01E01.mkv',
 							companions: [
@@ -87,6 +91,9 @@ assert.deepEqual(
 							source: 'BDRip',
 							resolution: '1920x1080',
 							codec: 'AVC',
+							attrs: {
+								origin: 'manual',
+							},
 							size: 456,
 							file: 'inbox:Bookworm S01E01.mkv',
 							companions: [],
@@ -116,12 +123,19 @@ assert.deepEqual(
 							resolution: '1080p',
 							source: 'WebRip',
 							codec: 'HEVC',
+							attrs: {
+								origin: 'takuhai',
+								release_group: 'SubsPlease',
+							},
 							hasSubtitles: true,
 						},
 						stagedMediaFile: {
 							resolution: '1920x1080',
 							source: 'BDRip',
 							codec: 'AVC',
+							attrs: {
+								origin: 'manual',
+							},
 							hasSubtitles: false,
 						},
 					},
