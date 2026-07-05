@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/wyvernzora/kura/internal/cli/client"
 	"github.com/wyvernzora/kura/internal/cli/render"
@@ -25,6 +26,7 @@ type stageCmd struct {
 type stageEpisodeCmd struct {
 	Source     string   `help:"Media source. Defaults to filename source or unknown."`
 	Companions []string `name:"companion" help:"Companion inbox selector (e.g. inbox:[BDrip] Show/E03.en.srt)."`
+	Attrs      []string `name:"attr" help:"Media attr key=value. May be repeated."`
 	Replace    bool     `name:"replace" help:"Stage over an active episode or replace an existing staged entry for the same season and episode."`
 	JSON       bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Args       []string `arg:"" required:"" help:"Selector terms, episode marker (e.g. S01E03), and an inbox: media selector, or series: for in-place metadata override."`
@@ -53,11 +55,12 @@ type stageRequestBody struct {
 }
 
 type stageRequestEpisode struct {
-	Episode    string   `json:"episode"`
-	Media      string   `json:"media"`
-	Source     string   `json:"source,omitempty"`
-	Companions []string `json:"companions,omitempty"`
-	Replace    bool     `json:"replace,omitempty"`
+	Episode    string            `json:"episode"`
+	Media      string            `json:"media"`
+	Source     string            `json:"source,omitempty"`
+	Companions []string          `json:"companions,omitempty"`
+	Replace    bool              `json:"replace,omitempty"`
+	Attrs      map[string]string `json:"attrs,omitempty"`
 }
 
 type stageRequestTrash struct {
@@ -88,6 +91,10 @@ func (cmd *stageEpisodeCmd) Run(rt *runContext) error {
 	if err != nil {
 		return err
 	}
+	attrs, err := parseStageAttrs(cmd.Attrs)
+	if err != nil {
+		return err
+	}
 	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
 	ref, err := resolveTermsToRef(rt, c, io, terms)
@@ -101,9 +108,28 @@ func (cmd *stageEpisodeCmd) Run(rt *runContext) error {
 			Source:     cmd.Source,
 			Companions: companions,
 			Replace:    cmd.Replace,
+			Attrs:      attrs,
 		}},
 	}
 	return runStage(rt, c, ref, body, cmd.JSON)
+}
+
+func parseStageAttrs(raw []string) (map[string]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(raw))
+	for _, item := range raw {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok || key == "" {
+			return nil, fmt.Errorf("attr %q must be key=value", item)
+		}
+		if _, exists := out[key]; exists {
+			return nil, fmt.Errorf("attr %q specified more than once", key)
+		}
+		out[key] = value
+	}
+	return out, nil
 }
 
 func (cmd *stageTrashCmd) Run(rt *runContext) error {

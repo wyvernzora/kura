@@ -3,6 +3,7 @@ package workflow
 import (
 	"fmt"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	domainrefs "github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/selector"
 )
@@ -28,6 +29,7 @@ type StageRequestEpisode struct {
 	Source     string
 	Companions []string
 	Replace    bool
+	Attrs      map[string]string
 }
 
 // StageRequestTrash mirrors TrashStageItem with all-string fields.
@@ -132,12 +134,17 @@ func parseStageRequestEpisodes(items []StageRequestEpisode) ([]EpisodeStageItem,
 		if err != nil {
 			return nil, err
 		}
+		attrs := media.Attrs(item.Attrs)
+		if err := media.ValidateAttrs(attrs); err != nil {
+			return nil, &StageRequestError{Axis: "episodes", Index: index, Field: "attrs", Cause: err}
+		}
 		out = append(out, EpisodeStageItem{
 			Episode:    episode,
 			Media:      mediaSel,
 			Source:     item.Source,
 			Companions: companions,
 			Replace:    item.Replace,
+			Attrs:      media.CloneAttrs(attrs),
 		})
 	}
 	return out, nil

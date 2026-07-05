@@ -308,6 +308,7 @@ func recordFromMedia(rec media.Record) *ReplacedRecord {
 		Size:       rec.Size,
 		MTime:      rec.MTime,
 		Companions: make([]ReplacedCompanion, 0, len(rec.Companions)),
+		Attrs:      media.CloneAttrs(rec.Attrs),
 	}
 	for _, c := range rec.Companions {
 		out.Companions = append(out.Companions, ReplacedCompanion{

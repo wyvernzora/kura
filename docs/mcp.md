@@ -23,10 +23,10 @@ agent sees.
 | `kura_aliases` | `{ref}` | Alias/title list | sync |
 | `kura_resolve` | `{terms: string[]}` | Candidate list | sync |
 | `kura_list` | `{statuses?, airing?, maxResults?, cursor?}` | Paginated series list | sync |
-| `kura_show` | `{ref, episodes?, status[], source[], resolution[]?}` | Series + episodes detail, including staged trash/extras | sync |
+| `kura_show` | `{ref, episodes?, status[], source[], resolution[]?}` | Series + episodes detail, including media attrs and staged trash/extras | sync |
 | `kura_add` | `{ref, dirname?, ordering?}` | Add result | sync |
 | `kura_import` | `{ref, dirname, ordering?}` | Import result | sync |
-| `kura_stage` | `{ref, episodes[], trash[], extras[]}` | `{jobId}` | async |
+| `kura_stage` | `{ref, episodes[{..., attrs?}], trash[], extras[]}` | `{jobId}` | async |
 | `kura_reset` | `{ref, episode?, trash[], extras[], all?}` | `{cleared, trashRemoved[], extraRemoved[]}` | sync |
 | `kura_reconcile_plan` | `{ref}` | `{token, changes[], trashItems[], extras[]}` | sync |
 | `kura_scan` | `{ref, refresh?, ordering?}` | `{jobId}` | async |

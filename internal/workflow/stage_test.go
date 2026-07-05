@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,6 +120,59 @@ func TestStage_RejectsEmptyBatch(t *testing.T) {
 	_, err := j.Wait(context.Background())
 	if _, ok := errors.AsType[*workflow.EmptyStageBatchError](err); !ok {
 		t.Fatalf("err = %v, want EmptyStageBatchError", err)
+	}
+}
+
+func TestStage_EpisodeAttrsPersistAndSurface(t *testing.T) {
+	deps, ref, insp, inboxDir := seedStageDeps(t)
+	sel := writeInboxMedia(t, inboxDir, "ep1.mkv", "body")
+	insp.infos[sel.Resolve(inboxDir)] = media.Info{Resolution: "1920x1080"}
+	e1, _ := refs.NewEpisode(1, 1)
+
+	j := workflow.Stage(context.Background(), deps, workflow.StageInput{
+		Ref: ref,
+		Episodes: []workflow.EpisodeStageItem{{
+			Episode: e1,
+			Media:   sel,
+			Attrs: media.Attrs{
+				"origin":        "takuhai",
+				"release_group": "SubsPlease",
+			},
+		}},
+	})
+	out, err := j.Wait(context.Background())
+	if err != nil {
+		t.Fatalf("Stage: %v", err)
+	}
+	if got := out.Episodes[0].Record.Attrs["release_group"]; got != "SubsPlease" {
+		t.Fatalf("result attrs release_group = %q", got)
+	}
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := model.Episodes[e1].Staged.Attrs["origin"]; got != "takuhai" {
+		t.Fatalf("persisted origin = %q", got)
+	}
+}
+
+func TestStage_RejectsInvalidAttrs(t *testing.T) {
+	deps, ref, insp, inboxDir := seedStageDeps(t)
+	sel := writeInboxMedia(t, inboxDir, "ep1.mkv", "body")
+	insp.infos[sel.Resolve(inboxDir)] = media.Info{Resolution: "1920x1080"}
+	e1, _ := refs.NewEpisode(1, 1)
+
+	j := workflow.Stage(context.Background(), deps, workflow.StageInput{
+		Ref: ref,
+		Episodes: []workflow.EpisodeStageItem{{
+			Episode: e1,
+			Media:   sel,
+			Attrs:   media.Attrs{"BadKey": "value"},
+		}},
+	})
+	_, err := j.Wait(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "attrs") {
+		t.Fatalf("Stage err = %v, want attrs validation error", err)
 	}
 }
 

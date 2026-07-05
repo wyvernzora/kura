@@ -5,12 +5,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wyvernzora/kura/internal/coord"
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/progress"
 	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/internal/storage/paths"
 )
 
 func TestIndexSaveLoad(t *testing.T) {
@@ -34,6 +38,34 @@ func TestIndexSaveLoad(t *testing.T) {
 	row, ok := loaded.GetRow(model.Ref)
 	if !ok || row.Title != "Honzuki" || row.Metadata != model.Metadata {
 		t.Fatalf("GetRow = (%+v, %v)", row, ok)
+	}
+}
+
+func TestIndexSaveModelStripsMediaAttrs(t *testing.T) {
+	root := t.TempDir()
+	idx := indexfile.New(root, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	model := minimalModel(t, "Honzuki", refs.Metadata("tvdb:370070"))
+	ep, _ := refs.NewEpisode(1, 1)
+	model.Episodes[ep] = series.Episode{
+		Active: &media.Record{
+			Path:       "/library/Honzuki/Season 1/e1.mkv",
+			Source:     media.SourceBluRay,
+			Companions: []media.Companion{},
+			Attrs:      media.Attrs{"origin": "takuhai"},
+		},
+	}
+	if err := idx.SaveModel(context.Background(), model, coord.NewMutator("test")); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(paths.IndexFile(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), `"attrs"`) || strings.Contains(string(data), "takuhai") {
+		t.Fatalf("index snapshot leaked attrs:\n%s", data)
+	}
+	if model.Episodes[ep].Active.Attrs["origin"] != "takuhai" {
+		t.Fatalf("SaveModel mutated caller attrs: %#v", model.Episodes[ep].Active.Attrs)
 	}
 }
 

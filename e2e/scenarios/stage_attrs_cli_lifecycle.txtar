@@ -1,0 +1,30 @@
+# stage_attrs_cli_lifecycle: CLI attrs persist through stage, apply,
+# scan refresh, and stay out of the library index.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+
+kura_stage_attrs $KURA_LAST_REF S01E0001 ep1.mp4 origin=takuhai release_group=SubsPlease
+stdout '"attrs":{"origin":"takuhai","release_group":"SubsPlease"}'
+
+kura_show $KURA_LAST_REF
+stdout '"status":"staged"'
+stdout '"attrs":{"origin":"takuhai","release_group":"SubsPlease"}'
+
+kura_plan $KURA_LAST_REF
+stdout '"token":'
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+stdout '"attrs":{"origin":"takuhai","release_group":"SubsPlease"}'
+
+kura_scan_refresh $KURA_LAST_REF
+stdout '"status":"updated"'
+kura_show $KURA_LAST_REF
+stdout '"attrs":{"origin":"takuhai","release_group":"SubsPlease"}'
+
+exec cat $KURA_LIB_ROOT/.kura/index.jsonl
+! stdout '"attrs"'
+! stdout 'SubsPlease'

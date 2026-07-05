@@ -111,6 +111,19 @@
         "companions": {
           "type": "array",
           "items": { "$ref": "#/$defs/companionRecord" }
+        },
+        "attrs": {
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[a-z0-9_.]+$",
+            "maxLength": 64
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 1024,
+            "pattern": "^[^\\x00-\\x1F\\x7F]*$"
+          }
         }
       }
     },

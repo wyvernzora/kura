@@ -160,3 +160,16 @@ func TestKuraStage_InvalidEpisodeRejected(t *testing.T) {
 		t.Fatalf("kind = %v, want %v", body["kind"], errkind.KindInvalidRef)
 	}
 }
+
+func TestStageInputToWorkflowCopiesAttrs(t *testing.T) {
+	got := stageInputToWorkflow(stageInput{
+		Episodes: []stageEpisodeInputItem{{
+			Episode: "S01E01",
+			Media:   "inbox:ep1.mkv",
+			Attrs:   map[string]string{"origin": "takuhai"},
+		}},
+	})
+	if got.Episodes[0].Attrs["origin"] != "takuhai" {
+		t.Fatalf("Attrs = %#v", got.Episodes[0].Attrs)
+	}
+}

@@ -1,0 +1,11 @@
+# stage_attrs_rest_parity: REST stage accepts attrs and show returns them.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+
+kura_rest_stage_attrs $KURA_LAST_REF S01E0001 ep1.mp4 origin=takuhai infohash=abc123
+stdout '"attrs":{"infohash":"abc123","origin":"takuhai"}'
+
+kura_show $KURA_LAST_REF
+stdout '"status":"staged"'
+stdout '"attrs":{"infohash":"abc123","origin":"takuhai"}'

@@ -7,8 +7,8 @@ import (
 )
 
 // SchemaVersion is the on-disk schema version stamped into the JSONL header.
-// v5 persists source-data entries; row projections are computed at query time.
-const SchemaVersion = 5
+// v6 persists source-data entries without media attrs; row projections are computed at query time.
+const SchemaVersion = 6
 
 // BuildOptions controls policy that affects projected row values.
 type BuildOptions struct {

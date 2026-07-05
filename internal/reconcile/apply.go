@@ -411,6 +411,7 @@ func recordToTrashfile(rec *ReplacedRecord, postMovePath string) trashfile.Recor
 		Size:       rec.Size,
 		MTime:      rec.MTime,
 		Companions: make([]trashfile.Companion, 0, len(rec.Companions)),
+		Attrs:      media.CloneAttrs(rec.Attrs),
 	}
 	for _, c := range rec.Companions {
 		out.Companions = append(out.Companions, trashfile.Companion{

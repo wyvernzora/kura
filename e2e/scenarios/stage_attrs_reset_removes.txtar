@@ -1,0 +1,14 @@
+# stage_attrs_reset_removes: reset drops staged attrs with the staged record.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+
+kura_stage_attrs $KURA_LAST_REF S01E0001 ep1.mp4 origin=takuhai
+stdout '"attrs":{"origin":"takuhai"}'
+
+kura_reset $KURA_LAST_REF S01E0001
+stdout '"record":'
+
+kura_show $KURA_LAST_REF
+! stdout '"status":"staged"'
+! stdout '"attrs"'

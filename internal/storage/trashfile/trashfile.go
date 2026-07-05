@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/renameio/v2/maybe"
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
 )
@@ -42,6 +43,7 @@ type Record struct {
 	Size       int64
 	MTime      time.Time
 	Companions []Companion
+	Attrs      map[string]string
 }
 
 type Companion struct {
@@ -68,13 +70,14 @@ type metaWire struct {
 }
 
 type recordWire struct {
-	Path       string          `json:"path"`
-	Source     string          `json:"source"`
-	Resolution string          `json:"resolution,omitempty"`
-	Codec      string          `json:"codec,omitempty"`
-	Size       int64           `json:"size"`
-	MTime      string          `json:"mtime"`
-	Companions []companionWire `json:"companions"`
+	Path       string            `json:"path"`
+	Source     string            `json:"source"`
+	Resolution string            `json:"resolution,omitempty"`
+	Codec      string            `json:"codec,omitempty"`
+	Size       int64             `json:"size"`
+	MTime      string            `json:"mtime"`
+	Companions []companionWire   `json:"companions"`
+	Attrs      map[string]string `json:"attrs,omitempty"`
 }
 
 type companionWire struct {
@@ -288,6 +291,7 @@ func toWire(in Meta) metaWire {
 			Size:       in.Record.Size,
 			MTime:      in.Record.MTime.UTC().Format(time.RFC3339),
 			Companions: make([]companionWire, 0, len(in.Record.Companions)),
+			Attrs:      media.CloneAttrs(in.Record.Attrs),
 		},
 	}
 	for _, companion := range in.Record.Companions {
@@ -338,6 +342,7 @@ func fromWire(in metaWire) (Meta, error) {
 			Size:       in.Record.Size,
 			MTime:      mtime,
 			Companions: make([]Companion, 0, len(in.Record.Companions)),
+			Attrs:      media.CloneAttrs(in.Record.Attrs),
 		},
 	}
 	for _, companion := range in.Record.Companions {

@@ -374,6 +374,7 @@ func mediaFromWire(in *mediaRecordV1) (*media.Record, error) {
 		Codec:      media.ParseCodec(in.Codec),
 		Size:       in.Size,
 		Companions: make([]media.Companion, 0, len(in.Companions)),
+		Attrs:      media.CloneAttrs(media.Attrs(in.Attrs)),
 	}
 	if in.MTime != "" {
 		if parsed, err := time.Parse(time.RFC3339, in.MTime); err == nil {
@@ -398,6 +399,7 @@ func mediaToWire(in *media.Record) *mediaRecordV1 {
 		Size:       in.Size,
 		MTime:      in.MTime.UTC().Format(time.RFC3339),
 		Companions: make([]companionRecordV1, 0, len(in.Companions)),
+		Attrs:      media.CloneAttrs(in.Attrs),
 	}
 	for _, companion := range in.Companions {
 		out.Companions = append(out.Companions, companionToWire(companion))

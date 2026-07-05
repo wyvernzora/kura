@@ -426,6 +426,7 @@ func mediaShow(seriesRoot string, record media.Record) response.MediaShow {
 		Size:       record.Size,
 		File:       seriesSelector(seriesRoot, record.Path),
 		Companions: companions,
+		Attrs:      media.CloneAttrs(record.Attrs),
 	}
 }
 

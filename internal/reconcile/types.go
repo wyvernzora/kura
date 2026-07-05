@@ -164,6 +164,7 @@ type ReplacedRecord struct {
 	Size       int64
 	MTime      time.Time
 	Companions []ReplacedCompanion
+	Attrs      map[string]string
 }
 
 // ReplacedCompanion mirrors the per-companion fields trashfile.Meta
