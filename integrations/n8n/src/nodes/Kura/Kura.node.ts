@@ -306,6 +306,7 @@ function projectMediaFile(media: IDataObject | undefined): IDataObject | undefin
 		resolution: media.resolution,
 		source: media.source,
 		codec: media.codec,
+		attrs: media.attrs,
 		hasSubtitles: hasSubtitles(media),
 	});
 }
