@@ -118,6 +118,7 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 						Companions: []response.CompanionShow{
 							{Path: "series:Season 1/Bookworm S01E01.en.srt"},
 						},
+						Attrs: map[string]string{"origin": "takuhai"},
 					},
 				},
 			}},
@@ -142,6 +143,9 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 	}
 	if len(ep.Active.Companions) != 1 || ep.Active.Companions[0] != "series:Season 1/Bookworm S01E01.en.srt" {
 		t.Fatalf("companion paths = %v, want [series:Season 1/Bookworm S01E01.en.srt]", ep.Active.Companions)
+	}
+	if ep.Active.Attrs["origin"] != "takuhai" {
+		t.Fatalf("attrs = %#v", ep.Active.Attrs)
 	}
 }
 

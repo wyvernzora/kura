@@ -114,12 +114,13 @@ type PosterShow struct {
 // inbox-staged files. Agents can pass them straight back to
 // kura_stage / kura_trash without further parsing.
 type MediaShow struct {
-	Source     string          `json:"source"`
-	Resolution string          `json:"resolution,omitempty"`
-	Codec      string          `json:"codec,omitempty"`
-	Size       int64           `json:"size"`
-	File       string          `json:"file"`
-	Companions []CompanionShow `json:"companions"`
+	Source     string            `json:"source"`
+	Resolution string            `json:"resolution,omitempty"`
+	Codec      string            `json:"codec,omitempty"`
+	Size       int64             `json:"size"`
+	File       string            `json:"file"`
+	Companions []CompanionShow   `json:"companions"`
+	Attrs      map[string]string `json:"attrs,omitempty"`
 }
 
 type CompanionShow struct {

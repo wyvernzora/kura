@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/reconcile"
 )
@@ -63,6 +64,7 @@ type replacedRecordV2 struct {
 	Size       int64                 `json:"size"`
 	MTime      string                `json:"mtime"`
 	Companions []replacedCompanionV2 `json:"companions,omitempty"`
+	Attrs      map[string]string     `json:"attrs,omitempty"`
 }
 
 type replacedCompanionV2 struct {
@@ -226,6 +228,7 @@ func replacedRecordToWire(r reconcile.ReplacedRecord) replacedRecordV2 {
 		Size:       r.Size,
 		MTime:      r.MTime.UTC().Format(time.RFC3339),
 		Companions: make([]replacedCompanionV2, 0, len(r.Companions)),
+		Attrs:      media.CloneAttrs(r.Attrs),
 	}
 	for _, c := range r.Companions {
 		out.Companions = append(out.Companions, replacedCompanionV2{
@@ -253,6 +256,7 @@ func replacedRecordFromWire(in replacedRecordV2) (reconcile.ReplacedRecord, erro
 		Size:       in.Size,
 		MTime:      mtime,
 		Companions: make([]reconcile.ReplacedCompanion, 0, len(in.Companions)),
+		Attrs:      media.CloneAttrs(in.Attrs),
 	}
 	for _, c := range in.Companions {
 		cmt, err := time.Parse(time.RFC3339, c.MTime)

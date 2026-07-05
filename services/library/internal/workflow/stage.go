@@ -59,6 +59,7 @@ type EpisodeStageItem struct {
 	Source     string
 	Companions []selector.Path
 	Replace    bool
+	Attrs      media.Attrs
 }
 
 // TrashStageItem queues one file (and explicit companions) for trash on
@@ -378,6 +379,9 @@ func validateOneEpisodeItem(
 	episodeState, ok := model.Episodes[item.Episode]
 	if !ok {
 		return resolvedEpisodeItem{}, &MetadataMissingEpisodeError{Episode: item.Episode}
+	}
+	if err := media.ValidateAttrs(item.Attrs); err != nil {
+		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d].attrs: %w", index, err)
 	}
 	seriesRoot := paths.SeriesDir(deps.LibRoot, model.Ref)
 	mediaPath, err := resolveStageMediaSelector(deps.InboxRoot, seriesRoot, item.Media, index)
@@ -867,6 +871,7 @@ func applyEpisodeItem(ctx context.Context, deps Deps, seriesRoot string, model *
 			Reason: err.Error(),
 		}, nil
 	}
+	record.Attrs = media.CloneAttrs(item.Attrs)
 	replaced := item.episodeStateBefore.Active != nil || item.episodeStateBefore.Staged != nil
 	if err := model.SetStaged(item.Episode, record); err != nil {
 		return response.StageEpisodeResult{}, nil, err

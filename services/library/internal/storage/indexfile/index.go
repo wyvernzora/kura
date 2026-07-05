@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/internal/coord"
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/domain/series"
 	"github.com/wyvernzora/kura/internal/progress"
@@ -382,6 +383,7 @@ func (i *Index) prepareEntry(in Entry) (entry, error) {
 	}
 	model := *in.Model
 	model.Ref = ref
+	stripMediaAttrs(&model)
 	raw, err := seriesfile.Encode(i.root, &model)
 	if err != nil {
 		return entry{}, err
@@ -391,6 +393,27 @@ func (i *Index) prepareEntry(in Entry) (entry, error) {
 		return entry{}, err
 	}
 	return entry{series: ref, model: copyModel, raw: append(json.RawMessage(nil), raw...)}, nil
+}
+
+func stripMediaAttrs(model *series.Series) {
+	if len(model.Episodes) == 0 {
+		return
+	}
+	episodes := make(map[refs.Episode]series.Episode, len(model.Episodes))
+	for ref, episode := range model.Episodes {
+		if episode.Active != nil {
+			active := media.CloneRecord(*episode.Active)
+			active.Attrs = nil
+			episode.Active = &active
+		}
+		if episode.Staged != nil {
+			staged := media.CloneRecord(*episode.Staged)
+			staged.Attrs = nil
+			episode.Staged = &staged
+		}
+		episodes[ref] = episode
+	}
+	model.Episodes = episodes
 }
 
 func (i *Index) replace(entries map[refs.Series]entry) error {

@@ -85,6 +85,7 @@ func (s *scanner) applyFile(ctx context.Context, file DiscoveredFile) error {
 	}
 	if episode.Active != nil {
 		mergeSourceFromExisting(&record, *episode.Active)
+		record.Attrs = media.CloneAttrs(episode.Active.Attrs)
 	}
 	if err := s.model.SetActive(file.Ref, record); err != nil {
 		return err

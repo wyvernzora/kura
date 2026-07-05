@@ -15,6 +15,7 @@ type Record struct {
 	Size       int64       `json:"size"`
 	MTime      time.Time   `json:"mtime"`
 	Companions []Companion `json:"companions"`
+	Attrs      Attrs       `json:"attrs,omitempty"`
 }
 
 // Companion is one tracked file alongside the primary media file (external
@@ -36,5 +37,6 @@ func CloneRecord(in Record) Record {
 	if out.Companions == nil {
 		out.Companions = []Companion{}
 	}
+	out.Attrs = CloneAttrs(in.Attrs)
 	return out
 }

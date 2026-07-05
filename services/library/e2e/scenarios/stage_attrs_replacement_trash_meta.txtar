@@ -1,0 +1,26 @@
+# stage_attrs_replacement_trash_meta: replaced active media attrs are copied
+# into trash meta before the replacement lands.
+
+kura_add stub:1001
+kura_mkfile ep1_old.mp4
+kura_stage_attrs $KURA_LAST_REF S01E0001 ep1_old.mp4 origin=takuhai release_group=OldGroup
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":1'
+
+kura_mkfile ep1_new.mp4
+kura_stage_replace_attrs $KURA_LAST_REF S01E0001 ep1_new.mp4 origin=takuhai release_group=NewGroup
+stdout '"attrs":{"origin":"takuhai","release_group":"NewGroup"}'
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+stdout '"appliedSteps":2'
+
+kura_first_trash_id $KURA_LAST_REF
+kura_series_dir $KURA_LAST_REF
+exec cat $KURA_SERIES_DIR/.kura/trash/$KURA_FIRST_TRASH_ID/meta.json
+stdout '"attrs": {'
+stdout '"origin": "takuhai"'
+stdout '"release_group": "OldGroup"'
+
+kura_show $KURA_LAST_REF
+stdout '"attrs":{"origin":"takuhai","release_group":"NewGroup"}'

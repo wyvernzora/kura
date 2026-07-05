@@ -42,3 +42,16 @@ func TestHandleStage_BadEpisodeRef(t *testing.T) {
 		t.Errorf("status: got %d want 400, body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestStageRequestToWorkflowCopiesAttrs(t *testing.T) {
+	got := stageRequestToWorkflow(stageRequest{
+		Episodes: []stageEpisode{{
+			Episode: "S01E01",
+			Media:   "inbox:ep1.mkv",
+			Attrs:   map[string]string{"origin": "takuhai"},
+		}},
+	})
+	if got.Episodes[0].Attrs["origin"] != "takuhai" {
+		t.Fatalf("Attrs = %#v", got.Episodes[0].Attrs)
+	}
+}

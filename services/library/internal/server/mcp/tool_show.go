@@ -10,6 +10,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/errkind"
 	"github.com/wyvernzora/kura/internal/response"
@@ -99,21 +100,23 @@ type mcpEpisode struct {
 }
 
 type mcpActiveMedia struct {
-	Source     string   `json:"source"`
-	Resolution string   `json:"resolution,omitempty"`
-	Codec      string   `json:"codec,omitempty"`
-	Size       int64    `json:"size"`
-	File       string   `json:"file"`
-	Companions []string `json:"companions"`
+	Source     string            `json:"source"`
+	Resolution string            `json:"resolution,omitempty"`
+	Codec      string            `json:"codec,omitempty"`
+	Size       int64             `json:"size"`
+	File       string            `json:"file"`
+	Companions []string          `json:"companions"`
+	Attrs      map[string]string `json:"attrs,omitempty"`
 }
 
 type mcpStagedMedia struct {
-	Source     string   `json:"source"`
-	Resolution string   `json:"resolution,omitempty"`
-	Codec      string   `json:"codec,omitempty"`
-	Size       int64    `json:"size"`
-	File       string   `json:"file"`
-	Companions []string `json:"companions"`
+	Source     string            `json:"source"`
+	Resolution string            `json:"resolution,omitempty"`
+	Codec      string            `json:"codec,omitempty"`
+	Size       int64             `json:"size"`
+	File       string            `json:"file"`
+	Companions []string          `json:"companions"`
+	Attrs      map[string]string `json:"attrs,omitempty"`
 }
 
 func addShowTool(s *sdkmcp.Server, deps Deps) {
@@ -402,6 +405,7 @@ func projectEpisode(ep response.EpisodeShow) mcpEpisode {
 			Size:       ep.Active.Size,
 			File:       ep.Active.File,
 			Companions: companionPaths(ep.Active.Companions),
+			Attrs:      media.CloneAttrs(ep.Active.Attrs),
 		}
 	}
 	if ep.Staged != nil {
@@ -412,6 +416,7 @@ func projectEpisode(ep response.EpisodeShow) mcpEpisode {
 			Size:       ep.Staged.Size,
 			File:       ep.Staged.File,
 			Companions: companionPaths(ep.Staged.Companions),
+			Attrs:      media.CloneAttrs(ep.Staged.Attrs),
 		}
 	}
 	return out

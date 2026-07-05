@@ -38,11 +38,12 @@ type stageRequest struct {
 }
 
 type stageEpisode struct {
-	Episode    string   `json:"episode"`
-	Media      string   `json:"media"`
-	Source     string   `json:"source,omitempty"`
-	Companions []string `json:"companions,omitempty"`
-	Replace    bool     `json:"replace,omitempty"`
+	Episode    string            `json:"episode"`
+	Media      string            `json:"media"`
+	Source     string            `json:"source,omitempty"`
+	Companions []string          `json:"companions,omitempty"`
+	Replace    bool              `json:"replace,omitempty"`
+	Attrs      map[string]string `json:"attrs,omitempty"`
 }
 
 type stageTrash struct {
@@ -137,6 +138,7 @@ func stageRequestToWorkflow(req stageRequest) workflow.StageRequest {
 			Source:     ep.Source,
 			Companions: ep.Companions,
 			Replace:    ep.Replace,
+			Attrs:      ep.Attrs,
 		})
 	}
 	for _, t := range req.Trash {

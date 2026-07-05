@@ -27,6 +27,7 @@ That Go definition is authoritative. If this section conflicts with the Go file,
   - `source` (string, optional) — override for the source label (`BluRay`, `WebRip`, `Web-DL`, `HDTV`, `DVDRip`, `TVRip`, `Unknown`).
   - `companions` ([]string, optional) — inbox sidecar selectors. Current MCP parsing accepts companions only for inbox media.
   - `replace` (bool, optional) — allow staging over an existing active or staged record at this slot.
+  - `attrs` (object, optional) — flat string map copied verbatim to the media record. Maximum 16 entries; keys must match `[a-z0-9_.]+` and be at most 64 chars; values must be UTF-8 strings with no control chars and at most 1024 chars.
 - `trash` ([]object, optional) — files queued for trash on next `reconcile_apply`.
   - `path` (string, required) — series selector for the file to queue (e.g. `series:Season 1/foo.mkv`). Scoped to the series in the request's `ref`.
   - `companions` ([]string, optional) — sidecar `series:` selectors to drag along into trash.

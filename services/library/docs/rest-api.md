@@ -81,7 +81,7 @@ SeriesRef in the request body as `dirname`.
 | DELETE | `/api/v1/series/{ref}` | — | — | `X-Kura-Operator + X-Confirm` if `?purge=1`; no operator header for untrack-only removal |
 | POST   | `/api/v1/series/{ref}/reset` | `{episode?, trash?, extras?, all?}` | Reset summary | — |
 | POST   | `/api/v1/series/{ref}/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 {jobId, kind, statusUrl, streamUrl, submittedAt}` | async |
-| POST   | `/api/v1/series/{ref}/stage` | `{episodes[], trash[], extras[]}` | `202 Job` | async |
+| POST   | `/api/v1/series/{ref}/stage` | `{episodes[{episode, media, source?, companions?, replace?, attrs?}], trash[], extras[]}` | `202 Job` | async |
 | POST   | `/api/v1/series/{ref}/reconcile/plan` | — | `{token, changes[], trashItems[], extras[]}` | — |
 | POST   | `/api/v1/series/{ref}/reconcile/apply` | `{token}` | `202 Job` | async |
 | POST   | `/api/v1/series/{ref}/reconcile/recover` | — | — | `X-Kura-Operator` |
@@ -99,6 +99,10 @@ SeriesRef in the request body as `dirname`.
 | GET    | `/api/v1/inbox` | — | Inbox listing | ETag |
 | GET    | `/api/v1/jobs/{job}` | — | Job status | — |
 | GET    | `/api/v1/jobs/{job}/stream` | — | Server-Sent Events | 30 min max, 250 ms poll interval |
+
+Episode stage entries accept optional `attrs`, a flat string map stored on
+the staged media record. `GET /api/v1/series/{ref}` returns `attrs` on active
+and staged media records when present; attrs are not queryable or indexed.
 
 Handlers live under `internal/server/rest/handler_*.go`. The router
 and middleware chain (auth, CORS, version header, recover) are in

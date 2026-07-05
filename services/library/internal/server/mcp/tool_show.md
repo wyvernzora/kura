@@ -2,6 +2,8 @@ Return the observed state of one tracked series: metadata header, season summari
 
 All path fields in this response are scheme-tagged selectors that can be passed back to compatible Kura tools without reconstruction. Applies to `active.file`/`active.companions`, `staged.file`/`staged.companions`, and the staged trash/extras paths.
 
+Active and staged media records may include `attrs`, a flat string map written by `kura_stage`. Kura returns attrs verbatim and never filters, sorts, or branches on individual attr keys.
+
 `stagedTrash` lists files queued for removal at next `kura_reconcile_apply`; `stagedExtras` lists extras queued for placement.
 
 Each episode carries `preferredTitle` (in the operator's first preferred language with fallback to canonical) and `canonicalTitle` (provider's default-language form) when the provider has them. Series-level `artwork.poster.url` is the TVDB CDN URL of the selected series poster (no auth needed to fetch).

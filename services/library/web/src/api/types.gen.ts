@@ -733,6 +733,7 @@ export interface MediaShow {
   size: number /* int64 */;
   file: string;
   companions: CompanionShow[];
+  attrs?: { [key: string]: string };
 }
 export interface CompanionShow {
   path: string;

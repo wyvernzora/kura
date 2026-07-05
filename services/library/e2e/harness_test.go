@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/storage/paths"
@@ -173,6 +174,78 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 			out, _, err := b.run(s.Context(), "stage", "episode", "--json", "--replace", ref, args[1], selector)
 			if err != nil {
 				return nil, fmt.Errorf("kura_stage_replace: %w", err)
+			}
+			return staticOutput(out), nil
+		},
+	)
+
+	// ── kura_stage_attrs ─────────────────────────────────────────────────
+	cmds["kura_stage_attrs"] = script.Command(
+		script.CmdUsage{Summary: "stage an episode file with attrs", Args: "<series_ref> <episode_marker> <file> <key=value...>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 4 {
+				return nil, fmt.Errorf("kura_stage_attrs: expected <ref> <ep> <file> <key=value...>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			selector, err := inboxSelector(s, args[2])
+			if err != nil {
+				return nil, fmt.Errorf("kura_stage_attrs: %w", err)
+			}
+			cliArgs := []string{"stage", "episode", "--json"}
+			for _, attr := range args[3:] {
+				cliArgs = append(cliArgs, "--attr", attr)
+			}
+			cliArgs = append(cliArgs, ref, args[1], selector)
+			out, errOut, runErr := b.run(s.Context(), cliArgs...)
+			return func(s *script.State) (string, string, error) {
+				return compactIfJSON(out), errOut, runErr
+			}, nil
+		},
+	)
+
+	// ── kura_stage_replace_attrs ─────────────────────────────────────────
+	cmds["kura_stage_replace_attrs"] = script.Command(
+		script.CmdUsage{Summary: "stage an episode replacement with attrs", Args: "<series_ref> <episode_marker> <file> <key=value...>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 4 {
+				return nil, fmt.Errorf("kura_stage_replace_attrs: expected <ref> <ep> <file> <key=value...>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			selector, err := inboxSelector(s, args[2])
+			if err != nil {
+				return nil, fmt.Errorf("kura_stage_replace_attrs: %w", err)
+			}
+			cliArgs := []string{"stage", "episode", "--json", "--replace"}
+			for _, attr := range args[3:] {
+				cliArgs = append(cliArgs, "--attr", attr)
+			}
+			cliArgs = append(cliArgs, ref, args[1], selector)
+			out, errOut, runErr := b.run(s.Context(), cliArgs...)
+			return func(s *script.State) (string, string, error) {
+				return compactIfJSON(out), errOut, runErr
+			}, nil
+		},
+	)
+
+	// ── kura_rest_stage_attrs ────────────────────────────────────────────
+	cmds["kura_rest_stage_attrs"] = script.Command(
+		script.CmdUsage{Summary: "stage an episode with attrs via REST", Args: "<series_ref> <episode_marker> <file> <key=value...>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 4 {
+				return nil, fmt.Errorf("kura_rest_stage_attrs: expected <ref> <ep> <file> <key=value...>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			selector, err := inboxSelector(s, args[2])
+			if err != nil {
+				return nil, fmt.Errorf("kura_rest_stage_attrs: %w", err)
+			}
+			attrs, err := parseAttrArgs(args[3:])
+			if err != nil {
+				return nil, fmt.Errorf("kura_rest_stage_attrs: %w", err)
+			}
+			out, err := restStageAttrs(s.Context(), b, ref, args[1], selector, attrs)
+			if err != nil {
+				return nil, fmt.Errorf("kura_rest_stage_attrs: %w", err)
 			}
 			return staticOutput(out), nil
 		},
@@ -393,6 +466,22 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 			out, _, err := b.run(s.Context(), "scan", "--json", ref)
 			if err != nil {
 				return nil, fmt.Errorf("kura_scan: %w", err)
+			}
+			return staticOutput(out), nil
+		},
+	)
+
+	// ── kura_scan_refresh ─────────────────────────────────────────────────
+	cmds["kura_scan_refresh"] = script.Command(
+		script.CmdUsage{Summary: "refresh-scan series directory", Args: "<series_ref>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) == 0 {
+				return nil, fmt.Errorf("kura_scan_refresh: expected series ref")
+			}
+			ref := s.ExpandEnv(strings.Join(args, " "), false)
+			out, _, err := b.run(s.Context(), "scan", "--json", "--refresh", ref)
+			if err != nil {
+				return nil, fmt.Errorf("kura_scan_refresh: %w", err)
 			}
 			return staticOutput(out), nil
 		},
@@ -952,6 +1041,119 @@ func activeFilePath(ctx context.Context, b *e2eBinary, ref, episode string) (str
 		return "", err
 	}
 	return filepath.Join(seriesRoot, filepath.FromSlash(strings.TrimPrefix(selector, prefix))), nil
+}
+
+func parseAttrArgs(args []string) (map[string]string, error) {
+	attrs := make(map[string]string, len(args))
+	for _, arg := range args {
+		key, value, ok := strings.Cut(arg, "=")
+		if !ok || key == "" {
+			return nil, fmt.Errorf("attr %q must be key=value", arg)
+		}
+		if _, exists := attrs[key]; exists {
+			return nil, fmt.Errorf("attr %q specified more than once", key)
+		}
+		attrs[key] = value
+	}
+	return attrs, nil
+}
+
+func restStageAttrs(ctx context.Context, b *e2eBinary, ref, episode, media string, attrs map[string]string) (string, error) {
+	body := map[string]any{
+		"episodes": []map[string]any{{
+			"episode": episode,
+			"media":   media,
+			"attrs":   attrs,
+		}},
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.url+"/api/v1/series/"+ref+"/stage", bytes.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusAccepted {
+		return "", fmt.Errorf("stage status %d: %s", resp.StatusCode, data)
+	}
+	var ack struct {
+		JobID string `json:"jobId"`
+	}
+	if err := json.Unmarshal(data, &ack); err != nil {
+		return "", err
+	}
+	if ack.JobID == "" {
+		return "", fmt.Errorf("stage response missing jobId: %s", data)
+	}
+	result, err := pollRESTJob(ctx, b, ack.JobID)
+	if err != nil {
+		return "", err
+	}
+	return compactIfJSON(string(result)), nil
+}
+
+func pollRESTJob(ctx context.Context, b *e2eBinary, jobID string) ([]byte, error) {
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.After(5 * time.Second)
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.url+"/api/v1/jobs/"+jobID, http.NoBody)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		data, readErr := io.ReadAll(resp.Body)
+		closeErr := resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("job status %d: %s", resp.StatusCode, data)
+		}
+		var status struct {
+			State  string          `json:"state"`
+			Result json.RawMessage `json:"result"`
+			Error  *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(data, &status); err != nil {
+			return nil, err
+		}
+		switch status.State {
+		case "succeeded":
+			return status.Result, nil
+		case "failed":
+			if status.Error != nil {
+				return nil, fmt.Errorf("job failed: %s", status.Error.Message)
+			}
+			return nil, fmt.Errorf("job failed")
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline:
+			return nil, fmt.Errorf("job %s did not finish", jobID)
+		case <-ticker.C:
+		}
+	}
 }
 
 // staticOutput wraps a fixed stdout in a script.WaitFunc, compacting

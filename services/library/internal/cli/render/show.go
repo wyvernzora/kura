@@ -169,14 +169,14 @@ func writeShowSeasonTable(w io.Writer, seriesRoot string, episodes []response.Ep
 		}
 		appendShowRows(tw, seriesRoot, episode.Episode, episode.Aired, episode.PreferredTitle, episode.Status, firstShowMedia(episode), styled, false)
 	}
-	return style.WriteStyledTable(w, tw, isCompanionLine)
+	return style.WriteStyledTable(w, tw, isDetailLine)
 }
 
-// isCompanionLine matches the rendered companion-row prefix used by
-// appendShowRows so WriteStyledTable can dim sidecar entries.
-func isCompanionLine(line string) bool {
+// isDetailLine matches rendered companion and attrs rows so WriteStyledTable
+// can dim detail entries.
+func isDetailLine(line string) bool {
 	trimmed := strings.TrimLeft(line, " ")
-	return strings.HasPrefix(trimmed, "┣ ") || strings.HasPrefix(trimmed, "┗ ")
+	return strings.HasPrefix(trimmed, "┣ ") || strings.HasPrefix(trimmed, "┗ ") || strings.HasPrefix(trimmed, "attrs ")
 }
 
 func appendShowRows(tw table.Writer, seriesRoot string, episode refs.Episode, aired, title string, status response.Status, media *response.MediaShow, styled bool, retired bool) {
@@ -197,6 +197,23 @@ func appendShowRows(tw table.Writer, seriesRoot string, episode refs.Episode, ai
 		}
 		tw.AppendRow(row)
 	}
+	if len(media.Attrs) > 0 {
+		row := table.Row{"", "", "", "", "", "", "    attrs " + attrsJSON(media.Attrs)}
+		if styled && retired {
+			for index := range row {
+				row[index] = style.Retired(row[index].(string))
+			}
+		}
+		tw.AppendRow(row)
+	}
+}
+
+func attrsJSON(attrs map[string]string) string {
+	data, err := json.Marshal(attrs)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }
 
 func showEpisodeRow(seriesRoot string, episode refs.Episode, aired, title string, status response.Status, media *response.MediaShow, styled bool, retired bool) table.Row {

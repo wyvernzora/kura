@@ -87,6 +87,7 @@ type mediaRecordV1 struct {
 	Size       int64               `json:"size"`
 	MTime      string              `json:"mtime"`
 	Companions []companionRecordV1 `json:"companions"`
+	Attrs      map[string]string   `json:"attrs,omitempty"`
 }
 
 type companionRecordV1 struct {

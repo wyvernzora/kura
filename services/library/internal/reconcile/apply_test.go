@@ -561,6 +561,7 @@ func TestWriteTrashMetas_RecordPathIsSeriesRelative(t *testing.T) {
 					Path:  originalPath,
 					Size:  1024,
 					MTime: time.Unix(0, 0),
+					Attrs: map[string]string{"origin": "takuhai"},
 				},
 			},
 			From: originalPath,
@@ -586,5 +587,8 @@ func TestWriteTrashMetas_RecordPathIsSeriesRelative(t *testing.T) {
 	if meta.Record.Path != originalPath {
 		t.Errorf("Record.Path = %q, want %q (series-relative pre-move path, not trash path)",
 			meta.Record.Path, originalPath)
+	}
+	if meta.Record.Attrs["origin"] != "takuhai" {
+		t.Fatalf("Record.Attrs = %#v", meta.Record.Attrs)
 	}
 }

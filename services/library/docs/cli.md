@@ -85,12 +85,15 @@ combinations or transport failures).
 | `kura show <selector>` | Full observed state for one series, with per-episode mediainfo + filesystem-issue surfacing. |
 | `kura resolve <selector> [--limit N]` | Resolve selector terms to candidate `MetadataRef`s without acting. |
 
+`kura show` includes media `attrs` on active/staged records when present.
+Human output renders them under the media file row; `--json` returns the map.
+
 ## Episode lifecycle
 
 | Verb | Purpose |
 |------|---------|
 | `kura scan <selector> [--refresh] [--metadata-only] [--ordering ORDERING]` | Re-sync a series with provider + filesystem; report orphan slots and skipped files. |
-| `kura stage episode <selector> S01E03 <inbox:media> [--source WebRip] [--replace] [--companion inbox:PATH]` | Record staged intent for one episode. Same-path stage is a metadata refresh and does not require `--replace`. |
+| `kura stage episode <selector> S01E03 <inbox:media> [--source WebRip] [--attr key=value] [--replace] [--companion inbox:PATH]` | Record staged intent for one episode. Same-path stage is a metadata refresh and does not require `--replace`; attrs are replaced wholesale. |
 | `kura reset --episode S01E03 <selector>` / `kura reset --all <selector>` | Drop one staged record or all of them. Does not touch staged files on disk. |
 | `kura reconcile plan <selector>` | Compute and persist a reconcile plan under `<series>/.kura/reconcile/<token>.jsonl`; print the token. Same series state always produces the same token (snapshot-derived). Apply re-validates the snapshot at execute time, so a stale plan (series state changed) is rejected by token mismatch. |
 | `kura reconcile apply <selector> <token>` | Validate the persisted plan against current state and execute the moves. |

@@ -88,6 +88,7 @@ func TestWriteReadPlanPreservesOwnerRecords(t *testing.T) {
 		Companions: []reconcile.ReplacedCompanion{{
 			Path: "inbox:/incoming/Bookworm S01E01.en.srt", Role: "subtitle", Language: "en", Size: 12_345, MTime: mtime,
 		}},
+		Attrs: map[string]string{"origin": "takuhai"},
 	}
 	displacedRec := &reconcile.ReplacedRecord{
 		Path:       "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
@@ -96,6 +97,7 @@ func TestWriteReadPlanPreservesOwnerRecords(t *testing.T) {
 		Codec:      "h264",
 		Size:       2_500_000_000,
 		MTime:      mtime,
+		Attrs:      map[string]string{"release_group": "OldGroup"},
 	}
 
 	episodeStep := reconcile.Step{
@@ -153,12 +155,18 @@ func TestWriteReadPlanPreservesOwnerRecords(t *testing.T) {
 	if len(gotEp.Companions) != 1 || gotEp.Companions[0].Role != "subtitle" || gotEp.Companions[0].Language != "en" {
 		t.Fatalf("StagedRecord companions mismatch: %#v", gotEp.Companions)
 	}
+	if gotEp.Attrs["origin"] != "takuhai" {
+		t.Fatalf("StagedRecord attrs = %#v", gotEp.Attrs)
+	}
 	gotTrash := out.Steps[0].Owner.Record
 	if gotTrash == nil {
 		t.Fatal("trash step Record nil after round-trip")
 	}
 	if gotTrash.Source != "webrip" || gotTrash.Codec != "h264" || gotTrash.Size != 2_500_000_000 {
 		t.Fatalf("Record facts mismatch: %#v", gotTrash)
+	}
+	if gotTrash.Attrs["release_group"] != "OldGroup" {
+		t.Fatalf("Record attrs = %#v", gotTrash.Attrs)
 	}
 	if out.Steps[1].Owner.EpisodeIntent != "replace" {
 		t.Fatalf("EpisodeIntent = %q, want replace", out.Steps[1].Owner.EpisodeIntent)

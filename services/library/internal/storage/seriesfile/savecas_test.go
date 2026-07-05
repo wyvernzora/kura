@@ -71,6 +71,38 @@ func TestSaveCASRoundtripPreservesHash(t *testing.T) {
 	}
 }
 
+func TestSaveCASRoundtripPreservesMediaAttrs(t *testing.T) {
+	libRoot, ref := setupFixtureLibrary(t)
+	model, err := seriesfile.Load(libRoot, ref)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	episode2, _ := refs.NewEpisode(1, 2)
+	staged := model.Episodes[episode2].Staged
+	if staged == nil {
+		t.Fatal("fixture staged record missing")
+	}
+	staged.Attrs = media.Attrs{
+		"origin":        "takuhai",
+		"release_group": "SubsPlease",
+	}
+	ep := model.Episodes[episode2]
+	ep.Staged = staged
+	model.Episodes[episode2] = ep
+
+	if err := seriesfile.SaveCAS(libRoot, model, coord.NewMutator("stage")); err != nil {
+		t.Fatalf("SaveCAS: %v", err)
+	}
+	reloaded, err := seriesfile.Load(libRoot, ref)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	got := reloaded.Episodes[episode2].Staged.Attrs
+	if got["origin"] != "takuhai" || got["release_group"] != "SubsPlease" {
+		t.Fatalf("attrs = %#v", got)
+	}
+}
+
 func TestSaveCASDetectsPreWriteDrift(t *testing.T) {
 	libRoot, ref := setupFixtureLibrary(t)
 	model, err := seriesfile.Load(libRoot, ref)

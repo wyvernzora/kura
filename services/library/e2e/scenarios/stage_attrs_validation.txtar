@@ -1,0 +1,12 @@
+# stage_attrs_validation: invalid attrs reject the whole stage request.
+
+kura_add stub:1001
+kura_mkfile ep1.mp4
+
+! kura_stage_attrs $KURA_LAST_REF S01E0001 ep1.mp4 BadKey=value
+stderr 'attrs'
+stderr 'BadKey'
+
+kura_show $KURA_LAST_REF
+! stdout '"status":"staged"'
+! stdout '"attrs"'
