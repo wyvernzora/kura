@@ -1,0 +1,9 @@
+# show_episodes_airing_season_no_match: old static fixture has no
+# currently airing season, so the predicate selector returns no spine
+# without failing.
+
+kura_add stub:1001
+kura_show_ep $KURA_LAST_REF AIRING_SEASON
+stdout '"metadataRef":"stub:1001"'
+stdout '"seasons":\[\]'
+! stdout 'S01E0001'

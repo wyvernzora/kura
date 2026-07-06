@@ -158,23 +158,13 @@ func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) ser
 	today := civil.DateOf(now)
 	seasons := map[int]struct{}{}
 	seasonsActive := map[int]struct{}{}
-	perSeason := map[int]*seasonAirDates{}
 	for episodeRef, episode := range model.Episodes {
 		if episodeRef.IsSpecial() {
 			continue
 		}
 		sn := episodeRef.Season()
 
-		// Cour calculation feeds on every announced air date,
-		// regardless of pending state, so the air-date collection
-		// happens up front before the pending short-circuit below.
-		sa, ok := perSeason[sn]
-		if !ok {
-			sa = &seasonAirDates{}
-			perSeason[sn] = sa
-		}
 		if episode.AirDate.IsValid() {
-			sa.dates = append(sa.dates, episode.AirDate)
 			if !episode.AirDate.After(today) && (!s.lastAired.IsValid() || s.lastAired.Before(episode.AirDate)) {
 				s.lastAired = episode.AirDate
 			}
@@ -209,25 +199,47 @@ func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) ser
 	}
 	s.seasons = len(seasons)
 	s.seasonsActive = len(seasonsActive)
-	s.airing = computeAiring(perSeason, now, opts.AiringTailDays)
+	s.airing = len(AiringSeasons(model, now, opts)) > 0
 	return s
 }
 
-// computeAiring returns true when any cour of any non-special season
-// is "currently airing." A season is split into cours by sorting its
-// episode air dates and starting a new cour wherever the gap between
-// consecutive dates exceeds airingCourGapDays. A cour qualifies when
-// (a) its first air date has already passed or falls within
-// airingHorizonDays AND (b) its last date is no older than the
+// AiringSeasons returns non-special seasons whose current cour is
+// inside Kura's airing window. The tail is intentional: recently ended
+// cours stay visible long enough for release-group batches or
+// preferred encodes to replace temporary stand-ins.
+func AiringSeasons(model *series.Series, now time.Time, opts BuildOptions) map[int]struct{} {
+	perSeason := map[int]*seasonAirDates{}
+	for episodeRef, episode := range model.Episodes {
+		if episodeRef.IsSpecial() || !episode.AirDate.IsValid() {
+			continue
+		}
+		sn := episodeRef.Season()
+		sa, ok := perSeason[sn]
+		if !ok {
+			sa = &seasonAirDates{}
+			perSeason[sn] = sa
+		}
+		sa.dates = append(sa.dates, episode.AirDate)
+	}
+	return airingSeasonsFromAirDates(perSeason, now, opts.AiringTailDays)
+}
+
+// airingSeasonsFromAirDates returns seasons with at least one cour
+// that is "currently airing." A season is split into cours by sorting
+// its episode air dates and starting a new cour wherever the gap
+// between consecutive dates exceeds airingCourGapDays. A cour
+// qualifies when (a) its first air date has already passed or falls
+// within airingHorizonDays AND (b) its last date is no older than the
 // configured airing tail. Far-ahead schedule announcements (first ep
 // beyond the horizon) and split-cour hiatuses (the active cour ended
 // before the tail; the next cour's first ep is months out) are both
 // filtered.
-func computeAiring(perSeason map[int]*seasonAirDates, now time.Time, tailDays int) bool {
+func airingSeasonsFromAirDates(perSeason map[int]*seasonAirDates, now time.Time, tailDays int) map[int]struct{} {
+	out := map[int]struct{}{}
 	today := civil.DateOf(now)
 	horizon := today.AddDays(airingHorizonDays)
 	tailStart := today.AddDays(-tailDays)
-	for _, sa := range perSeason {
+	for season, sa := range perSeason {
 		if len(sa.dates) == 0 {
 			continue
 		}
@@ -242,11 +254,12 @@ func computeAiring(perSeason map[int]*seasonAirDates, now time.Time, tailDays in
 				continue
 			}
 			if !last.Before(tailStart) {
-				return true
+				out[season] = struct{}{}
+				break
 			}
 		}
 	}
-	return false
+	return out
 }
 
 // splitIntoCours partitions a sorted-ascending slice of air dates into

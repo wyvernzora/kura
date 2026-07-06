@@ -1,0 +1,8 @@
+# show_episodes_none: episodes=NONE returns series metadata with an
+# empty episode spine, not a not-found error.
+
+kura_add stub:1001
+kura_show_ep $KURA_LAST_REF NONE
+stdout '"metadataRef":"stub:1001"'
+stdout '"seasons":\[\]'
+! stdout 'S01E0001'

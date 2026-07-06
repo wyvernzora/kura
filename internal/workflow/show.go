@@ -22,8 +22,9 @@ import (
 //
 // Episodes is the parsed selector; transports parse the raw string at
 // their decode boundary so malformed input rejects before any series
-// load. Status / Source / Resolution are sets; an empty slice means
-// "any."
+// load. Selector keywords (NONE, AIRING_SEASON) replace only the
+// episode axis and still compose with Status / Source / Resolution.
+// Status / Source / Resolution are sets; an empty slice means "any."
 type ShowInput struct {
 	Ref refs.Series
 	// MetadataRef + Preview drive the live-provider preview path: when
@@ -74,8 +75,10 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		preferredTitle = in.Ref.String()
 	}
 	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
-	selector := in.Episodes
-	if selector.Active {
+	rowOpts := rowBuildOptions(deps)
+	filter, noEpisodes := showEpisodeFilter(model, now, in.Episodes, in.Status, in.Source, in.Resolution, rowOpts)
+	selector := filter.selector
+	if selector.IsNormal() {
 		// Loud rejection when the season doesn't exist in the spine.
 		// Empty range overlap (start..end vs available episode numbers)
 		// stays quiet — handled by buildSeasons's filter dropping
@@ -95,13 +98,11 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 			}
 		}
 	}
-	filter := episodeFilter{
-		selector:    selector,
-		statuses:    statusSet(in.Status),
-		sources:     stringSet(in.Source),
-		resolutions: stringSet(in.Resolution),
+	row := indexfile.BuildRowFromModelWithOptions(model, now, rowOpts)
+	seasons := []response.SeasonShow{}
+	if !noEpisodes {
+		seasons = buildSeasons(seriesRoot, model, now, filter, false)
 	}
-	row := indexfile.BuildRowFromModelWithOptions(model, now, rowBuildOptions(deps))
 	out := response.Show{
 		MetadataRef:    model.Metadata,
 		Ref:            in.Ref,
@@ -111,7 +112,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		CanonicalTitle: model.CanonicalTitle.String(),
 		Status:         row.Status,
 		IsAiring:       row.IsAiring,
-		Seasons:        buildSeasons(seriesRoot, model, now, filter, false),
+		Seasons:        seasons,
 		StagedTrash:    buildStagedTrash(seriesRoot, model.StagedTrash),
 		StagedExtras:   buildStagedExtras(deps.InboxRoot, model.StagedExtras),
 		Artwork:        artworkShow(model.Artwork),
@@ -145,16 +146,16 @@ func showPreview(ctx context.Context, deps Deps, in ShowInput) (response.Show, e
 		now = deps.Now()
 	}
 	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
-	filter := episodeFilter{
-		selector:    in.Episodes,
-		statuses:    statusSet(in.Status),
-		sources:     stringSet(in.Source),
-		resolutions: stringSet(in.Resolution),
-	}
-	row := indexfile.BuildRowFromModelWithOptions(model, now, rowBuildOptions(deps))
+	rowOpts := rowBuildOptions(deps)
+	filter, noEpisodes := showEpisodeFilter(model, now, in.Episodes, in.Status, in.Source, in.Resolution, rowOpts)
+	row := indexfile.BuildRowFromModelWithOptions(model, now, rowOpts)
 	preferredTitle := model.PreferredTitle.String()
 	if preferredTitle == "" {
 		preferredTitle = ref.String()
+	}
+	seasons := []response.SeasonShow{}
+	if !noEpisodes {
+		seasons = buildSeasons(seriesRoot, model, now, filter, true)
 	}
 	return response.Show{
 		MetadataRef:    metadataRef,
@@ -164,7 +165,7 @@ func showPreview(ctx context.Context, deps Deps, in ShowInput) (response.Show, e
 		CanonicalTitle: model.CanonicalTitle.String(),
 		Status:         row.Status,
 		IsAiring:       row.IsAiring,
-		Seasons:        buildSeasons(seriesRoot, model, now, filter, true),
+		Seasons:        seasons,
 		Artwork:        artworkShow(model.Artwork),
 	}, nil
 }
@@ -243,14 +244,21 @@ func buildStagedExtras(inboxRoot string, items []domainseries.StagedExtraItem) [
 // selector, status set, source set, resolution set) at episode-grouping
 // time. Empty fields = no filter on that axis.
 type episodeFilter struct {
-	selector    refs.EpisodeSelector
-	statuses    map[response.Status]struct{}
-	sources     map[string]struct{}
-	resolutions map[string]struct{}
+	selector           refs.EpisodeSelector
+	seasonFilterActive bool
+	seasons            map[int]struct{}
+	statuses           map[response.Status]struct{}
+	sources            map[string]struct{}
+	resolutions        map[string]struct{}
 }
 
 func (f episodeFilter) match(ref refs.Episode, view response.EpisodeShow) bool {
-	if f.selector.Active && !f.selector.Matches(ref) {
+	if f.seasonFilterActive {
+		if _, ok := f.seasons[ref.Season()]; !ok {
+			return false
+		}
+	}
+	if f.selector.IsNormal() && !f.selector.Matches(ref) {
 		return false
 	}
 	if len(f.statuses) > 0 {
@@ -275,6 +283,32 @@ func (f episodeFilter) match(ref refs.Episode, view response.EpisodeShow) bool {
 		}
 	}
 	return true
+}
+
+func showEpisodeFilter(
+	model *domainseries.Series,
+	now time.Time,
+	selector refs.EpisodeSelector,
+	statuses []response.Status,
+	sources []string,
+	resolutions []string,
+	rowOpts indexfile.BuildOptions,
+) (episodeFilter, bool) {
+	filter := episodeFilter{
+		statuses:    statusSet(statuses),
+		sources:     stringSet(sources),
+		resolutions: stringSet(resolutions),
+	}
+	switch {
+	case selector.IsNone():
+		return filter, true
+	case selector.IsAiringSeason():
+		filter.seasonFilterActive = true
+		filter.seasons = indexfile.AiringSeasons(model, now, rowOpts)
+	case selector.IsNormal():
+		filter.selector = selector
+	}
+	return filter, false
 }
 
 func matchesCollapsedStatus(statuses map[response.Status]struct{}, status response.Status) bool {
@@ -338,22 +372,11 @@ func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, 
 		}
 		bySeason[ref.Season()] = append(bySeason[ref.Season()], view)
 	}
-	// Surface every season the filter would visit (selector.Active
-	// scopes to one season; otherwise surface every season present in
-	// the spine even if filtering left it empty so the caller sees
-	// "this season exists, filter trimmed it to zero").
-	if filter.selector.Active {
-		// Only the selected season; verified to exist by caller.
-		if _, ok := bySeason[filter.selector.Season]; !ok {
-			bySeason[filter.selector.Season] = nil
-		}
-	} else {
-		for s := range allSeasons {
-			if _, ok := bySeason[s]; !ok {
-				bySeason[s] = nil
-			}
-		}
-	}
+	// Surface every season the filter would visit. A concrete selector
+	// scopes to one season, AIRING_SEASON scopes to its computed season
+	// set, and default/ALL surfaces every season present in the spine
+	// even if later axes trimmed it to zero episodes.
+	surfaceFilteredSeasons(bySeason, allSeasons, filter)
 	numbers := make([]int, 0, len(bySeason))
 	for n := range bySeason {
 		numbers = append(numbers, n)
@@ -370,6 +393,28 @@ func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, 
 		})
 	}
 	return out
+}
+
+func surfaceFilteredSeasons(bySeason map[int][]response.EpisodeShow, allSeasons map[int]struct{}, filter episodeFilter) {
+	switch {
+	case filter.selector.IsNormal():
+		// Only the selected season; verified to exist by caller.
+		if _, ok := bySeason[filter.selector.Season]; !ok {
+			bySeason[filter.selector.Season] = nil
+		}
+	case filter.seasonFilterActive:
+		for s := range filter.seasons {
+			if _, ok := bySeason[s]; !ok {
+				bySeason[s] = nil
+			}
+		}
+	default:
+		for s := range allSeasons {
+			if _, ok := bySeason[s]; !ok {
+				bySeason[s] = nil
+			}
+		}
+	}
 }
 
 func summarizeSeason(eps []response.EpisodeShow) response.SeasonSummary {
