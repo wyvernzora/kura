@@ -1,4 +1,5 @@
 import type {
+	Icon,
 	ICredentialTestRequest,
 	ICredentialType,
 	INodeProperties,
@@ -8,6 +9,7 @@ export class KuraApi implements ICredentialType {
 	name = 'kuraApi';
 	displayName = 'Kura API';
 	documentationUrl = 'https://github.com/wyvernzora/kura';
+	icon: Icon = 'file:kura.svg';
 
 	properties: INodeProperties[] = [
 		{
