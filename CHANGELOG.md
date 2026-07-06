@@ -2,6 +2,14 @@
 
 Notable release changes for Kura.
 
+## v0.4.1 - 2026-07-06
+
+### Highlights
+
+- Added Kura logo assets and wired them into the README and n8n custom node
+  package.
+- Added richer n8n node metadata and icon copying for the Kura node.
+
 ## v0.4.0 - 2026-07-06
 
 ### Highlights
