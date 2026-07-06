@@ -2,6 +2,20 @@
 
 Notable release changes for Kura.
 
+## v0.4.0 - 2026-07-06
+
+### Highlights
+
+- Added media extended attributes for active and staged episode records, with
+  CLI, REST, MCP, n8n, storage, trash metadata, and e2e parity.
+- Added `ALL`, `NONE`, and `AIRING_SEASON` episode selectors for `kura show`
+  so agents can request all episodes, metadata-only responses, or the same
+  airing-season shorthand used by the library index.
+- Ensured n8n `kura show` simplified output includes extended attributes.
+- Delayed Renovate PR creation until release-age checks clear, while allowing
+  closed age-gated PRs to be recreated after the gate passes.
+- Kept Go, web, n8n, Docker, and GitHub Actions dependencies current.
+
 ## v0.3.0 - 2026-07-02
 
 ### Highlights

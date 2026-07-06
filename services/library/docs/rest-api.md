@@ -142,5 +142,5 @@ timeout. Per-job forensic logs are written to
 The binary's version (stamped at build time via `-ldflags`) is
 returned on `/api/v1/health` and on every response as the
 `X-Kura-Version` header. Build a versioned image with
-`docker build --build-arg VERSION=v0.3.0 ...`; without the arg the
+`docker build --build-arg VERSION=v0.4.0 ...`; without the arg the
 binary reports `dev`.
