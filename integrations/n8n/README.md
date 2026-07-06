@@ -21,5 +21,10 @@ episode/media state.
 corepack enable
 corepack pnpm install --frozen-lockfile
 corepack pnpm typecheck
-corepack pnpm build
+corepack pnpm build            # tsc -> dist/ + node icon
 ```
+
+All nodes and credentials share one icon:
+[`docs/assets/logo-n8n.svg`](../../docs/assets/logo-n8n.svg). The build copies it into
+each compiled node dir and credentials dir. The container image builds from the repo
+root so that asset is in scope.

@@ -17,8 +17,21 @@ export class Kura implements INodeType {
 		name: 'kura',
 		group: ['transform'],
 		version: 1,
+		icon: 'file:kura.svg',
 		subtitle: '={{$parameter["operation"] + " (" + $parameter["resource"] + ")"}}',
 		description: 'Read Kura library state for anime automation workflows',
+		documentationUrl: 'https://github.com/wyvernzora/kura/tree/main/integrations/n8n',
+		codex: {
+			categories: ['Data & Storage'],
+			resources: {
+				primaryDocumentation: [
+					{
+						url: 'https://github.com/wyvernzora/kura/tree/main/integrations/n8n',
+					},
+				],
+			},
+			alias: ['Anime library', 'Plex library', 'Media library'],
+		},
 		defaults: { name: 'Kura' },
 		inputs: ['main'],
 		outputs: ['main'],
