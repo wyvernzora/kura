@@ -16,7 +16,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"cloud.google.com/go/civil"
 	"github.com/wyvernzora/kura/internal/domain/media"
 	"github.com/wyvernzora/kura/internal/domain/refs"
 	"github.com/wyvernzora/kura/internal/provider"
@@ -44,11 +46,14 @@ type Provider struct {
 //     pending-episode semantics (e.g. count rollups, IsAiring).
 //   - stub:1003 "All Pending Show" — 1 season, 2 far-future-aired
 //     episodes. Used by all-pending status scenarios.
+//   - stub:1004 "Airing Show" — 1 season with dates relative to
+//     process time. Used by airing-window scenarios.
 func NewDefaultProvider() *Provider {
 	ep1, _ := refs.NewEpisode(1, 1)
 	ep2, _ := refs.NewEpisode(1, 2)
 	ep3, _ := refs.NewEpisode(1, 3)
 	ep4, _ := refs.NewEpisode(1, 4)
+	today := civil.DateOf(time.Now())
 	return &Provider{
 		seriesByID: map[string]provider.Series{
 			"1001": {
@@ -145,6 +150,39 @@ func NewDefaultProvider() *Provider {
 								Aired:          "2099-01-08",
 								PreferredTitle: textnorm.NFC("Future 2"),
 								CanonicalTitle: textnorm.NFC("Future 2"),
+							},
+						},
+					},
+				},
+			},
+			"1004": {
+				SeriesSummary: provider.SeriesSummary{
+					MetadataRef:    "stub:1004",
+					PreferredTitle: textnorm.NFC("Airing Show"),
+					CanonicalTitle: textnorm.NFC("Airing Show"),
+					Status:         provider.SeriesStatusContinuing,
+				},
+				Seasons: []provider.Season{
+					{
+						Number: 1,
+						Episodes: []provider.Episode{
+							{
+								Ref:            ep1,
+								Aired:          today.AddDays(-14).String(),
+								PreferredTitle: textnorm.NFC("Aired 1"),
+								CanonicalTitle: textnorm.NFC("Aired 1"),
+							},
+							{
+								Ref:            ep2,
+								Aired:          today.AddDays(-7).String(),
+								PreferredTitle: textnorm.NFC("Aired 2"),
+								CanonicalTitle: textnorm.NFC("Aired 2"),
+							},
+							{
+								Ref:            ep3,
+								Aired:          today.AddDays(7).String(),
+								PreferredTitle: textnorm.NFC("Pending 3"),
+								CanonicalTitle: textnorm.NFC("Pending 3"),
 							},
 						},
 					},

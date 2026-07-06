@@ -10,15 +10,15 @@ import (
 func TestParseEpisodeSelector_Forms(t *testing.T) {
 	cases := []struct {
 		in       string
-		want     refs.EpisodeSelector
 		wantStr  string
+		wantZero bool
 		matchYes []refs.Episode
 		matchNo  []refs.Episode
 	}{
 		{
-			in:      "",
-			want:    refs.EpisodeSelector{},
-			wantStr: "",
+			in:       "",
+			wantStr:  "",
+			wantZero: true,
 			matchYes: []refs.Episode{
 				mustEp(t, 1, 1),
 				mustEp(t, 99, 99),
@@ -26,7 +26,6 @@ func TestParseEpisodeSelector_Forms(t *testing.T) {
 		},
 		{
 			in:      "S01",
-			want:    refs.EpisodeSelector{Active: true, Season: 1},
 			wantStr: "S1",
 			matchYes: []refs.Episode{
 				mustEp(t, 1, 1),
@@ -39,7 +38,6 @@ func TestParseEpisodeSelector_Forms(t *testing.T) {
 		},
 		{
 			in:      "S0",
-			want:    refs.EpisodeSelector{Active: true, Season: 0},
 			wantStr: "S0",
 			matchYes: []refs.Episode{
 				mustEp(t, 0, 1),
@@ -50,7 +48,6 @@ func TestParseEpisodeSelector_Forms(t *testing.T) {
 		},
 		{
 			in:      "S01E03",
-			want:    refs.EpisodeSelector{Active: true, Season: 1, HasRange: true, From: 3, To: 3},
 			wantStr: "S1E3",
 			matchYes: []refs.Episode{
 				mustEp(t, 1, 3),
@@ -63,7 +60,6 @@ func TestParseEpisodeSelector_Forms(t *testing.T) {
 		},
 		{
 			in:      "S01E03-12",
-			want:    refs.EpisodeSelector{Active: true, Season: 1, HasRange: true, From: 3, To: 12},
 			wantStr: "S1E3-12",
 			matchYes: []refs.Episode{
 				mustEp(t, 1, 3),
@@ -76,6 +72,22 @@ func TestParseEpisodeSelector_Forms(t *testing.T) {
 				mustEp(t, 2, 7),
 			},
 		},
+		{
+			in:      "ALL",
+			wantStr: "ALL",
+			matchYes: []refs.Episode{
+				mustEp(t, 0, 1),
+				mustEp(t, 1, 1),
+			},
+		},
+		{
+			in:      "NONE",
+			wantStr: "NONE",
+			matchNo: []refs.Episode{
+				mustEp(t, 0, 1),
+				mustEp(t, 1, 1),
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -83,8 +95,8 @@ func TestParseEpisodeSelector_Forms(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseEpisodeSelector(%q): %v", tc.in, err)
 			}
-			if got != tc.want {
-				t.Errorf("got %+v, want %+v", got, tc.want)
+			if got.IsZero() != tc.wantZero {
+				t.Errorf("IsZero = %v, want %v", got.IsZero(), tc.wantZero)
 			}
 			if got.String() != tc.wantStr {
 				t.Errorf("String = %q, want %q", got.String(), tc.wantStr)
@@ -103,6 +115,25 @@ func TestParseEpisodeSelector_Forms(t *testing.T) {
 	}
 }
 
+func TestParseEpisodeSelector_AiringSeason(t *testing.T) {
+	got, err := refs.ParseEpisodeSelector("AIRING_SEASON")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	if !got.IsAiringSeason() || got.IsZero() {
+		t.Fatalf("got %+v, want explicit AIRING_SEASON selector", got)
+	}
+	if got.String() != "AIRING_SEASON" {
+		t.Fatalf("String = %q, want AIRING_SEASON", got.String())
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("Matches(AIRING_SEASON) did not panic")
+		}
+	}()
+	got.Matches(mustEp(t, 1, 1))
+}
+
 func TestParseEpisodeSelector_Errors(t *testing.T) {
 	cases := []string{
 		"S",
@@ -112,6 +143,7 @@ func TestParseEpisodeSelector_Errors(t *testing.T) {
 		"S1E0-5",      // start 0
 		"E1",          // missing season
 		"s01e03",      // lowercase
+		"none",        // keyword is exact-case
 		"S01E03-12-1", // extra range part
 	}
 	for _, in := range cases {

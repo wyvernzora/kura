@@ -19,7 +19,7 @@ import (
 
 type showInput struct {
 	Ref        string   `json:"ref" jsonschema:"Metadata ref to inspect, e.g. \"tvdb:370070\"."`
-	Episodes   string   `json:"episodes,omitempty" jsonschema:"Optional episode selector: S<N> | S<N>E<E> | S<N>E<A>-<B>. Specials = S0. Empty = whole series."`
+	Episodes   string   `json:"episodes,omitempty" jsonschema:"Optional episode selector: ALL | NONE | AIRING_SEASON | S<N> | S<N>E<E> | S<N>E<A>-<B>. Specials = S0. Empty = ALL."`
 	Status     []string `json:"status,omitempty" jsonschema:"Optional set of episode statuses to include (pending, missing, present, staged, staged_replacement). Empty = all statuses."`
 	Source     []string `json:"source,omitempty" jsonschema:"Optional set of active-media sources to include (BluRay, WebRip, etc.). Empty = all sources."`
 	Resolution []string `json:"resolution,omitempty" jsonschema:"Optional set of active-media resolutions to include (1080p, 720p, etc.). Empty = all resolutions."`
@@ -316,11 +316,11 @@ func compressDroppedRanges(dropped map[int][]int, seasons []mcpSeason) []string 
 		first, last := eps[0], eps[len(eps)-1]
 		// Whole-season drop → `S<N>`.
 		if len(eps) == totalEpisodesPerSeason[sn] {
-			sel := refs.EpisodeSelector{Active: true, Season: sn}
+			sel := refs.EpisodeSelector{Kind: refs.EpisodeSelectorNormal, Season: sn}
 			out = append(out, sel.String())
 			continue
 		}
-		sel := refs.EpisodeSelector{Active: true, Season: sn, HasRange: true, From: first, To: last}
+		sel := refs.EpisodeSelector{Kind: refs.EpisodeSelectorNormal, Season: sn, HasRange: true, From: first, To: last}
 		out = append(out, sel.String())
 	}
 	return out

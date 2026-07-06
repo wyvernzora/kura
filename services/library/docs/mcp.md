@@ -34,6 +34,11 @@ agent sees.
 | `kura_job_status` | `{jobId, includeResult?}` | Status + progress + result/error | sync |
 | `kura_inbox_list` | `{path?, recursive?, depth?, limit?, kind?, nameGlob?, includeHidden?}` | Structured inbox listing | sync |
 
+`kura_show.episodes` accepts `ALL`, `NONE`, `AIRING_SEASON`, `S<N>`,
+`S<N>E<E>`, or `S<N>E<A>-<B>`. Empty means `ALL`; `AIRING_SEASON`
+selects non-special season(s) inside the same airing/tail window used by
+`kura_list`'s `isAiring` flag and composes with the other filters.
+
 Async tools return a job handle; the agent polls `kura_job_status`.
 See [lifecycle.md §Async jobs](lifecycle.md#async-jobs).
 

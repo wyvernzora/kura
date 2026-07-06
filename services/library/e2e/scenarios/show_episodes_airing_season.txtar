@@ -1,0 +1,11 @@
+# show_episodes_airing_season: AIRING_SEASON returns the whole active
+# airing/tail season, including pending rows.
+
+kura_add stub:1004
+kura_show_ep $KURA_LAST_REF AIRING_SEASON
+stdout '"metadataRef":"stub:1004"'
+stdout '"number":1'
+stdout 'S01E0001'
+stdout 'S01E0002'
+stdout 'S01E0003'
+stdout '"status":"pending"'

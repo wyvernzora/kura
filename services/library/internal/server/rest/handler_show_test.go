@@ -1,10 +1,19 @@
 package rest
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/wyvernzora/kura/internal/coord"
+	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/internal/storage/seriesfile"
 )
 
 func TestHandleShow_NotFound(t *testing.T) {
@@ -30,6 +39,49 @@ func TestHandleShow_RejectsSeriesRefForm(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status: got %d want 400, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleShow_EpisodesNoneReturns200(t *testing.T) {
+	srv := newTestServer(t)
+	ref, err := refs.ParseSeries("Show")
+	if err != nil {
+		t.Fatalf("ParseSeries: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(srv.deps.Workflow.LibRoot, ref.String()), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	ep, err := refs.NewEpisode(1, 1)
+	if err != nil {
+		t.Fatalf("NewEpisode: %v", err)
+	}
+	model := &series.Series{
+		Ref:      ref,
+		Metadata: refs.Metadata("tvdb:1"),
+		Episodes: map[refs.Episode]series.Episode{ep: {}},
+	}
+	if err := seriesfile.SaveCAS(srv.deps.Workflow.LibRoot, model, coord.NewMutator("test")); err != nil {
+		t.Fatalf("SaveCAS %s: %v", paths.SeriesMetadata(srv.deps.Workflow.LibRoot, ref), err)
+	}
+	if err := srv.deps.Workflow.Index.SaveModel(context.Background(), model, coord.NewMutator("test")); err != nil {
+		t.Fatalf("SaveModel: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/series/tvdb:1?episodes=NONE", http.NoBody)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status: got %d want 200, body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Seasons []any `json:"seasons"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Seasons == nil || len(body.Seasons) != 0 {
+		t.Fatalf("seasons = %#v, want empty array", body.Seasons)
 	}
 }
 

@@ -85,6 +85,155 @@ func TestShow_UsesConfiguredAiringTail(t *testing.T) {
 	}
 }
 
+func TestShow_EpisodeSelectorNoneReturnsEmptySeasons(t *testing.T) {
+	root, ref := saveShowSelectorFixture(t)
+	selector, err := refs.ParseEpisodeSelector("NONE")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	out, err := Show(context.Background(), Deps{
+		LibRoot: root,
+		Now:     func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+	}, ShowInput{Ref: ref, Episodes: selector})
+	if err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+	if out.MetadataRef.String() != "tvdb:1" {
+		t.Fatalf("MetadataRef = %s, want tvdb:1", out.MetadataRef)
+	}
+	if len(out.Seasons) != 0 {
+		t.Fatalf("Seasons = %+v, want empty", out.Seasons)
+	}
+}
+
+func TestShow_EpisodeSelectorAiringSeason(t *testing.T) {
+	root, ref := saveShowSelectorFixture(t)
+	selector, err := refs.ParseEpisodeSelector("AIRING_SEASON")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	out, err := Show(context.Background(), Deps{
+		LibRoot: root,
+		Now:     func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+	}, ShowInput{Ref: ref, Episodes: selector})
+	if err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+	if len(out.Seasons) != 1 || out.Seasons[0].Number != 2 {
+		t.Fatalf("Seasons = %+v, want only S2", out.Seasons)
+	}
+	if len(out.Seasons[0].Episodes) != 2 {
+		t.Fatalf("S2 episodes = %d, want 2", len(out.Seasons[0].Episodes))
+	}
+}
+
+func TestShow_EpisodeSelectorAiringSeasonComposesWithStatus(t *testing.T) {
+	root, ref := saveShowSelectorFixture(t)
+	selector, err := refs.ParseEpisodeSelector("AIRING_SEASON")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	out, err := Show(context.Background(), Deps{
+		LibRoot: root,
+		Now:     func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+	}, ShowInput{Ref: ref, Episodes: selector, Status: []response.Status{response.StatusMissing}})
+	if err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+	if len(out.Seasons) != 1 || out.Seasons[0].Number != 2 {
+		t.Fatalf("Seasons = %+v, want only S2", out.Seasons)
+	}
+	eps := out.Seasons[0].Episodes
+	if len(eps) != 1 || eps[0].Episode.String() != "S02E0001" || eps[0].Status != response.StatusMissing {
+		t.Fatalf("episodes = %+v, want missing S02E0001", eps)
+	}
+}
+
+func TestShow_EpisodeSelectorAiringSeasonNoMatchReturnsEmptySeasons(t *testing.T) {
+	root, ref := saveShowSelectorFixture(t)
+	selector, err := refs.ParseEpisodeSelector("AIRING_SEASON")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	out, err := Show(context.Background(), Deps{
+		LibRoot: root,
+		Now:     func() time.Time { return time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC) },
+	}, ShowInput{Ref: ref, Episodes: selector})
+	if err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+	if len(out.Seasons) != 0 {
+		t.Fatalf("Seasons = %+v, want empty", out.Seasons)
+	}
+}
+
+func TestShow_EpisodeSelectorMissingExplicitSeasonStillErrors(t *testing.T) {
+	root, ref := saveShowSelectorFixture(t)
+	selector, err := refs.ParseEpisodeSelector("S99")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	_, err = Show(context.Background(), Deps{
+		LibRoot: root,
+		Now:     func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+	}, ShowInput{Ref: ref, Episodes: selector})
+	if _, ok := errors.AsType[*EpisodeSelectorSeasonMissingError](err); !ok {
+		t.Fatalf("err = %v, want EpisodeSelectorSeasonMissingError", err)
+	}
+}
+
+func saveShowSelectorFixture(t *testing.T) (string, refs.Series) {
+	t.Helper()
+	root := t.TempDir()
+	ref := mustShowSeries(t, "Selector_Show")
+	resolution := mustShowResolution(t, 1920, 1080)
+	rec := &media.Record{Path: filepath.Join(root, ref.String(), "Season 2", "Selector Show - S02E02.mkv"), Source: media.SourceWebRip, Resolution: resolution, Size: 1}
+	e101 := mustShowEpisode(t, 1, 1)
+	e201 := mustShowEpisode(t, 2, 1)
+	e202 := mustShowEpisode(t, 2, 2)
+	model := &domainseries.Series{
+		Ref:            ref,
+		Metadata:       refs.Metadata("tvdb:1"),
+		PreferredTitle: textnorm.NFC("Selector Show"),
+		Episodes: map[refs.Episode]domainseries.Episode{
+			e101: {AirDate: civil.Date{Year: 2020, Month: 1, Day: 1}, Active: rec},
+			e201: {AirDate: civil.Date{Year: 2026, Month: 4, Day: 27}},
+			e202: {AirDate: civil.Date{Year: 2026, Month: 5, Day: 7}, Active: rec},
+		},
+	}
+	if err := seriesfile.SaveCAS(root, model, coord.NewMutator("test")); err != nil {
+		t.Fatalf("SaveCAS: %v", err)
+	}
+	return root, ref
+}
+
+func mustShowSeries(t *testing.T, name string) refs.Series {
+	t.Helper()
+	ref, err := refs.ParseSeries(name)
+	if err != nil {
+		t.Fatalf("ParseSeries: %v", err)
+	}
+	return ref
+}
+
+func mustShowEpisode(t *testing.T, season, episode int) refs.Episode {
+	t.Helper()
+	ref, err := refs.NewEpisode(season, episode)
+	if err != nil {
+		t.Fatalf("NewEpisode: %v", err)
+	}
+	return ref
+}
+
+func mustShowResolution(t *testing.T, width, height int) media.Resolution {
+	t.Helper()
+	resolution, err := media.NewResolution(width, height)
+	if err != nil {
+		t.Fatalf("NewResolution: %v", err)
+	}
+	return resolution
+}
+
 func TestUpdateIndexRowPersistsModelSnapshot(t *testing.T) {
 	root := t.TempDir()
 	ref, err := refs.ParseSeries("Show")
@@ -211,12 +360,12 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 		},
 		{
 			name:   "selector S1",
-			filter: episodeFilter{selector: refs.EpisodeSelector{Active: true, Season: 1}},
+			filter: episodeFilter{selector: refs.EpisodeSelector{Kind: refs.EpisodeSelectorNormal, Season: 1}},
 			want:   []refs.Episode{r1, r2},
 		},
 		{
 			name:   "selector S1E1",
-			filter: episodeFilter{selector: refs.EpisodeSelector{Active: true, Season: 1, HasRange: true, From: 1, To: 1}},
+			filter: episodeFilter{selector: refs.EpisodeSelector{Kind: refs.EpisodeSelectorNormal, Season: 1, HasRange: true, From: 1, To: 1}},
 			want:   []refs.Episode{r1},
 		},
 		{
@@ -237,7 +386,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 		{
 			name: "compose S1 + present",
 			filter: episodeFilter{
-				selector: refs.EpisodeSelector{Active: true, Season: 1},
+				selector: refs.EpisodeSelector{Kind: refs.EpisodeSelectorNormal, Season: 1},
 				statuses: statusSet([]response.Status{response.StatusPresent}),
 			},
 			want: []refs.Episode{r1},

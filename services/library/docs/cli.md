@@ -87,6 +87,10 @@ combinations or transport failures).
 
 `kura show` includes media `attrs` on active/staged records when present.
 Human output renders them under the media file row; `--json` returns the map.
+`--episodes` accepts `ALL`, `NONE`, `AIRING_SEASON`, `S<N>`, `S<N>E<E>`, or
+`S<N>E<A>-<B>`. Empty means `ALL`. `AIRING_SEASON` uses the same airing/tail
+window as `list --airing` and still composes with status/source/resolution
+filters.
 
 ## Episode lifecycle
 

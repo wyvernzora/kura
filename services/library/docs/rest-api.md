@@ -103,6 +103,10 @@ SeriesRef in the request body as `dirname`.
 Episode stage entries accept optional `attrs`, a flat string map stored on
 the staged media record. `GET /api/v1/series/{ref}` returns `attrs` on active
 and staged media records when present; attrs are not queryable or indexed.
+`GET /api/v1/series/{ref}?episodes=...` accepts `ALL`, `NONE`,
+`AIRING_SEASON`, `S<N>`, `S<N>E<E>`, or `S<N>E<A>-<B>`. Empty means `ALL`.
+`AIRING_SEASON` uses the same airing/tail window as list `isAiring` and
+composes with `status`, `source`, and `resolution`.
 
 Handlers live under `internal/server/rest/handler_*.go`. The router
 and middleware chain (auth, CORS, version header, recover) are in

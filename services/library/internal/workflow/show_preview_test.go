@@ -26,6 +26,20 @@ func (previewSource) Search(context.Context, textnorm.NFCString, provider.Search
 func (previewSource) GetSeries(_ context.Context, id, _ string) (provider.Series, error) {
 	ep1, _ := refs.NewEpisode(1, 1)
 	ep2, _ := refs.NewEpisode(1, 2)
+	if id == "airing" {
+		return provider.Series{
+			SeriesSummary: provider.SeriesSummary{
+				MetadataRef:    mustMeta("tvdb:" + id),
+				PreferredTitle: textnorm.NFC("Preview Airing"),
+			},
+			Seasons: []provider.Season{
+				{Number: 1, Episodes: []provider.Episode{
+					{Ref: ep1, Aired: "2026-04-27"},
+					{Ref: ep2, Aired: "2026-05-07"},
+				}},
+			},
+		}, nil
+	}
 	return provider.Series{
 		SeriesSummary: provider.SeriesSummary{
 			MetadataRef:    mustMeta("tvdb:" + id),
@@ -85,5 +99,60 @@ func TestShowPreviewBuildsFromProviderAllMissing(t *testing.T) {
 	}
 	if total != 2 {
 		t.Fatalf("episodes = %d, want 2", total)
+	}
+}
+
+func TestShowPreview_EpisodeSelectorNone(t *testing.T) {
+	selector, err := refs.ParseEpisodeSelector("NONE")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	deps := workflow.Deps{
+		LibRoot: t.TempDir(),
+		Now:     func() time.Time { return time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC) },
+		Provider: workflow.NewProviderFactory(func() (provider.Source, error) {
+			return previewSource{}, nil
+		}),
+	}
+
+	show, err := workflow.Show(context.Background(), deps, workflow.ShowInput{
+		Preview:     true,
+		MetadataRef: mustMeta("tvdb:42"),
+		Episodes:    selector,
+	})
+	if err != nil {
+		t.Fatalf("Show preview: %v", err)
+	}
+	if len(show.Seasons) != 0 {
+		t.Fatalf("Seasons = %+v, want empty", show.Seasons)
+	}
+}
+
+func TestShowPreview_EpisodeSelectorAiringSeason(t *testing.T) {
+	selector, err := refs.ParseEpisodeSelector("AIRING_SEASON")
+	if err != nil {
+		t.Fatalf("ParseEpisodeSelector: %v", err)
+	}
+	deps := workflow.Deps{
+		LibRoot: t.TempDir(),
+		Now:     func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
+		Provider: workflow.NewProviderFactory(func() (provider.Source, error) {
+			return previewSource{}, nil
+		}),
+	}
+
+	show, err := workflow.Show(context.Background(), deps, workflow.ShowInput{
+		Preview:     true,
+		MetadataRef: mustMeta("tvdb:airing"),
+		Episodes:    selector,
+	})
+	if err != nil {
+		t.Fatalf("Show preview: %v", err)
+	}
+	if len(show.Seasons) != 1 || show.Seasons[0].Number != 1 {
+		t.Fatalf("Seasons = %+v, want S1", show.Seasons)
+	}
+	if len(show.Seasons[0].Episodes) != 2 {
+		t.Fatalf("episodes = %d, want 2", len(show.Seasons[0].Episodes))
 	}
 }

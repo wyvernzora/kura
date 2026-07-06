@@ -350,6 +350,107 @@ func TestBuildRowFromModel_AiringFlag_ActiveSecondCour(t *testing.T) {
 	}
 }
 
+func TestAiringSeasons(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	rec := &media.Record{Source: media.SourceWebRip, Resolution: mustResolution(t, 1920, 1080), Size: 1}
+	opts := indexfile.DefaultBuildOptions()
+
+	tests := []struct {
+		name     string
+		model    *series.Series
+		opts     indexfile.BuildOptions
+		expected map[int]struct{}
+	}{
+		{
+			name: "mid airing season selected",
+			model: &series.Series{Episodes: map[refs.Episode]series.Episode{
+				mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2026, Month: 4, Day: 27}, Active: rec},
+				mustEpisode(t, 1, 2): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 7}},
+			}},
+			opts:     opts,
+			expected: map[int]struct{}{1: {}},
+		},
+		{
+			name: "finale inside tail selected",
+			model: &series.Series{Episodes: map[refs.Episode]series.Episode{
+				mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2026, Month: 4, Day: 24}, Active: rec},
+				mustEpisode(t, 1, 2): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 1}},
+			}},
+			opts:     opts,
+			expected: map[int]struct{}{1: {}},
+		},
+		{
+			name: "finale beyond tail not selected",
+			model: &series.Series{Episodes: map[refs.Episode]series.Episode{
+				mustEpisode(t, 1, 1): {AirDate: civil.Date{Year: 2026, Month: 4, Day: 24}, Active: rec},
+				mustEpisode(t, 1, 2): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 1}},
+			}},
+			opts: func() indexfile.BuildOptions {
+				opts := indexfile.DefaultBuildOptions()
+				opts.AiringTailDays = 2
+				return opts
+			}(),
+			expected: map[int]struct{}{},
+		},
+		{
+			name: "split cour hiatus not selected",
+			model: func() *series.Series {
+				episodes := map[refs.Episode]series.Episode{}
+				cour1Start := civil.Date{Year: 2026, Month: 1, Day: 10}
+				for i := 1; i <= 12; i++ {
+					episodes[mustEpisode(t, 1, i)] = series.Episode{AirDate: cour1Start.AddDays(7 * (i - 1)), Active: rec}
+				}
+				episodes[mustEpisode(t, 1, 13)] = series.Episode{AirDate: civil.Date{Year: 2026, Month: 7, Day: 11}}
+				return &series.Series{Episodes: episodes}
+			}(),
+			opts:     opts,
+			expected: map[int]struct{}{},
+		},
+		{
+			name: "active second cour selected",
+			model: func() *series.Series {
+				episodes := map[refs.Episode]series.Episode{}
+				cour1Start := civil.Date{Year: 2026, Month: 1, Day: 10}
+				cour2Start := civil.Date{Year: 2026, Month: 4, Day: 25}
+				for i := 1; i <= 12; i++ {
+					episodes[mustEpisode(t, 1, i)] = series.Episode{AirDate: cour1Start.AddDays(7 * (i - 1)), Active: rec}
+				}
+				for i := 13; i <= 16; i++ {
+					episodes[mustEpisode(t, 1, i)] = series.Episode{AirDate: cour2Start.AddDays(7 * (i - 13))}
+				}
+				return &series.Series{Episodes: episodes}
+			}(),
+			opts:     opts,
+			expected: map[int]struct{}{1: {}},
+		},
+		{
+			name: "specials excluded",
+			model: &series.Series{Episodes: map[refs.Episode]series.Episode{
+				mustEpisode(t, 0, 1): {AirDate: civil.Date{Year: 2026, Month: 5, Day: 1}},
+			}},
+			opts:     opts,
+			expected: map[int]struct{}{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := indexfile.AiringSeasons(tt.model, now, tt.opts)
+			if len(got) != len(tt.expected) {
+				t.Fatalf("AiringSeasons = %v, want %v", got, tt.expected)
+			}
+			for season := range tt.expected {
+				if _, ok := got[season]; !ok {
+					t.Fatalf("AiringSeasons missing season %d: %v", season, got)
+				}
+			}
+			row := indexfile.BuildRowFromModelWithOptions(tt.model, now, tt.opts)
+			if row.IsAiring != (len(got) > 0) {
+				t.Fatalf("IsAiring = %v, want %v from AiringSeasons", row.IsAiring, len(got) > 0)
+			}
+		})
+	}
+}
+
 // Regression: pending (unaired) episodes must not contribute to
 // EpisodeCount or SeasonCount. Re:Zero-shaped scenario — a series
 // whose latest season has 5 aired-missing eps and 14 announced-but-

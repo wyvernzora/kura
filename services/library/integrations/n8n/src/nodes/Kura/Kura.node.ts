@@ -91,8 +91,8 @@ export class Kura implements INodeType {
 				name: 'episodes',
 				type: 'string',
 				default: '',
-				placeholder: 'S1 or S1E1-12',
-				description: 'Optional Kura episode selector',
+				placeholder: 'ALL, NONE, AIRING_SEASON, S1, or S1E1-12',
+				description: 'Optional Kura episode selector. Empty means ALL.',
 				displayOptions: { show: { resource: ['series'], operation: ['show'] } },
 			},
 			{
