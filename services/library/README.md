@@ -1,6 +1,20 @@
-# Kura
+<div align="center">
+    <br>
+    <br>
+    <img width="256" src="docs/assets/logo-full-256.png">
+    <h1 align="center">蔵</h1>
+</div>
 
-Kura is an anime-first personal library manager for Plex-style series folders.
+<p align="center">
+<b>kura - anime-first personal library manager</b>
+</p>
+
+<hr>
+<br>
+<br>
+
+**kura** (蔵 — "storehouse") is an anime-first personal library manager for
+Plex-style series folders.
 It tracks provider metadata, stages incoming media, previews filesystem moves,
 and keeps replaced files in per-series trash instead of deleting them.
 
