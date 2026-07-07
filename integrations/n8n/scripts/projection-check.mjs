@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { projectRow, projectShow } = require('../dist/nodes/Kura/Kura.node.js');
+const {
+	isNotFoundError,
+	projectRow,
+	projectShow,
+	shouldResolveNotFound,
+	singleResolveCandidate,
+} = require('../dist/nodes/Kura/Kura.node.js');
 
 assert.deepEqual(
 	projectRow({
@@ -198,6 +204,36 @@ assert.deepEqual(
 			},
 		],
 	},
+);
+
+assert.equal(isNotFoundError({ httpCode: '404' }), true);
+assert.equal(isNotFoundError({ statusCode: 404 }), true);
+assert.equal(isNotFoundError({ response: { statusCode: 404 } }), true);
+assert.equal(isNotFoundError({ httpCode: '500' }), false);
+assert.equal(isNotFoundError(new Error('not found')), false);
+assert.equal(shouldResolveNotFound(false, { httpCode: '404' }), true);
+assert.equal(shouldResolveNotFound(true, { httpCode: '404' }), false);
+assert.equal(shouldResolveNotFound(false, { httpCode: '500' }), false);
+assert.deepEqual(
+	singleResolveCandidate(
+		{
+			candidates: [
+				{
+					ref: 'tvdb:370070',
+					preferredTitle: 'Bookworm',
+				},
+			],
+		},
+		'tvdb:370070',
+	),
+	{
+		ref: 'tvdb:370070',
+		preferredTitle: 'Bookworm',
+	},
+);
+assert.throws(
+	() => singleResolveCandidate({ candidates: [] }, 'tvdb:404'),
+	/resolve returned 0 candidates for metadata ref tvdb:404/,
 );
 
 console.log('projection-check ok');

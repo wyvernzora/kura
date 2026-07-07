@@ -5,6 +5,7 @@ import type {
 	INodeExecutionData,
 	INodeType,
 	INodeTypeDescription,
+	JsonObject,
 } from 'n8n-workflow';
 
 const CRED = 'kuraApi';
@@ -34,7 +35,9 @@ export class Kura implements INodeType {
 		},
 		defaults: { name: 'Kura' },
 		inputs: ['main'],
-		outputs: ['main'],
+		outputs:
+			'={{$parameter["operation"] === "show" && $parameter["errorOnNotFound"] === false ? ["main", "main"] : ["main"]}}',
+		outputNames: ['tracked', 'untracked'],
 		credentials: [{ name: CRED, required: true }],
 		properties: [
 			{
@@ -149,6 +152,14 @@ export class Kura implements INodeType {
 				description: 'Optional comma-separated active-media resolutions',
 				displayOptions: { show: { resource: ['series'], operation: ['show'] } },
 			},
+			{
+				displayName: 'Error on Not Found',
+				name: 'errorOnNotFound',
+				type: 'boolean',
+				default: true,
+				description: 'Whether to throw an error when Kura has no series for the metadata ref',
+				displayOptions: { show: { resource: ['series'], operation: ['show'] } },
+			},
 		],
 	};
 
@@ -172,14 +183,26 @@ export class Kura implements INodeType {
 
 		const items = this.getInputData();
 		const out: INodeExecutionData[] = [];
+		const resolvedNotFound: INodeExecutionData[] = [];
+		let emitUntrackedOutput = false;
 		for (let i = 0; i < items.length; i++) {
+			const errorOnNotFound = shouldErrorOnNotFound(this, i);
+			if (!errorOnNotFound) emitUntrackedOutput = true;
+			const metadataRef = this.getNodeParameter('metadataRef', i) as string;
 			try {
-				const metadataRef = this.getNodeParameter('metadataRef', i) as string;
 				const includeSpecials = this.getNodeParameter('includeSpecials', i) as boolean;
 				const simplifyOutput = this.getNodeParameter('simplifyOutput', i) as boolean;
 				const result = await call('GET', showPath(metadataRef, queryFor(this, i)));
 				out.push({ json: projectShow(result, includeSpecials, simplifyOutput), pairedItem: { item: i } });
 			} catch (error) {
+				if (shouldResolveNotFound(errorOnNotFound, error)) {
+					const result = await call('POST', '/api/v1/resolve', { terms: [metadataRef] });
+					resolvedNotFound.push({
+						json: singleResolveCandidate(result, metadataRef),
+						pairedItem: { item: i },
+					});
+					continue;
+				}
 				if (this.continueOnFail()) {
 					out.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 					continue;
@@ -187,21 +210,47 @@ export class Kura implements INodeType {
 				throw error;
 			}
 		}
-		return [out];
+		return emitUntrackedOutput ? [out, resolvedNotFound] : [out];
 	}
 }
 
-type HTTPCall = (method: IHttpRequestMethods, path: string) => Promise<IDataObject>;
+function shouldErrorOnNotFound(ctx: IExecuteFunctions, itemIndex: number): boolean {
+	return ctx.getNodeParameter('errorOnNotFound', itemIndex, true) !== false;
+}
+
+export function shouldResolveNotFound(errorOnNotFound: boolean, error: unknown): boolean {
+	return !errorOnNotFound && isNotFoundError(error);
+}
+
+export function isNotFoundError(error: unknown): boolean {
+	if (!isObject(error)) return false;
+	return (
+		error.httpCode === '404' ||
+		error.statusCode === 404 ||
+		objectField(error, 'response')?.statusCode === 404
+	);
+}
+
+export function singleResolveCandidate(result: IDataObject, metadataRef: string): IDataObject {
+	const candidates = arrayField(result, 'candidates');
+	if (candidates.length !== 1) {
+		throw new Error(`resolve returned ${candidates.length} candidates for metadata ref ${metadataRef}`);
+	}
+	return candidates[0];
+}
+
+type HTTPCall = (method: IHttpRequestMethods, path: string, body?: JsonObject) => Promise<IDataObject>;
 
 function callFactory(ctx: IExecuteFunctions, credentials: IDataObject): HTTPCall {
 	const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');
 	const bearerToken = String(credentials.bearerToken ?? '');
 	const headers = bearerToken === '' ? undefined : { Authorization: `Bearer ${bearerToken}` };
-	return (method, path) =>
+	return (method, path, body) =>
 		ctx.helpers.httpRequest({
 			method,
 			url: `${baseUrl}${path}`,
 			headers,
+			body,
 			json: true,
 		}) as Promise<IDataObject>;
 }

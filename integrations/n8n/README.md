@@ -12,8 +12,10 @@ that installs into the directory n8n reads from `N8N_CUSTOM_EXTENSIONS`.
 **Series → List** intentionally skips `error` and `untracked` rows. They are
 not download-actionable.
 
-**Series → Show** reads one series by `metadataRef` and emits agent-focused
-episode/media state.
+**Series → Show** reads one series by `metadataRef`. With **Error on Not Found**
+enabled, the node has one output. With it disabled, the node has **tracked** and
+**untracked** outputs; missing tracked series are resolved by metadata ref and
+emitted as one candidate on **untracked**.
 
 ## Development
 
