@@ -4,6 +4,7 @@ import type { Candidate, ListRow } from '@/api/types';
 
 import {
   countMultiValuedField,
+  DEFAULT_SORT,
   displayStatus,
   filterByMultiValuedField,
   filterByStatus,
@@ -149,6 +150,12 @@ describe('sortRows', () => {
     const snapshot = [...input];
     sortRows(input, { key: 'title', direction: 'asc' });
     expect(input).toEqual(snapshot);
+  });
+});
+
+describe('DEFAULT_SORT', () => {
+  it('starts the library on latest aired first', () => {
+    expect(DEFAULT_SORT).toEqual({ key: 'lastAired', direction: 'desc' });
   });
 });
 
