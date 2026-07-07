@@ -27,7 +27,7 @@ FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS go-build
 WORKDIR /src
 
 # VERSION is stamped into the kura binary via -ldflags="-X main.Version=...".
-# Pass at build time: `docker build --build-arg VERSION=v0.4.2 ...`. Falls
+# Pass at build time: `docker build --build-arg VERSION=v0.4.3 ...`. Falls
 # back to "dev" so ad-hoc `docker build` without the arg still produces a
 # usable image; published images should always set this.
 ARG VERSION=dev

@@ -2,6 +2,13 @@
 
 Notable release changes for Kura.
 
+## v0.4.3 - 2026-07-07
+
+### Highlights
+
+- Fixed n8n `kura show` not-found routing for Axios 404 errors so disabled
+  `Error on Not Found` routes missing tracked refs to the untracked output.
+
 ## v0.4.2 - 2026-07-07
 
 ### Highlights
