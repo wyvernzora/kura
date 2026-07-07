@@ -70,8 +70,8 @@ enforces a specific UID/GID, rebuild the image with matching values:
 docker build \
   --build-arg KURA_UID=$(id -u) \
   --build-arg KURA_GID=$(id -g) \
-  --build-arg VERSION=v0.4.2 \
-  -t kura:v0.4.2 .
+  --build-arg VERSION=v0.4.3 \
+  -t kura:v0.4.3 .
 ```
 
 Three knobs flow through `--build-arg`:
@@ -168,9 +168,9 @@ kubelet chown the mount before the container starts.
 ### Building a versioned image
 
 ```sh
-docker build --build-arg VERSION=v0.4.2 -t kura:v0.4.2 .
+docker build --build-arg VERSION=v0.4.3 -t kura:v0.4.3 .
 ```
 
-Produces an image that reports `v0.4.2` on `/api/v1/health` and the
+Produces an image that reports `v0.4.3` on `/api/v1/health` and the
 `X-Kura-Version` response header. Without the arg the binary reports
 `dev`.
