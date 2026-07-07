@@ -226,7 +226,9 @@ export function isNotFoundError(error: unknown): boolean {
 	if (!isObject(error)) return false;
 	return (
 		error.httpCode === '404' ||
+		error.status === 404 ||
 		error.statusCode === 404 ||
+		objectField(error, 'response')?.status === 404 ||
 		objectField(error, 'response')?.statusCode === 404
 	);
 }
