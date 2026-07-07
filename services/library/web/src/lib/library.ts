@@ -14,9 +14,9 @@ export interface SortSpec {
 }
 
 /**
- * Default — title ascending, matching the server's tie-broken sort.
+ * Default — most recently aired first, with title as the tie-breaker.
  */
-export const DEFAULT_SORT: SortSpec = { key: 'title', direction: 'asc' };
+export const DEFAULT_SORT: SortSpec = { key: 'lastAired', direction: 'desc' };
 
 /**
  * Display order weight for the status sort key. Mirrors the
