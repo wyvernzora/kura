@@ -2,6 +2,16 @@
 
 Notable release changes for Kura.
 
+## v0.4.2 - 2026-07-07
+
+### Highlights
+
+- Added n8n `kura show` not-found routing with a visible `Error on Not Found`
+  toggle, dynamic tracked/untracked outputs, and resolved untracked candidates
+  for missing metadata refs.
+- Changed the web library's default sort to Last Aired with the latest aired
+  series first.
+
 ## v0.4.1 - 2026-07-06
 
 ### Highlights
