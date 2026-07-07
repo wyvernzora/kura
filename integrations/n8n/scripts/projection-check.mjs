@@ -207,7 +207,9 @@ assert.deepEqual(
 );
 
 assert.equal(isNotFoundError({ httpCode: '404' }), true);
+assert.equal(isNotFoundError({ status: 404 }), true);
 assert.equal(isNotFoundError({ statusCode: 404 }), true);
+assert.equal(isNotFoundError({ response: { status: 404 } }), true);
 assert.equal(isNotFoundError({ response: { statusCode: 404 } }), true);
 assert.equal(isNotFoundError({ httpCode: '500' }), false);
 assert.equal(isNotFoundError(new Error('not found')), false);
