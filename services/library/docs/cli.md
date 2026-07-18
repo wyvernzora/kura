@@ -27,8 +27,9 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 | `reconcile apply <selector> <token>` | CLI + MCP + REST | — | Validate the persisted plan against current state and execute it. Job-shaped. All-or-nothing in intent; failures leave the series in an inconsistent state for manual resolution. |
 | `reconcile recover <selector>` | CLI + REST (operator) | Operator judgment | Clear a stale `in_progress` claim left by a crashed `reconcile apply`. |
 | `resolve <selector>` | CLI + MCP + REST | — | Resolve selector terms to candidate `MetadataRef`s. Returns the candidate list without auto-picking. |
-| `list` | CLI + MCP + REST | — | Fast metadata inventory of the library. Untracked rows are surfaced on every surface. |
+| `list [--tag tag] [--tag '!tag']` | CLI + MCP + REST | — | Fast metadata inventory with optional conjunctive tag filtering. Tag expressions are normalized to lowercase. Repeat `--tag` for multiple expressions. Untracked rows are surfaced on every surface. |
 | `show <selector>` | CLI + MCP + REST | — | Return full observed state for a series. Agent-facing surfaces omit permanent trash listings. |
+| `tag update <metadata-ref> --tag tag [--tag '!tag']` | CLI + MCP + REST | — | Atomically add plain tags and remove `!tag` expressions. Tag expressions are normalized to lowercase. Repeat `--tag` for multiple changes. |
 | `trash list <selector> \| --all` | CLI + REST (operator) | Safety boundary | List trashed files. `--older-than DURATION` filters by age. |
 | `trash empty <selector> \| --all --confirm` | CLI + REST (operator; REST also requires confirm) | Safety boundary | Permanently delete trashed files. CLI requires `--confirm` only with `--all`. |
 | `trash restore <selector> <ULID>` | CLI + REST (operator) | Safety boundary | Move a trashed entry's files back to their recorded paths. Run `scan` afterward to re-adopt. |

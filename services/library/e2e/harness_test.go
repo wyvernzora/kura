@@ -92,6 +92,26 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 		},
 	)
 
+	// ── kura_tag_update ─────────────────────────────────────────────────
+	cmds["kura_tag_update"] = script.Command(
+		script.CmdUsage{Summary: "update series tags", Args: "<metadata_ref> <tag_expression...>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) < 2 {
+				return nil, fmt.Errorf("kura_tag_update: expected <metadata_ref> <tag_expression...>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			cliArgs := []string{"tag", "update", "--json"}
+			for _, tag := range args[1:] {
+				cliArgs = append(cliArgs, "--tag", tag)
+			}
+			cliArgs = append(cliArgs, ref)
+			out, errOut, runErr := b.run(s.Context(), cliArgs...)
+			return func(s *script.State) (string, string, error) {
+				return compactIfJSON(out), errOut, runErr
+			}, nil
+		},
+	)
+
 	// ── kura_show_ep ──────────────────────────────────────────────────────
 	cmds["kura_show_ep"] = script.Command(
 		script.CmdUsage{Summary: "show series filtered by episode selector", Args: "<series_ref> <selector>"},
@@ -651,6 +671,24 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 				return nil, fmt.Errorf("kura_list: %w", err)
 			}
 			return staticOutput(out), nil
+		},
+	)
+
+	// ── kura_list_tags ───────────────────────────────────────────────────
+	cmds["kura_list_tags"] = script.Command(
+		script.CmdUsage{Summary: "list series filtered by tags", Args: "<tag_expression...>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) == 0 {
+				return nil, fmt.Errorf("kura_list_tags: expected <tag_expression...>")
+			}
+			cliArgs := []string{"list", "--json"}
+			for _, tag := range args {
+				cliArgs = append(cliArgs, "--tag", tag)
+			}
+			out, errOut, runErr := b.run(s.Context(), cliArgs...)
+			return func(s *script.State) (string, string, error) {
+				return compactIfJSON(out), errOut, runErr
+			}, nil
 		},
 	)
 

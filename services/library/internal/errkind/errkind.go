@@ -28,6 +28,7 @@ const (
 	KindNotFound            = "not_found"
 	KindConflict            = "conflict"
 	KindInvalidEpisode      = "invalid_episode"
+	KindInvalidTag          = "invalid_tag"
 	KindNoStaged            = "no_staged"
 	KindPlanApplied         = "plan_applied"
 	KindStaleSnapshot       = "stale_snapshot"

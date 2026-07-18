@@ -7,7 +7,7 @@ that installs into the directory n8n reads from `N8N_CUSTOM_EXTENSIONS`.
 
 | Node | What it does |
 | --- | --- |
-| Kura | Resource **Series**, operations **List** and **Show**. |
+| Kura | Resource **Series**, operations **List**, **Show**, and **Update Tags**. |
 
 **Series → List** intentionally skips `error` and `untracked` rows. They are
 not download-actionable.
@@ -16,6 +16,20 @@ not download-actionable.
 enabled, the node has one output. With it disabled, the node has **tracked** and
 **untracked** outputs; missing tracked series are resolved by metadata ref and
 emitted as one candidate on **untracked**.
+
+**Series → List** accepts a space-delimited tag filter. Plain tags must be
+present and `!tag` expressions must be absent; all expressions compose with
+AND semantics.
+
+**Series → Update Tags** accepts space-delimited tag changes. Plain tags add
+to the series and `!tag` expressions remove from it. Kura normalizes tags to
+lowercase and treats them as opaque workflow markers. Current Takuhai
+conventions are:
+
+- `maintenance-requested`
+- `maintenance-disabled`
+- `priority`
+- `mute-notifications`
 
 ## Development
 

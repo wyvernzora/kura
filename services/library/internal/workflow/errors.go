@@ -15,6 +15,20 @@ var ErrLibraryRootNotFound = errors.New("workflow: library root not found")
 // exists but is not a directory.
 var ErrLibraryRootNotDirectory = errors.New("workflow: library root is not a directory")
 
+// InvalidTagError reports invalid tag syntax or contradictory expressions.
+type InvalidTagError struct {
+	Tag    string
+	Reason string
+	Limit  int
+}
+
+func (e *InvalidTagError) Error() string {
+	if e.Tag != "" {
+		return fmt.Sprintf("workflow: invalid tag %q: %s", e.Tag, e.Reason)
+	}
+	return "workflow: invalid tags: " + e.Reason
+}
+
 // NotFoundError signals a series is not present in the library. Surfaces
 // translate to a 404-style response (CLI exit code, MCP error code).
 type NotFoundError struct {

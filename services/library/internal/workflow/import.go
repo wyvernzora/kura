@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/wyvernzora/kura/internal/coord"
 	"github.com/wyvernzora/kura/internal/domain/refs"
@@ -84,7 +85,11 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 	if err := checkMetadataAvailable(deps, metadataRef, ref); err != nil {
 		return response.AddResult{}, err
 	}
+	var preservedTags []string
 	if in.Force {
+		if existing, loadErr := seriesfile.Load(deps.LibRoot, ref); loadErr == nil {
+			preservedTags = slices.Clone(existing.Tags)
+		}
 		if rmErr := os.Remove(metadataPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
 			return response.AddResult{}, rmErr
 		}
@@ -96,6 +101,9 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 		return response.AddResult{}, err
 	}
 	model.Ref = ref
+	if in.Force {
+		model.Tags = preservedTags
+	}
 	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
 		return response.AddResult{}, err

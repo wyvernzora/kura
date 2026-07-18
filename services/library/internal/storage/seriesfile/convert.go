@@ -47,6 +47,10 @@ func fromWire(in seriesV3) (*series.Series, error) {
 	if err != nil {
 		return nil, err
 	}
+	tags, err := series.NormalizeTags(in.Tags)
+	if err != nil {
+		return nil, fmt.Errorf("seriesfile: invalid tags: %w", err)
+	}
 	out := &series.Series{
 		Metadata:       metadataRef,
 		PreferredTitle: textnorm.NFC(in.PreferredTitle),
@@ -59,6 +63,7 @@ func fromWire(in seriesV3) (*series.Series, error) {
 		StagedTrash:    stagedTrash,
 		StagedExtras:   stagedExtras,
 		UserAliases:    userAliasesFromWire(in.UserAliases),
+		Tags:           tags,
 		SearchKey:      in.SearchKey,
 		LastMutated:    mutator,
 	}
@@ -194,7 +199,11 @@ func mutatorToWire(in coord.Mutator) mutatorV1 {
 	}
 }
 
-func toWire(in *series.Series) seriesV3 {
+func toWire(in *series.Series) (seriesV3, error) {
+	tags, err := series.NormalizeTags(in.Tags)
+	if err != nil {
+		return seriesV3{}, fmt.Errorf("seriesfile: invalid tags: %w", err)
+	}
 	dateAdded := in.DateAdded
 	if dateAdded.IsZero() {
 		dateAdded = in.LastScanned
@@ -212,6 +221,7 @@ func toWire(in *series.Series) seriesV3 {
 		StagedTrash:    stagedTrashListToWire(in.StagedTrash),
 		StagedExtras:   stagedExtraListToWire(in.StagedExtras),
 		UserAliases:    userAliasesToWire(in.UserAliases),
+		Tags:           tags,
 		SearchKey:      in.SearchKey,
 		LastMutated:    mutatorToWire(in.LastMutated),
 	}
@@ -219,7 +229,7 @@ func toWire(in *series.Series) seriesV3 {
 		wire := holderToWire(*in.InProgress)
 		out.InProgress = &wire
 	}
-	return out
+	return out, nil
 }
 
 // artworkToWire projects the domain artwork shape into the wire shell.

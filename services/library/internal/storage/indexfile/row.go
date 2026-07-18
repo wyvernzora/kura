@@ -55,6 +55,7 @@ type Row struct {
 
 	Resolutions []string `json:"resolutions,omitempty"`
 	Sources     []string `json:"sources,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
 
 	// Series-level artwork URLs lifted from the on-disk series.json.
 	// Both omitempty so older index rows (built before posters were

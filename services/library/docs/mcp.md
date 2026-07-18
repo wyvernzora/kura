@@ -13,7 +13,7 @@ journey, see [lifecycle.md](lifecycle.md).
 
 ## Tools
 
-13 tools registered in `internal/server/mcp/server.go`. Each tool has
+14 tools registered in `internal/server/mcp/server.go`. Each tool has
 a tool-specific markdown brief alongside its handler
 (`internal/server/mcp/tool_<name>.md`); those briefs are what the
 agent sees.
@@ -22,8 +22,9 @@ agent sees.
 |------|-------|--------|--------------|
 | `kura_aliases` | `{ref}` | Alias/title list | sync |
 | `kura_resolve` | `{terms: string[]}` | Candidate list | sync |
-| `kura_list` | `{statuses?, airing?, maxResults?, cursor?}` | Paginated series list | sync |
+| `kura_list` | `{statuses?, airing?, tags[]?, maxResults?, cursor?}` | Paginated series list | sync |
 | `kura_show` | `{ref, episodes?, status[], source[], resolution[]?}` | Series + episodes detail, including media attrs and staged trash/extras | sync |
+| `kura_update_tags` | `{ref, tags[]}` | `{metadataRef, tags[]}` | sync |
 | `kura_add` | `{ref, dirname?, ordering?}` | Add result | sync |
 | `kura_import` | `{ref, dirname, ordering?}` | Import result | sync |
 | `kura_stage` | `{ref, episodes[{..., attrs?}], trash[], extras[]}` | `{jobId}` | async |
@@ -33,6 +34,9 @@ agent sees.
 | `kura_reconcile_apply` | `{ref, token}` | Job handle | async |
 | `kura_job_status` | `{jobId, includeResult?}` | Status + progress + result/error | sync |
 | `kura_inbox_list` | `{path?, recursive?, depth?, limit?, kind?, nameGlob?, includeHidden?}` | Structured inbox listing | sync |
+
+Tag expressions accepted by `kura_list` and `kura_update_tags` are normalized
+to lowercase before validation and matching.
 
 `kura_show.episodes` accepts `ALL`, `NONE`, `AIRING_SEASON`, `S<N>`,
 `S<N>E<E>`, or `S<N>E<A>-<B>`. Empty means `ALL`; `AIRING_SEASON`
@@ -51,8 +55,8 @@ Specifically:
 - **Read tools are non-destructive.** `kura_resolve`, `kura_list`,
   `kura_show`, `kura_inbox_list`, `kura_job_status` cannot mutate
   state.
-- **Intent expression is metadata-only.** `kura_stage` and
-  `kura_reset` write or remove staged records; no files move.
+- **Intent expression is metadata-only.** `kura_stage`, `kura_reset`, and
+  `kura_update_tags` mutate series metadata; no files move.
 - **Reconcile displaces, never deletes.** `kura_reconcile_apply`
   moves displaced active files to `<series>/.kura/trash/<ulid>/`
   with self-describing `meta.json`; restoration is filesystem-only

@@ -20,7 +20,7 @@ export class Kura implements INodeType {
 		version: 1,
 		icon: 'file:kura.svg',
 		subtitle: '={{$parameter["operation"] + " (" + $parameter["resource"] + ")"}}',
-		description: 'Read Kura library state for anime automation workflows',
+		description: 'Read Kura library state and update series workflow tags',
 		documentationUrl: 'https://github.com/wyvernzora/kura/tree/main/integrations/n8n',
 		codex: {
 			categories: ['Data & Storage'],
@@ -57,6 +57,7 @@ export class Kura implements INodeType {
 				options: [
 					{ name: 'List', value: 'list', action: 'List actionable series' },
 					{ name: 'Show', value: 'show', action: 'Show series state' },
+					{ name: 'Update Tags', value: 'updateTags', action: 'Update tags on a series' },
 				],
 				default: 'list',
 			},
@@ -78,7 +79,7 @@ export class Kura implements INodeType {
 				type: 'boolean',
 				default: true,
 				description: 'Whether to return an agent-focused projection instead of the native Kura REST shape',
-				displayOptions: { show: { resource: ['series'] } },
+				displayOptions: { show: { resource: ['series'], operation: ['list', 'show'] } },
 			},
 			{
 				displayName: 'Airing',
@@ -94,13 +95,32 @@ export class Kura implements INodeType {
 				displayOptions: { show: { resource: ['series'], operation: ['list'] } },
 			},
 			{
+				displayName: 'Tags',
+				name: 'tags',
+				type: 'string',
+				default: '',
+				placeholder: 'priority !maintenance-disabled',
+				description: 'Space-delimited tag filter. Plain tags must be present; !tag expressions must be absent.',
+				displayOptions: { show: { resource: ['series'], operation: ['list'] } },
+			},
+			{
 				displayName: 'Metadata Ref',
 				name: 'metadataRef',
 				type: 'string',
 				default: '={{$json.metadataRef}}',
 				required: true,
 				description: 'Kura metadata ref, for example tvdb:370070',
-				displayOptions: { show: { resource: ['series'], operation: ['show'] } },
+				displayOptions: { show: { resource: ['series'], operation: ['show', 'updateTags'] } },
+			},
+			{
+				displayName: 'Tag Changes',
+				name: 'tagChanges',
+				type: 'string',
+				default: '',
+				required: true,
+				placeholder: 'maintenance-requested !maintenance-disabled',
+				description: 'Space-delimited changes. Plain tags add; !tag expressions remove.',
+				displayOptions: { show: { resource: ['series'], operation: ['updateTags'] } },
 			},
 			{
 				displayName: 'Episodes',
@@ -172,13 +192,39 @@ export class Kura implements INodeType {
 			const statuses = this.getNodeParameter('statuses', 0) as string[];
 			const airing = this.getNodeParameter('airing', 0) as string;
 			const simplifyOutput = this.getNodeParameter('simplifyOutput', 0) as boolean;
-			const rows = await listAll(call, statuses, airing);
+			const tags = this.getNodeParameter('tags', 0) as string;
+			const rows = await listAll(call, statuses, airing, tags);
 			return [
 				rows
 					.filter((row) => ACTIONABLE_STATUSES.has(stringField(row, 'status')))
 					.filter((row) => stringField(row, 'metadataRef') !== '')
 					.map((row) => ({ json: projectRow(row, simplifyOutput) })),
 			];
+		}
+
+		if (operation === 'updateTags') {
+			const items = this.getInputData();
+			const out: INodeExecutionData[] = [];
+			for (let i = 0; i < items.length; i++) {
+				const metadataRef = this.getNodeParameter('metadataRef', i) as string;
+				const tags = splitTagExpressions(this.getNodeParameter('tagChanges', i) as string);
+				try {
+					if (tags.length === 0) throw new Error('at least one tag expression is required');
+					const result = await call(
+						'PATCH',
+						`/api/v1/series/${encodeURIComponent(metadataRef)}/tags`,
+						{ tags },
+					);
+					out.push({ json: result, pairedItem: { item: i } });
+				} catch (error) {
+					if (this.continueOnFail()) {
+						out.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
+						continue;
+					}
+					throw error;
+				}
+			}
+			return [out];
 		}
 
 		const items = this.getInputData();
@@ -257,7 +303,7 @@ function callFactory(ctx: IExecuteFunctions, credentials: IDataObject): HTTPCall
 		}) as Promise<IDataObject>;
 }
 
-async function listAll(call: HTTPCall, statuses: string[], airing: string): Promise<IDataObject[]> {
+async function listAll(call: HTTPCall, statuses: string[], airing: string, tags: string): Promise<IDataObject[]> {
 	const rows: IDataObject[] = [];
 	let cursor = '';
 	do {
@@ -266,6 +312,7 @@ async function listAll(call: HTTPCall, statuses: string[], airing: string): Prom
 		for (const status of effectiveStatuses) query.append('status', status);
 		if (airing === 'airing') query.set('airing', 'true');
 		if (airing === 'notAiring') query.set('airing', 'false');
+		if (tags.trim() !== '') query.set('tags', tags);
 		query.set('limit', String(PAGE_LIMIT));
 		if (cursor !== '') query.set('cursor', cursor);
 
@@ -285,6 +332,7 @@ export function projectRow(row: IDataObject, simplifyOutput = true): IDataObject
 		status: row.status,
 		isAiring: Boolean(row.isAiring),
 		staged: Boolean(row.staged),
+		tags: stringArrayField(row, 'tags'),
 	});
 }
 
@@ -317,6 +365,10 @@ function csv(value: string): string[] {
 		.filter((part) => part !== '');
 }
 
+export function splitTagExpressions(value: string): string[] {
+	return value.trim() === '' ? [] : value.trim().split(/\s+/);
+}
+
 export function projectShow(
 	show: IDataObject,
 	includeSpecials = false,
@@ -330,6 +382,7 @@ export function projectShow(
 		canonicalTitle: show.canonicalTitle,
 		status: show.status,
 		isAiring: Boolean(show.isAiring),
+		tags: stringArrayField(show, 'tags'),
 	});
 	out.seasons = filteredSeasons(show, includeSpecials).map(projectSeason);
 	return out;
@@ -397,6 +450,11 @@ function arrayField(obj: IDataObject, key: string): IDataObject[] {
 function stringField(obj: IDataObject, key: string): string {
 	const value = obj[key];
 	return typeof value === 'string' ? value : '';
+}
+
+function stringArrayField(obj: IDataObject, key: string): string[] {
+	const value = obj[key];
+	return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
 function objectField(obj: IDataObject, key: string): IDataObject | undefined {

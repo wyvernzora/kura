@@ -14,6 +14,7 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 
 - `statuses` ([]string, optional) — filter by status. Allowed values: `complete`, `incomplete`, `error`, `untracked`. Empty or omitted returns all four.
 - `airing` (bool, optional) — when true, return only currently-airing series; when false, return only non-airing series. Omit for no airing filter.
+- `tags` ([]string, optional) — conjunctive tag filter. Expressions are normalized to lowercase; plain tags must be present and `!tag` expressions must be absent. Empty or omitted applies no tag filter.
 - `maxResults` (int, optional) — maximum rows per response. `0` or omitted uses the server default (100). Values above 1000 are clamped.
 - `cursor` (string, optional) — opaque pagination token from a previous response's `nextCursor`. Omit for the first page.
 <!-- /schema -->

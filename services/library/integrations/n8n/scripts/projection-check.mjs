@@ -8,6 +8,7 @@ const {
 	projectShow,
 	shouldResolveNotFound,
 	singleResolveCandidate,
+	splitTagExpressions,
 } = require('../dist/nodes/Kura/Kura.node.js');
 
 assert.deepEqual(
@@ -23,6 +24,7 @@ assert.deepEqual(
 		posterUrl: 'https://example.invalid/poster.jpg',
 		lastScanned: '2026-04-20T03:00:00Z',
 		searchKey: 'bookworm',
+		tags: ['priority'],
 	}),
 	{
 		metadataRef: 'tvdb:370070',
@@ -31,8 +33,15 @@ assert.deepEqual(
 		status: 'incomplete',
 		isAiring: true,
 		staged: false,
+		tags: ['priority'],
 	},
 );
+
+assert.deepEqual(splitTagExpressions(' priority   !maintenance-disabled '), [
+	'priority',
+	'!maintenance-disabled',
+]);
+assert.deepEqual(splitTagExpressions('  '), []);
 
 const fullRow = {
 	metadataRef: 'tvdb:370070',
@@ -55,6 +64,7 @@ assert.deepEqual(
 		canonicalTitle: 'Ascendance of a Bookworm',
 		status: 'incomplete',
 		isAiring: false,
+		tags: ['mute-notifications'],
 		artwork: { poster: { url: 'https://example.invalid/poster.jpg' } },
 		seasons: [
 			{
@@ -117,6 +127,7 @@ assert.deepEqual(
 		canonicalTitle: 'Ascendance of a Bookworm',
 		status: 'incomplete',
 		isAiring: false,
+		tags: ['mute-notifications'],
 		seasons: [
 			{
 				number: 1,

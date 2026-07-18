@@ -19,6 +19,7 @@ import (
 // ListInput parameters for the List workflow.
 //
 //   - Statuses: empty filters none; non-empty admits only those statuses.
+//   - Tags: plain expressions require presence; !tag requires absence.
 //   - MaxResults: 0 = no limit (CLI default); >0 caps the page size.
 //     Values above maxListPageSize are clamped.
 //   - Cursor: empty for first page; otherwise an opaque token returned
@@ -28,6 +29,7 @@ type ListInput struct {
 	// Airing is a tri-state filter on Row.IsAiring. nil = no filter,
 	// non-nil = admit only rows whose IsAiring matches.
 	Airing     *bool
+	Tags       []string
 	MaxResults int
 	Cursor     string
 	Now        time.Time
@@ -60,6 +62,11 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 
 	rows = applyStatusFilter(rows, in.Statuses)
 	rows = applyAiringFilter(rows, in.Airing)
+	tagFilter, err := parseTagExpressions(in.Tags, true)
+	if err != nil {
+		return response.ListResult{}, err
+	}
+	rows = applyTagFilter(rows, tagFilter)
 
 	pageSize, err := normalizePageSize(in.MaxResults)
 	if err != nil {
@@ -196,6 +203,7 @@ func rowToListRow(row indexfile.Row) response.ListRow {
 		MetadataRef:        row.Metadata,
 		Resolutions:        row.Resolutions,
 		Sources:            row.Sources,
+		Tags:               row.Tags,
 		PosterURL:          row.PosterURL,
 		PosterThumbnailURL: row.PosterThumbnailURL,
 		DateAdded:          row.DateAdded,

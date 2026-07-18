@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/wyvernzora/kura/internal/response"
 	"github.com/wyvernzora/kura/internal/workflow"
@@ -22,6 +23,8 @@ const (
 //	airing             — when "1"/"true"/"yes"/"on", admit only airing
 //	                     rows; when "0"/"false"/"no"/"off", admit only
 //	                     non-airing rows; absent means no filter.
+//	tags               — space-delimited conjunctive tag expressions;
+//	                     plain tags require presence, !tag requires absence.
 //	limit              — page cap (default 100, max 1000).
 //	cursor             — opaque pagination token from a prior response.
 //
@@ -56,10 +59,12 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	tags := parseTagQuery(q["tags"])
 
 	result, err := workflow.List(r.Context(), s.deps.Workflow, workflow.ListInput{
 		Statuses:   statuses,
 		Airing:     airing,
+		Tags:       tags,
 		MaxResults: maxResults,
 		Cursor:     q.Get("cursor"),
 	})
@@ -69,6 +74,14 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSONWithETag(w, r, http.StatusOK, result)
+}
+
+func parseTagQuery(values []string) []string {
+	var tags []string
+	for _, value := range values {
+		tags = append(tags, strings.Fields(value)...)
+	}
+	return tags
 }
 
 // parseOptionalBool returns nil for empty input, *true / *false for

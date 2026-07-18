@@ -59,6 +59,7 @@ metadata file for a series.
   "ordering": "default",
   "artwork": { ... },
   "userAliases": ["bocchi"],
+  "tags": ["maintenance-requested", "priority"],
   "searchKey": "bocchirock",
   "episodes": {
     "S01E0001": {
@@ -88,6 +89,9 @@ metadata file for a series.
   series-relative on disk and absolutized on load.
 - `stagedTrash` and `stagedExtras` carry pre-reconcile intent for
   trash and extras-folder placements outside per-episode slots.
+- `tags` is an optional sorted set of opaque user-managed workflow
+  markers. Values match `[a-z0-9][a-z0-9:_-]{0,63}`; input is normalized
+  to lowercase and Kura does not assign meaning to individual tags.
 - Reads: `seriesfile.Load(libRoot, ref)`. Writes: `SaveCAS(libRoot,
   series, mutator)` returns the new content hash.
 

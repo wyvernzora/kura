@@ -133,3 +133,5 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Treat Kura's library as a single-writer personal anime library on low-IOPS storage, often NFS-backed; do not add high-throughput, multi-writer, or cloud-object-store durability machinery unless a real Kura workflow requires it.
 - Thread deploy-time row-building policy from `cmd/kura` through workflow/index builders; do not read env vars directly from storage packages.
 - Kura does not guarantee forward compatibility for old binaries reading newer on-disk metadata; prefer a clear current-schema contract over version machinery whose only benefit is rollback ergonomics.
+- Use namespaced workflow-tag conventions in the UI and integration guidance: `priority:high`, `priority:low`, `maintenance:requested`, and `maintenance:disabled`.
+- Format commit subjects as `<scope>: <message>`; do not use unscoped subjects or Conventional Commits `type(scope):` syntax.

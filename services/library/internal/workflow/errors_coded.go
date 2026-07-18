@@ -12,6 +12,19 @@ import (
 
 // --- not-found family --------------------------------------------------
 
+func (e *InvalidTagError) Kind() string     { return errkind.KindInvalidTag }
+func (e *InvalidTagError) Category() string { return errkind.CategoryInvalidParams }
+func (e *InvalidTagError) Data() map[string]any {
+	out := map[string]any{"reason": e.Reason}
+	if e.Tag != "" {
+		out["tag"] = e.Tag
+	}
+	if e.Limit != 0 {
+		out["limit"] = e.Limit
+	}
+	return out
+}
+
 func (e *NotFoundError) Kind() string     { return errkind.KindNotFound }
 func (e *NotFoundError) Category() string { return errkind.CategoryInvalidParams }
 func (e *NotFoundError) Data() map[string]any {

@@ -200,6 +200,7 @@ export interface ListRow {
   metadataRef?: string;
   resolutions?: string[];
   sources?: string[];
+  tags?: string[];
   /**
    * Series-level poster artwork URLs lifted from series.json. Empty
    * strings when the metadata provider had no poster for the series
@@ -622,6 +623,7 @@ export interface Show {
   lastScanned?: string;
   preferredTitle: string;
   canonicalTitle?: string;
+  tags?: string[];
   status: ListStatus;
   /**
    * IsAiring mirrors ListRow.IsAiring — observed-airing flag
@@ -843,6 +845,24 @@ export const StatusStaged: Status = 'staged';
  * staged record; reconcile will replace the active one.
  */
 export const StatusStagedReplacement: Status = 'staged_replacement';
+
+//////////
+// source: tags.go
+
+/**
+ * TagUpdate is the request body shared by REST and transport clients.
+ * Plain expressions add a tag; expressions prefixed with ! remove it.
+ */
+export interface TagUpdate {
+  tags: string[];
+}
+/**
+ * SeriesTags is the resulting stored tag set after an update.
+ */
+export interface SeriesTags {
+  metadataRef: string;
+  tags: string[];
+}
 
 //////////
 // source: trash.go
