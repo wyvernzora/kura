@@ -45,6 +45,7 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("POST /api/v1/series", s.handleAdd)
 	apiMux.HandleFunc("POST /api/v1/series/import", s.handleImport)
 	apiMux.HandleFunc("DELETE /api/v1/series/{ref}", s.handleRemoveDispatch)
+	apiMux.HandleFunc("PATCH /api/v1/series/{ref}/tags", s.handleTagsUpdate)
 
 	// resolve
 	apiMux.HandleFunc("POST /api/v1/resolve", s.handleResolve)

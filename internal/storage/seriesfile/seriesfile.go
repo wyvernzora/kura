@@ -160,7 +160,10 @@ func saveCASUpdate(libRoot string, m *series.Series, mutator coord.Mutator, path
 
 func encodeForSeries(libRoot string, m *series.Series) ([]byte, error) {
 	seriesDir := paths.SeriesDir(libRoot, m.Ref)
-	wire := toWire(m)
+	wire, err := toWire(m)
+	if err != nil {
+		return nil, err
+	}
 	if err := relativizeActiveWire(&wire, seriesDir); err != nil {
 		return nil, err
 	}

@@ -74,8 +74,9 @@ SeriesRef in the request body as `dirname`.
 |--------|------|------|----------|---------|
 | GET    | `/api/v1/health` | — | `{ok, version, libraryRoot, uptimeMs, startedAt}` | none (auth-exempt) |
 | GET    | `/api/v1/library` | — | Library summary | ETag |
-| GET    | `/api/v1/series` | — | Paginated `ListResult` | ETag, query: `status`, `airing`, `cursor`, `limit` |
+| GET    | `/api/v1/series` | — | Paginated `ListResult` | ETag, query: `status`, `airing`, `tags`, `cursor`, `limit` |
 | GET    | `/api/v1/series/{ref}` | — | `Show` (series + episodes) | ETag, query: `episodes`, `status`, `source`, `resolution` |
+| PATCH  | `/api/v1/series/{ref}/tags` | `{tags[]}` | `{metadataRef, tags[]}` | — |
 | POST   | `/api/v1/series` | `{ref, dirname?, ordering?}` | Series spine | — |
 | POST   | `/api/v1/series/import` | `{ref, dirname, force?, ordering?}` | Series spine | — |
 | DELETE | `/api/v1/series/{ref}` | — | — | `X-Kura-Operator + X-Confirm` if `?purge=1`; no operator header for untrack-only removal |
@@ -107,6 +108,20 @@ and staged media records when present; attrs are not queryable or indexed.
 `AIRING_SEASON`, `S<N>`, `S<N>E<E>`, or `S<N>E<A>-<B>`. Empty means `ALL`.
 `AIRING_SEASON` uses the same airing/tail window as list `isAiring` and
 composes with `status`, `source`, and `resolution`.
+
+Series tags are opaque workflow markers matching
+`[a-z0-9][a-z0-9:_-]{0,63}`. Input is normalized to lowercase before
+validation. `PATCH .../tags` applies plain expressions as additions and
+`!tag` expressions as removals, atomically:
+
+```json
+{"tags":["priority","!maintenance-disabled"]}
+```
+
+`GET /api/v1/series?tags=priority%20!maintenance-disabled` applies a
+conjunctive filter: every plain tag must be present and every `!tag` must be
+absent. Multiple `tags` query parameters are concatenated. List and show
+responses expose the stored tag set when non-empty.
 
 Handlers live under `internal/server/rest/handler_*.go`. The router
 and middleware chain (auth, CORS, version header, recover) are in

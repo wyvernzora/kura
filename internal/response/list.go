@@ -59,6 +59,7 @@ type ListRow struct {
 	MetadataRef       refs.Metadata `json:"metadataRef,omitempty"`
 	Resolutions       []string      `json:"resolutions,omitempty"`
 	Sources           []string      `json:"sources,omitempty"`
+	Tags              []string      `json:"tags,omitempty"`
 	// Series-level poster artwork URLs lifted from series.json. Empty
 	// strings when the metadata provider had no poster for the series
 	// or the row predates poster surfacing — clients should fall back

@@ -23,6 +23,7 @@ type seriesV3 struct {
 	StagedTrash    []stagedTrashEntryV1 `json:"stagedTrash"`
 	StagedExtras   []stagedExtraEntryV1 `json:"stagedExtras"`
 	UserAliases    []string             `json:"userAliases,omitempty"`
+	Tags           []string             `json:"tags,omitempty"`
 	SearchKey      string               `json:"searchKey"`
 	InProgress     *holderV1            `json:"in_progress,omitempty"`
 	LastMutated    mutatorV1            `json:"last_mutated"`
@@ -147,6 +148,9 @@ func normalizeWire(s *seriesV3) {
 	}
 	if len(s.UserAliases) == 0 {
 		s.UserAliases = nil
+	}
+	if len(s.Tags) == 0 {
+		s.Tags = nil
 	}
 }
 

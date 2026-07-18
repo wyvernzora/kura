@@ -52,7 +52,7 @@ func (c *Client) Library(ctx context.Context) (LibraryResponse, error) {
 
 // ListSeries calls GET /api/v1/series. airing is nil for "no filter",
 // or a pointer for the airing-flag tri-state filter.
-func (c *Client) ListSeries(ctx context.Context, statuses []string, airing *bool, limit int, cursor string) (response.ListResult, error) {
+func (c *Client) ListSeries(ctx context.Context, statuses []string, airing *bool, tags []string, limit int, cursor string) (response.ListResult, error) {
 	q := url.Values{}
 	for _, s := range statuses {
 		q.Add("status", s)
@@ -64,6 +64,9 @@ func (c *Client) ListSeries(ctx context.Context, statuses []string, airing *bool
 			q.Set("airing", "false")
 		}
 	}
+	for _, tag := range tags {
+		q.Add("tags", tag)
+	}
 	if limit > 0 {
 		q.Set("limit", strconv.Itoa(limit))
 	}
@@ -72,6 +75,14 @@ func (c *Client) ListSeries(ctx context.Context, statuses []string, airing *bool
 	}
 	var out response.ListResult
 	err := c.Do(ctx, http.MethodGet, "/api/v1/series", q, nil, &out, false)
+	return out, err
+}
+
+// UpdateTags calls PATCH /api/v1/series/{ref}/tags. Plain expressions add
+// tags and expressions prefixed with ! remove tags.
+func (c *Client) UpdateTags(ctx context.Context, ref string, tags []string) (response.SeriesTags, error) {
+	var out response.SeriesTags
+	err := c.Do(ctx, http.MethodPatch, "/api/v1/series/"+url.PathEscape(ref)+"/tags", nil, response.TagUpdate{Tags: tags}, &out, false)
 	return out, err
 }
 

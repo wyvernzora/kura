@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"sort"
 	"time"
 
@@ -114,6 +115,7 @@ func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts Buil
 		row.LastAired = summary.lastAired.String()
 	}
 	row.Resolutions, row.Sources = collectActiveQuality(model)
+	row.Tags = slices.Clone(model.Tags)
 	if !model.Artwork.Poster.IsZero() {
 		row.PosterURL = model.Artwork.Poster.URL
 		row.PosterThumbnailURL = model.Artwork.Poster.ThumbnailURL

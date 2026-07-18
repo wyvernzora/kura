@@ -69,6 +69,9 @@ type Series struct {
 	// rescan-time TVDB aliases + translated titles land separately
 	// (transient, folded straight into SearchKey and discarded).
 	UserAliases []textnorm.NFCString
+	// Tags are opaque user-managed workflow markers. Kura validates and
+	// stores their syntax but assigns no meaning to individual values.
+	Tags []string
 	// SearchKey is the persisted output of `internal/searchkey.Compute`.
 	// The only search-related field we persist — provider aliases +
 	// translated titles flow in transiently per scan / add and never

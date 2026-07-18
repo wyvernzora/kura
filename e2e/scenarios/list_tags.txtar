@@ -1,0 +1,23 @@
+# list_tags: repeated --tag filters compose conjunctively.
+# Validates positive presence and negative absence through CLI -> REST -> index.
+
+kura_add stub:1001
+kura_add stub:1003
+
+kura_tag_update stub:1001 Maintenance-Requested PRIORITY
+kura_tag_update stub:1003 Mute-Notifications Priority
+
+# Both repeated filters must match: priority present, mute absent.
+kura_list_tags PRIORITY '!Mute-Notifications'
+stdout '"title":"Stub Show"'
+! stdout '"title":"All Pending Show"'
+
+# A single positive filter admits both tagged series.
+kura_list_tags priority
+stdout '"title":"Stub Show"'
+stdout '"title":"All Pending Show"'
+
+# A negative-only filter excludes both priority series.
+kura_list_tags '!priority'
+! stdout '"title":"Stub Show"'
+! stdout '"title":"All Pending Show"'

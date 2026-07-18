@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"sort"
 	"time"
 
@@ -110,6 +111,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		LastScanned:    formatOptionalTime(model.LastScanned),
 		PreferredTitle: preferredTitle,
 		CanonicalTitle: model.CanonicalTitle.String(),
+		Tags:           slices.Clone(model.Tags),
 		Status:         row.Status,
 		IsAiring:       row.IsAiring,
 		Seasons:        seasons,

@@ -67,6 +67,7 @@ func entryForListRow(t *testing.T, libRoot string, row indexfile.Row) indexfile.
 		Ref:            row.Series,
 		Metadata:       metadata,
 		PreferredTitle: textnorm.NFC(row.Title),
+		Tags:           row.Tags,
 		Episodes: map[refs.Episode]series.Episode{
 			ep: {Active: &media.Record{Path: filepath.Join(libRoot, row.Series.String(), "Season 1", "episode.mkv"), Size: 1}},
 		},
@@ -81,6 +82,39 @@ func makeRow(t *testing.T, title string, status response.ListStatus) indexfile.R
 		Series: ref,
 		Title:  title,
 		Status: status,
+	}
+}
+
+func TestList_FiltersTagsConjunctively(t *testing.T) {
+	priority := makeRow(t, "Priority", response.ListStatusComplete)
+	priority.Tags = []string{"priority"}
+	muted := makeRow(t, "Muted", response.ListStatusComplete)
+	muted.Tags = []string{"mute-notifications", "priority"}
+	plain := makeRow(t, "Plain", response.ListStatusComplete)
+	deps := listFixture(t, priority, muted, plain)
+
+	result, err := workflow.List(context.Background(), deps, workflow.ListInput{
+		Tags: []string{"Priority", "!MUTE-NOTIFICATIONS"},
+	})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(result.Rows) != 1 || result.Rows[0].Title != "Priority" {
+		t.Fatalf("rows = %+v, want only Priority", result.Rows)
+	}
+}
+
+func TestList_RejectsConflictingTagExpressions(t *testing.T) {
+	deps := listFixture(t)
+	_, err := workflow.List(context.Background(), deps, workflow.ListInput{
+		Tags: []string{"priority", "!priority"},
+	})
+	if err == nil {
+		t.Fatal("List error = nil, want invalid tag")
+	}
+	var invalid *workflow.InvalidTagError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("List error = %T %v, want InvalidTagError", err, err)
 	}
 }
 

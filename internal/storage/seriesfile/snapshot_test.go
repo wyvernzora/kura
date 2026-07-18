@@ -27,6 +27,7 @@ func TestSnapshotEncodeDecodeRoundTrip(t *testing.T) {
 	now := time.Date(2026, 5, 4, 12, 0, 0, 0, time.UTC)
 	model.CanonicalTitle = textnormFor(t, "Honzuki no Gekokujou")
 	model.UserAliases = []textnorm.NFCString{textnormFor(t, "honzuki"), textnormFor(t, "bookworm")}
+	model.Tags = []string{"Priority", "maintenance-requested", "PRIORITY"}
 	model.InProgress = &coord.Holder{Op: "reconcile_apply", Token: "tok", PID: 44, Host: "host", Started: now}
 	model.LastMutated = coord.Mutator{Op: "scan", PID: 45, Host: "host", At: now}
 	model.StagedTrash = []series.StagedTrashItem{
@@ -103,6 +104,9 @@ func TestSnapshotEncodeDecodeRoundTrip(t *testing.T) {
 	}
 	if len(decoded.UserAliases) != 2 || decoded.UserAliases[0].String() != "honzuki" {
 		t.Fatalf("UserAliases = %+v", decoded.UserAliases)
+	}
+	if len(decoded.Tags) != 2 || decoded.Tags[0] != "maintenance-requested" || decoded.Tags[1] != "priority" {
+		t.Fatalf("Tags = %+v", decoded.Tags)
 	}
 	if decoded.InProgress == nil || decoded.InProgress.Op != "reconcile_apply" {
 		t.Fatalf("InProgress = %+v", decoded.InProgress)

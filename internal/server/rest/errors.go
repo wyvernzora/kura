@@ -102,6 +102,7 @@ func statusForKind(kind, category string) int {
 		errkind.KindStaleSnapshot:
 		return http.StatusConflict
 	case errkind.KindInvalidEpisode,
+		errkind.KindInvalidTag,
 		errkind.KindNoStaged,
 		errkind.KindUnsupportedProvider,
 		errkind.KindInvalidCursor,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/wyvernzora/kura/internal/cli/stdio"
@@ -86,20 +87,22 @@ func requireAliases(aliases []string) error {
 // printAliases renders the alias list as a single-column human read
 // or as JSON. The human form intentionally stays minimal so it pipes
 // cleanly into shell loops.
-func printAliases(out interface {
-	Write(p []byte) (int, error)
-}, list response.UserAliasList, asJSON bool) error {
+func printAliases(out io.Writer, list response.UserAliasList, asJSON bool) error {
+	return printStringList(out, list, list.Aliases, "(no user aliases)", asJSON)
+}
+
+func printStringList(out io.Writer, jsonPayload any, items []string, emptyMsg string, asJSON bool) error {
 	if asJSON {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
-		return enc.Encode(list)
+		return enc.Encode(jsonPayload)
 	}
-	if len(list.Aliases) == 0 {
-		_, err := fmt.Fprintln(out, "(no user aliases)")
+	if len(items) == 0 {
+		_, err := fmt.Fprintln(out, emptyMsg)
 		return err
 	}
-	for _, alias := range list.Aliases {
-		if _, err := fmt.Fprintln(out, alias); err != nil {
+	for _, item := range items {
+		if _, err := fmt.Fprintln(out, item); err != nil {
 			return err
 		}
 	}

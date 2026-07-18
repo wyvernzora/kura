@@ -19,6 +19,7 @@ type Show struct {
 	LastScanned    string        `json:"lastScanned,omitempty"`
 	PreferredTitle string        `json:"preferredTitle"`
 	CanonicalTitle string        `json:"canonicalTitle,omitempty"`
+	Tags           []string      `json:"tags,omitempty"`
 	Status         ListStatus    `json:"status"`
 	// IsAiring mirrors ListRow.IsAiring — observed-airing flag
 	// independent of Status.
