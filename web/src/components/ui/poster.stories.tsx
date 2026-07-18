@@ -48,6 +48,24 @@ export const Incomplete: Story = {
   },
 };
 
+export const HighPriority: Story = {
+  args: {
+    tags: ['priority:high'],
+  },
+};
+
+export const LowPriority: Story = {
+  args: {
+    tags: ['priority:low'],
+  },
+};
+
+export const DisabledPriority: Story = {
+  args: {
+    tags: ['maintenance:disabled'],
+  },
+};
+
 export const AiringIncomplete: Story = {
   args: {
     title: '怪獣8号',

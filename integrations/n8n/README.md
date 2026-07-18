@@ -26,10 +26,10 @@ to the series and `!tag` expressions remove from it. Kura normalizes tags to
 lowercase and treats them as opaque workflow markers. Current Takuhai
 conventions are:
 
-- `maintenance-requested`
-- `maintenance-disabled`
-- `priority`
-- `mute-notifications`
+- `maintenance:requested`
+- `maintenance:disabled`
+- `priority:high`
+- `priority:low`
 
 ## Development
 

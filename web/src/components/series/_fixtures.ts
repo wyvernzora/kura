@@ -143,6 +143,7 @@ export const FIXTURE_SHOW_AIRING: Show = {
   status: 'complete',
   isAiring: true,
   lastScanned: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+  tags: ['priority:high'],
   artwork: {
     poster: {
       url: 'https://artworks.thetvdb.com/banners/v4/series/424536/posters/65b1a59f6b5d2.jpg',

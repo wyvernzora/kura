@@ -14,6 +14,7 @@ function row(opts: {
   episodesAvailable?: number;
   episodeCount: number;
   posterUrl?: string;
+  tags?: string[];
 }): ListRow {
   return {
     metadataRef: opts.metadataRef,
@@ -25,6 +26,7 @@ function row(opts: {
     episodesAvailable: opts.episodesAvailable ?? opts.episodeCount,
     episodeCount: opts.episodeCount,
     posterUrl: opts.posterUrl,
+    tags: opts.tags,
   };
 }
 
@@ -36,12 +38,14 @@ export const FIXTURE_LIST_ROWS: ListRow[] = [
     isAiring: true,
     episodesAvailable: 18,
     episodeCount: 28,
+    tags: ['priority:high'],
   }),
   row({
     metadataRef: 'tvdb:81189',
     title: 'Cowboy Bebop',
     status: 'complete',
     episodeCount: 26,
+    tags: ['maintenance:disabled'],
   }),
   row({
     metadataRef: 'tvdb:79474',

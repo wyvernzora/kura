@@ -42,6 +42,21 @@ if (typeof window !== 'undefined') {
       const url = urlOf(input);
       const method = (init?.method ?? 'GET').toUpperCase();
 
+      // PATCH /api/v1/series/{ref}/tags → echo the additive expressions
+      // back as the stored tag set so the settings modal's mutation
+      // succeeds instead of 404ing when a story is clicked.
+      if (method === 'PATCH' && /\/api\/v1\/series\/.+\/tags$/.test(url)) {
+        const ref = decodeURIComponent(url.split('/').slice(-2)[0] ?? '');
+        let tags: string[] = [];
+        try {
+          const body = JSON.parse(String(init?.body ?? '{}')) as { tags?: string[] };
+          tags = (body.tags ?? []).filter((t) => !t.startsWith('!'));
+        } catch {
+          // keep empty tag set on unparsable body
+        }
+        return jsonResponse({ metadataRef: ref, tags });
+      }
+
       // POST /api/v1/series/{ref}/scan → return a job handle ack.
       if (method === 'POST' && /\/api\/v1\/series\/.+\/scan$/.test(url)) {
         const jobId = `sb-mock-${Math.random().toString(36).slice(2, 10)}`;

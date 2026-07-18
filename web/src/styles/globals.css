@@ -48,6 +48,14 @@
   --color-status-error: #c5483a;
   --color-status-error-fg: #fafaf7;
 
+  /* Priority palette — read-only poster badges for non-default priority. */
+  --color-priority-high: #e8b53a;
+  --color-priority-high-fg: #1a1a1a;
+  --color-priority-low: #5b7a9a;
+  --color-priority-low-fg: #fafaf7;
+  --color-priority-disabled: #403f3a;
+  --color-priority-disabled-fg: #e5e4dd;
+
   /* Levitation — Stripe / Notion stacked soft shadows. card / pop are
    * for chrome; poster is heavier (3-stop) so the art floats higher
    * than its surrounding chrome. */

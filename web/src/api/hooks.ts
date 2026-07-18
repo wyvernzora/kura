@@ -12,6 +12,7 @@ import type {
   ResolveRequest,
   Show,
 } from './types';
+import type { SeriesTags, TagUpdate } from './types.gen';
 
 const PAGE_SIZE = 100;
 
@@ -133,6 +134,18 @@ export function useAddSeries() {
       api<AddResult>('/api/v1/series', {
         method: 'POST',
         body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['series'] }),
+  });
+}
+
+export function useUpdateTags(ref: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tags: string[]) =>
+      api<SeriesTags>(`/api/v1/series/${encodeURIComponent(ref)}/tags`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tags } satisfies TagUpdate),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['series'] }),
   });
