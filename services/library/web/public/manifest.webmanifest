@@ -1,0 +1,7 @@
+{
+  "name": "kura",
+  "short_name": "kura",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone"
+}
