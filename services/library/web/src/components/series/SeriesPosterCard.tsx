@@ -5,7 +5,11 @@ import type { Show } from '@/api/types';
 import { AddToLibraryButton } from '@/components/series/AddToLibraryButton';
 import { ScanButton } from '@/components/series/ScanButton';
 import { ScanDetailsModal, type ScanDetailsView } from '@/components/series/ScanDetailsModal';
+import { SeriesSettingsModal } from '@/components/series/SeriesSettingsModal';
 import { SeriesStatusCornerPill } from '@/components/series/SeriesStatusCornerPill';
+import { IconBtn } from '@/components/ui/icon-btn';
+import { MaterialIcon } from '@/components/ui/material-icon';
+import { PosterPriorityBadge } from '@/components/ui/poster-priority-badge';
 import { cn } from '@/lib/cn';
 import { primaryStatus, withAiring } from '@/lib/status';
 import { usePosterTilt } from '@/lib/usePosterTilt';
@@ -39,6 +43,7 @@ export function SeriesPosterCard({ show, preview = false, className }: SeriesPos
   const title = show.preferredTitle || show.canonicalTitle || show.ref;
   const posterUrl = show.artwork?.poster?.thumbnailUrl ?? show.artwork?.poster?.url;
   const [modalOpen, setModalOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [view, setView] = useState<ScanDetailsView>(undefined);
 
   function handleShowDetails(scan: ScanJobState) {
@@ -73,7 +78,7 @@ export function SeriesPosterCard({ show, preview = false, className }: SeriesPos
         className,
       )}
     >
-      <PosterFrame title={title} posterUrl={posterUrl} status={status} />
+      <PosterFrame title={title} posterUrl={posterUrl} status={status} tags={show.tags} />
       <div className="font-mono text-[10px] tracking-[0.4px] text-muted">{show.metadataRef}</div>
       <h1 className="m-0 font-sans text-[26px] leading-tight font-semibold text-ink tracking-[-0.4px] [word-break:break-word]">
         {title}
@@ -82,12 +87,29 @@ export function SeriesPosterCard({ show, preview = false, className }: SeriesPos
         <AddToLibraryButton metadataRef={show.metadataRef} />
       ) : (
         <>
-          <ScanButton
-            metadataRef={show.metadataRef}
-            lastScanned={show.lastScanned}
-            onShowDetails={handleShowDetails}
-          />
+          <div className="flex w-full items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <ScanButton
+                metadataRef={show.metadataRef}
+                lastScanned={show.lastScanned}
+                onShowDetails={handleShowDetails}
+              />
+            </div>
+            <IconBtn
+              aria-label="Series settings"
+              onClick={() => setSettingsOpen(true)}
+              className="kura-focusable-kb h-[38px] w-[38px] shrink-0 rounded-[6px] shadow-[var(--shadow-card)] hover:shadow-[var(--shadow-card-hover)]"
+            >
+              <MaterialIcon name="more_vert" size={18} className="text-muted" />
+            </IconBtn>
+          </div>
           <ScanDetailsModal open={modalOpen} onOpenChange={setModalOpen} view={view} />
+          <SeriesSettingsModal
+            metadataRef={show.metadataRef}
+            tags={show.tags ?? []}
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+          />
         </>
       )}
     </aside>
@@ -98,9 +120,10 @@ interface PosterFrameProps {
   title: string;
   posterUrl: string | undefined;
   status: ReturnType<typeof primaryStatus>;
+  tags?: string[];
 }
 
-export function PosterFrame({ title, posterUrl, status }: PosterFrameProps) {
+export function PosterFrame({ title, posterUrl, status, tags }: PosterFrameProps) {
   const [imgError, setImgError] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const showImage = !!posterUrl && !imgError;
@@ -138,7 +161,10 @@ export function PosterFrame({ title, posterUrl, status }: PosterFrameProps) {
           className="absolute inset-0 z-[1] h-full w-full object-cover"
         />
       )}
-      <SeriesStatusCornerPill status={status} />
+      <span className="absolute top-[10px] right-[10px] z-[3] inline-flex items-center gap-1.5">
+        <PosterPriorityBadge tags={tags} variant="round" />
+        <SeriesStatusCornerPill status={status} className="static" />
+      </span>
     </div>
   );
 }

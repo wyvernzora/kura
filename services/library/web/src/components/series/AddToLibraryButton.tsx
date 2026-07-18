@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Check, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { KuraApiError } from '@/api/client';
+import { apiErrorMessage } from '@/api/client';
 import { useAddSeries } from '@/api/hooks';
 import { cn } from '@/lib/cn';
 
@@ -92,9 +92,7 @@ export function AddToLibraryButton({ metadataRef }: AddToLibraryButtonProps) {
       )}
       {addSeries.isError && (
         <span className="px-1 text-xs text-status-error">
-          {addSeries.error instanceof KuraApiError
-            ? (addSeries.error.body?.message ?? 'Failed to add series.')
-            : 'Failed to add series.'}
+          {apiErrorMessage(addSeries.error, 'Failed to add series.')}
         </span>
       )}
     </div>

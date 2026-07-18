@@ -17,6 +17,10 @@ export class KuraApiError extends Error {
   }
 }
 
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof KuraApiError ? (err.body?.message ?? fallback) : fallback;
+}
+
 /**
  * Mode-aware fetch wrapper used by every data hook.
  *

@@ -168,6 +168,7 @@ export function VirtualPosterGrid({ rows, density, onSelect }: VirtualPosterGrid
                 posterThumbnailUrl={row.posterThumbnailUrl}
                 available={row.episodesAvailable}
                 total={row.episodeCount}
+                tags={row.tags}
                 dense={density.dense}
                 // Untracked rows have no metadata ref → no detail page →
                 // stay flat. Tracked rows pick up cursor pointer +

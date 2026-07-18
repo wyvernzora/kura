@@ -1,5 +1,6 @@
 import { type KeyboardEvent, memo, useRef, useState } from 'react';
 
+import { PosterPriorityBadge } from '@/components/ui/poster-priority-badge';
 import { cn } from '@/lib/cn';
 import type { StatusValue } from '@/lib/status';
 import { usePosterTilt } from '@/lib/usePosterTilt';
@@ -28,6 +29,8 @@ interface PosterProps {
   available?: number;
   /** Total tracked episode count. */
   total?: number;
+  /** Series tags used to derive the read-only priority badge. */
+  tags?: readonly string[];
   /** Tightens the title font + gap on small viewports. */
   dense?: boolean;
   /** Suppress the title row (for use inside modals where the title lives separately). */
@@ -80,6 +83,7 @@ function PosterImpl({
   posterThumbnailUrl,
   available,
   total,
+  tags,
   dense,
   hideTitle,
   onClick,
@@ -185,6 +189,7 @@ function PosterImpl({
             {available}/{total}
           </EpisodeCountBadge>
         )}
+        <PosterPriorityBadge tags={tags} />
       </div>
       {!hideTitle && (
         <div
