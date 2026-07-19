@@ -4,9 +4,10 @@
 		"config:recommended",
 		"helpers:pinGitHubActionDigests",
 		":dependencyDashboard",
-		":semanticCommits",
+		":semanticCommitsDisabled",
 		":separateMajorReleases"
 	],
+	"commitMessagePrefix": "deps:",
 	"timezone": "America/Los_Angeles",
 	"schedule": ["after 6pm every weekday", "every weekend"],
 	"minimumReleaseAge": "5 days",

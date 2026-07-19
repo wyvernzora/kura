@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -16,8 +17,44 @@ env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
+  commit-subject:
+    name: commit subject
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate pull request title
+        if: github.event_name == 'pull_request'
+        env:
+          SUBJECT: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$SUBJECT" | ./.githooks/check-commit-subject.sh -
+
+      - name: Validate pushed commits
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] ||
+             ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            commits="$AFTER"
+          else
+            commits="$(git rev-list --reverse "$BEFORE..$AFTER")"
+          fi
+
+          for commit in $commits; do
+            subject="$(git show -s --format=%s "$commit")"
+            if ! printf '%s\n' "$subject" | ./.githooks/check-commit-subject.sh -; then
+              echo "::error::Commit $commit has an invalid subject: $subject"
+              exit 1
+            fi
+          done
+
   go:
     name: go
+    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -70,6 +107,7 @@ jobs:
 
   web:
     name: web
+    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -120,6 +158,7 @@ jobs:
   # the merge that would publish a broken :dev image.
   e2e:
     name: e2e
+    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -141,6 +180,7 @@ jobs:
   # through the web job (which doesn't regenerate, only typechecks).
   gen-check:
     name: gen-ts drift
+    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -176,6 +216,7 @@ jobs:
 
   n8n:
     name: n8n
+    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -210,7 +251,7 @@ jobs:
   #   push to main → :dev (and VERSION=dev-<short_sha>)
   build-push:
     name: build & push
-    needs: [go, web, gen-check, e2e, n8n]
+    needs: [commit-subject, go, web, gen-check, e2e, n8n]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
