@@ -5,9 +5,9 @@ GOFMT_DIRS := cmd internal
 # Defaults to `git describe` (tag-based, falls back to short SHA on an
 # untagged checkout) so dev builds carry a meaningful identifier without
 # needing a manual override. Tagged releases get the literal tag, e.g.
-# "v0.4.3"; mid-development checkouts get something like
-# "v0.4.3-3-g35093c0" or "v0.4.3-3-g35093c0-dirty". CI/release builds
-# can pass `VERSION=v0.4.3` explicitly.
+# "v0.5.0"; mid-development checkouts get something like
+# "v0.5.0-3-g35093c0" or "v0.5.0-3-g35093c0-dirty". CI/release builds
+# can pass `VERSION=v0.5.0` explicitly.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 GO_LDFLAGS := -s -w -X main.Version=$(VERSION)
 
