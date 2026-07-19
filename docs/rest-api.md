@@ -104,6 +104,9 @@ SeriesRef in the request body as `dirname`.
 Episode stage entries accept optional `attrs`, a flat string map stored on
 the staged media record. `GET /api/v1/series/{ref}` returns `attrs` on active
 and staged media records when present; attrs are not queryable or indexed.
+Active and staged media records also expose optional `dimensions` (the raw
+`WIDTHxHEIGHT` value) and `mtime` (the persisted file modification time in
+RFC 3339 format) alongside the folded `resolution` label.
 `GET /api/v1/series/{ref}?episodes=...` accepts `ALL`, `NONE`,
 `AIRING_SEASON`, `S<N>`, `S<N>E<E>`, or `S<N>E<A>-<B>`. Empty means `ALL`.
 `AIRING_SEASON` uses the same airing/tail window as list `isAiring` and

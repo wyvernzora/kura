@@ -2,6 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 
 import { apiErrorMessage } from '@/api/client';
 import { useUpdateTags } from '@/api/hooks';
+import { GhostIconButton } from '@/components/ui/ghost-icon-btn';
 import { MaterialIcon } from '@/components/ui/material-icon';
 import { cn } from '@/lib/cn';
 import {
@@ -121,12 +122,10 @@ export function SeriesSettingsModal({
                 <DialogPrimitive.Title className="text-[15px] font-semibold text-ink">
                   Settings
                 </DialogPrimitive.Title>
-                <DialogPrimitive.Close
-                  type="button"
-                  aria-label="Close"
-                  className="ml-auto inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-overlay-soft hover:text-ink"
-                >
-                  <MaterialIcon name="close" size={18} />
+                <DialogPrimitive.Close asChild>
+                  <GhostIconButton size="md" aria-label="Close" className="ml-auto">
+                    <MaterialIcon name="close" size={18} />
+                  </GhostIconButton>
                 </DialogPrimitive.Close>
               </div>
               <div

@@ -466,11 +466,17 @@ func mediaShow(seriesRoot string, record media.Record) response.MediaShow {
 			MTime:    c.MTime.UTC().Format(time.RFC3339),
 		})
 	}
+	dimensions := ""
+	if record.Resolution.Known() {
+		dimensions = record.Resolution.String()
+	}
 	return response.MediaShow{
 		Source:     record.Source.Display(),
 		Resolution: record.Resolution.Display(),
+		Dimensions: dimensions,
 		Codec:      record.Codec.String(),
 		Size:       record.Size,
+		MTime:      formatOptionalTime(record.MTime),
 		File:       seriesSelector(seriesRoot, record.Path),
 		Companions: companions,
 		Attrs:      media.CloneAttrs(record.Attrs),

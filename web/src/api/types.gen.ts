@@ -731,8 +731,10 @@ export interface PosterShow {
 export interface MediaShow {
   source: string;
   resolution?: string;
+  dimensions?: string;
   codec?: string;
   size: number /* int64 */;
+  mtime?: string;
   file: string;
   companions: CompanionShow[];
   attrs?: { [key: string]: string };

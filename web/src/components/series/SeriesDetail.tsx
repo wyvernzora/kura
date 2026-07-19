@@ -60,6 +60,9 @@ interface SeriesDetailBodyProps {
 }
 
 function SeriesDetailBody({ data, orderedSeasons, preview }: SeriesDetailBodyProps) {
+  const seriesDir = data.root.startsWith('library:')
+    ? data.root.slice('library:'.length)
+    : undefined;
   return (
     <div
       className={cn(
@@ -76,7 +79,14 @@ function SeriesDetailBody({ data, orderedSeasons, preview }: SeriesDetailBodyPro
             populate.
           </Card>
         ) : (
-          orderedSeasons.map((season) => <SeasonPanel key={season.number} season={season} />)
+          orderedSeasons.map((season) => (
+            <SeasonPanel
+              key={season.number}
+              season={season}
+              seriesDir={seriesDir}
+              lastScanned={data.lastScanned}
+            />
+          ))
         )}
       </div>
     </div>

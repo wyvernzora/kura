@@ -1,12 +1,15 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { SeasonShow } from '@/api/types';
+import { EpisodeDetailsSheet } from '@/components/series/EpisodeDetailsSheet';
 import { EpisodeRow } from '@/components/series/EpisodeRow';
 import { cn } from '@/lib/cn';
 
 interface SeasonPanelProps {
   season: SeasonShow;
+  seriesDir?: string;
+  lastScanned?: string;
   defaultOpen?: boolean;
   className?: string;
 }
@@ -16,13 +19,30 @@ interface SeasonPanelProps {
  * rollup; clicking toggles the body. Specials (season 0) default to
  * closed so the most actionable seasons surface first.
  */
-export function SeasonPanel({ season, defaultOpen, className }: SeasonPanelProps) {
+export function SeasonPanel({
+  season,
+  seriesDir,
+  lastScanned,
+  defaultOpen,
+  className,
+}: SeasonPanelProps) {
   const isSpecials = season.number === 0;
   const [open, setOpen] = useState(defaultOpen ?? !isSpecials);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedEpisodeMarker, setSelectedEpisodeMarker] = useState<string>();
+  const detailsTriggerRef = useRef<HTMLButtonElement>(null);
   const label = isSpecials ? 'Specials' : `Season ${season.number}`;
   const present = season.summary.present;
   const total = season.summary.episodeCount;
   const episodes = season.episodes ?? [];
+  const selectedEpisode = episodes.find((episode) => episode.episode === selectedEpisodeMarker);
+
+  useEffect(() => {
+    if (detailsOpen && selectedEpisodeMarker && !selectedEpisode) {
+      setDetailsOpen(false);
+    }
+  }, [detailsOpen, selectedEpisode, selectedEpisodeMarker]);
+
   return (
     <div
       className={cn('mb-[18px] overflow-hidden rounded-[12px] bg-surface shadow-card', className)}
@@ -60,9 +80,30 @@ export function SeasonPanel({ season, defaultOpen, className }: SeasonPanelProps
               No episodes available.
             </div>
           ) : (
-            episodes.map((ep) => <EpisodeRow key={ep.episode} episode={ep} />)
+            episodes.map((ep) => (
+              <EpisodeRow
+                key={ep.episode}
+                episode={ep}
+                onDetails={(trigger) => {
+                  detailsTriggerRef.current = trigger;
+                  setSelectedEpisodeMarker(ep.episode);
+                  setDetailsOpen(true);
+                }}
+              />
+            ))
           )}
         </div>
+      )}
+      {selectedEpisode && (
+        <EpisodeDetailsSheet
+          key={selectedEpisode.episode}
+          episode={selectedEpisode}
+          seriesDir={seriesDir}
+          lastScanned={lastScanned}
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          restoreFocusRef={detailsTriggerRef}
+        />
       )}
     </div>
   );

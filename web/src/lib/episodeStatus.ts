@@ -13,6 +13,37 @@ export const EPISODE_STATUS_LABEL: Record<EpisodeStatus, string> = {
   pending: 'Pending · not yet aired',
 };
 
+export const EPISODE_STATUS_BADGE: Record<
+  EpisodeStatus,
+  { label: string; icon: string; className: string }
+> = {
+  present: {
+    label: 'Present',
+    icon: 'check_circle',
+    className: 'bg-status-complete/12 text-status-complete',
+  },
+  missing: {
+    label: 'Missing',
+    icon: 'report',
+    className: 'bg-status-error/12 text-status-error',
+  },
+  pending: {
+    label: 'Pending',
+    icon: 'schedule',
+    className: 'bg-status-airing/12 text-status-airing',
+  },
+  staged: {
+    label: 'Staged',
+    icon: 'move_to_inbox',
+    className: 'bg-status-incomplete/16 text-status-staged-fg',
+  },
+  staged_replacement: {
+    label: 'Staged replacement',
+    icon: 'swap_horiz',
+    className: 'bg-status-incomplete/16 text-status-staged-fg',
+  },
+};
+
 /**
  * Status dot color, expressed as a Tailwind utility against the
  * existing kura status palette so light/dark theming flips for free.

@@ -54,7 +54,14 @@ func TestShow_UsesConfiguredAiringTail(t *testing.T) {
 	if err := os.WriteFile(activePath, []byte("media"), 0o644); err != nil {
 		t.Fatalf("WriteFile active: %v", err)
 	}
-	rec := &media.Record{Path: activePath, Source: media.SourceWebRip, Resolution: resolution, Size: 1}
+	mtime := time.Date(2026, 4, 24, 17, 30, 0, 0, time.FixedZone("PDT", -7*60*60))
+	rec := &media.Record{
+		Path:       activePath,
+		Source:     media.SourceWebRip,
+		Resolution: resolution,
+		Size:       1,
+		MTime:      mtime,
+	}
 	e1, _ := refs.NewEpisode(1, 1)
 	e2, _ := refs.NewEpisode(1, 2)
 	model := &domainseries.Series{
@@ -82,6 +89,58 @@ func TestShow_UsesConfiguredAiringTail(t *testing.T) {
 	}
 	if out.IsAiring {
 		t.Fatal("IsAiring = true, want false with 2-day tail")
+	}
+	active := out.Seasons[0].Episodes[0].Active
+	if active == nil {
+		t.Fatal("Active = nil, want media details")
+	}
+	if active.Dimensions != "1920x1080" {
+		t.Errorf("Dimensions = %q, want 1920x1080", active.Dimensions)
+	}
+	if active.MTime != mtime.UTC().Format(time.RFC3339) {
+		t.Errorf("MTime = %q, want %q", active.MTime, mtime.UTC().Format(time.RFC3339))
+	}
+}
+
+func TestShow_UnknownResolutionAndZeroMTimeAreEmpty(t *testing.T) {
+	root := t.TempDir()
+	ref := mustShowSeries(t, "Unknown_Media_Details")
+	episode := mustShowEpisode(t, 1, 1)
+	model := &domainseries.Series{
+		Ref:            ref,
+		Metadata:       refs.Metadata("tvdb:1"),
+		PreferredTitle: textnorm.NFC("Unknown Media Details"),
+		Episodes: map[refs.Episode]domainseries.Episode{
+			episode: {
+				AirDate: civil.Date{Year: 2020, Month: 1, Day: 1},
+				Active: &media.Record{
+					Path: filepath.Join(
+						root,
+						ref.String(),
+						"Season 1",
+						"Unknown Media Details - S01E01.mkv",
+					),
+					Source: media.SourceUnknown,
+				},
+			},
+		},
+	}
+	if err := seriesfile.SaveCAS(root, model, coord.NewMutator("test")); err != nil {
+		t.Fatalf("SaveCAS: %v", err)
+	}
+	out, err := Show(context.Background(), Deps{LibRoot: root, Now: time.Now}, ShowInput{Ref: ref})
+	if err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+	active := out.Seasons[0].Episodes[0].Active
+	if active == nil {
+		t.Fatal("Active = nil, want media details")
+	}
+	if active.Dimensions != "" {
+		t.Errorf("Dimensions = %q, want empty", active.Dimensions)
+	}
+	if active.MTime != "" {
+		t.Errorf("MTime = %q, want empty", active.MTime)
 	}
 }
 

@@ -5,25 +5,15 @@ import type { EpisodeShow, MediaShow } from '@/api/types';
 import { CompanionsBadge } from '@/components/series/CompanionsBadge';
 import { ChipSlot, ResolutionChip, SourceChip } from '@/components/series/QualityChip';
 import { StatusDot } from '@/components/series/StatusDot';
+import { GhostIconButton } from '@/components/ui/ghost-icon-btn';
 import { cn } from '@/lib/cn';
 import { episodeSubText, isDimmedStatus } from '@/lib/episodeStatus';
+import { formatSize, shortMarker } from '@/lib/format';
 
 interface EpisodeRowProps {
   episode: EpisodeShow;
+  onDetails: (trigger: HTMLButtonElement) => void;
   className?: string;
-}
-
-const MIB = 1024 * 1024;
-const GIB = 1024 * MIB;
-
-function formatSize(bytes: number): string {
-  if (bytes >= GIB) {
-    return `${(bytes / GIB).toFixed(2)} GB`;
-  }
-  if (bytes >= MIB) {
-    return `${Math.round(bytes / MIB)} MB`;
-  }
-  return `${bytes} B`;
 }
 
 /**
@@ -46,7 +36,7 @@ function formatSize(bytes: number): string {
  * placeholders on desktop so columns line up regardless of which
  * cells have media on disk.
  */
-export function EpisodeRow({ episode, className }: EpisodeRowProps) {
+export function EpisodeRow({ episode, onDetails, className }: EpisodeRowProps) {
   const { status, episode: marker, preferredTitle, canonicalTitle, aired, active } = episode;
   const title = preferredTitle || canonicalTitle || marker;
   const dim = isDimmedStatus(status);
@@ -73,6 +63,7 @@ export function EpisodeRow({ episode, className }: EpisodeRowProps) {
         hasMedia={hasMedia}
         hasStaged={hasStaged}
         active={active}
+        onDetails={onDetails}
       />
       <MobileRow
         marker={marker}
@@ -83,6 +74,7 @@ export function EpisodeRow({ episode, className }: EpisodeRowProps) {
         hasMedia={hasMedia}
         hasStaged={hasStaged}
         active={active}
+        onDetails={onDetails}
       />
     </div>
   );
@@ -97,6 +89,7 @@ interface RowVariantProps {
   hasMedia: boolean;
   hasStaged: boolean;
   active: MediaShow | undefined;
+  onDetails: (trigger: HTMLButtonElement) => void;
 }
 
 function DesktopRow({
@@ -108,6 +101,7 @@ function DesktopRow({
   hasMedia,
   hasStaged,
   active,
+  onDetails,
 }: RowVariantProps) {
   return (
     <div
@@ -129,7 +123,7 @@ function DesktopRow({
       ) : (
         <ChipSlot />
       )}
-      <ActionsButton />
+      <ActionsButton onClick={onDetails} />
     </div>
   );
 }
@@ -143,6 +137,7 @@ function MobileRow({
   hasMedia,
   hasStaged,
   active,
+  onDetails,
 }: RowVariantProps) {
   return (
     <div className="flex flex-col gap-1 px-3 py-3 sm:hidden">
@@ -152,7 +147,7 @@ function MobileRow({
         <div className="min-w-0 flex-1 truncate font-mono text-[10px] tracking-[0.3px] text-muted">
           {shortMarker(marker)} · {subText}
         </div>
-        <ActionsButton className="shrink-0" />
+        <ActionsButton className="shrink-0" onClick={onDetails} />
       </div>
       {/* Title line: indented to align with the meta text above; chips
           ride on the right at compact size so they fit without
@@ -190,35 +185,23 @@ function renderSubText(
   return parts.join(' · ');
 }
 
-function ActionsButton({ className }: { className?: string }) {
+function ActionsButton({
+  className,
+  onClick,
+}: {
+  className?: string;
+  onClick: (trigger: HTMLButtonElement) => void;
+}) {
   return (
-    <button
-      type="button"
-      aria-label="Episode actions"
-      // P5 keeps the affordance visible but inert. Episode-level
-      // mutations (rescan, identify, mark missing) land in a later
-      // round when the action menu wires up.
-      disabled
-      className={cn(
-        'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted disabled:cursor-default disabled:opacity-60',
-        className,
-      )}
+    <GhostIconButton
+      size="sm"
+      aria-label="Episode details"
+      aria-haspopup="dialog"
+      title="Episode details"
+      onClick={(event) => onClick(event.currentTarget)}
+      className={className}
     >
       <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
-    </button>
+    </GhostIconButton>
   );
-}
-
-/**
- * Server emits the storage marker `S01E0003`; episode rows display
- * the relaxed `S01E03` form to match the prototype. We chop the
- * leading two zeros off the episode pad when present and shorter
- * markers fall through unchanged.
- */
-function shortMarker(marker: string): string {
-  return marker.replace(/^S(\d{2,})E(\d{4,})$/, (_m, season: string, episode: string) => {
-    const ep = episode.replace(/^0+/, '') || '0';
-    const padded = ep.length < 2 ? ep.padStart(2, '0') : ep;
-    return `S${season}E${padded}`;
-  });
 }
