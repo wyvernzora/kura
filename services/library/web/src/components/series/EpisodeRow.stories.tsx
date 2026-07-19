@@ -23,23 +23,23 @@ export default meta;
 type Story = StoryObj<typeof EpisodeRow>;
 
 export const Present: Story = {
-  args: { episode: FIXTURE_EPISODE_PRESENT },
+  args: { episode: FIXTURE_EPISODE_PRESENT, onDetails: () => undefined },
 };
 
 export const Missing: Story = {
-  args: { episode: FIXTURE_EPISODE_MISSING },
+  args: { episode: FIXTURE_EPISODE_MISSING, onDetails: () => undefined },
 };
 
 export const Pending: Story = {
-  args: { episode: FIXTURE_EPISODE_PENDING },
+  args: { episode: FIXTURE_EPISODE_PENDING, onDetails: () => undefined },
 };
 
 export const Stack: Story = {
   render: () => (
     <>
-      <EpisodeRow episode={FIXTURE_EPISODE_PRESENT} />
-      <EpisodeRow episode={FIXTURE_EPISODE_MISSING} />
-      <EpisodeRow episode={FIXTURE_EPISODE_PENDING} />
+      <EpisodeRow episode={FIXTURE_EPISODE_PRESENT} onDetails={() => undefined} />
+      <EpisodeRow episode={FIXTURE_EPISODE_MISSING} onDetails={() => undefined} />
+      <EpisodeRow episode={FIXTURE_EPISODE_PENDING} onDetails={() => undefined} />
     </>
   ),
 };

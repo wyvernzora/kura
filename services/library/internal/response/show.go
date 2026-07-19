@@ -117,8 +117,10 @@ type PosterShow struct {
 type MediaShow struct {
 	Source     string            `json:"source"`
 	Resolution string            `json:"resolution,omitempty"`
+	Dimensions string            `json:"dimensions,omitempty"`
 	Codec      string            `json:"codec,omitempty"`
 	Size       int64             `json:"size"`
+	MTime      string            `json:"mtime,omitempty"`
 	File       string            `json:"file"`
 	Companions []CompanionShow   `json:"companions"`
 	Attrs      map[string]string `json:"attrs,omitempty"`

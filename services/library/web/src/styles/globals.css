@@ -47,6 +47,7 @@
   --color-status-untracked-fg: #fafaf7;
   --color-status-error: #c5483a;
   --color-status-error-fg: #fafaf7;
+  --color-status-staged-fg: #9a7b1a;
 
   /* Priority palette — read-only poster badges for non-default priority. */
   --color-priority-high: #e8b53a;
@@ -93,6 +94,7 @@ html[data-k-theme="dark"] {
   --color-overlay: rgba(8, 12, 22, 0.55);
   --color-overlay-soft: rgba(255, 255, 255, 0.06);
   --color-topbar-scrolled: rgba(26, 32, 48, 0.78);
+  --color-status-staged-fg: #e8b53a;
 
   /* Dark mode shadows lean heavier — light leakage in dark UIs is
    * harder to see, so opacity goes up to keep elevation legible. */
