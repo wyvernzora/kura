@@ -2,6 +2,20 @@
 
 Notable release changes for Kura.
 
+## v0.5.0 - 2026-07-19
+
+### Highlights
+
+- Added durable series tags across storage, CLI, REST, MCP, n8n, and web
+  surfaces, including tag-expression filtering and combined add/remove updates.
+- Added responsive series workflow settings for namespaced priority and
+  maintenance tags, with priority badges in the library and series views.
+- Added an episode details sheet for current and staged media with portable
+  path and selector copying, companion files, adoption attributes, media
+  comparisons, dimensions, sizes, and modification times.
+- Added iOS standalone web-app metadata and viewport behavior for installing
+  Kura on the Home Screen.
+
 ## v0.4.3 - 2026-07-07
 
 ### Highlights
