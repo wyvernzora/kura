@@ -29,6 +29,7 @@ Requirements:
 - Go 1.26.3 or newer.
 - `mediainfo` on `PATH`, or `KURA_MEDIAINFO_COMMAND` set to its path.
 - Docker if you want the container image.
+- Lefthook if you contribute changes.
 
 Build the CLI/server binary:
 
@@ -121,9 +122,10 @@ stuck-claim recovery.
 ## Development
 
 ```sh
+lefthook install
 make check
 go test ./...
 ```
 
 Read [AGENTS.md](AGENTS.md) before contributing. It contains the repo-specific
-rules for code changes, tests, and e2e scenarios.
+rules for code changes, tests, e2e scenarios, and commit subjects.
