@@ -17,7 +17,7 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 ## Parameters
 
 
-- `path` (string, optional) — subpath relative to the inbox root (forward-slash, no leading slash). Empty lists the root.
+- `path` (string, optional) — path relative to the inbox root (forward-slash, no leading slash). A directory lists its children; a file returns that exact entry. Empty lists the root.
 - `recursive` (bool, optional) — when true, walks subdirectories up to `depth` levels deep.
 - `depth` (int, optional) — recursive depth cap (default 3, max 5). Ignored when `recursive=false`.
 - `limit` (int, optional) — cap on entries returned (default 500, max 5000). Truncation surfaces in the trailing footer.
@@ -31,6 +31,7 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 ```
 kura_inbox_list                              # one-level listing of inbox root
 kura_inbox_list(path="[BDrip] Show")        # children of one release dir
+kura_inbox_list(path="[BDrip] Show/E01.mkv") # inspect one exact entry
 kura_inbox_list(recursive=true, depth=3)    # walk subtrees, up to depth 5
 kura_inbox_list(nameGlob="*.mkv")           # filter by basename pattern
 kura_inbox_list(kind="file")                # only files (or "dir" / "symlink")

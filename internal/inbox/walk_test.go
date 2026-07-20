@@ -233,15 +233,36 @@ func TestWalk_PathNotFound(t *testing.T) {
 	}
 }
 
-func TestWalk_PathNotDir(t *testing.T) {
+func TestWalk_FilePathReturnsFile(t *testing.T) {
 	root := t.TempDir()
-	makeTree(t, root, map[string]string{"a.mkv": "f"})
+	const name = "[LoliHouse] Tenbin - 02 [WebRip 1080p HEVC-10bit AAC ASSx2].mkv"
+	makeTree(t, root, map[string]string{name: "f:data"})
 	opts := defaultOpts()
-	opts.Path = "a.mkv"
-	_, err := inbox.Walk(root, opts)
-	var ndErr *inbox.PathNotDirError
-	if !errors.As(err, &ndErr) {
-		t.Fatalf("expected PathNotDirError, got %T %v", err, err)
+	opts.Path = name
+	opts.Depth = 3
+
+	res, err := inbox.Walk(root, opts)
+	if err != nil {
+		t.Fatalf("Walk: %v", err)
+	}
+	if res.Path != name {
+		t.Errorf("Path: got %q, want %q", res.Path, name)
+	}
+	if len(res.Entries) != 1 {
+		t.Fatalf("Entries: got %d, want 1", len(res.Entries))
+	}
+	entry := res.Entries[0]
+	if entry.Name != name {
+		t.Errorf("Name: got %q, want %q", entry.Name, name)
+	}
+	if entry.RelPath != name {
+		t.Errorf("RelPath: got %q, want %q", entry.RelPath, name)
+	}
+	if entry.Kind != inbox.KindFile {
+		t.Errorf("Kind: got %q, want %q", entry.Kind, inbox.KindFile)
+	}
+	if entry.Size != 4 {
+		t.Errorf("Size: got %d, want 4", entry.Size)
 	}
 }
 
@@ -280,6 +301,12 @@ func TestWalk_SymlinkSurfaceNoFollow(t *testing.T) {
 	}
 	if !sawLink {
 		t.Errorf("symlink entry missing")
+	}
+
+	opts := defaultOpts()
+	opts.Path = "linked"
+	if _, err := inbox.Walk(root, opts); err == nil {
+		t.Fatal("expected exact symlink path to be rejected")
 	}
 }
 

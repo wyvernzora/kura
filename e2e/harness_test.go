@@ -159,6 +159,24 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 		return "inbox:" + filepath.ToSlash(relUnderInbox), nil
 	}
 
+	// ── kura_inbox_list ─────────────────────────────────────────────────
+	cmds["kura_inbox_list"] = script.Command(
+		script.CmdUsage{Summary: "list an inbox directory or exact file", Args: "<path>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 1 {
+				return nil, fmt.Errorf("kura_inbox_list: expected 1 arg, got %d", len(args))
+			}
+			out, errOut, runErr := b.run(
+				s.Context(),
+				"inbox", "list", "--json", "--depth=3", "--limit=500",
+				s.ExpandEnv(args[0], false),
+			)
+			return func(s *script.State) (string, string, error) {
+				return compactIfJSON(out), errOut, runErr
+			}, nil
+		},
+	)
+
 	// ── kura_stage ────────────────────────────────────────────────────────
 	cmds["kura_stage"] = script.Command(
 		script.CmdUsage{Summary: "stage an episode file", Args: "<series_ref> <episode_marker> <file>"},

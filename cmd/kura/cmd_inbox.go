@@ -17,7 +17,7 @@ type inboxListCmd struct {
 	Kind          string `name:"kind" short:"k" help:"Filter by entry kind: file, dir, or symlink."`
 	NameGlob      string `name:"name" help:"filepath.Match glob filtered against basename (e.g. '*.mkv')."`
 	IncludeHidden bool   `name:"all" short:"a" help:"Surface dotfiles and download-in-flight markers."`
-	Path          string `arg:"" optional:"" help:"Subpath under the inbox root (default: inbox root)."`
+	Path          string `arg:"" optional:"" help:"Directory or exact file under the inbox root (default: inbox root)."`
 }
 
 func (cmd *inboxListCmd) Run(rt *runContext) error {

@@ -107,6 +107,52 @@ func TestKuraInboxList_ReturnsStructuredContentOnly(t *testing.T) {
 	}
 }
 
+func TestKuraInboxList_FilePathReturnsExactEntry(t *testing.T) {
+	root := t.TempDir()
+	const name = "[LoliHouse] Tenbin - 02 [WebRip 1080p HEVC-10bit AAC ASSx2].mkv"
+	if err := os.WriteFile(filepath.Join(root, name), []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cs := connectInMemoryWithInboxList(t, root)
+	res, err := cs.CallTool(context.Background(), &sdkmcp.CallToolParams{
+		Name: "kura_inbox_list",
+		Arguments: map[string]any{
+			"path":          name,
+			"recursive":     false,
+			"depth":         3,
+			"limit":         500,
+			"includeHidden": false,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("IsError, content=%v structured=%v", res.Content, res.StructuredContent)
+	}
+	body, err := decodeStructured(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("decode StructuredContent: %v", err)
+	}
+	if body["path"] != "inbox:"+name {
+		t.Errorf("path = %v, want inbox:%s", body["path"], name)
+	}
+	entries, ok := body["entries"].([]any)
+	if !ok || len(entries) != 1 {
+		t.Fatalf("entries = %#v, want one entry", body["entries"])
+	}
+	entry, ok := entries[0].(map[string]any)
+	if !ok {
+		t.Fatalf("entry = %T, want map", entries[0])
+	}
+	if entry["path"] != "inbox:"+name {
+		t.Errorf("entry path = %v, want inbox:%s", entry["path"], name)
+	}
+	if entry["kind"] != "file" {
+		t.Errorf("kind = %v, want file", entry["kind"])
+	}
+}
+
 func TestKuraInboxList_RejectsBadKind(t *testing.T) {
 	cs := connectInMemoryWithInboxList(t, t.TempDir())
 	res, err := cs.CallTool(context.Background(), &sdkmcp.CallToolParams{

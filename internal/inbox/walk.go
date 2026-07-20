@@ -49,8 +49,8 @@ func (e Entry) Selector() selector.Path {
 
 // Options configures Walk.
 type Options struct {
-	// Path is a slash-form relative path under the inbox root. Empty
-	// means the inbox root itself. Validated via CleanRelativePath.
+	// Path is a slash-form relative path to a directory or exact file
+	// under the inbox root. Empty means the inbox root itself.
 	Path string
 
 	// Recursive controls multi-level traversal. When true, Depth caps
@@ -100,22 +100,6 @@ func (e *PathNotFoundError) Data() map[string]any {
 	return map[string]any{"path": e.Path}
 }
 
-// PathNotDirError signals the requested subpath exists but is not a
-// directory.
-type PathNotDirError struct {
-	Path string
-}
-
-func (e *PathNotDirError) Error() string {
-	return fmt.Sprintf("inbox: path %q is not a directory", e.Path)
-}
-
-func (e *PathNotDirError) Kind() string     { return errkind.KindInvalidRef }
-func (e *PathNotDirError) Category() string { return errkind.CategoryInvalidParams }
-func (e *PathNotDirError) Data() map[string]any {
-	return map[string]any{"path": e.Path}
-}
-
 // InvalidGlobError signals NameGlob has malformed syntax.
 type InvalidGlobError struct {
 	Pattern string
@@ -134,11 +118,13 @@ func (e *InvalidGlobError) Data() map[string]any {
 	return map[string]any{"pattern": e.Pattern}
 }
 
-// Walk enumerates entries under inboxRoot/<opts.Path>. The walk is
-// non-following for symlinks (they're surfaced as Kind=symlink with
-// SymlinkTarget set, not recursed into). Names from the filesystem are
-// NFC-normalized in returned entries; recursion uses the on-disk name
-// for stat'ing so NFD-storage filesystems (macOS HFS+/APFS) still work.
+// Walk enumerates inboxRoot/<opts.Path>. A directory path returns its
+// children; a file path returns that exact entry. The walk is
+// non-following for symlinks (directory listings surface them as
+// Kind=symlink with SymlinkTarget set, but never recurse into them).
+// Names from the filesystem are NFC-normalized in returned entries;
+// recursion uses the on-disk name for stat'ing so NFD-storage
+// filesystems (macOS HFS+/APFS) still work.
 func Walk(inboxRoot string, opts Options) (Result, error) {
 	if inboxRoot == "" {
 		return Result{}, errors.New("inbox: inboxRoot is empty")
@@ -151,14 +137,28 @@ func Walk(inboxRoot string, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	depth := resolveWalkDepth(opts)
-	base, err := resolveWalkStart(inboxRoot, relPath)
+	base, info, err := resolveWalkStart(inboxRoot, relPath)
 	if err != nil {
 		return Result{}, err
 	}
 
-	all, err := walkDir(base, relPath, depth, opts)
-	if err != nil {
-		return Result{}, err
+	var all []Entry
+	if info.IsDir() {
+		all, err = walkDir(base, relPath, depth, opts)
+		if err != nil {
+			return Result{}, err
+		}
+	} else {
+		entry := Entry{
+			Name:    norm.NFC.String(info.Name()),
+			RelPath: relPath,
+			Kind:    KindFile,
+			Size:    info.Size(),
+			MTime:   info.ModTime(),
+		}
+		if (opts.IncludeHidden || !isHidden(entry.Name)) && matchesFilters(entry, opts) {
+			all = append(all, entry)
+		}
 	}
 	sortEntries(all)
 
@@ -204,33 +204,27 @@ func resolveWalkDepth(opts Options) int {
 }
 
 // resolveWalkStart joins inboxRoot with relPath, enforces the
-// guardWithinRoot containment check, and rejects the start when it's
-// missing, a symlink, or not a directory. Returns the absolute base
-// path on success.
-func resolveWalkStart(inboxRoot, relPath string) (string, error) {
+// guardWithinRoot containment check, lstat's the target, and rejects a
+// symlink start so traversal never follows it.
+func resolveWalkStart(inboxRoot, relPath string) (string, fs.FileInfo, error) {
 	base := inboxRoot
 	if relPath != "" {
 		base = filepath.Join(inboxRoot, filepath.FromSlash(relPath))
 	}
 	if err := guardWithinRoot(inboxRoot, base); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	info, err := os.Lstat(base)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return "", &PathNotFoundError{Path: relPath}
+			return "", nil, &PathNotFoundError{Path: relPath}
 		}
-		return "", err
+		return "", nil, err
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		// Walk's start path can't itself be a symlink (would conflict
-		// with the no-follow contract for traversal).
-		return "", &selector.PathOutsideRootError{Path: relPath}
+		return "", nil, &selector.PathOutsideRootError{Path: relPath}
 	}
-	if !info.IsDir() {
-		return "", &PathNotDirError{Path: relPath}
-	}
-	return base, nil
+	return base, info, nil
 }
 
 // walkDir reads one directory and (if depthRemaining > 1) recurses

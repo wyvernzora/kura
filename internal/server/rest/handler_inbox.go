@@ -11,7 +11,7 @@ import (
 //
 // Query:
 //
-//	path           — slash-form subpath under the inbox root (default: root)
+//	path           — slash-form directory or exact file under the inbox root (default: root)
 //	recursive      — "1"/"true" to walk subtrees (default: false)
 //	depth          — max levels when recursive (default 3, max 5)
 //	limit          — max entries returned (default 500, max 5000)
