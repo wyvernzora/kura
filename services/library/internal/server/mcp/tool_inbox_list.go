@@ -13,7 +13,7 @@ import (
 // inboxListInput mirrors workflow.InboxListInput at the wire boundary.
 // Field names use camelCase to match other MCP tool inputs.
 type inboxListInput struct {
-	Path          string `json:"path,omitempty" jsonschema:"Optional subpath relative to the inbox root (forward-slash, no leading slash). Empty lists the root."`
+	Path          string `json:"path,omitempty" jsonschema:"Optional path relative to the inbox root (forward-slash, no leading slash). A directory lists its children; a file returns that exact entry. Empty lists the root."`
 	Recursive     bool   `json:"recursive,omitempty" jsonschema:"When true, walks subdirectories up to depth levels deep."`
 	Depth         int    `json:"depth,omitempty" jsonschema:"Recursive depth cap (default 3, max 5). Ignored when recursive=false."`
 	Limit         int    `json:"limit,omitempty" jsonschema:"Cap on entries returned (default 500, max 5000). Truncation surfaces in the trailing footer."`

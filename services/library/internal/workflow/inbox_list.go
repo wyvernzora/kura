@@ -58,9 +58,10 @@ func (e *InboxNotConfiguredError) Error() string {
 	return "workflow: inbox is not configured (KURA_INBOX_ROOT unset)"
 }
 
-// InboxList enumerates entries under deps.InboxRoot/<in.Path>. Limit
-// and depth are clamped to defaults when zero, rejected when above
-// configured maxima.
+// InboxList enumerates deps.InboxRoot/<in.Path>. Directory paths list
+// their children; file paths return that exact entry. Limit and depth
+// are clamped to defaults when zero, rejected when above configured
+// maxima.
 func InboxList(ctx context.Context, deps Deps, in InboxListInput) (response.InboxList, error) {
 	_ = ctx
 	if deps.InboxRoot == "" {

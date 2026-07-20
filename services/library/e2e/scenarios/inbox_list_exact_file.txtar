@@ -1,0 +1,8 @@
+# inbox_list_exact_file: an exact file path returns that entry.
+
+kura_inbox_list '[LoliHouse] Tenbin - 02 [WebRip 1080p HEVC-10bit AAC ASSx2].mkv'
+stdout '"path":"inbox:\[LoliHouse\] Tenbin - 02 \[WebRip 1080p HEVC-10bit AAC ASSx2\]\.mkv"'
+stdout '"entries":\[\{"path":"inbox:\[LoliHouse\] Tenbin - 02 \[WebRip 1080p HEVC-10bit AAC ASSx2\]\.mkv","kind":"file"'
+
+-- [LoliHouse] Tenbin - 02 [WebRip 1080p HEVC-10bit AAC ASSx2].mkv --
+data
