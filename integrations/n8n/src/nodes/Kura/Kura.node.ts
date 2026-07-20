@@ -382,18 +382,19 @@ export function projectShow(
 		canonicalTitle: show.canonicalTitle,
 		status: show.status,
 		isAiring: Boolean(show.isAiring),
-		tags: stringArrayField(show, 'tags'),
 	});
+	out.tags = stringArrayField(show, 'tags');
 	out.seasons = filteredSeasons(show, includeSpecials).map(projectSeason);
 	return out;
 }
 
 function withSpecialsFilter(show: IDataObject, includeSpecials: boolean): IDataObject {
-	if (includeSpecials) return show;
-	return {
+	const out: IDataObject = {
 		...show,
-		seasons: filteredSeasons(show, false),
+		tags: stringArrayField(show, 'tags'),
 	};
+	if (!includeSpecials) out.seasons = filteredSeasons(show, false);
+	return out;
 }
 
 function filteredSeasons(show: IDataObject, includeSpecials: boolean): IDataObject[] {

@@ -183,6 +183,7 @@ assert.deepEqual(
 		ref: 'Bookworm',
 		root: 'library:Bookworm',
 		artwork: { poster: { url: 'https://example.invalid/poster.jpg' } },
+		tags: [],
 		seasons: [{ number: 1, summary: { episodeCount: 1 }, episodes: [] }],
 		stagedTrash: [{ id: 'trash' }],
 	},
@@ -208,6 +209,7 @@ assert.deepEqual(
 		preferredTitle: 'Bookworm',
 		status: 'complete',
 		isAiring: false,
+		tags: [],
 		seasons: [
 			{
 				number: 0,
