@@ -2,6 +2,16 @@
 
 Notable release changes for Kura.
 
+## v0.5.1 - 2026-07-20
+
+### Highlights
+
+- Fixed inbox listing for exact media-file paths so discovery returns the
+  file's `inbox:` selector and metadata instead of rejecting it as a
+  non-directory.
+- Ensured the n8n Series Show operation always returns `tags` as an array in
+  simplified and native output, using `[]` for untagged series.
+
 ## v0.5.0 - 2026-07-19
 
 ### Highlights
