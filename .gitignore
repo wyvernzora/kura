@@ -1,1 +1,22 @@
+# Build output
 bin/
+
+# Machine-local working dirs and env (session/agent state, scratch notes)
+scratch
+.claude
+.codex
+.checkpoint
+.envrc
+.env
+.env.*
+!.env.example
+.pnpm-store/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
