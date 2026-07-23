@@ -1,7 +1,7 @@
 go 1.26.3
 
 use (
-	./services/library
+	./services/library-manager
 	./services/releases
 	./services/releases/sources/dmhy
 	./services/releases/sources/nyaa

@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - "services/library/**"
+      - "services/library-manager/**"
       - "integrations/n8n/kura/**"
       - "services/webui/src/api/types.gen.ts"
       - ".github/workflows/ci-library.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - "services/library/**"
+      - "services/library-manager/**"
       - "integrations/n8n/kura/**"
       - "services/webui/src/api/types.gen.ts"
       - ".github/workflows/ci-library.yml"
@@ -32,13 +32,13 @@ jobs:
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: services/library
+        working-directory: services/library-manager
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
-          go-version-file: services/library/go.mod
+          go-version-file: services/library-manager/go.mod
           cache: true
 
       # gofmt drift check: -l lists offenders without mutation.
@@ -61,13 +61,13 @@ jobs:
         with:
           version: v2.12.2
           install-mode: goinstall
-          working-directory: services/library
+          working-directory: services/library-manager
 
       - name: go test
         run: go test -race -count=1 ./...
 
       - name: go build
-        run: go build -trimpath -o bin/kura ./cmd/kura
+        run: go build -trimpath -o bin/kura-library-manager ./cmd/kura-library-manager
 
   # Hermetic CLI e2e scenarios against the stub provider (-tags=e2e_stub).
   e2e:
@@ -75,13 +75,13 @@ jobs:
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: services/library
+        working-directory: services/library-manager
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
-          go-version-file: services/library/go.mod
+          go-version-file: services/library-manager/go.mod
           cache: true
 
       - name: e2e
@@ -96,7 +96,7 @@ jobs:
 
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
-          go-version-file: services/library/go.mod
+          go-version-file: services/library-manager/go.mod
           cache: true
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
@@ -114,12 +114,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: regenerate types
-        run: make -C services/library gen-ts
+        run: make -C services/library-manager gen-ts
 
       - name: assert no drift
         run: |
           if ! git diff --exit-code -- services/webui/src/api/types.gen.ts; then
-            echo "::error::types.gen.ts is stale; run 'make -C services/library gen-ts' and commit" >&2
+            echo "::error::types.gen.ts is stale; run 'make -C services/library-manager gen-ts' and commit" >&2
             exit 1
           fi
 
@@ -194,7 +194,7 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
-          context: services/library
+          context: services/library-manager
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

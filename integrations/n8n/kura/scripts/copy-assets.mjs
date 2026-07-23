@@ -1,7 +1,7 @@
 import { access, cp, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const ICON = '../../../services/library/docs/assets/logo-n8n.svg';
+const ICON = '../../../services/library-manager/docs/assets/logo-n8n.svg';
 const NODES = 'dist/nodes';
 const CREDENTIALS = 'dist/credentials';
 

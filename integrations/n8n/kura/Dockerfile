@@ -16,7 +16,7 @@ RUN corepack enable
 COPY integrations/n8n/kura/package.json integrations/n8n/kura/pnpm-lock.yaml integrations/n8n/kura/pnpm-workspace.yaml ./
 RUN corepack pnpm install --frozen-lockfile
 COPY integrations/n8n/kura/ ./
-COPY services/library/docs/assets/logo-n8n.svg /src/services/library/docs/assets/logo-n8n.svg
+COPY services/library-manager/docs/assets/logo-n8n.svg /src/services/library-manager/docs/assets/logo-n8n.svg
 RUN corepack pnpm build
 RUN mkdir -p /pkg && cp -r package.json dist /pkg/
 
