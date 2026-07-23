@@ -50,7 +50,7 @@ func run() error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("tygo generate: %w", err)
 	}
-	return postProcess(filepath.Join("..", "..", "web", "src", "api", "types.gen.ts"))
+	return postProcess(filepath.Join("..", "..", "..", "webui", "src", "api", "types.gen.ts"))
 }
 
 func postProcess(path string) error {
