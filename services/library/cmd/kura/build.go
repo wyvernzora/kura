@@ -10,14 +10,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/config"
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/mediainfo"
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/storage/paths"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/config"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/mediainfo"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // buildSourceFromFlags constructs the metadata source from the global CLI flags.

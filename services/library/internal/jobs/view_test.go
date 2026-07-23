@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
 )
 
 func TestGet_NotFoundForUnknownID(t *testing.T) {

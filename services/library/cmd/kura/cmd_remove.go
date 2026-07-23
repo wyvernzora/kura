@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 
-	"github.com/wyvernzora/kura/internal/cli/render"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/cli/render"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
 )
 
 type removeCmd struct {

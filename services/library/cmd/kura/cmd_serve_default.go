@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/wyvernzora/kura/internal/workflow"
+import "github.com/wyvernzora/kura/services/library/internal/workflow"
 
 // applyTestStubs is a no-op in production builds. The serveCmd flags
 // --provider-stub / --inspector-stub are hidden and silently ignored

@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/google/renameio/v2/maybe"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/reconcile"
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 const currentSchemaVersion = 2

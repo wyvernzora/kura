@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/storage/jobfile"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/progress"
+	"github.com/wyvernzora/kura/services/library/internal/storage/jobfile"
 )
 
 // Logger is the small interface the registry uses for lifecycle and

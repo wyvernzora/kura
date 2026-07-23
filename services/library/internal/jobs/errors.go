@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 // JobKind labels what a job is doing. Each kind binds to one workflow

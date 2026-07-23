@@ -1,6 +1,6 @@
 package response
 
-import "github.com/wyvernzora/kura/internal/domain/refs"
+import "github.com/wyvernzora/kura/services/library/internal/domain/refs"
 
 // StageResult is workflow.Stage's response. Stage may queue a mix of
 // episode stages, trash items, and extras in one batch; results surface

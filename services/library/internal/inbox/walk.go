@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 	"golang.org/x/text/unicode/norm"
 )
 

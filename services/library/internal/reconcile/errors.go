@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
 )
 
 // PlanAlreadyAppliedError signals the plan log already has a success

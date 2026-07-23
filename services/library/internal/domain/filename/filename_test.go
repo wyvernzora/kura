@@ -5,9 +5,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/wyvernzora/kura/internal/domain/filename"
-	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/filename"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 func utf8ValidMedia(m filename.Media) bool {

@@ -3,9 +3,9 @@
 package main
 
 import (
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/teststub"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/teststub"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // applyTestStubs swaps the provider and inspector for in-memory

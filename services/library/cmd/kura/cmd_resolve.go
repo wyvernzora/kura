@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/cli/render"
+	"github.com/wyvernzora/kura/services/library/internal/cli/render"
 )
 
 type resolveCmd struct {

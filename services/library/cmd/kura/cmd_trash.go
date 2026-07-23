@@ -6,9 +6,9 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	clipkg "github.com/wyvernzora/kura/internal/cli"
-	"github.com/wyvernzora/kura/internal/cli/render"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
+	clipkg "github.com/wyvernzora/kura/services/library/internal/cli"
+	"github.com/wyvernzora/kura/services/library/internal/cli/render"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
 )
 
 type trashCmd struct {

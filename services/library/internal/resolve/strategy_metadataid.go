@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
 )
 
 type metadataIDStrategy struct {

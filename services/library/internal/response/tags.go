@@ -1,6 +1,6 @@
 package response
 
-import "github.com/wyvernzora/kura/internal/domain/refs"
+import "github.com/wyvernzora/kura/services/library/internal/domain/refs"
 
 // TagUpdate is the request body shared by REST and transport clients.
 // Plain expressions add a tag; expressions prefixed with ! remove it.

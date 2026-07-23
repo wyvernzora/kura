@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 type searchResponse struct {

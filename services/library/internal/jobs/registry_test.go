@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/progress"
 )
 
 func mustSeries(t *testing.T, name string) refs.Series {

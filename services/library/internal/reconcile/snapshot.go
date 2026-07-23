@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 )
 
 // Snapshot returns the hex sha256 of the input bytes. Workflows compute this

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // handleShow serves GET /api/v1/series/{ref}.

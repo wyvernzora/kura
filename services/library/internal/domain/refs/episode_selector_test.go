@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 func TestParseEpisodeSelector_Forms(t *testing.T) {

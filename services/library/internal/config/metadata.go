@@ -4,8 +4,8 @@ import (
 	"errors"
 	"os"
 
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/provider/tvdb"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/provider/tvdb"
 )
 
 type EnvFunc func(string) string

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/inbox"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/inbox"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // InboxListInput parameters for the InboxList workflow.

@@ -3,7 +3,7 @@ package selector
 import (
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 // Term is a normalized selector token. Resolution strategies decide how to

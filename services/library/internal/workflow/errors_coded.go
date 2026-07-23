@@ -1,7 +1,7 @@
 package workflow
 
 import (
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 )
 
 // This file attaches the Kind / Category / Data methods used by

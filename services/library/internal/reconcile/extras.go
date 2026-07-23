@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/domain/series"
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/domain/series"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 // planExtras builds the ordered step set for every stagedExtras entry.

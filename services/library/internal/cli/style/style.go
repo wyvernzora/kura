@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
 )
 
 // ShouldStyle returns true when w is a terminal that supports ANSI

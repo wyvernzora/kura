@@ -24,7 +24,7 @@ import (
 
 	"golang.org/x/text/unicode/norm"
 
-	"github.com/wyvernzora/kura/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
 )
 
 // TranslatedTitle mirrors the domain shape; declared here as a small

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/storage/indexfile"
 )
 
 func TestIndexWatch_GetServesFromMemory(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 type aliasesInput struct {

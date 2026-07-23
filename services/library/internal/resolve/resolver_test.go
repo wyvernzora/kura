@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
 )
 
 func TestResolverEmptyQuery(t *testing.T) {

@@ -7,9 +7,9 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/wyvernzora/kura/internal/errkind"
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 type listInput struct {

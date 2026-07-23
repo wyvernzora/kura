@@ -3,8 +3,8 @@ package workflow
 import (
 	"context"
 
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/domain/series"
 )
 
 // updateIndexModel writes model into the index source snapshot. Used after a

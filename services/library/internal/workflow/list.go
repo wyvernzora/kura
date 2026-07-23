@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library/internal/progress"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/storage/indexfile"
 )
 
 // ListInput parameters for the List workflow.

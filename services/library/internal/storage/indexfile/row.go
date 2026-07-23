@@ -1,9 +1,9 @@
 package indexfile
 
 import (
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // SchemaVersion is the on-disk schema version stamped into the JSONL header.

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // TestScan_AlwaysReturnsTrackedJob is the per-workflow IsTracked

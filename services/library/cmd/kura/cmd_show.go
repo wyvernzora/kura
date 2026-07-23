@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 
-	clipkg "github.com/wyvernzora/kura/internal/cli"
-	"github.com/wyvernzora/kura/internal/cli/client"
-	"github.com/wyvernzora/kura/internal/cli/prompt"
-	"github.com/wyvernzora/kura/internal/cli/render"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	clipkg "github.com/wyvernzora/kura/services/library/internal/cli"
+	"github.com/wyvernzora/kura/services/library/internal/cli/client"
+	"github.com/wyvernzora/kura/services/library/internal/cli/prompt"
+	"github.com/wyvernzora/kura/services/library/internal/cli/render"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 type showCmd struct {

@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 // On-disk layout constants. Exported so callers that need to compare or

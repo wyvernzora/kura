@@ -1,6 +1,6 @@
 package response
 
-import "github.com/wyvernzora/kura/internal/domain/refs"
+import "github.com/wyvernzora/kura/services/library/internal/domain/refs"
 
 // ScanStatus is the per-episode outcome of a scan pass.
 type ScanStatus string

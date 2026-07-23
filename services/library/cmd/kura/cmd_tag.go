@@ -3,8 +3,8 @@ package main
 import (
 	"io"
 
-	"github.com/wyvernzora/kura/internal/cli/stdio"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 type tagCmd struct {

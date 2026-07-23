@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/server/auth"
+	"github.com/wyvernzora/kura/services/library/internal/server/auth"
 )
 
 const (

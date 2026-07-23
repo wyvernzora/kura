@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // InboxList formats an inbox listing as plain text suitable for an MCP

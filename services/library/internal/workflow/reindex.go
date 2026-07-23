@@ -3,9 +3,9 @@ package workflow
 import (
 	"context"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // Reindex walks the library root, reloads every series.json into the

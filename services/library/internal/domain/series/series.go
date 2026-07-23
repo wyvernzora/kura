@@ -10,12 +10,12 @@ import (
 
 	"cloud.google.com/go/civil"
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/searchkey"
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/searchkey"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 // ParseAirDate parses YYYY-MM-DD or empty into a civil.Date. Empty input

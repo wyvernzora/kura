@@ -19,10 +19,10 @@ import (
 	"time"
 
 	"cloud.google.com/go/civil"
-	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 // FixtureProviderKey is the metadata-ref key under which fixture

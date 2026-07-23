@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain/selector"
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 type textSearchStrategy struct {

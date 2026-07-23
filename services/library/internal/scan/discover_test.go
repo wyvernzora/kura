@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/storage/seriesdir"
+	"github.com/wyvernzora/kura/services/library/internal/storage/seriesdir"
 )
 
 func TestDiscoverSeasonEpisodesUsesAnitogoFallback(t *testing.T) {

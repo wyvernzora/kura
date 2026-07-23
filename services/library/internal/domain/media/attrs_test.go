@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
 )
 
 func TestValidateAttrs(t *testing.T) {

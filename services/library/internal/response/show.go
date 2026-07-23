@@ -1,6 +1,6 @@
 package response
 
-import "github.com/wyvernzora/kura/internal/domain/refs"
+import "github.com/wyvernzora/kura/services/library/internal/domain/refs"
 
 // Show is workflow.Show's full response: persisted series metadata
 // joined with derived per-episode status and filesystem-issue lists.

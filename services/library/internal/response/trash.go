@@ -3,7 +3,7 @@ package response
 import (
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 // TrashList is workflow.TrashList's response. Series are sorted by

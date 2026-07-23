@@ -5,11 +5,11 @@ import (
 	"errors"
 	"io/fs"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/reconcile"
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/planfile"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/storage/planfile"
 )
 
 // ApplyReconcileResponse projects a reconcile.ApplyResult into the

@@ -14,8 +14,8 @@ import (
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // ErrNonInteractive is returned when SelectCandidate is asked to prompt

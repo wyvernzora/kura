@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 const (

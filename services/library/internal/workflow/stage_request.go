@@ -3,9 +3,9 @@ package workflow
 import (
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/domain/media"
-	domainrefs "github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	domainrefs "github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
 )
 
 // StageRequest is the transport-neutral string-input shape every

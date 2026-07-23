@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 func TestTagFlagsAreRepeatable(t *testing.T) {

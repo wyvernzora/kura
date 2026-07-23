@@ -18,9 +18,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/series"
-	"github.com/wyvernzora/kura/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/domain/series"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
 )
 
 // Deps is the cross-call dependency set the reconcile package needs.

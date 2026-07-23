@@ -1,6 +1,6 @@
 package response
 
-import "github.com/wyvernzora/kura/internal/domain/refs"
+import "github.com/wyvernzora/kura/services/library/internal/domain/refs"
 
 // AddResult is workflow.Add's response. MetadataRef is echoed because
 // the surface caller (CLI / script) often resolved it from text terms

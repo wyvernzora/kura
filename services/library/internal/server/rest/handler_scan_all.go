@@ -3,8 +3,8 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // scanAllRequest is the POST /api/v1/library/scan body. All fields are

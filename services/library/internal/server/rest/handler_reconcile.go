@@ -3,8 +3,8 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/internal/reconcile"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // recoverRequest is the POST /api/v1/series/{ref}/reconcile/recover body.

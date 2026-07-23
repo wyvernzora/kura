@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	domainseries "github.com/wyvernzora/kura/internal/domain/series"
-	"github.com/wyvernzora/kura/internal/progress"
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/paths"
-	"github.com/wyvernzora/kura/internal/storage/seriesfile"
-	"github.com/wyvernzora/kura/internal/storage/trashfile"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	domainseries "github.com/wyvernzora/kura/services/library/internal/domain/series"
+	"github.com/wyvernzora/kura/services/library/internal/progress"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library/internal/storage/trashfile"
 )
 
 // RemoveInput parameters for the Remove workflow. Purge=false untracks

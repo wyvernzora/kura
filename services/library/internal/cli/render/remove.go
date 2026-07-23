@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/wyvernzora/kura/internal/cli/style"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/cli/style"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // Remove writes the remove response. asJSON forces JSON; non-TTY also

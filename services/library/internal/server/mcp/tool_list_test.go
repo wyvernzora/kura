@@ -6,7 +6,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 )
 
 func connectInMemoryWithList(t *testing.T) *sdkmcp.ClientSession {

@@ -1,6 +1,6 @@
 package resolve
 
-import "github.com/wyvernzora/kura/internal/provider"
+import "github.com/wyvernzora/kura/services/library/internal/provider"
 
 // Resolution is the resolver's success-path output. Outcome is encoded by
 // result cardinality: zero is not found, one is resolved, many is unresolved.

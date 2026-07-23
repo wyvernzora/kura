@@ -8,8 +8,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/errkind"
-	"github.com/wyvernzora/kura/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
 )
 
 const (

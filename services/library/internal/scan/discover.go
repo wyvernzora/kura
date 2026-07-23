@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/mediainfo"
-	"github.com/wyvernzora/kura/internal/storage/paths"
-	"github.com/wyvernzora/kura/internal/storage/seriesdir"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/mediainfo"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/storage/seriesdir"
 )
 
 type DiscoveredFile struct {

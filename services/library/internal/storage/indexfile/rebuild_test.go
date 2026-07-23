@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/storage/indexfile"
 )
 
 func TestSnapshot_NotReadyDuringColdRebuild(t *testing.T) {

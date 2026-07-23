@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/fsop"
+	"github.com/wyvernzora/kura/services/library/internal/fsop"
 )
 
 const envUmask = "KURA_UMASK"

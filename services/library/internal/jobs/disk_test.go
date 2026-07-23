@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/storage/jobfile"
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/storage/jobfile"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 // TestPersistedJobLogsToDisk asserts that a registry configured with

@@ -1,6 +1,6 @@
 package response
 
-import "github.com/wyvernzora/kura/internal/domain/refs"
+import "github.com/wyvernzora/kura/services/library/internal/domain/refs"
 
 // ListStatus is the rolled-up state of one series in the library list.
 // Library-level (vs episode-level Status above): does the series have

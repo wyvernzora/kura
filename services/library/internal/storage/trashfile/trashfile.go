@@ -16,9 +16,9 @@ import (
 
 	"github.com/google/renameio/v2/maybe"
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 const schemaVersion = 1

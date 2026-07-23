@@ -3,7 +3,7 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // resolveRequest is the POST /api/v1/resolve body.

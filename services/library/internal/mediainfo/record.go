@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
 )
 
 var mediaFactsPattern = regexp.MustCompile(`\(([^()]*)\)\.[^.]+$`)

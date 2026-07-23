@@ -13,8 +13,8 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/wyvernzora/kura/internal/server/auth"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/server/auth"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 const (

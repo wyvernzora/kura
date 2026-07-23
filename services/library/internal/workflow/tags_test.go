@@ -6,11 +6,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/storage/seriesfile"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 func TestUpdateTagsAddsRemovesAndNoOps(t *testing.T) {

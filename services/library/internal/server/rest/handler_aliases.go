@@ -3,8 +3,8 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // handleAliasesList serves GET /api/v1/series/{ref}/aliases. Returns

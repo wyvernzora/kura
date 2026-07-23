@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 // Config tunes the sweep loop. Zero values fall back to the defaults

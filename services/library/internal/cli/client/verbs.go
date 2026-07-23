@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // HealthResponse mirrors the /api/v1/health body.

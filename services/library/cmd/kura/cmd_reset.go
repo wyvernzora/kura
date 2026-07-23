@@ -5,10 +5,10 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/wyvernzora/kura/internal/cli/client"
-	"github.com/wyvernzora/kura/internal/cli/render"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/cli/client"
+	"github.com/wyvernzora/kura/services/library/internal/cli/render"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 type resetCmd struct {

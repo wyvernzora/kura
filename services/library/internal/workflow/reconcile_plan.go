@@ -6,10 +6,10 @@ import (
 	"io/fs"
 	"time"
 
-	domainseries "github.com/wyvernzora/kura/internal/domain/series"
-	"github.com/wyvernzora/kura/internal/reconcile"
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/planfile"
+	domainseries "github.com/wyvernzora/kura/services/library/internal/domain/series"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/storage/planfile"
 )
 
 // PlanReconcileInput parameters for the PlanReconcile workflow.

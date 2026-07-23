@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 )
 
 // fakeCoded implements errkind.Coded with chosen kind/category for

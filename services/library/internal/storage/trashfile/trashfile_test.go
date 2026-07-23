@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/storage/paths"
-	"github.com/wyvernzora/kura/internal/storage/trashfile"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/storage/trashfile"
 )
 
 func TestWriteReadList(t *testing.T) {

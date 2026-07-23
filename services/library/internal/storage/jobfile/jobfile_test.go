@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/storage/jobfile"
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/storage/jobfile"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 func TestRoundTripHeaderProgressTerminal(t *testing.T) {

@@ -3,8 +3,8 @@ package workflow
 import (
 	"context"
 
-	"github.com/wyvernzora/kura/internal/reconcile"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // RecoverReconcileInput parameters for the RecoverReconcile workflow.

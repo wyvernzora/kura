@@ -6,7 +6,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // handleTrashRestore serves POST /api/v1/series/{ref}/trash/{ulid}/restore.

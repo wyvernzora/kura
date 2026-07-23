@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // ParseListStatus converts a CLI flag value into a response.ListStatus,

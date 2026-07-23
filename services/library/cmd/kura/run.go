@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
 )
 
 // runContext is the per-invocation harness bound to kong as a pointer so

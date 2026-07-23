@@ -9,8 +9,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 // Source retrieves series, season, and episode metadata from an external

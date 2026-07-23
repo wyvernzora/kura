@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 func TestInboxList_BasicFormatting(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
 )
 
 func TestComputeFlattensSingleAlias(t *testing.T) {

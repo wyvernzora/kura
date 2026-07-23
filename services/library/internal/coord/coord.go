@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 // Coordinator serializes mutations against the same series (or the

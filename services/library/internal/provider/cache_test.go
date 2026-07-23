@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 func TestCachedSourceSharesSearchResults(t *testing.T) {

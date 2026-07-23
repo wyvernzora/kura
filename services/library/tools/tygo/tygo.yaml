@@ -1,5 +1,5 @@
 packages:
-  - path: "github.com/wyvernzora/kura/internal/response"
+  - path: "github.com/wyvernzora/kura/services/library/internal/response"
     output_path: "../../web/src/api/types.gen.ts"
     type_mappings:
       "time.Time": "string"

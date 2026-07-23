@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
 )
 
 func TestSeriesEpisodesErrorsWhenPaginationExceedsCap(t *testing.T) {

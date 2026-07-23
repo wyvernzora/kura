@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 )
 
 // maxInternalMessage caps the message length for non-coded errors so

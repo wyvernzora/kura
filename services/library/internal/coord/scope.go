@@ -3,7 +3,7 @@ package coord
 import (
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 // SeriesScope returns the canonical scope label for a per-series coordination

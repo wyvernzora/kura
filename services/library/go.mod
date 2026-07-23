@@ -1,4 +1,4 @@
-module github.com/wyvernzora/kura
+module github.com/wyvernzora/kura/services/library
 
 go 1.26.3
 

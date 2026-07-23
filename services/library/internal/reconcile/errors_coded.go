@@ -1,8 +1,8 @@
 package reconcile
 
 import (
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 )
 
 func (e *PlanAlreadyAppliedError) Kind() string     { return errkind.KindPlanApplied }

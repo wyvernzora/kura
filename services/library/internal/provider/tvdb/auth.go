@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
 )
 
 type loginRequest struct {

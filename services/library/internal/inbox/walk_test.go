@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/inbox"
+	"github.com/wyvernzora/kura/services/library/internal/inbox"
 	"golang.org/x/text/unicode/norm"
 )
 

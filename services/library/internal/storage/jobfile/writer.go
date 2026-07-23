@@ -6,7 +6,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 // Writer is an open append handle to a job's JSONL file. Created

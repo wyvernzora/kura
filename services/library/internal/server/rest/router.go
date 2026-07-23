@@ -3,7 +3,7 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/internal/server/webui"
+	"github.com/wyvernzora/kura/services/library/internal/server/webui"
 )
 
 // buildRouter wires the URL surface and applies the middleware chain.

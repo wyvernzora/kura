@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
 )
 
 func TestPlanToResponseProjectsStagedRecord(t *testing.T) {

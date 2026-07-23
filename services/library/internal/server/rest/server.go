@@ -20,7 +20,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
 )
 
 // seriesSelector returns path expressed as a `series:<rel>` selector

@@ -3,8 +3,8 @@ package response
 import (
 	"time"
 
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
 )
 
 // ReconcilePlan is workflow.PlanReconcile's response. Token / CreatedAt

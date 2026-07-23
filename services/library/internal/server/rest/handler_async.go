@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // jobSubmissionResponse is the 202 body for every async submission.

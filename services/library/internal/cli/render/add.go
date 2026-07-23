@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // Add writes the add response. asJSON toggles JSON; otherwise prints

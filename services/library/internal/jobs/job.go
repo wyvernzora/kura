@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/progress"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/progress"
 )
 
 // Status enumerates the three states a job can be in.

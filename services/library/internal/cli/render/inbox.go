@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/wyvernzora/kura/internal/cli/style"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/cli/style"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // InboxList writes the inbox listing to w. asJSON toggles a JSON

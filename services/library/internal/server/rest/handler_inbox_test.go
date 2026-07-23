@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/jobs"
-	"github.com/wyvernzora/kura/internal/response"
-	"github.com/wyvernzora/kura/internal/storage/indexfile"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/jobs"
+	"github.com/wyvernzora/kura/services/library/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 func newInboxTestServer(t *testing.T) (server *Server, inboxRoot string) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/wyvernzora/kura/internal/coord"
-	"github.com/wyvernzora/kura/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/coord"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
 )
 
 // StartupRecoveryResult summarizes a startup recovery sweep across the

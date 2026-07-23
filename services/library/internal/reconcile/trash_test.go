@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/domain/series"
 )
 
 func TestPlanTrash_EmptyArrayProducesNoSteps(t *testing.T) {

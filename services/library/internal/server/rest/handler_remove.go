@@ -3,7 +3,7 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // handleRemove serves DELETE /api/v1/series/{ref}.

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain/selector"
+	"github.com/wyvernzora/kura/services/library/internal/domain/selector"
 	"golang.org/x/text/unicode/norm"
 )
 

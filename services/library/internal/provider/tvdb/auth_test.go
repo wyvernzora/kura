@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 func TestClientRefreshesTokenAfterUnauthorized(t *testing.T) {

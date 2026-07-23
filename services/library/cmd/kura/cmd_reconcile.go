@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/wyvernzora/kura/internal/cli/render"
-	"github.com/wyvernzora/kura/internal/cli/stdio"
-	"github.com/wyvernzora/kura/internal/reconcile"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/cli/render"
+	"github.com/wyvernzora/kura/services/library/internal/cli/stdio"
+	"github.com/wyvernzora/kura/services/library/internal/reconcile"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 type reconcileCmd struct {

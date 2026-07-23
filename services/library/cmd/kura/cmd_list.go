@@ -1,10 +1,10 @@
 package main
 
 import (
-	clipkg "github.com/wyvernzora/kura/internal/cli"
-	"github.com/wyvernzora/kura/internal/cli/client"
-	"github.com/wyvernzora/kura/internal/cli/render"
-	"github.com/wyvernzora/kura/internal/response"
+	clipkg "github.com/wyvernzora/kura/services/library/internal/cli"
+	"github.com/wyvernzora/kura/services/library/internal/cli/client"
+	"github.com/wyvernzora/kura/services/library/internal/cli/render"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 type listCmd struct {

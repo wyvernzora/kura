@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/oklog/ulid/v2"
-	"github.com/wyvernzora/kura/internal/domain/series"
+	"github.com/wyvernzora/kura/services/library/internal/domain/series"
 )
 
 func TestPlanExtras_EmptyArrayProducesNoSteps(t *testing.T) {

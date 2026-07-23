@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/wyvernzora/kura/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
 )
 
 // Series identifies a tracked series by directory name.

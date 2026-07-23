@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // handleTrashListSeries serves GET /api/v1/series/{ref}/trash.

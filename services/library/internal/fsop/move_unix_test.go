@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/fsop"
+	"github.com/wyvernzora/kura/services/library/internal/fsop"
 )
 
 func TestSafeMoveFileAlignsGroupWithParent(t *testing.T) {

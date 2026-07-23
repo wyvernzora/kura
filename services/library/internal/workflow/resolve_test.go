@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/domain/refs"
-	"github.com/wyvernzora/kura/internal/provider"
-	"github.com/wyvernzora/kura/internal/textnorm"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/domain/refs"
+	"github.com/wyvernzora/kura/services/library/internal/provider"
+	"github.com/wyvernzora/kura/services/library/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 // posterSource is a fake provider.Source whose Search returns two

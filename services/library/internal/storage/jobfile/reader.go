@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/wyvernzora/kura/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library/internal/storage/paths"
 )
 
 // Job is the fully-decoded view of one JSONL file. Header is always

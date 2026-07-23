@@ -1,6 +1,6 @@
 package response
 
-import "github.com/wyvernzora/kura/internal/domain/refs"
+import "github.com/wyvernzora/kura/services/library/internal/domain/refs"
 
 // Resolution is the workflow.Resolve return shape. Outcome is encoded by
 // candidate-list cardinality:

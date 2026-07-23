@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/internal/cli"
+	"github.com/wyvernzora/kura/services/library/internal/cli"
 )
 
 func TestParseDuration(t *testing.T) {

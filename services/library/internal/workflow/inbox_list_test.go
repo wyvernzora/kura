@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wyvernzora/kura/internal/inbox"
-	"github.com/wyvernzora/kura/internal/workflow"
+	"github.com/wyvernzora/kura/services/library/internal/inbox"
+	"github.com/wyvernzora/kura/services/library/internal/workflow"
 )
 
 func writeFile(t *testing.T, p string) {

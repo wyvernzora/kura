@@ -1,7 +1,7 @@
 package coord
 
 import (
-	"github.com/wyvernzora/kura/internal/errkind"
+	"github.com/wyvernzora/kura/services/library/internal/errkind"
 )
 
 // errkind.Coded methods on the coord error types. See errkind.Coded

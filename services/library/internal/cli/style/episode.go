@@ -3,8 +3,8 @@ package style
 import (
 	"strings"
 
-	"github.com/wyvernzora/kura/internal/domain/media"
-	"github.com/wyvernzora/kura/internal/response"
+	"github.com/wyvernzora/kura/services/library/internal/domain/media"
+	"github.com/wyvernzora/kura/services/library/internal/response"
 )
 
 // EpisodeStatus colors a response.Status string. Used by show, scan, and
