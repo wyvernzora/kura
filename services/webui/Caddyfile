@@ -1,0 +1,25 @@
+# kura-webui: static SPA + reverse proxy to the service APIs.
+# One origin for the browser; no CORS, one auth point. Upstreams come
+# from env so deployments wire their own service discovery.
+{
+	auto_https off
+	admin off
+}
+
+:8080 {
+	encode gzip
+
+	# Library API. Future: /api/releases/*, /api/backup/* route to their
+	# services as suite views land in the SPA.
+	handle /api/* {
+		reverse_proxy {$KURA_WEBUI_LIBRARY_UPSTREAM}
+	}
+
+	# SPA: hashed assets served as files, everything else falls through
+	# to index.html for client-side routing.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
