@@ -15,13 +15,13 @@ ARG VERSION=dev
 
 # ---- build ----
 FROM node:24-alpine AS build
-WORKDIR /src/integrations/n8n
+WORKDIR /src/integrations/n8n/releases
 RUN corepack enable
-COPY integrations/n8n/package.json integrations/n8n/pnpm-lock.yaml ./
+COPY integrations/n8n/releases/package.json integrations/n8n/releases/pnpm-lock.yaml ./
 RUN corepack pnpm install --frozen-lockfile
-COPY integrations/n8n/ ./
+COPY integrations/n8n/releases/ ./
 # The node icon asset (resolved as ../../docs/assets at build time).
-COPY docs/assets/logo-n8n.svg /src/docs/assets/logo-n8n.svg
+COPY services/releases/docs/assets/logo-n8n.svg /src/services/releases/docs/assets/logo-n8n.svg
 RUN corepack pnpm build
 # Reduce to the loadable package: the n8n manifest (package.json) + compiled dist/.
 RUN mkdir -p /pkg && cp -r package.json dist /pkg/
@@ -30,7 +30,7 @@ RUN mkdir -p /pkg && cp -r package.json dist /pkg/
 FROM busybox:1.38-musl
 LABEL org.opencontainers.image.source="https://github.com/wyvernzora/takuhai"
 COPY --from=build /pkg /takuhai-nodes
-COPY integrations/n8n/entrypoint.sh /entrypoint.sh
+COPY integrations/n8n/releases/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 # The directory n8n is configured to scan (N8N_CUSTOM_EXTENSIONS); overridable.
 ENV TAKUHAI_NODES_TARGET=/opt/n8n/custom
