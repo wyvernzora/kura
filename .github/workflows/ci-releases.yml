@@ -1,0 +1,256 @@
+name: ci-releases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/releases/**"
+      - "integrations/n8n/releases/**"
+      - ".github/workflows/ci-releases.yml"
+  pull_request:
+    paths:
+      - "services/releases/**"
+      - "integrations/n8n/releases/**"
+      - ".github/workflows/ci-releases.yml"
+
+concurrency:
+  group: ci-releases-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: go
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/releases
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: services/releases/go.mod
+          cache: true
+
+      # gofmt drift check across every module's source roots.
+      - name: gofmt
+        run: |
+          drift=$(gofmt -l cmd internal pkg sources)
+          if [ -n "$drift" ]; then
+            echo "::error::gofmt drift in:" >&2
+            echo "$drift" >&2
+            exit 1
+          fi
+
+      # Workspace drift check runs at the monorepo root: a `use` added
+      # without `go work sync`, or sync-promoted versions missing from a
+      # module's standalone go.sum, would otherwise pass silently.
+      - name: go work sync drift
+        working-directory: .
+        run: |
+          go work sync
+          git diff --exit-code
+
+      - name: install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+
+      # Explicit module list with GOWORK=off: under the monorepo workspace,
+      # `go list -m` would enumerate every workspace module including the
+      # library; each releases module must gate standalone, exactly as its
+      # docker builds run.
+      - name: per-module vet / build / test / lint
+        env:
+          GOWORK: "off"
+        run: |
+          for m in . sources/dmhy sources/nyaa; do
+            echo "::group::module $m"
+            (cd "$m" \
+              && go vet ./... \
+              && go build ./... \
+              && go build -tags=conformance ./... \
+              && go test -race -count=1 -tags=conformance ./... \
+              && golangci-lint run ./...) || { echo "::error::module $m failed"; exit 1; }
+            echo "::endgroup::"
+          done
+
+      - name: go build (binaries)
+        env:
+          GOWORK: "off"
+        run: |
+          (cd . && go build -trimpath -o bin/kura-releases ./cmd/kura-releases)
+          (cd sources/dmhy && go build -trimpath -o ../../bin/kura-releases-dmhy ./cmd/kura-releases-dmhy)
+          (cd sources/nyaa && go build -trimpath -o ../../bin/kura-releases-nyaa ./cmd/kura-releases-nyaa)
+
+  # Real-binary smoke over the deployable shape: real Postgres via
+  # testcontainers, builds + runs cmd/kura-releases.
+  smoke:
+    name: smoke
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/releases
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: services/releases/go.mod
+          cache: true
+
+      - name: real-binary smoke
+        run: go test -tags=smoke -run TestSmoke -count=1 ./cmd/kura-releases
+
+  # End-to-end over built service + crawler images, fake DMHY, Postgres.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/releases
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: services/releases/go.mod
+          cache: true
+
+      - name: end-to-end workflow
+        run: go test -tags=e2e -run TestEndToEndWorkflow -count=1 ./e2e
+
+  n8n:
+    name: n8n
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+
+      - name: corepack pnpm build
+        working-directory: integrations/n8n/releases
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm build
+
+  # :dev image publish for the releases family, gated on all test jobs.
+  build-push:
+    name: build & push
+    needs: [go, smoke, e2e, n8n]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: kura-releases
+            image: ghcr.io/wyvernzora/kura-releases
+            context: services/releases
+            file: services/releases/Dockerfile
+            build_args: |
+              BUILD_DIR=.
+              CMD_PKG=./cmd/kura-releases
+            description: Anime release indexer + match work queue (REST + MCP)
+          - component: kura-releases-crawler-dmhy
+            image: ghcr.io/wyvernzora/kura-releases-crawler-dmhy
+            context: services/releases
+            file: services/releases/Dockerfile
+            build_args: |
+              BUILD_DIR=sources/dmhy
+              CMD_PKG=./cmd/kura-releases-dmhy
+            description: DMHY stateless crawler (POST /crawl)
+          - component: kura-releases-crawler-nyaa
+            image: ghcr.io/wyvernzora/kura-releases-crawler-nyaa
+            context: services/releases
+            file: services/releases/Dockerfile
+            build_args: |
+              BUILD_DIR=sources/nyaa
+              CMD_PKG=./cmd/kura-releases-nyaa
+            description: Nyaa stateless crawler (POST /crawl)
+          - component: kura-releases-n8n-nodes
+            image: ghcr.io/wyvernzora/kura-releases-n8n-nodes
+            context: .
+            file: integrations/n8n/releases/Dockerfile
+            build_args: ''
+            description: Release-indexer custom nodes for n8n (init container)
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Determine VERSION
+        id: version
+        run: |
+          echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags + labels
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.component }}
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.value }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build & push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.version.outputs.value }}
+            COMMIT=${{ github.sha }}
+            ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          provenance: false
+
+  # Prune untagged GHCR versions accumulated by :dev moves.
+  cleanup-untagged:
+    name: prune untagged
+    needs: build-push
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - kura-releases
+          - kura-releases-crawler-dmhy
+          - kura-releases-crawler-nyaa
+          - kura-releases-n8n-nodes
+    steps:
+      - name: Delete untagged versions, keep last 10
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
+        with:
+          package-name: ${{ matrix.package }}
+          package-type: container
+          delete-only-untagged-versions: 'true'
+          min-versions-to-keep: 10

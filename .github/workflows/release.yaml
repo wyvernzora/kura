@@ -1,5 +1,8 @@
 name: release
 
+# Repo-wide versioning: one v* tag releases every service image at that
+# version. Replaces the per-repo release workflows.
+
 on:
   push:
     tags:
@@ -7,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example v0.1.0"
+        description: "Release version, for example v0.6.0"
         required: true
         type: string
 
@@ -18,7 +21,6 @@ permissions:
 
 jobs:
   verify:
-    name: verify
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -37,11 +39,14 @@ jobs:
             version="${GITHUB_REF_NAME}"
           fi
           if [[ ! "$version" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
-            echo "version must look like v0.1.0, got $version" >&2
+            echo "version must look like v0.6.0, got $version" >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      # Path-filtered service CI runs may legitimately not exist for a
+      # given commit, so the release gate checks (a) the tag is on main
+      # and (b) ci-lint.yml — which runs for every push — succeeded.
       - name: Verify release commit is on main with passing CI
         id: verify
         env:
@@ -61,7 +66,7 @@ jobs:
           fi
 
           ci_run_url="$(
-            gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs" \
+            gh api "repos/$REPOSITORY/actions/workflows/ci-lint.yml/runs" \
               --method GET \
               -f branch=main \
               -f event=push \
@@ -71,58 +76,131 @@ jobs:
               head -n 1
           )"
           if [ -z "$ci_run_url" ]; then
-            echo "::error::Release commit $tagged_sha does not have a successful completed ci.yml push run on main."
+            echo "::error::Release commit $tagged_sha does not have a successful ci-lint.yml push run on main."
             exit 1
           fi
 
           echo "Release commit $tagged_sha is on main and passed CI: $ci_run_url"
 
-  publish-images:
-    name: publish ${{ matrix.component }}
+  publish-library:
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags + labels
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
+        with:
+          images: ghcr.io/wyvernzora/kura-server
+          tags: |
+            type=raw,value=${{ needs.verify.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=kura-server
+            org.opencontainers.image.description=Anime-first library manager
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build & push image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        with:
+          context: services/library
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.verify.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Compute n8n node tags + labels
+        id: n8n-meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
+        with:
+          images: ghcr.io/wyvernzora/kura-n8n-nodes
+          tags: |
+            type=raw,value=${{ needs.verify.outputs.version }}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=kura-n8n-nodes
+            org.opencontainers.image.description=Kura custom nodes for n8n
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.verify.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build & push n8n nodes
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
+        with:
+          context: .
+          file: integrations/n8n/kura/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.n8n-meta.outputs.tags }}
+          labels: ${{ steps.n8n-meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.verify.outputs.version }}
+          cache-from: type=gha,scope=release-n8n-nodes
+          cache-to: type=gha,mode=max,scope=release-n8n-nodes
+          provenance: false
+
+  publish-releases:
     needs: verify
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
-      # Keep this in sync with ci.yml's image-plan job; CI fails if it drifts.
       matrix:
         include:
-          - component: takuhai
-            image: ghcr.io/${{ github.repository }}
-            context: .
-            file: Dockerfile
+          - component: kura-releases
+            image: ghcr.io/wyvernzora/kura-releases
+            context: services/releases
+            file: services/releases/Dockerfile
             build_args: |
               BUILD_DIR=.
-              CMD_PKG=./cmd/takuhai
+              CMD_PKG=./cmd/kura-releases
             description: Anime release indexer + match work queue (REST + MCP)
-          - component: crawler-dmhy
-            image: ghcr.io/${{ github.repository }}/crawler-dmhy
-            context: .
-            file: Dockerfile
+          - component: kura-releases-crawler-dmhy
+            image: ghcr.io/wyvernzora/kura-releases-crawler-dmhy
+            context: services/releases
+            file: services/releases/Dockerfile
             build_args: |
               BUILD_DIR=sources/dmhy
-              CMD_PKG=./cmd/takuhai-dmhy
+              CMD_PKG=./cmd/kura-releases-dmhy
             description: DMHY stateless crawler (POST /crawl)
-          - component: crawler-nyaa
-            image: ghcr.io/${{ github.repository }}/crawler-nyaa
-            context: .
-            file: Dockerfile
+          - component: kura-releases-crawler-nyaa
+            image: ghcr.io/wyvernzora/kura-releases-crawler-nyaa
+            context: services/releases
+            file: services/releases/Dockerfile
             build_args: |
               BUILD_DIR=sources/nyaa
-              CMD_PKG=./cmd/takuhai-nyaa
+              CMD_PKG=./cmd/kura-releases-nyaa
             description: Nyaa stateless crawler (POST /crawl)
-          - component: n8n-nodes
-            image: ghcr.io/${{ github.repository }}/n8n-nodes
+          - component: kura-releases-n8n-nodes
+            image: ghcr.io/wyvernzora/kura-releases-n8n-nodes
             context: .
-            file: integrations/n8n/Dockerfile
+            file: integrations/n8n/releases/Dockerfile
             build_args: ''
-            description: takuhai custom nodes for n8n (init container)
+            description: Release-indexer custom nodes for n8n (init container)
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          fetch-depth: 0
-
-      - name: Check out release commit
-        run: git checkout --detach "${{ needs.verify.outputs.sha }}"
+          ref: ${{ needs.verify.outputs.sha }}
 
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
@@ -167,8 +245,7 @@ jobs:
           provenance: false
 
   github-release:
-    name: github release
-    needs: [verify, publish-images]
+    needs: [verify, publish-library, publish-releases]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

@@ -1,72 +1,45 @@
-name: ci
+name: ci-library
 
 on:
   push:
     branches: [main]
+    paths:
+      - "services/library/**"
+      - "integrations/n8n/kura/**"
+      - ".github/workflows/ci-library.yml"
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "services/library/**"
+      - "integrations/n8n/kura/**"
+      - ".github/workflows/ci-library.yml"
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-library-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
+  IMAGE_NAME: ghcr.io/wyvernzora/kura-server
 
 jobs:
-  commit-subject:
-    name: commit subject
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          fetch-depth: 0
-
-      - name: Validate pull request title
-        if: github.event_name == 'pull_request'
-        env:
-          SUBJECT: ${{ github.event.pull_request.title }}
-        run: printf '%s\n' "$SUBJECT" | ./.githooks/check-commit-subject.sh -
-
-      - name: Validate pushed commits
-        if: github.event_name == 'push'
-        env:
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
-        run: |
-          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] ||
-             ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            commits="$AFTER"
-          else
-            commits="$(git rev-list --reverse "$BEFORE..$AFTER")"
-          fi
-
-          for commit in $commits; do
-            subject="$(git show -s --format=%s "$commit")"
-            if ! printf '%s\n' "$subject" | ./.githooks/check-commit-subject.sh -; then
-              echo "::error::Commit $commit has an invalid subject: $subject"
-              exit 1
-            fi
-          done
-
   go:
     name: go
-    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/library
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
-          go-version-file: go.mod
+          go-version-file: services/library/go.mod
           cache: true
 
-      # gofmt drift check. The Makefile `fmt` target rewrites in place,
-      # which would silently auto-fix CI runs; here we use `-l` to list
-      # offenders without mutation and fail when the list is non-empty.
+      # gofmt drift check: -l lists offenders without mutation.
       - name: gofmt
         run: |
           drift=$(gofmt -l cmd internal)
@@ -79,26 +52,15 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # Pinned to match the version used locally; avoids CI-only failures
-      # when a newer lint release surfaces issues no developer has hit yet.
-      # Bump intentionally with the local install.
-      #
-      # install-mode=goinstall compiles golangci-lint from source against
-      # the Go toolchain `setup-go` just installed. The default `binary`
-      # mode downloads the upstream prebuilt binary, which is built with
-      # an older Go (v1.64.8 ships built with go1.24); when the project's
-      # go.mod targets a newer Go than that, golangci-lint refuses to
-      # load the config with "Go language version used to build
-      # golangci-lint is lower than the targeted Go version". Building
-      # from source side-steps the check.
+      # install-mode=goinstall compiles golangci-lint against the toolchain
+      # setup-go installed; pinned to match the local version.
       - name: golangci-lint
         uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9
         with:
           version: v2.12.2
           install-mode: goinstall
+          working-directory: services/library
 
-      # -race catches data races; -count=1 disables test caching so a green
-      # CI run reflects an actual execution, not a stale cached pass.
       - name: go test
         run: go test -race -count=1 ./...
 
@@ -107,36 +69,28 @@ jobs:
 
   web:
     name: web
-    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: web
+        working-directory: services/library/web
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      # No `version` field — pnpm/action-setup reads the version pinned
-      # in web/package.json#packageManager (currently pnpm@10.33.4). The
-      # action defaults to ./package.json at the repo root, which has no
-      # packageManager field; point it at the web sub-directory's manifest.
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
         with:
-          package_json_file: web/package.json
+          package_json_file: services/library/web/package.json
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: services/library/web/pnpm-lock.yaml
 
       - name: pnpm install
         run: pnpm install --frozen-lockfile
 
-      # Build first: the TanStack Router Vite plugin emits
-      # src/routeTree.gen.ts as a side effect, which typecheck (tsc -b)
-      # imports from src/main.tsx. The file is gitignored, so a fresh
-      # CI checkout has no copy and `tsc` fails with TS2307 if build
-      # hasn't run. Build also validates the production bundle.
+      # Build first: the router plugin emits routeTree.gen.ts, which
+      # typecheck imports; the file is gitignored.
       - name: build
         run: pnpm build
 
@@ -149,78 +103,66 @@ jobs:
       - name: test
         run: pnpm test
 
-  # End-to-end scenarios under e2e/ exercise the CLI surface against a
-  # stub provider (kura built with -tags=e2e_stub) so the run is fully
-  # hermetic — no docker, no network, no real media. Catches workflow
-  # regressions (stage → plan → apply → trash chains) that unit tests
-  # don't cover. Gated by build-push so a red e2e run can't ship an
-  # image. Renovate dependency bumps surface here at PR time before
-  # the merge that would publish a broken :dev image.
+  # Hermetic CLI e2e scenarios against the stub provider (-tags=e2e_stub).
   e2e:
     name: e2e
-    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/library
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
-          go-version-file: go.mod
+          go-version-file: services/library/go.mod
           cache: true
 
-      # Bumped to 300s vs the local Makefile's 120s — race-mode CI is
-      # slower than dev machines, and the suite cold-builds the
-      # kura-e2e binary once before any test runs.
       - name: e2e
         run: go test -tags=e2e -race -count=1 -timeout=300s ./e2e/...
 
-  # Regenerate web/src/api/types.gen.ts from internal/response and fail
-  # the build if the working tree drifts. Mirrors `make check-gen`. Runs
-  # on its own job so a Go-only change can't slip a stale types.gen.ts
-  # through the web job (which doesn't regenerate, only typechecks).
+  # Regenerate web/src/api/types.gen.ts and fail on drift.
   gen-check:
     name: gen-ts drift
-    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
-          go-version-file: go.mod
+          go-version-file: services/library/go.mod
           cache: true
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
         with:
-          package_json_file: web/package.json
+          package_json_file: services/library/web/package.json
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: services/library/web/pnpm-lock.yaml
 
       - name: pnpm install (for biome)
-        working-directory: web
+        working-directory: services/library/web
         run: pnpm install --frozen-lockfile
 
       - name: regenerate types
-        run: make gen-ts
+        run: make -C services/library gen-ts
 
       - name: assert no drift
         run: |
-          if ! git diff --exit-code -- web/src/api/types.gen.ts; then
-            echo "::error::web/src/api/types.gen.ts is stale; run 'make gen-ts' and commit the result" >&2
+          if ! git diff --exit-code -- services/library/web/src/api/types.gen.ts; then
+            echo "::error::types.gen.ts is stale; run 'make -C services/library gen-ts' and commit" >&2
             exit 1
           fi
 
   n8n:
     name: n8n
-    if: github.event.action != 'edited'
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: integrations/n8n
+        working-directory: integrations/n8n/kura
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
@@ -242,38 +184,23 @@ jobs:
       - name: test
         run: corepack pnpm test
 
-  # Build & push the development container image to GHCR. Gated on every
-  # test job so a red main commit can't ship a poisoned :dev tag.
-  # Pull-request events skip this entirely (no push, no permission to
-  # GHCR from forks). Tagged releases are published by release.yaml.
-  #
-  # Tag rules:
-  #   push to main → :dev (and VERSION=dev-<short_sha>)
+  # :dev image publish, gated on every test job.
   build-push:
     name: build & push
-    needs: [commit-subject, go, web, gen-check, e2e, n8n]
+    needs: [go, web, gen-check, e2e, n8n]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
-    outputs:
-      version: ${{ steps.version.outputs.value }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      # VERSION drives the -ldflags="-X main.Version=..." stamp baked
-      # into the kura binary. Main-branch pushes use the short SHA
-      # prefixed with "dev-" so /api/v1/health on a :dev image still
-      # reports the exact commit it came from.
       - name: Determine VERSION
         id: version
         run: |
           echo "value=dev-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      # QEMU enables linux/arm64 emulation on the amd64 GH-hosted
-      # runner. Slower than native arm64 but keeps the workflow on
-      # free-tier runners.
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
 
@@ -291,7 +218,7 @@ jobs:
           tags: |
             type=raw,value=dev
           labels: |
-            org.opencontainers.image.title=kura
+            org.opencontainers.image.title=kura-server
             org.opencontainers.image.description=Anime-first library manager
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.value }}
@@ -301,7 +228,7 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
-          context: .
+          context: services/library
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -316,7 +243,7 @@ jobs:
         id: n8n-meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
         with:
-          images: ${{ env.IMAGE_NAME }}/n8n-nodes
+          images: ghcr.io/wyvernzora/kura-n8n-nodes
           tags: |
             type=raw,value=dev
           labels: |
@@ -331,7 +258,7 @@ jobs:
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
-          file: integrations/n8n/Dockerfile
+          file: integrations/n8n/kura/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.n8n-meta.outputs.tags }}
