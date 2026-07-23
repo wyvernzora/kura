@@ -1,10 +1,10 @@
 {
-  "name": "n8n-nodes-kura-release-indexer",
+  "name": "n8n-nodes-kura",
   "version": "0.0.0",
-  "description": "n8n nodes for the Kura release indexer and matcher queue.",
-  "keywords": ["n8n-community-node-package", "takuhai", "anime"],
+  "description": "n8n nodes for the Kura suite: library automation, release ingest, and the matcher queue.",
+  "keywords": ["n8n-community-node-package", "kura", "anime"],
   "license": "MIT",
-  "packageManager": "pnpm@10.34.4",
+  "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=20.15"
   },
@@ -15,16 +15,18 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "dev": "tsc -p tsconfig.json --watch",
+    "test": "node scripts/projection-check.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "n8n": {
     "n8nNodesApiVersion": 1,
     "credentials": [
-      "dist/credentials/TakuhaiApi.credentials.js"
+      "dist/credentials/KuraLibraryApi.credentials.js",
+      "dist/credentials/KuraReleasesApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/Takuhai/Takuhai.node.js",
-      "dist/nodes/TakuhaiTrigger/TakuhaiTrigger.node.js"
+      "dist/nodes/Kura/Kura.node.js",
+      "dist/nodes/KuraQueueTrigger/KuraQueueTrigger.node.js"
     ]
   },
   "peerDependencies": {
@@ -33,6 +35,6 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "n8n-workflow": "*",
-    "typescript": "^5.7.2"
+    "typescript": "^6.0.0"
   }
 }

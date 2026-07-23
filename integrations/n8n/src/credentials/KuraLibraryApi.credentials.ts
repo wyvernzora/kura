@@ -5,9 +5,9 @@ import type {
 	INodeProperties,
 } from 'n8n-workflow';
 
-export class KuraApi implements ICredentialType {
-	name = 'kuraApi';
-	displayName = 'Kura API';
+export class KuraLibraryApi implements ICredentialType {
+	name = 'kuraLibraryApi';
+	displayName = 'Kura Library API';
 	documentationUrl = 'https://github.com/wyvernzora/kura';
 	icon: Icon = 'file:kura.svg';
 
@@ -19,7 +19,7 @@ export class KuraApi implements ICredentialType {
 			default: 'http://kura:8080',
 			placeholder: 'http://kura:8080',
 			required: true,
-			description: 'Base URL of the Kura REST service',
+			description: 'Base URL of the Kura library-manager REST service',
 		},
 		{
 			displayName: 'Bearer Token',

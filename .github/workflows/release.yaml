@@ -129,31 +129,48 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
 
-      - name: Compute n8n node tags + labels
-        id: n8n-meta
+  publish-n8n:
+    needs: verify
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.verify.outputs.sha }}
+
+      - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4
+      - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4
+
+      - uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags + labels
+        id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
         with:
-          images: ghcr.io/wyvernzora/kura-n8n-nodes
+          images: ghcr.io/wyvernzora/kura/n8n-nodes
           tags: |
             type=raw,value=${{ needs.verify.outputs.version }}
             type=raw,value=latest
           labels: |
             org.opencontainers.image.title=kura-n8n-nodes
-            org.opencontainers.image.description=Kura custom nodes for n8n
+            org.opencontainers.image.description=Kura suite custom nodes for n8n (init container)
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.verify.outputs.version }}
             org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
             org.opencontainers.image.licenses=MIT
 
-      - name: Build & push n8n nodes
+      - name: Build & push image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
           context: .
-          file: integrations/n8n/kura/Dockerfile
+          file: integrations/n8n/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.n8n-meta.outputs.tags }}
-          labels: ${{ steps.n8n-meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ needs.verify.outputs.version }}
           cache-from: type=gha,scope=release-n8n-nodes
@@ -220,12 +237,6 @@ jobs:
             file: services/release-indexer/Dockerfile
             build_args: ''
             description: Anime release indexer, source crawlers, and match work queue
-          - component: kura-releases-n8n-nodes
-            image: ghcr.io/wyvernzora/kura-releases-n8n-nodes
-            context: .
-            file: integrations/n8n/releases/Dockerfile
-            build_args: ''
-            description: Release-indexer custom nodes for n8n (init container)
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -274,7 +285,7 @@ jobs:
           provenance: false
 
   github-release:
-    needs: [verify, publish-library, publish-webui, publish-releases]
+    needs: [verify, publish-library, publish-n8n, publish-webui, publish-releases]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

@@ -7,29 +7,29 @@ import type {
 } from 'n8n-workflow';
 import { LoggerProxy as Logger } from 'n8n-workflow';
 
-const CRED = 'takuhaiApi';
+const CRED = 'kuraReleasesApi';
 
 /**
- * Takuhai Queue Trigger — polls by claiming queue work. It stays idle when no work is
- * claimable and emits one batch item when work exists. The poll schedule comes from
- * n8n's standard polling UI.
+ * Kura Queue Trigger — polls by claiming release-indexer queue work. It stays
+ * idle when no work is claimable and emits one batch item when work exists.
+ * The poll schedule comes from n8n's standard polling UI.
  */
-export class TakuhaiTrigger implements INodeType {
+export class KuraQueueTrigger implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Takuhai Queue Trigger',
-		name: 'takuhaiTrigger',
-		icon: 'file:takuhai.svg',
+		displayName: 'Kura Queue Trigger',
+		name: 'kuraQueueTrigger',
+		icon: 'file:kura.svg',
 		group: ['trigger'],
 		version: 1,
 		subtitle: '={{"claim: " + $parameter["limit"]}}',
-		description: 'Claims takuhai queue work when releases are available',
+		description: 'Claims Kura release-indexer queue work when releases are available',
 		codex: {
 			categories: ['Core Nodes'],
 			subcategories: {
 				'Core Nodes': ['Helpers'],
 			},
 		},
-		defaults: { name: 'Takuhai Queue Trigger' },
+		defaults: { name: 'Kura Queue Trigger' },
 		polling: true,
 		inputs: [],
 		outputs: ['main'],
@@ -69,17 +69,17 @@ export class TakuhaiTrigger implements INodeType {
 				json: true,
 			})) as IDataObject;
 		} catch (error) {
-			Logger.debug('Takuhai queue trigger claim failed', { err: (error as Error).message });
+			Logger.debug('Kura queue trigger claim failed', { err: (error as Error).message });
 			throw error;
 		}
 
 		const claimed = (res.items as IDataObject[]) ?? [];
 		if (claimed.length === 0) {
-			Logger.debug('Takuhai queue trigger poll completed with no claims');
+			Logger.debug('Kura queue trigger poll completed with no claims');
 			return null;
 		}
 
-		Logger.info('Takuhai queue trigger emitted claims', { claimed_count: claimed.length });
+		Logger.info('Kura queue trigger emitted claims', { claimed_count: claimed.length });
 		return [[{ json: { items: claimed, count: claimed.length } }]];
 	}
 }

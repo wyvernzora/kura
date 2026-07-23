@@ -10,12 +10,12 @@
 ARG VERSION=dev
 
 FROM node:24-alpine AS build
-WORKDIR /src/integrations/n8n/kura
+WORKDIR /src/integrations/n8n
 ENV CI=true
 RUN corepack enable
-COPY integrations/n8n/kura/package.json integrations/n8n/kura/pnpm-lock.yaml integrations/n8n/kura/pnpm-workspace.yaml ./
+COPY integrations/n8n/package.json integrations/n8n/pnpm-lock.yaml integrations/n8n/pnpm-workspace.yaml ./
 RUN corepack pnpm install --frozen-lockfile
-COPY integrations/n8n/kura/ ./
+COPY integrations/n8n/ ./
 COPY services/library-manager/docs/assets/logo-n8n.svg /src/services/library-manager/docs/assets/logo-n8n.svg
 RUN corepack pnpm build
 RUN mkdir -p /pkg && cp -r package.json dist /pkg/
@@ -23,7 +23,7 @@ RUN mkdir -p /pkg && cp -r package.json dist /pkg/
 FROM busybox:1.38-musl
 LABEL org.opencontainers.image.source="https://github.com/wyvernzora/kura"
 COPY --from=build /pkg /kura-nodes
-COPY integrations/n8n/kura/entrypoint.sh /entrypoint.sh
+COPY integrations/n8n/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENV KURA_NODES_TARGET=/opt/n8n/custom
 ENTRYPOINT ["/entrypoint.sh"]

@@ -5,14 +5,12 @@ on:
     branches: [main]
     paths:
       - "services/library-manager/**"
-      - "integrations/n8n/kura/**"
       - "services/webui/src/api/types.gen.ts"
       - ".github/workflows/ci-library.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "services/library-manager/**"
-      - "integrations/n8n/kura/**"
       - "services/webui/src/api/types.gen.ts"
       - ".github/workflows/ci-library.yml"
 
@@ -123,37 +121,10 @@ jobs:
             exit 1
           fi
 
-  n8n:
-    name: n8n
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: integrations/n8n/kura
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: 24
-
-      - name: pnpm install
-        run: |
-          corepack enable
-          corepack pnpm install --frozen-lockfile
-
-      - name: typecheck
-        run: corepack pnpm typecheck
-
-      - name: build
-        run: corepack pnpm build
-
-      - name: test
-        run: corepack pnpm test
-
   # :dev image publish, gated on every test job.
   build-push:
     name: build & push
-    needs: [go, gen-check, e2e, n8n]
+    needs: [go, gen-check, e2e]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
@@ -203,34 +174,4 @@ jobs:
             VERSION=${{ steps.version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: false
-
-      - name: Compute n8n node tags + labels
-        id: n8n-meta
-        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
-        with:
-          images: ghcr.io/wyvernzora/kura-n8n-nodes
-          tags: |
-            type=raw,value=dev
-          labels: |
-            org.opencontainers.image.title=kura-n8n-nodes
-            org.opencontainers.image.description=Kura custom nodes for n8n
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.version=${{ steps.version.outputs.value }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.licenses=MIT
-
-      - name: Build & push n8n nodes
-        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
-        with:
-          context: .
-          file: integrations/n8n/kura/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.n8n-meta.outputs.tags }}
-          labels: ${{ steps.n8n-meta.outputs.labels }}
-          build-args: |
-            VERSION=${{ steps.version.outputs.value }}
-          cache-from: type=gha,scope=n8n-nodes
-          cache-to: type=gha,mode=max,scope=n8n-nodes
           provenance: false

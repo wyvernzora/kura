@@ -14,7 +14,7 @@ section are relative to that service's directory unless they start with
 | `services/library-manager/` | kura core: library manager, REST + MCP API (no embedded UI) |
 | `services/release-indexer/` | release indexer with built-in `sources/{dmhy,nyaa}` crawlers |
 | `services/webui/` | suite web UI: static SPA + Caddy proxy to the service APIs |
-| `integrations/n8n/{kura,releases}/` | the two n8n node packages |
+| `integrations/n8n/` | the suite n8n node package: one Kura node (series/release/queue resources) + a queue trigger |
 | `prompts/` | reserved: versioned agent/matcher prompts |
 | `deploy/` | reserved: deployment manifests |
 
@@ -59,13 +59,12 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
   service image at that version.
 - Directories and commit scopes are unprefixed. Service images live
   under the registry namespace `ghcr.io/wyvernzora/kura/<component>`
-  (`library-manager`, `release-indexer`, `webui`). Binaries keep the
+  (`library-manager`, `release-indexer`, `webui`, `n8n-nodes`). Binaries keep the
   `kura-` prefix (`kura-library-manager`, `kura-release-indexer`) since
   PATH has no namespace.
 - Separate crawler images are no longer published; DMHY and Nyaa run inside
-  `release-indexer`. The two n8n-nodes images (`kura-n8n-nodes`,
-  `kura-releases-n8n-nodes`) remain pending consolidation into
-  `kura/n8n-nodes`.
+  `release-indexer`. The n8n nodes ship as one image,
+  `ghcr.io/wyvernzora/kura/n8n-nodes`.
 
 ## End-to-end tests (all services)
 

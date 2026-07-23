@@ -16,7 +16,7 @@ One repo, several services, one version line:
 |---|---|
 | [`services/library-manager`](services/library-manager/) | The library manager: scans, stages, and reconciles an anime library; REST + MCP APIs |
 | [`services/release-indexer`](services/release-indexer/) | Release indexer: durable store + match work queue over raw releases (DMHY, Nyaa crawlers) |
-| [`integrations/n8n`](integrations/n8n/) | Custom n8n nodes for both services — n8n drives the acquisition pipeline |
+| [`integrations/n8n`](integrations/n8n/) | Custom n8n nodes for the suite — n8n drives the acquisition pipeline |
 | `services/backup` *(planned)* | LTO tape archival service |
 | [`services/webui`](services/webui/) | Suite web UI: static SPA + Caddy proxy, one origin over every service API |
 
