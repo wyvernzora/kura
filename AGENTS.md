@@ -5,6 +5,7 @@ first (`~/.agents/AGENTS.md`, `~/.agents/go.md`). Service-specific
 context, learnings, and overrides live in each service's own AGENTS.md:
 
 - `services/library/AGENTS.md` — the core library manager (was the kura repo).
+- `services/webui/README.md` — the suite web UI (split from the library 2026-07).
 - `services/releases/AGENTS.md` — the release indexer (was the takuhai repo).
 
 ## Layout
@@ -13,6 +14,7 @@ context, learnings, and overrides live in each service's own AGENTS.md:
 |---|---|
 | `services/library/` | kura core: library manager, REST + MCP + embedded web UI |
 | `services/releases/` | release indexer + `sources/{dmhy,nyaa}` crawler modules |
+| `services/webui/` | suite web UI: static SPA + Caddy proxy to the service APIs |
 | `integrations/n8n/{kura,releases}/` | the two n8n node packages |
 | `prompts/` | reserved: versioned agent/matcher prompts |
 | `deploy/` | reserved: deployment manifests |

@@ -27,7 +27,7 @@ This file holds project-specific context, learnings, and overrides only. Rules i
 - **Priority:** anime behavior comes first; other series types can work when compatible but should not drive the design.
 - **Product shape:** no bloat. Prefer CLI tools for manual use and MCP tools for agentic use.
 - **Operational scale:** personal anime library automation, not a high-throughput multi-writer file transaction system. Expect new episodes a few times a week and occasional season upgrades, usually flowing qbit/download inbox -> Kura -> library with an LLM agent driving Kura. Kura is the only intended writer inside the library root; other tools should be readonly there, and direct human writes are rare. Avoid engineering for AWS-S3-scale concurrency or hostile library writers unless the product requirements explicitly change.
-- **UI:** a web UI (`web/`, pnpm + vite) is built and embedded into the binary (`internal/server/webui`), served by `kura serve --rest` at `/`.
+- **UI:** none embedded — the suite web UI lives in `services/webui` (SPA + Caddy proxy fronting this service's REST API). `kura serve --rest` serves the API only.
 - **Distribution:** Go application shipped as a Docker container.
 
 ### Stack
@@ -45,7 +45,7 @@ This file holds project-specific context, learnings, and overrides only. Rules i
 - **Domain types:** `internal/domain/{refs,media,series,filename,selector}` are pure types shared across packages. Leaf-level — they do not import sibling internal packages.
 - **Inbox:** `internal/inbox` walks the `KURA_INBOX_ROOT` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
 - **Search keys:** `internal/searchkey` computes the per-series fuzzy-search blob shipped on `ListRow` — flattened, deduplicated alias lines fed to client-side fuse.js. Never user-facing.
-- **Transports:** `kura serve` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, bearer-token auth via `internal/server/auth`, embedded web UI from `internal/server/webui` at `/`). Servers depend on `internal/workflow` for behavior. `cmd/kura` hosts the CLI; its verbs are REST clients via `internal/cli/client` (discovery through `KURA_SERVER_URL`, default `http://127.0.0.1:8080`) — only the `serve` command imports `internal/workflow` in-process.
+- **Transports:** `kura serve` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, bearer-token auth via `internal/server/auth`). Servers depend on `internal/workflow` for behavior. `cmd/kura` hosts the CLI; its verbs are REST clients via `internal/cli/client` (discovery through `KURA_SERVER_URL`, default `http://127.0.0.1:8080`) — only the `serve` command imports `internal/workflow` in-process.
 - **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (env loading), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `internal/response` (wire response shapes), `internal/cli/*` (CLI rendering / stdio / REST client).
 - **Container:** Docker, single-binary image.
 

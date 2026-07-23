@@ -18,7 +18,7 @@ One repo, several services, one version line:
 | [`services/releases`](services/releases/) | Release indexer: durable store + match work queue over raw releases (DMHY, Nyaa crawlers) |
 | [`integrations/n8n`](integrations/n8n/) | Custom n8n nodes for both services — n8n drives the acquisition pipeline |
 | `services/backup` *(planned)* | LTO tape archival service |
-| `services/webui` *(planned)* | Suite-wide web UI |
+| [`services/webui`](services/webui/) | Suite web UI: static SPA + Caddy proxy, one origin over every service API |
 
 Everything ships as `kura-*` container images versioned together (`vX.Y.Z`
 tags). Development: `make check` fans out to every service; per-service
