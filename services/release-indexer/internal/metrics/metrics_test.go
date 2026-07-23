@@ -72,8 +72,6 @@ func TestConstructorsUseIndependentRegistries(t *testing.T) {
 	q := fakeQueueStats{}
 	_ = NewTakuhai("v", "c", q)
 	_ = NewTakuhai("v", "c", q)
-	_ = NewCrawler("takuhai_dmhy", "DMHY", "v", "c")
-	_ = NewCrawler("takuhai_dmhy", "DMHY", "v", "c")
 }
 
 func TestSubmitConfidenceRecordsMatchedAndSuppressed(t *testing.T) {

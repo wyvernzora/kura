@@ -23,48 +23,13 @@ services:
       context: ../..
       dockerfile: Dockerfile
       args:
-        BUILD_DIR: .
-        CMD_PKG: ./cmd/kura-release-indexer
         VERSION: dev
     environment:
-      KURA_RELEASES_ADDR: :8080
       KURA_RELEASES_DATABASE_URL: postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable
-      KURA_RELEASES_LOG_LEVEL: debug
+    volumes:
+      - ./release-indexer.toml:/etc/kura/release-indexer.toml:ro
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
-
-  dmhy:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      args:
-        BUILD_DIR: sources/dmhy
-        CMD_PKG: ./cmd/kura-releases-dmhy
-        VERSION: dev
-    environment:
-      KURA_RELEASES_DMHY_ADDR: :8080
-      KURA_RELEASES_DMHY_BASE_URL: https://share.dmhy.org
-      KURA_RELEASES_DMHY_SORT_ID: "2"
-      KURA_RELEASES_DMHY_LOG_LEVEL: debug
-    ports:
-      - "8081:8080"
-
-  nyaa:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      args:
-        BUILD_DIR: sources/nyaa
-        CMD_PKG: ./cmd/kura-releases-nyaa
-        VERSION: dev
-    environment:
-      KURA_RELEASES_NYAA_ADDR: :8080
-      KURA_RELEASES_NYAA_BASE_URL: https://nyaa.si
-      KURA_RELEASES_NYAA_CATEGORY: "1_0"
-      KURA_RELEASES_NYAA_FILTER: "0"
-      KURA_RELEASES_NYAA_LOG_LEVEL: debug
-    ports:
-      - "8082:8080"

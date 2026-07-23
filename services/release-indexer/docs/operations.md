@@ -1,97 +1,89 @@
-# takuhai — Operations
+# Release indexer — Operations
 
 For architecture, see [design.md](design.md).
 
-## Build And Run
+## Build and run
 
 ```sh
 make build
-go build -o bin/takuhai ./cmd/takuhai
 
-./bin/takuhai --addr=:8080
+KURA_RELEASES_DATABASE_URL=postgres://… \
+  ./bin/kura-release-indexer --config ./config.example.toml
 ```
 
-takuhai serves `/ingest`, `/magnets/{infohash}`, `/releases/{infohash}`,
-`/queue/claim`, `/queue/stats`, `/submit`, `/mcp`, `/healthz`, and `/metrics`.
-
-The DMHY crawler is separate:
-
-```sh
-(cd sources/dmhy && go build -o ../../bin/takuhai-dmhy ./cmd/takuhai-dmhy)
-./bin/takuhai-dmhy serve --addr=:8081 --sort-id=2
-```
-
-The Nyaa crawler exposes the same `/crawl` shape:
-
-```sh
-(cd sources/nyaa && go build -o ../../bin/takuhai-nyaa ./cmd/takuhai-nyaa)
-./bin/takuhai-nyaa serve --addr=:8082 --category=1_0 --filter=0
-```
+One process serves `/ingest`, `/magnets/{infohash}`, `/releases/{infohash}`,
+`/queue/claim`, `/queue/stats`, `/submit`, `/mcp`, `/healthz`, and `/metrics`, and
+runs every enabled source crawler.
 
 ## Configuration
 
-Every service flag honors a `KURA_RELEASES_` environment fallback.
+`--config` selects the TOML file and defaults to
+`/etc/kura/release-indexer.toml`. The file must exist, unknown keys are rejected,
+and invalid configuration fails startup. See
+[`config.example.toml`](../config.example.toml) for every field, its requirement,
+and its default.
 
-| Flag | Env | Default | Notes |
-| --- | --- | --- | --- |
-| `--addr` | `KURA_RELEASES_ADDR` | `:8080` | HTTP listen address |
-| `--database-url` | `KURA_RELEASES_DATABASE_URL` | unset | PostgreSQL URL; required |
-| `--log-level` | `KURA_RELEASES_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `--queue-max-attempts` | `KURA_RELEASES_QUEUE_MAX_ATTEMPTS` | `3` | Failed unmatched submits before `exhausted` |
+The only runtime secret is required separately:
 
-The DMHY crawler uses `KURA_RELEASES_DMHY_` variables for its own flags (`--addr`,
-`--dmhy-base-url`, `--sort-id`, `--rate-rps`, `--cache-ttl`, `--log-level`).
-The Nyaa crawler uses `KURA_RELEASES_NYAA_` variables (`--addr`, `--nyaa-base-url`,
-`--query`, `--category`, `--filter`, `--rate-rps`, `--log-level`).
+| Environment variable | Purpose |
+| --- | --- |
+| `KURA_RELEASES_DATABASE_URL` | PostgreSQL connection URL |
+
+Source tables are optional. An absent table disables that source. A present table
+defaults `enabled` to true and requires `interval`. Each enabled source runs once
+after the HTTP listener binds and then at its configured interval. Runs for one
+source never overlap; `timeout` cancels the crawl and ingest together.
+
+Each normal run starts at the newest listing and reads at most 200 posts. There is
+no cursor, bootstrap, or overlap state. Replayed posts are harmless because
+ingestion is idempotent. A gap larger than the recent window is an explicit
+backfill; an external producer can still post batches to `/ingest`.
+
+The container includes a safe example file with sources disabled. Deployments
+mount their environment-specific file at `/etc/kura/release-indexer.toml`, normally
+from a ConfigMap, and inject the database URL from a Secret.
 
 ## Database
 
-takuhai requires PostgreSQL. Embedded goose migrations run automatically before the
-HTTP listener binds. A migration failure aborts startup; a database already at head is
-a no-op.
-
-Local development databases from older schemas should be recreated.
+The release indexer requires PostgreSQL. Embedded goose migrations run
+automatically before the HTTP listener binds. A migration failure aborts startup;
+a database already at head is a no-op.
 
 ## Workflow
 
 ```text
-n8n -> POST /crawl       -> crawler
-n8n -> POST /ingest      -> takuhai
-n8n -> POST /queue/claim -> wake and claim raw release evidence
-n8n -> matcher agent     -> matched | unmatched | suppressed
-n8n -> POST /submit      -> takuhai
-n8n -> GET /magnets/{infohash} -> fetch a stored magnet link
-n8n -> GET /releases/{infohash} -> fetch full release context
-consumer agent -> MCP list_releases / get_release / resolve_magnets
+release-indexer scheduler -> DMHY / Nyaa
+release-indexer crawler   -> direct ingest -> Postgres
+external producer        -> POST /ingest (escape hatch)
+n8n                       -> POST /queue/claim
+n8n                       -> matcher agent
+n8n                       -> POST /submit
+consumer agent            -> MCP list_releases / get_release / resolve_magnets
 ```
 
-The n8n trigger claims work directly. `/queue/stats.exhausted` should be monitored as
-an operator intervention signal.
+`/queue/stats.exhausted` is the operator intervention signal for matcher work.
 
 ## Security
 
-takuhai has no application-level auth. Restrict write surfaces by infrastructure:
-n8n should be the only caller of `/ingest`, `/magnets/*`, `/releases/*`,
-`/queue/*`, and `/submit`; consumer agents should only reach `/mcp`. The service itself needs egress
-only to Postgres and DNS.
-Crawler deployments, not takuhai, own source-site egress.
+The service has no application-level auth. Restrict write surfaces by
+infrastructure. The pod needs egress to PostgreSQL, DNS, and every enabled source
+URL. Consumer agents should only reach `/mcp`.
 
-This repo does not ship Kubernetes manifests. Platform policy belongs with the
-deployment that runs takuhai.
+This repo does not ship Kubernetes manifests. Platform policy and the mounted
+ConfigMap/Secret belong to the deployment repository.
 
 ## Releases
 
-Push a semver tag such as `v0.1.0` to run `.github/workflows/release.yaml`. The
-workflow verifies that the tagged commit is on `main` and has a successful `ci.yml`
-push run, then publishes versioned and `latest` GHCR images for takuhai, the crawler
-images, and the n8n node init image before creating the GitHub release.
+A repo-wide semver tag publishes one
+`ghcr.io/wyvernzora/kura/release-indexer` image plus the n8n integration image.
+Separate crawler images are no longer built or published.
 
-## Health And Shutdown
+## Health and shutdown
 
-- `/healthz` is a live DB ping.
-- `/metrics` exports Prometheus metrics; see [`docs/metrics.md`](metrics.md).
-- Startup fails fast if the HTTP bind fails.
-- SIGTERM drains in-flight HTTP/MCP requests before closing the DB pool.
+- `/healthz` remains a DB ping; source-site failures do not make the pod unhealthy.
+- `/metrics` exports HTTP, queue, ingest, matcher, and scheduled-source metrics.
+- Startup fails fast if migrations or the HTTP bind fail.
+- SIGTERM cancels source crawls, drains HTTP/MCP requests, then closes PostgreSQL.
 - Logs are JSON `slog` on stderr.
 
 ## Development
@@ -101,17 +93,11 @@ make hooks
 make check
 make devserver
 
-for m in . sources/dmhy sources/nyaa; do (cd "$m" && go build ./... && go vet ./... && go test -race ./...); done
-
-go test -tags=e2e -run TestEndToEndWorkflow -count=1 ./e2e
+go test -race ./...
 go test -race -tags=conformance ./...
-go test -tags=smoke -run TestSmoke ./cmd/takuhai
+go test -tags=smoke -run TestSmoke ./cmd/kura-release-indexer
 ```
 
-`make devserver` runs `docker compose -f tools/devserver/compose.yaml up --build`: ephemeral
-Postgres on `localhost:5432`, takuhai on `localhost:8080`, the DMHY crawler on
-`localhost:8081`, and the Nyaa crawler on `localhost:8082`. Stop it with Ctrl-C; use
+`make devserver` runs one release-indexer container plus ephemeral PostgreSQL. The
+mounted development TOML enables both sources. Stop it with Ctrl-C; use
 `docker compose -f tools/devserver/compose.yaml down` to remove the containers.
-
-`make test` includes the Docker-backed e2e workflow test. Conformance, e2e, and smoke
-use testcontainers and require Docker access.

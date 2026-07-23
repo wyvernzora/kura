@@ -14,9 +14,9 @@
 <br>
 
 **takuhai** (宅配 — "home delivery / courier") is a self-hosted anime **release
-index**: a dumb, durable store + work queue + query API. It receives raw releases
-pushed from pluggable sources (DMHY first), keeps them immutably, dedups them by
-infohash into a queryable catalog, and exposes the unmatched ones as a work queue.
+index**: a durable store + source crawler + work queue + query API. It crawls
+configured sources, keeps their raw releases immutably, dedups them by infohash into a
+queryable catalog, and exposes the unmatched ones as a work queue.
 
 It pairs with [`kura`](https://github.com/wyvernzora/kura) (蔵 — "storehouse").
 
@@ -33,26 +33,27 @@ strings it never resolves; it only records the matcher outcome.
 
 ## Architecture in one breath
 
-n8n drives everything. A stateless **crawler** (`POST /crawl`) fetches posts; n8n
-pushes them to takuhai's `POST /ingest`, which dedups and queues them. n8n drives the
-**match loop** over the queue REST API; a stateless matcher resolves each
-release. Consumers read the catalog over an **MCP** API (`list_releases`,
-`resolve_magnets`). Postgres is both the store and the work queue. See
-[docs/design.md](docs/design.md).
+The release-indexer runs DMHY and Nyaa crawls on configured intervals and ingests
+their posts directly. Each run starts at the newest listing and is bounded to the
+latest 200 posts; durable ingestion makes replay harmless. `POST /ingest` remains an
+escape hatch for external producers. n8n drives only the **match loop** over the queue
+REST API; a stateless matcher resolves each release. Consumers read the catalog over
+an **MCP** API (`list_releases`, `get_release`, `resolve_magnets`). Postgres is both
+the store and the work queue. See [docs/design.md](docs/design.md).
 
 ## Quick start
 
 ```sh
-make devserver                                     # Postgres + takuhai + crawler services
+make devserver
 
-make build                                          # → bin/takuhai
+make build
 KURA_RELEASES_DATABASE_URL=postgres://… \
-  ./bin/takuhai --addr=:8080                        # /ingest, /queue/*, /submit, /mcp, /healthz
+  ./bin/kura-release-indexer --config ./config.example.toml
 ```
 
-The binary runs its migrations on startup. Config is flag- or `KURA_RELEASES_`-env driven
-(`--addr`, `--database-url`, `--log-level`). See [docs/operations.md](docs/operations.md)
-for deployment and the container build.
+The binary runs its migrations on startup. Non-secret settings live in a strict TOML
+file; the database URL remains Secret-backed. See
+[docs/operations.md](docs/operations.md) for deployment and the container build.
 
 ## Documentation
 
@@ -68,7 +69,7 @@ make hooks    # point git at .githooks/ (commit-message guard)
 make check    # fmt + vet + lint + test + build
 ```
 
-This is a Go workspace: the root service module + crawler modules under `sources/`.
+DMHY and Nyaa live under `sources/` in the same Go module as the service.
 
 ## License
 

@@ -36,14 +36,14 @@ func TestFetchPageRateLimiterHonorsCanceledContext(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	s := NewServerWithMetricsAndLogger("file://"+dir, "", "", "", 0.01, nil, nil)
-	if _, err := s.fetchPage(context.Background(), 1); err != nil {
+	crawler := NewHTTPCrawler("file://"+dir, "", "", "", 0.01)
+	if _, err := crawler.fetch(context.Background(), 1); err != nil {
 		t.Fatalf("first fetch: %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := s.fetchPage(ctx, 2)
+	_, err := crawler.fetch(ctx, 2)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("second fetch error = %v, want context.Canceled", err)
 	}

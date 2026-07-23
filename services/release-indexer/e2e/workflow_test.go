@@ -25,6 +25,7 @@ import (
 
 const (
 	matchInfohash    = "0123456789abcdef0123456789abcdef01234567"
+	matchMagnet      = "magnet:?xt=urn:btih:" + matchInfohash + "&tr=udp://tracker.match/announce&tr=http://tracker.common/announce"
 	suppressInfohash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
 	exhaustInfohash  = "1111111111111111111111111111111111111111"
 	unknownInfohash  = "ffffffffffffffffffffffffffffffffffffffff"
@@ -48,11 +49,8 @@ func TestEndToEndWorkflow(t *testing.T) {
 
 	pg := startPostgres(t, ctx, nw)
 	startFakeDMHY(t, ctx, nw)
-	crawlerURL := startCrawler(t, ctx, nw)
 	takuhaiURL := startTakuhai(t, ctx, nw, pg)
-
-	posts := crawlDMHY(t, crawlerURL)
-	ingestPosts(t, takuhaiURL, posts)
+	waitForAvailable(t, takuhaiURL, 3)
 
 	matchToken := claimOne(t, takuhaiURL, matchInfohash, 30)
 	assertSubmitStatus(t, takuhaiURL, http.StatusConflict, map[string]any{
@@ -106,7 +104,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 		t.Fatalf("queue stats = %+v, want matched=1 suppressed=1 exhausted=1 available=0 leased=0", stats)
 	}
 
-	assertMCP(t, ctx, takuhaiURL, posts[0].Magnet)
+	assertMCP(t, ctx, takuhaiURL, matchMagnet)
 }
 
 func startPostgres(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork) *tcpostgres.PostgresContainer {
@@ -155,61 +153,39 @@ func startFakeDMHY(t *testing.T, ctx context.Context, nw *testcontainers.DockerN
 	return c
 }
 
-func startCrawler(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork) string {
-	t.Helper()
-	c, err := testcontainers.Run(ctx, "",
-		testcontainers.WithDockerfile(testcontainers.FromDockerfile{
-			Context:        repoRoot(t),
-			Dockerfile:     "Dockerfile",
-			Repo:           "takuhai-e2e-crawler",
-			Tag:            "latest",
-			BuildArgs:      buildArgs(map[string]string{"BUILD_DIR": "sources/dmhy", "CMD_PKG": "./cmd/kura-releases-dmhy", "VERSION": "e2e"}),
-			BuildLogWriter: os.Stderr,
-		}),
-		tcnetwork.WithNetwork([]string{"crawler"}, nw),
-		testcontainers.WithEnv(map[string]string{
-			"KURA_RELEASES_DMHY_ADDR":      ":8080",
-			"KURA_RELEASES_DMHY_BASE_URL":  "http://dmhy",
-			"KURA_RELEASES_DMHY_SORT_ID":   "2",
-			"KURA_RELEASES_DMHY_RATE_RPS":  "0",
-			"KURA_RELEASES_DMHY_CACHE_TTL": "0",
-			"KURA_RELEASES_DMHY_LOG_LEVEL": "debug",
-		}),
-		testcontainers.WithExposedPorts("8080/tcp"),
-		testcontainers.WithWaitStrategy(wait.ForListeningPort("8080/tcp").WithStartupTimeout(2*time.Minute)),
-	)
-	if err != nil {
-		t.Fatalf("start crawler container: %v", err)
-	}
-	t.Cleanup(func() {
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer stopCancel()
-		_ = c.Terminate(stopCtx)
-	})
-	endpoint, err := c.Endpoint(ctx, "http")
-	if err != nil {
-		t.Fatalf("crawler endpoint: %v", err)
-	}
-	return endpoint
-}
-
 func startTakuhai(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork, pg *tcpostgres.PostgresContainer) string {
 	t.Helper()
+	config := `[server]
+addr = ":8080"
+log_level = "debug"
+
+[queue]
+max_attempts = 2
+
+[sources.dmhy]
+interval = "1h"
+timeout = "30s"
+url = "http://dmhy"
+category = "2"
+max_rps = 0
+cache_ttl = "0s"
+`
 	c, err := testcontainers.Run(ctx, "",
 		testcontainers.WithDockerfile(testcontainers.FromDockerfile{
 			Context:        repoRoot(t),
 			Dockerfile:     "Dockerfile",
 			Repo:           "takuhai-e2e-service",
 			Tag:            "latest",
-			BuildArgs:      buildArgs(map[string]string{"BUILD_DIR": ".", "CMD_PKG": "./cmd/kura-release-indexer", "VERSION": "e2e"}),
 			BuildLogWriter: os.Stderr,
 		}),
 		tcnetwork.WithNetwork([]string{"takuhai"}, nw),
 		testcontainers.WithEnv(map[string]string{
-			"KURA_RELEASES_ADDR":               ":8080",
-			"KURA_RELEASES_DATABASE_URL":       "postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable",
-			"KURA_RELEASES_QUEUE_MAX_ATTEMPTS": "2",
-			"KURA_RELEASES_LOG_LEVEL":          "debug",
+			"KURA_RELEASES_DATABASE_URL": "postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable",
+		}),
+		testcontainers.WithFiles(testcontainers.ContainerFile{
+			Reader:            strings.NewReader(config),
+			ContainerFilePath: "/etc/kura/release-indexer.toml",
+			FileMode:          0o644,
 		}),
 		testcontainers.WithExposedPorts("8080/tcp"),
 		testcontainers.WithWaitStrategy(wait.ForHTTP("/healthz").WithPort("8080/tcp").WithStartupTimeout(2*time.Minute)),
@@ -229,42 +205,16 @@ func startTakuhai(t *testing.T, ctx context.Context, nw *testcontainers.DockerNe
 	return endpoint
 }
 
-func crawlDMHY(t *testing.T, crawlerURL string) []rawpost.RawPost {
+func waitForAvailable(t *testing.T, takuhaiURL string, want int) {
 	t.Helper()
-	var first crawlResponse
-	postJSON(t, crawlerURL+"/crawl", map[string]any{
-		"page_size": 2,
-		"lookback":  "365d",
-	}, http.StatusOK, &first)
-	if len(first.Posts) != 2 || !first.HasMore || first.NextCursor == "" {
-		t.Fatalf("first crawl = %+v, want two posts with has_more", first)
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if stats := queueStats(t, takuhaiURL); stats.Available == want {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
-	if first.Posts[0].Title != "E2E Match Release" || !strings.Contains(first.Posts[0].Magnet, "tr=udp://tracker.match/announce") {
-		t.Fatalf("first crawled post = %+v, want tracker-rich match release", first.Posts[0])
-	}
-	if first.Posts[0].SizeBytes != 1500000000 {
-		t.Fatalf("first post size = %d, want 1500000000", first.Posts[0].SizeBytes)
-	}
-
-	var second crawlResponse
-	postJSON(t, crawlerURL+"/crawl", map[string]any{
-		"page_size": 2,
-		"cursor":    first.NextCursor,
-		"lookback":  "365d",
-	}, http.StatusOK, &second)
-	if len(second.Posts) != 1 || second.HasMore || second.NextCursor != "" {
-		t.Fatalf("second crawl = %+v, want final single post", second)
-	}
-	return append(first.Posts, second.Posts...)
-}
-
-func ingestPosts(t *testing.T, takuhaiURL string, posts []rawpost.RawPost) {
-	t.Helper()
-	var summary rawpost.IngestSummary
-	postJSON(t, takuhaiURL+"/ingest", map[string]any{"posts": posts}, http.StatusOK, &summary)
-	if summary.Batch.New != 3 || summary.Batch.Skipped != 0 || summary.Queue.Available != 3 {
-		t.Fatalf("ingest summary = %+v, want three new available posts", summary)
-	}
+	t.Fatalf("queue did not reach %d available releases", want)
 }
 
 func claimOne(t *testing.T, takuhaiURL, wantInfohash string, leaseSeconds int) int64 {
@@ -417,15 +367,6 @@ func firstText(res *mcpsdk.CallToolResult) string {
 	return ""
 }
 
-func buildArgs(in map[string]string) map[string]*string {
-	out := make(map[string]*string, len(in))
-	for k, v := range in {
-		v := v
-		out[k] = &v
-	}
-	return out
-}
-
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	wd, err := os.Getwd()
@@ -481,12 +422,6 @@ func row(sourceID, title, infohash, size, published, tracker string) string {
 <td align="center">%s</td>
 <td><span style="display: none;">%s</span></td>
 </tr>`, sourceID, title, magnet, bare, size, published)
-}
-
-type crawlResponse struct {
-	Posts      []rawpost.RawPost `json:"posts"`
-	NextCursor string            `json:"next_cursor"`
-	HasMore    bool              `json:"has_more"`
 }
 
 type claimResponse struct {

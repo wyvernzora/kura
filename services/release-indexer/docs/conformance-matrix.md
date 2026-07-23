@@ -6,7 +6,7 @@ the public contract that should not drift.
 Run it with:
 
 ```sh
-go test -tags=conformance ./internal/conformance
+go test -tags=conformance ./...
 ```
 
 ## Current Coverage
@@ -20,7 +20,13 @@ go test -tags=conformance ./internal/conformance
 | MCP `get_release` maps unknown releases to tool error code `no_such_release` | `TestAPIShape_GetReleaseMCPNoSuchRelease` |
 | A stale `claim_token` cannot submit after a newer claim | `TestAPIShape_StaleClaimTokenRejected` |
 | Repeated `unmatched` submissions exhaust after the configured max attempts | `TestAPIShape_UnmatchedExhaustsAfterMaxAttempts` |
+| DMHY fixtures, parser output, newest-200 bound, empty-floor threshold, and transient/parse failures | `sources/dmhy` conformance suite |
+| Nyaa live fixtures, parser output, newest-window bound, empty-floor threshold, and transient failures | `sources/nyaa` conformance suite |
 
 The real-binary smoke test covers startup migrations, `/healthz`, `/ingest`,
 `/magnets/{infohash}`, `/releases/{infohash}`, `/queue/claim`, `/submit`, `/queue/stats`, MCP tool
-registration/call, removed worker path rejection, and fail-fast bind behavior.
+registration/call, removed worker path rejection, fail-fast bind behavior, strict TOML
+startup, an in-process scheduled Nyaa crawl, direct ingest, and bounded shutdown.
+The Docker e2e runs the consolidated release-indexer against fake DMHY and PostgreSQL,
+then exercises the full claim, submit, query, and MCP workflow over those scheduled
+releases.

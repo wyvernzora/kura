@@ -9,7 +9,7 @@ import (
 
 // countingFetcher returns a PageFetcher that tallies upstream calls and a fixed body.
 func countingFetcher(calls *int, body []byte, err error) PageFetcher {
-	return func(context.Context, int, int) ([]byte, error) {
+	return func(context.Context, int) ([]byte, error) {
 		*calls++
 		return body, err
 	}
@@ -26,7 +26,7 @@ func TestPageCacheDedupsWithinTTL(t *testing.T) {
 
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
-		b, err := w(ctx, 31, 1)
+		b, err := w(ctx, 1)
 		if err != nil || string(b) != "page" {
 			t.Fatalf("call %d: body=%q err=%v", i, b, err)
 		}
@@ -36,9 +36,8 @@ func TestPageCacheDedupsWithinTTL(t *testing.T) {
 	}
 }
 
-// TestPageCacheKeysDistinct: sort_id and page each form part of the key, so only an
-// exact repeat is served from cache.
-func TestPageCacheKeysDistinct(t *testing.T) {
+// TestPageCachePagesDistinct: each page has its own cache entry.
+func TestPageCachePagesDistinct(t *testing.T) {
 	var calls int
 	c := newPageCache(time.Minute)
 	now := time.Unix(0, 0)
@@ -46,12 +45,11 @@ func TestPageCacheKeysDistinct(t *testing.T) {
 	w := c.wrap(countingFetcher(&calls, []byte("x"), nil))
 
 	ctx := context.Background()
-	w(ctx, 31, 1) // different page
-	w(ctx, 31, 2) // different page
-	w(ctx, 2, 1)  // different sort_id
-	w(ctx, 31, 1) // exact repeat -> cached
-	if calls != 3 {
-		t.Fatalf("upstream calls = %d, want 3 (distinct keys; one repeat cached)", calls)
+	w(ctx, 1)
+	w(ctx, 2)
+	w(ctx, 1)
+	if calls != 2 {
+		t.Fatalf("upstream calls = %d, want 2 (distinct pages; one repeat cached)", calls)
 	}
 }
 
@@ -64,11 +62,11 @@ func TestPageCacheExpires(t *testing.T) {
 	w := c.wrap(countingFetcher(&calls, []byte("x"), nil))
 
 	ctx := context.Background()
-	w(ctx, 31, 1) // fetch (calls=1)
+	w(ctx, 1) // fetch (calls=1)
 	now = now.Add(5 * time.Minute)
-	w(ctx, 31, 1)                  // cached (calls=1)
+	w(ctx, 1)                      // cached (calls=1)
 	now = now.Add(6 * time.Minute) // 11m total > 10m TTL
-	w(ctx, 31, 1)                  // expired -> refetch (calls=2)
+	w(ctx, 1)                      // expired -> refetch (calls=2)
 	if calls != 2 {
 		t.Fatalf("upstream calls = %d, want 2 (refetch after TTL)", calls)
 	}
@@ -84,10 +82,10 @@ func TestPageCacheDoesNotCacheErrors(t *testing.T) {
 	w := c.wrap(countingFetcher(&calls, nil, errors.New("boom")))
 
 	ctx := context.Background()
-	if _, err := w(ctx, 31, 1); err == nil {
+	if _, err := w(ctx, 1); err == nil {
 		t.Fatal("want error from failing fetch")
 	}
-	if _, err := w(ctx, 31, 1); err == nil {
+	if _, err := w(ctx, 1); err == nil {
 		t.Fatal("want error from failing fetch")
 	}
 	if calls != 2 {

@@ -1,8 +1,2 @@
-// Package dmhy is the stateless DMHY crawler module. It parses DMHY pages and
-// serves POST /crawl, emitting raw posts (pkg/rawpost.RawPost) with no infohash
-// normalization and no dedup — takuhai derives the dedup key on /ingest.
-//
-// html.go/parse.go are the dumb parsers (HTML, 大小 size); crawl.go is
-// the stateless page-walk + consecutive-empty end-of-archive threshold; server.go is
-// the POST /crawl HTTP handler; cmd/kura-releases-dmhy is the binary.
+// Package dmhy parses and crawls DMHY release pages for the release-indexer.
 package dmhy

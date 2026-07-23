@@ -4,50 +4,31 @@ FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 
 WORKDIR /src
 
-# Pre-fetch root-module dependencies for layer caching. Crawler modules
-# resolve the root via `replace … => ../..`, so they share
-# the same module cache once the full tree is copied below.
+# Pre-fetch dependencies for layer caching.
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy the whole workspace. The crawler build needs the root tree present
-# (its replace points at ../..); the service build ignores sources/. One
-# parametric Dockerfile serves both images.
+# Copy the whole release-indexer module.
 COPY . .
 
-# BUILD_DIR is the module root to build from (`.` for the service,
-# `sources/*` for a crawler). CMD_PKG is the main package within it.
-ARG BUILD_DIR=.
-ARG CMD_PKG=./cmd/kura-release-indexer
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
-RUN cd "${BUILD_DIR}" \
-    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build \
     -trimpath \
     -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /out/app \
-    "${CMD_PKG}"
+    ./cmd/kura-release-indexer
 
 ## Runtime stage
 FROM gcr.io/distroless/static-debian12:nonroot
 
 COPY --from=build /out/app /usr/local/bin/app
+COPY config.example.toml /etc/kura/release-indexer.toml
 
-# Binary-specific runtime config comes from env vars, NOT a shared CMD: the two
-# images run different binaries with different flag sets. Both addr vars are pinned
-# to :8080 (matching EXPOSE 8080) so each binary binds the published port from its
-# own env var; the var the other binary ignores is harmless.
-ENV KURA_RELEASES_ADDR=:8080
-ENV KURA_RELEASES_DMHY_ADDR=:8080
-ENV KURA_RELEASES_NYAA_ADDR=:8080
-
-# The shared CMD supplies the crawler's required `serve` subcommand. The service binary
-# has no subcommands, so it ignores the trailing positional and configures from env.
 EXPOSE 8080
 USER nonroot:nonroot
 
 ENTRYPOINT ["/usr/local/bin/app"]
-CMD ["serve"]

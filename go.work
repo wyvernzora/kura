@@ -3,6 +3,4 @@ go 1.26.3
 use (
 	./services/library-manager
 	./services/release-indexer
-	./services/release-indexer/sources/dmhy
-	./services/release-indexer/sources/nyaa
 )

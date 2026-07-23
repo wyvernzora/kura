@@ -75,6 +75,9 @@ type Takuhai struct {
 	ingestBatches        *prometheus.CounterVec
 	ingestPosts          *prometheus.CounterVec
 	ingestBatchSize      prometheus.Histogram
+	sourceCrawls         *prometheus.CounterVec
+	sourceCrawlDuration  *prometheus.HistogramVec
+	sourceCrawlPosts     *prometheus.CounterVec
 	queueClaims          *prometheus.CounterVec
 	queueClaimedItems    prometheus.Counter
 	queueClaimBatchSize  prometheus.Histogram
@@ -123,6 +126,25 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 			Help:      "Posts per ingest batch.",
 			Buckets:   []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000},
 		}),
+		sourceCrawls: auto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "takuhai",
+			Subsystem: "source",
+			Name:      "crawls_total",
+			Help:      "Scheduled source crawls by result.",
+		}, []string{"source", "result"}),
+		sourceCrawlDuration: auto.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: "takuhai",
+			Subsystem: "source",
+			Name:      "crawl_duration_seconds",
+			Help:      "Scheduled source crawl duration.",
+			Buckets:   prometheus.DefBuckets,
+		}, []string{"source"}),
+		sourceCrawlPosts: auto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "takuhai",
+			Subsystem: "source",
+			Name:      "crawl_posts_total",
+			Help:      "Posts returned by scheduled source crawls.",
+		}, []string{"source"}),
 		queueClaims: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "takuhai",
 			Subsystem: "queue",
@@ -179,6 +201,10 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 		for _, result := range []string{"new", "updated", "duplicate", "conflict", "skipped", "error"} {
 			m.ingestPosts.WithLabelValues(source, result).Add(0)
 		}
+		for _, result := range []string{"ok", "crawl_error", "ingest_error"} {
+			m.sourceCrawls.WithLabelValues(source, result).Add(0)
+		}
+		m.sourceCrawlPosts.WithLabelValues(source).Add(0)
 	}
 	return m
 }
@@ -201,6 +227,17 @@ func (m *Takuhai) IngestPost(source, result string) {
 		source = "unknown"
 	}
 	m.ingestPosts.WithLabelValues(source, result).Inc()
+}
+
+func (m *Takuhai) SourceCrawl(source, result string, posts int, duration time.Duration) {
+	if m == nil {
+		return
+	}
+	m.sourceCrawls.WithLabelValues(source, result).Inc()
+	m.sourceCrawlDuration.WithLabelValues(source).Observe(duration.Seconds())
+	if posts > 0 {
+		m.sourceCrawlPosts.WithLabelValues(source).Add(float64(posts))
+	}
 }
 
 func (m *Takuhai) QueueClaim(count int, result string) {
@@ -343,120 +380,6 @@ func (c *queueCollector) Collect(ch chan<- prometheus.Metric) {
 		"exhausted":  qs.Exhausted,
 	} {
 		ch <- prometheus.MustNewConstMetric(queueItemsDesc, prometheus.GaugeValue, float64(value), state)
-	}
-}
-
-// Crawler records Prometheus metrics for one stateless crawler service.
-type Crawler struct {
-	HTTP             *HTTP
-	handler          http.Handler
-	crawlRequests    *prometheus.CounterVec
-	crawlDuration    prometheus.Histogram
-	crawlPages       prometheus.Counter
-	crawlPosts       prometheus.Counter
-	crawlPostsPerReq prometheus.Histogram
-	fetchRequests    *prometheus.CounterVec
-	fetchDuration    prometheus.Histogram
-	parsePosts       *prometheus.CounterVec
-}
-
-// NewCrawler constructs the metric surface used by one stateless crawler.
-func NewCrawler(namespace, sourceName, version, commit string) *Crawler {
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	registerBuildInfo(reg, namespace, version, commit)
-	auto := promauto.With(reg)
-	return &Crawler{
-		handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}),
-		HTTP: newHTTP(reg, namespace, map[string]string{
-			"/crawl":   "/crawl",
-			"/metrics": "/metrics",
-		}),
-		crawlRequests: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "crawl",
-			Name:      "requests_total",
-			Help:      "Total crawl requests.",
-		}, []string{"result"}),
-		crawlDuration: auto.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Subsystem: "crawl",
-			Name:      "duration_seconds",
-			Help:      "Crawl request duration in seconds.",
-			Buckets:   prometheus.DefBuckets,
-		}),
-		crawlPages: auto.NewCounter(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "crawl",
-			Name:      "pages_fetched_total",
-			Help:      "Total " + sourceName + " pages fetched successfully.",
-		}),
-		crawlPosts: auto.NewCounter(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "crawl",
-			Name:      "posts_returned_total",
-			Help:      "Total posts returned from crawl requests.",
-		}),
-		crawlPostsPerReq: auto.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Subsystem: "crawl",
-			Name:      "posts_per_request",
-			Help:      "Posts returned per crawl request.",
-			Buckets:   []float64{0, 1, 5, 10, 25, 50, 100, 200},
-		}),
-		fetchRequests: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "fetch",
-			Name:      "requests_total",
-			Help:      "Total upstream " + sourceName + " page fetches.",
-		}, []string{"result"}),
-		fetchDuration: auto.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Subsystem: "fetch",
-			Name:      "duration_seconds",
-			Help:      "Upstream " + sourceName + " page fetch duration in seconds.",
-			Buckets:   prometheus.DefBuckets,
-		}),
-		parsePosts: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "parse",
-			Name:      "posts_total",
-			Help:      "Total posts parsed from " + sourceName + " pages.",
-		}, []string{"result"}),
-	}
-}
-
-func (m *Crawler) Handler() http.Handler { return m.handler }
-
-func (m *Crawler) Crawl(result string, posts int, dur time.Duration) {
-	if m == nil {
-		return
-	}
-	m.crawlRequests.WithLabelValues(result).Inc()
-	m.crawlDuration.Observe(dur.Seconds())
-	m.crawlPostsPerReq.Observe(float64(posts))
-	if posts > 0 {
-		m.crawlPosts.Add(float64(posts))
-	}
-}
-
-func (m *Crawler) Fetch(result string, dur time.Duration) {
-	if m == nil {
-		return
-	}
-	m.fetchRequests.WithLabelValues(result).Inc()
-	m.fetchDuration.Observe(dur.Seconds())
-	if result == "ok" {
-		m.crawlPages.Inc()
-	}
-}
-
-func (m *Crawler) ParsePosts(result string, posts int) {
-	if m == nil {
-		return
-	}
-	if posts > 0 {
-		m.parsePosts.WithLabelValues(result).Add(float64(posts))
 	}
 }
 

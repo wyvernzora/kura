@@ -1,6 +1,7 @@
-# takuhai — Design
+# Release indexer — Design
 
-takuhai is a durable anime release index: it stores crawled release posts, leases
+The release indexer is a durable anime release index: it crawls configured sources,
+stores raw release posts, leases
 unmatched releases to an external matcher, records the matcher outcome, and lets a
 consumer agent list matched releases with optional canonical-ref filtering.
 
@@ -8,13 +9,18 @@ consumer agent list matched releases with optional canonical-ref filtering.
 
 - The release identity is the canonical v1 `btih`: 40 lowercase hex. Pure v2 torrents
   are skipped.
-- takuhai does not match titles. It records the external matcher result.
-- `ref` values are opaque namespace-prefixed strings such as `tvdb:123`; takuhai only
+- The indexer does not match titles. It records the external matcher result.
+- `ref` values are opaque namespace-prefixed strings such as `tvdb:123`; the indexer only
   shape-validates them.
-- Crawlers are stateless. n8n owns schedules, cursors, retries, and orchestration.
+- DMHY and Nyaa run inside the indexer process. Each source has one non-overlapping
+  scheduled loop, starts at the newest listing, and emits at most 200 posts per run.
+- Normal crawling has no durable cursor, bootstrap window, or overlap setting.
+  Idempotent ingestion makes repeated recent-window reads safe.
+- `POST /ingest` remains an external-producer escape hatch; sources still emit the
+  same `RawPost` contract and do not import indexer storage.
 - Queue claims are fenced by `claim_token`; stale submits must not overwrite newer
   claims.
-- takuhai stores the full crawler-provided magnet link. It does not normalize,
+- The indexer stores the full crawler-provided magnet link. It does not normalize,
   refresh, probe, or reassemble tracker URLs.
 
 ## Data Model
@@ -81,6 +87,18 @@ Crawler posts and ingest posts use the same shape:
 
 `ref` is required only for `matched`. `confidence` is meaningful for successful
 `matched` and `suppressed` submissions. `reason` is plain debugging text.
+
+## Source scheduling
+
+Enabled sources run once after the HTTP listener binds and then on their configured
+fixed interval. A source loop is sequential, so a slow run cannot overlap the next
+tick. `timeout` bounds both crawling and direct ingestion. Failures are logged and
+counted, then the loop waits for its next interval; they do not affect `/healthz`.
+
+Every run requests the newest 200 posts. Crawlers have no cursor or lookback
+protocol. This is a steady-state polling window, not a backfill engine. If the service is offline long
+enough to miss more than that window, an external producer can perform the exceptional
+backfill and use `POST /ingest`.
 
 ## Queue Semantics
 

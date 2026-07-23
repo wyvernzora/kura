@@ -55,10 +55,8 @@ var bfSizeCellRe = regexp.MustCompile(`align="center">([0-9.]+\s*[KMGT]?B)<`)
 var hiddenDateRe = regexp.MustCompile(`display:\s*none;?">\s*([0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2})`)
 
 // ParseArchivePage parses a DMHY HTML-archive page's content rows into raw posts. It is
-// the crawler's exported HTML primitive — the page-walk uses it live, and the
-// `kura-releases-dmhy parse` backfill command reuses it on locally-saved pages. It is the
-// DUMB-crawler successor of internal/source/dmhy/backfill.go's
-// parseArchivePage: it emits EVERY content row as a rawpost.RawPost (raw
+// the crawler's exported HTML primitive and emits every content row as a
+// rawpost.RawPost (raw
 // title+magnet+metadata+size), including rows whose magnet has no canonical v1 btih
 // (pure-v2 / malformed) — those were SKIPPED by the old parser but are now emitted
 // here with their raw magnet and no infohash. takuhai derives the dedup key and the
@@ -70,8 +68,7 @@ var hiddenDateRe = regexp.MustCompile(`display:\s*none;?">\s*([0-9]{4}/[0-9]{2}/
 // table anchor. A zero-row page that LACKS that anchor is a non-archive 200 (CDN
 // interstitial, truncation, markup drift) and returns errNonArchivePage so the
 // page-walk surfaces it as a fetch failure — never counting it toward the
-// consecutive-empty floor threshold (a swallowed parse failure would silently
-// truncate backfill at a fake floor, the inverse of what the threshold prevents).
+// consecutive-empty floor threshold.
 func ParseArchivePage(html []byte) ([]rawpost.RawPost, error) {
 	body := string(html)
 
@@ -179,7 +176,7 @@ func rowSourceID(href string) string {
 }
 
 // dmhyZone is the DMHY hidden-timestamp zone (CST, UTC+8). The hidden date spans carry
-// no zone, so parsing them as UTC would skew the lookback window by ~8h; parse them in
+// no zone, so parsing them as UTC would skew the release timestamp by ~8h; parse them in
 // the DMHY zone so PublishedAt is a correct instant.
 var dmhyZone = time.FixedZone("CST", 8*3600)
 

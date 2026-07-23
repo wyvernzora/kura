@@ -56,7 +56,11 @@ func TestSmoke(t *testing.T) {
 
 	addr := "127.0.0.1:" + freePort(t)
 	baseURL := "http://" + addr
-	_ = startBinary(t, ctx, binPath, addr, dsn)
+	configPath := filepath.Join(t.TempDir(), "release-indexer.toml")
+	if err := os.WriteFile(configPath, []byte("[server]\naddr = \""+addr+"\"\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	_ = startBinary(t, ctx, binPath, configPath, dsn)
 	waitHealthy(t, ctx, baseURL+"/healthz", 60*time.Second)
 
 	t.Run("ingest-claim-submit-stats", func(t *testing.T) {
@@ -269,10 +273,8 @@ func TestSmoke(t *testing.T) {
 	})
 
 	t.Run("bind-fast", func(t *testing.T) {
-		second := exec.CommandContext(ctx, binPath,
-			"--addr="+addr,
-			"--database-url="+dsn,
-		)
+		second := exec.CommandContext(ctx, binPath, "--config="+configPath)
+		second.Env = append(os.Environ(), "KURA_RELEASES_DATABASE_URL="+dsn)
 		if err := second.Start(); err != nil {
 			t.Fatalf("start second instance: %v", err)
 		}
@@ -290,13 +292,10 @@ func TestSmoke(t *testing.T) {
 	})
 }
 
-func startBinary(t *testing.T, ctx context.Context, binPath, addr, dsn string) *exec.Cmd {
+func startBinary(t *testing.T, ctx context.Context, binPath, configPath, dsn string) *exec.Cmd {
 	t.Helper()
-	cmd := exec.CommandContext(ctx, binPath,
-		"--addr="+addr,
-		"--database-url="+dsn,
-		"--log-level=info",
-	)
+	cmd := exec.CommandContext(ctx, binPath, "--config="+configPath)
+	cmd.Env = append(os.Environ(), "KURA_RELEASES_DATABASE_URL="+dsn)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

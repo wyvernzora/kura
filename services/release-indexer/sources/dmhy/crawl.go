@@ -2,69 +2,44 @@ package dmhy
 
 import (
 	"context"
-	"time"
+	"fmt"
 
-	"github.com/wyvernzora/kura/services/release-indexer/internal/metrics"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/crawl"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
 )
 
-// PageFetcher fetches the raw bytes for a 1-based DMHY page number and sort_id.
-type PageFetcher func(ctx context.Context, sortID, page int) (body []byte, err error)
+// PageFetcher fetches the raw bytes for a 1-based DMHY page number.
+type PageFetcher func(ctx context.Context, page int) (body []byte, err error)
 
-// CrawlRequest is the POST /crawl request body.
-type CrawlRequest = crawl.CrawlRequest
-
-// CrawlResponse is the POST /crawl response body.
-type CrawlResponse struct {
-	Posts      []rawpost.RawPost `json:"posts"`
-	NextCursor string            `json:"next_cursor"`
-	HasMore    bool              `json:"has_more"`
-
-	stopReason   string `json:"-"`
-	pagesFetched int    `json:"-"`
-	lastPage     int    `json:"-"`
-}
-
-// Crawler is the stateless DMHY crawl engine behind POST /crawl.
+// Crawler walks DMHY's newest archive pages.
 type Crawler struct {
 	fetch     PageFetcher
 	threshold int
-	sortID    int
-	now       func() time.Time
-	metrics   *metrics.Crawler
+	category  int
 }
 
-// NewCrawler constructs a stateless crawler over a page fetcher and the
-// consecutive-empty threshold N. sortID defaults to 0 (the bare-path archive walk);
-// the clock defaults to time.Now.
+// NewCrawler constructs a crawler over a page fetcher.
 func NewCrawler(fetch PageFetcher, threshold int) *Crawler {
-	return &Crawler{fetch: fetch, threshold: threshold, sortID: 0, now: time.Now}
+	return &Crawler{fetch: fetch, threshold: threshold}
 }
 
-func (c *Crawler) Crawl(ctx context.Context, req CrawlRequest, lookback time.Duration) (CrawlResponse, error) {
-	resp, err := c.shared().Crawl(ctx, req, lookback)
-	if err != nil {
-		return CrawlResponse{}, err
-	}
-	return crawlResponse(resp), nil
+// Crawl returns up to limit of the newest DMHY posts.
+func (c *Crawler) Crawl(ctx context.Context, limit int) ([]rawpost.RawPost, error) {
+	return c.shared().Crawl(ctx, limit)
 }
 
-func crawlResponse(resp crawl.CrawlResponse) CrawlResponse {
-	return CrawlResponse{
-		Posts:        resp.Posts,
-		NextCursor:   resp.NextCursor,
-		HasMore:      resp.HasMore,
-		stopReason:   resp.StopReason,
-		pagesFetched: resp.PagesFetched,
-		lastPage:     resp.LastPage,
-	}
+func (c *Crawler) shared() *crawl.Crawler {
+	return crawl.NewCrawler(crawl.Config{
+		Source:    "dmhy",
+		Fetch:     crawl.PageFetcher(c.fetch),
+		Parse:     ParseArchivePage,
+		Threshold: c.threshold,
+		ParseErrorContext: func(page int) string {
+			return fmtParseContext(c.category, page)
+		},
+	})
 }
 
-func parseCursor(cursor string) (page, offset int, err error) {
-	return crawl.ParseCursor("dmhy", cursor)
-}
-
-func formatCursor(page, offset int) string {
-	return crawl.FormatCursor(page, offset)
+func fmtParseContext(category, page int) string {
+	return fmt.Sprintf("category %d page %d", category, page)
 }

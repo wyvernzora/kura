@@ -218,26 +218,8 @@ jobs:
             image: ghcr.io/wyvernzora/kura/release-indexer
             context: services/release-indexer
             file: services/release-indexer/Dockerfile
-            build_args: |
-              BUILD_DIR=.
-              CMD_PKG=./cmd/kura-release-indexer
-            description: Anime release indexer + match work queue (REST + MCP)
-          - component: kura-releases-crawler-dmhy
-            image: ghcr.io/wyvernzora/kura-releases-crawler-dmhy
-            context: services/release-indexer
-            file: services/release-indexer/Dockerfile
-            build_args: |
-              BUILD_DIR=sources/dmhy
-              CMD_PKG=./cmd/kura-releases-dmhy
-            description: DMHY stateless crawler (POST /crawl)
-          - component: kura-releases-crawler-nyaa
-            image: ghcr.io/wyvernzora/kura-releases-crawler-nyaa
-            context: services/release-indexer
-            file: services/release-indexer/Dockerfile
-            build_args: |
-              BUILD_DIR=sources/nyaa
-              CMD_PKG=./cmd/kura-releases-nyaa
-            description: Nyaa stateless crawler (POST /crawl)
+            build_args: ''
+            description: Anime release indexer, source crawlers, and match work queue
           - component: kura-releases-n8n-nodes
             image: ghcr.io/wyvernzora/kura-releases-n8n-nodes
             context: .

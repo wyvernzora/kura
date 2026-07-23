@@ -1,11 +1,6 @@
 GO_PACKAGES := ./...
 GOFMT_DIRS  := cmd internal pkg sources
 
-# The module roots in the workspace. A root-only `./...` does not descend into
-# the nested source modules (go.work is not traversed by `./...`), so the
-# per-module targets below loop over every module root.
-MODULES := . sources/dmhy sources/nyaa
-
 # VERSION and COMMIT stamp the binary via -ldflags.
 # Defaults to `git describe` so dev builds carry a meaningful identifier
 # without a manual override. CI/release builds pass VERSION=vX.Y.Z explicitly.
@@ -28,42 +23,23 @@ GOLANGCI_LINT ?= $(shell if command -v golangci-lint >/dev/null 2>&1; then \
 .PHONY: build check devserver e2e fmt lint test vet smoke hooks
 
 build:
-	@for m in $(MODULES); do \
-		if [ "$$m" = "." ]; then \
-			name=kura-release-indexer; \
-			out=bin/kura-release-indexer; \
-		else \
-			name=kura-releases-$$(basename "$$m"); \
-			out=../../bin/$$name; \
-		fi; \
-		echo "==> go build $$name ($$m)"; \
-		(cd "$$m" && go build -trimpath -ldflags='$(GO_LDFLAGS)' -o "$$out" "./cmd/$$name") || exit 1; \
-	done
+	go build -trimpath -ldflags='$(GO_LDFLAGS)' -o bin/kura-release-indexer ./cmd/kura-release-indexer
 
 fmt:
 	gofmt -w $(GOFMT_DIRS)
 
 vet:
-	@for m in $(MODULES); do \
-		echo "==> go vet ($$m)"; \
-		(cd "$$m" && go vet $(GO_PACKAGES)) || exit 1; \
-	done
+	go vet $(GO_PACKAGES)
 
 lint:
 	@if [ -z "$(GOLANGCI_LINT)" ]; then \
 		echo "golangci-lint not found. Install it with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"; \
 		exit 127; \
 	fi
-	@for m in $(MODULES); do \
-		echo "==> golangci-lint ($$m)"; \
-		(cd "$$m" && $(GOLANGCI_LINT) run $(GO_PACKAGES)) || exit 1; \
-	done
+	$(GOLANGCI_LINT) run $(GO_PACKAGES)
 
 test:
-	@for m in $(MODULES); do \
-		echo "==> go test ($$m)"; \
-		(cd "$$m" && go test $(GO_PACKAGES)) || exit 1; \
-	done
+	go test $(GO_PACKAGES)
 	$(MAKE) e2e
 
 e2e:

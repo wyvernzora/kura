@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-kura-release-indexer",
   "version": "0.0.0",
-  "description": "n8n nodes for takuhai — drive ingest, the queue match loop, and any takuhai-shaped crawler.",
+  "description": "n8n nodes for the Kura release indexer and matcher queue.",
   "keywords": ["n8n-community-node-package", "takuhai", "anime"],
   "license": "MIT",
   "packageManager": "pnpm@10.34.4",
@@ -15,19 +15,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "dev": "tsc -p tsconfig.json --watch",
-    "test": "pnpm build && node scripts/test-crawler-trigger.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "n8n": {
     "n8nNodesApiVersion": 1,
     "credentials": [
-      "dist/credentials/TakuhaiApi.credentials.js",
-      "dist/credentials/TakuhaiCrawlerApi.credentials.js"
+      "dist/credentials/TakuhaiApi.credentials.js"
     ],
     "nodes": [
       "dist/nodes/Takuhai/Takuhai.node.js",
-      "dist/nodes/TakuhaiCrawler/TakuhaiCrawler.node.js",
-      "dist/nodes/TakuhaiCrawlerTrigger/TakuhaiCrawlerTrigger.node.js",
       "dist/nodes/TakuhaiTrigger/TakuhaiTrigger.node.js"
     ]
   },

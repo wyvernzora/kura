@@ -62,11 +62,10 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
   (`library-manager`, `release-indexer`, `webui`). Binaries keep the
   `kura-` prefix (`kura-library-manager`, `kura-release-indexer`) since
   PATH has no namespace.
-- Legacy image names still published pending consolidation: the crawler
-  images (`kura-releases-crawler-{dmhy,nyaa}` — crawlers are slated to
-  be absorbed into release-indexer) and the two n8n-nodes images
-  (`kura-n8n-nodes`, `kura-releases-n8n-nodes` — slated to merge into
-  `kura/n8n-nodes`).
+- Separate crawler images are no longer published; DMHY and Nyaa run inside
+  `release-indexer`. The two n8n-nodes images (`kura-n8n-nodes`,
+  `kura-releases-n8n-nodes`) remain pending consolidation into
+  `kura/n8n-nodes`.
 
 ## End-to-end tests (all services)
 
@@ -224,19 +223,19 @@ Read design.md before any sizable change.
 ### About the release indexer
 
 - **Name:** release-indexer (binary `kura-release-indexer`; was the standalone takuhai repo, 宅配 — "home delivery / courier").
-- **Domain:** anime **release index** — a dumb, durable store + work queue + query
-  API. It records what an external matching agent reports; it holds no matching policy.
-- **Ingestion is external push.** n8n drives stateless crawlers (`POST /crawl`) and
-  pushes posts to the indexer (`POST /ingest`). The indexer holds no cursor, runs no
-  scheduler, makes no outbound calls.
+- **Domain:** anime **release index** — a durable store + source crawler + work queue
+  + query API. It records what an external matching agent reports; it holds no
+  matching policy.
+- **Crawling is in-process.** One scheduled loop per enabled source crawls the newest
+  bounded window and ingests it directly. There is no durable cursor, bootstrap, or
+  overlap state. `POST /ingest` remains an external-producer escape hatch.
 - **Surfaces:**
   - REST (n8n-driven): `POST /ingest`, `POST /queue/claim`, `GET /queue/stats`,
     `POST /submit`, `GET /magnets/{infohash}`, and `GET /releases/{infohash}`.
   - MCP (consumer-only): `list_releases`, `get_release`, `resolve_magnets`, over streamable HTTP at `/mcp`.
   - `/healthz` — a live DB ping.
-- **Transport:** HTTP (`--addr=:8080`).
-- **Distribution:** Go binary + Docker container. Crawlers are separate binaries
-  (`sources/dmhy/cmd/kura-releases-dmhy`, `sources/nyaa/cmd/kura-releases-nyaa`).
+- **Transport:** HTTP (configured by TOML).
+- **Distribution:** one Go binary + Docker container.
 
 ### Invariants (do not violate — see design.md §2)
 
@@ -251,25 +250,30 @@ Read design.md before any sizable change.
   safe (a disposition fences on `claim_token`).
 - Sources are pluggable: a new source is a new crawler speaking the same `RawPost`
   shape — it must not touch the indexer's core.
+- Source failures are observable but do not fail `/healthz`, which remains a DB ping.
+- Each source has one sequential scheduled loop; runs never overlap and each run is
+  bounded by its configured timeout.
 
 ### Stack
 
-- **Language:** Go 1.26.3+ (pinned in `go.mod` / `.tool-versions`). Three Go modules
-  live here — the service module plus the `sources/{dmhy,nyaa}` crawler modules — all
-  members of the monorepo-root `go.work`. CI builds each module with `GOWORK=off`.
-- **Entry point:** `cmd/kura-release-indexer/main.go` — flag-driven, env fallbacks (prefix
-  `KURA_RELEASES_`). Runs migrations at startup, then serves HTTP.
+- **Language:** Go 1.26.3+ (pinned in `go.mod` / `.tool-versions`). One Go module
+  contains the service and both source packages.
+- **Entry point:** `cmd/kura-release-indexer/main.go` — strict TOML config selected by
+  `--config`; `KURA_RELEASES_DATABASE_URL` is the only normal environment setting.
+  Runs migrations, binds HTTP, then starts enabled source loops.
 - **Store:** PostgreSQL via `pgx`. Migrations are **embedded goose** in
   `db/migrations/`, run at startup under an advisory lock.
 - **MCP SDK:** `github.com/modelcontextprotocol/go-sdk` (streamable HTTP at `/mcp`).
-- **Logs:** structured `slog` (JSON) to stderr, `--log-level`.
+- **Logs:** structured `slog` (JSON) to stderr.
 
 ### Package map
 
 ```
-cmd/kura-release-indexer/   flag-driven entrypoint: wiring and lifecycle (migrate → serve → drain)
+cmd/kura-release-indexer/   config + wiring + lifecycle (migrate → bind → crawl/serve → drain)
 pkg/rawpost/         shared wire contract: RawPost + IngestSummary (a leaf)
-internal/config/     Config struct; flag + env binding; validation
+internal/config/     strict TOML loading, defaults, and validation
+internal/crawlrunner/ one non-overlapping scheduled loop per enabled source
+internal/ingest/     transport-neutral RawPost normalization + persistence
 internal/infohash/   NormalizeInfohash + ErrSkipInfohash — the dedup key
 internal/cursor/     list_releases cursor encode/decode + ref/path binding + ref validation
 internal/dispatch/   transport-neutral worker/consumer dispatch + sentinel→code helper
@@ -279,14 +283,14 @@ internal/store/postgres/  pgx implementation (only backend in v1)
 internal/mcp/        MCP server: consumer tools only; HTTP /mcp; calls dispatch
 internal/health/     /healthz: DB ping via the Ping seam
 db/migrations/       embedded goose SQL migrations
-sources/dmhy/        stateless DMHY crawler module (own go.mod): RSS+HTML parsers + POST /crawl
-sources/nyaa/        stateless Nyaa crawler module (own go.mod): same /crawl contract
+sources/dmhy/        DMHY parser and crawler
+sources/nyaa/        Nyaa parser and crawler
 ```
 
 `store` is a leaf (imports neither `rawpost` nor the REST layer); `mcp` reaches store
-only through `dispatch`; REST queue/submit routes use `dispatch`, while ingest maps
-`rawpost.RawPost` to store params at the boundary. The service module never imports
-the `sources/*` modules.
+only through `dispatch`; REST queue/submit routes use `dispatch`; REST and scheduled
+sources share `internal/ingest`; source packages emit `RawPost` and do not import
+storage.
 
 ### Commands
 
@@ -294,8 +298,6 @@ the `sources/*` modules.
 make check                     # fmt + vet + lint + test + build
 go test -race -tags=conformance ./...   # conformance suite (real PG via testcontainers)
 make smoke                     # real-binary smoke (go test -tags=smoke ./cmd/kura-release-indexer)
-# per-module (matches CI):
-for m in . sources/dmhy sources/nyaa; do (cd "$m" && GOWORK=off go build ./... && go vet ./... && go test -race ./...); done
 ```
 
 ### Learnings
@@ -309,6 +311,8 @@ corrects your approach, append a one-line, concrete rule here before ending the 
   end-to-end with the real-binary smoke (`make smoke`), not the conformance gate alone.
 - `attempt_count` means failed unmatched submissions, not claims; claim crashes must
   not affect matching semantics.
+- Keep every source `category` as a TOML string; DMHY maps that string to its existing
+  `sort_id` semantics internally.
 
 ---
 

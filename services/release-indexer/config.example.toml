@@ -1,0 +1,68 @@
+# All fields in this table are optional.
+[server]
+
+# Optional; default = ":8080"
+addr = ":8080"
+
+# Optional; default = "info". Allowed: debug, info, warn, error.
+log_level = "info"
+
+
+# This table and all its fields are optional.
+[queue]
+
+# Optional; default = 3.
+max_attempts = 3
+
+
+# This source table is optional. If absent, DMHY is disabled.
+[sources.dmhy]
+
+# Optional; default = true when this table is present.
+enabled = false
+
+# Required when enabled.
+interval = "5m"
+
+# Optional; default = "2m".
+timeout = "2m"
+
+# Optional; default = "https://share.dmhy.org".
+url = "https://share.dmhy.org"
+
+# Optional; default = "2". DMHY category identifier used in the source URL.
+category = "2"
+
+# Optional; default = 0.5. Set to 0 to disable rate limiting.
+max_rps = 0.5
+
+# Optional; default = "10m". Set to "0s" to disable caching.
+cache_ttl = "10m"
+
+
+# This source table is optional. If absent, Nyaa is disabled.
+[sources.nyaa]
+
+# Optional; default = true when this table is present.
+enabled = false
+
+# Required when enabled.
+interval = "5m"
+
+# Optional; default = "2m".
+timeout = "2m"
+
+# Optional; default = "https://nyaa.si".
+url = "https://nyaa.si"
+
+# Optional; default = "".
+query = ""
+
+# Optional; default = "1_4".
+category = "1_4"
+
+# Optional; default = "0".
+filter = "0"
+
+# Optional; default = 0.5. Set to 0 to disable rate limiting.
+max_rps = 0.5

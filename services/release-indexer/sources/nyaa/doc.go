@@ -1,4 +1,2 @@
-// Package nyaa is the stateless Nyaa crawler module. It parses Nyaa listing pages
-// and serves POST /crawl, emitting raw posts (pkg/rawpost.RawPost) with no
-// infohash normalization or matching policy.
+// Package nyaa parses and crawls Nyaa listing pages for the release-indexer.
 package nyaa

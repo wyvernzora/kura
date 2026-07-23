@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -9,8 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/services/release-indexer/internal/infohash"
-	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
+	"github.com/wyvernzora/kura/services/release-indexer/internal/ingest"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
 )
 
@@ -18,12 +16,6 @@ import (
 // rather than an unbounded transaction stream). n8n keeps batches modest; this is the
 // boundary backstop.
 const maxBatchPosts = 1000
-
-// ingestStore is the narrow store seam POST /ingest needs.
-type ingestStore interface {
-	IngestN(ctx context.Context, p store.IngestParams) (store.IngestOutcome, error)
-	QueueStats(ctx context.Context) (store.QueueStats, error)
-}
 
 // ingestRequest is the POST /ingest request body: a batch of raw crawled posts.
 type ingestRequest struct {
@@ -74,24 +66,28 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	batch, failure, status, msg := h.ingestBatch(ctx, req.Posts)
-	if status != http.StatusOK {
+	batch, err := h.ingest.Batch(ctx, req.Posts)
+	if err != nil {
+		var failure *ingest.Failure
+		if !errors.As(err, &failure) {
+			failure = &ingest.Failure{Index: -1, Err: err}
+		}
 		h.metrics.IngestBatch(len(req.Posts), "error")
 		h.log(r, slog.LevelError, "ingest failed",
 			"post_count", len(req.Posts),
 			"source_counts", sourceCounts(req.Posts),
-			"post_index", failure.index,
-			"source", failure.source,
-			"source_id", failure.sourceID,
-			"status", status,
+			"post_index", failure.Index,
+			"source", failure.Source,
+			"source_id", failure.SourceID,
+			"status", http.StatusInternalServerError,
 			"duration_ms", time.Since(start).Milliseconds(),
-			"err", failure.err,
+			"err", err,
 		)
-		http.Error(w, msg, status)
+		http.Error(w, "ingest failed", http.StatusInternalServerError)
 		return
 	}
 
-	qs, err := h.ingest.QueueStats(ctx)
+	qs, err := h.stats.QueueStats(ctx)
 	if err != nil {
 		h.metrics.IngestBatch(len(req.Posts), "error")
 		h.log(r, slog.LevelError, "ingest queue stats failed",
@@ -130,62 +126,6 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-type ingestFailure struct {
-	index    int
-	source   string
-	sourceID string
-	err      error
-}
-
-func (h *Handler) ingestBatch(ctx context.Context, posts []rawpost.RawPost) (batchOut rawpost.IngestBatch, failure ingestFailure, status int, msg string) {
-	var batch rawpost.IngestBatch
-	for i := range posts {
-		post := posts[i]
-
-		ih, err := infohash.NormalizeInfohash(post.Magnet)
-		if err != nil {
-			if errors.Is(err, infohash.ErrSkipInfohash) {
-				batch.Skipped++
-				h.metrics.IngestPost(post.Source, "skipped")
-				continue
-			}
-			h.metrics.IngestPost(post.Source, "error")
-			return batch, ingestFailure{
-				index:    i,
-				source:   post.Source,
-				sourceID: post.SourceID,
-				err:      err,
-			}, http.StatusInternalServerError, "infohash normalization failed"
-		}
-
-		out, err := h.ingest.IngestN(ctx, ingestParams(post, ih))
-		if err != nil {
-			h.metrics.IngestPost(post.Source, "error")
-			return batch, ingestFailure{
-				index:    i,
-				source:   post.Source,
-				sourceID: post.SourceID,
-				err:      err,
-			}, http.StatusInternalServerError, "ingest failed"
-		}
-		switch {
-		case out.New:
-			batch.New++
-			h.metrics.IngestPost(post.Source, "new")
-		case out.Updated:
-			batch.Updated++
-			h.metrics.IngestPost(post.Source, "updated")
-		case out.Duplicate:
-			batch.Duplicate++
-			h.metrics.IngestPost(post.Source, "duplicate")
-		case out.Conflict:
-			batch.Conflict++
-			h.metrics.IngestPost(post.Source, "conflict")
-		}
-	}
-	return batch, ingestFailure{}, http.StatusOK, ""
-}
-
 func sourceCounts(posts []rawpost.RawPost) map[string]int {
 	counts := make(map[string]int)
 	for i := range posts {
@@ -196,17 +136,4 @@ func sourceCounts(posts []rawpost.RawPost) map[string]int {
 		counts[source]++
 	}
 	return counts
-}
-
-func ingestParams(p rawpost.RawPost, ih string) store.IngestParams {
-	return store.IngestParams{
-		Infohash:    ih,
-		Source:      p.Source,
-		SourceID:    p.SourceID,
-		Title:       p.Title,
-		URL:         p.URL,
-		Magnet:      p.Magnet,
-		SizeBytes:   p.SizeBytes,
-		PublishedAt: p.PublishedAt,
-	}
 }

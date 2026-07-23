@@ -1,15 +1,5 @@
-// Command takuhai is the release-indexer service entrypoint.
-//
-// takuhai (宅配, "home delivery / courier") is a passive store + work queue +
-// query API for anime releases. Ingestion is external push: n8n drives the
-// stateless crawler and POSTs raw posts to /ingest, then drives the match loop
-// over the queue REST API. Consumer agents read the catalog over the /mcp
-// endpoint. The actual identity matching is performed by an external agent; the
-// indexer only records what that agent reports.
-//
-// All configuration is via flags, each honoring a KURA_RELEASES_-prefixed
-// environment-variable fallback so container deployments can configure the
-// binary without crafting an args list.
+// Command kura-release-indexer serves the release index and runs configured
+// source crawlers. Matching remains external.
 package main
 
 import (
@@ -32,11 +22,16 @@ import (
 
 	dbmigrations "github.com/wyvernzora/kura/services/release-indexer/db/migrations"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/config"
+	"github.com/wyvernzora/kura/services/release-indexer/internal/crawlrunner"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/health"
+	"github.com/wyvernzora/kura/services/release-indexer/internal/ingest"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/mcp"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/metrics"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/rest"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store/postgres"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/sources/dmhy"
+	"github.com/wyvernzora/kura/services/release-indexer/sources/nyaa"
 
 	// time/tzdata bakes the IANA zoneinfo database into the binary so
 	// timezone-dependent parsing works in distroless/scratch images that
@@ -58,28 +53,13 @@ func main() {
 }
 
 func run() error {
-	var (
-		showVersion      = flag.Bool("version", false, "print version and exit")
-		addr             = stringFlag("addr", "KURA_RELEASES_ADDR", ":8080", "listen address")
-		databaseURL      = stringFlag("database-url", "KURA_RELEASES_DATABASE_URL", "", "PostgreSQL connection string")
-		logLevel         = stringFlag("log-level", "KURA_RELEASES_LOG_LEVEL", "info", "log level: debug, info, warn, error")
-		queueMaxAttempts = intFlag("queue-max-attempts", "KURA_RELEASES_QUEUE_MAX_ATTEMPTS", 3, "max unmatched submits before a release becomes exhausted")
-	)
-	flag.Parse()
-
-	if *showVersion {
+	cfg, showVersion, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	if showVersion {
 		fmt.Println(version)
 		return nil
-	}
-
-	cfg := config.Config{
-		Addr:             *addr,
-		DatabaseURL:      *databaseURL,
-		LogLevel:         *logLevel,
-		QueueMaxAttempts: *queueMaxAttempts,
-	}
-	if err := cfg.Validate(); err != nil {
-		return err
 	}
 
 	level, err := parseLogLevel(cfg.LogLevel)
@@ -117,6 +97,11 @@ func run() error {
 	// listener and the MCP server mount the SAME handler.
 	healthz := health.NewHandlerWithLogger(st, logger.With("component", "health"))
 	metricsSrv := metrics.NewTakuhai(version, commit, st)
+	ingester := ingest.New(st, metricsSrv)
+	crawls, err := newCrawlRunner(cfg, ingester, metricsSrv, logger.With("component", "crawler"))
+	if err != nil {
+		return err
+	}
 
 	// The consumer-only MCP server (list_releases / get_release / resolve_magnets). Its Handler() serves
 	// /mcp + /healthz.
@@ -125,9 +110,11 @@ func run() error {
 	logger.Info("takuhai starting",
 		"version", version,
 		"addr", cfg.Addr,
+		"dmhy_enabled", cfg.Sources.DMHY.Enabled,
+		"nyaa_enabled", cfg.Sources.Nyaa.Enabled,
 	)
 
-	return runHTTP(ctx, logger, cfg.Addr, st, mcpSrv, healthz, metricsSrv)
+	return runHTTP(ctx, logger, cfg.Addr, st, mcpSrv, healthz, metricsSrv, crawls)
 }
 
 // runHTTP mounts every HTTP route — /ingest (push), /queue/* + /submit (match loop), /mcp +
@@ -140,6 +127,7 @@ func runHTTP(
 	mcpSrv *mcp.Server,
 	healthz http.Handler,
 	metricsSrv *metrics.Takuhai,
+	crawls *crawlrunner.Runner,
 ) error {
 	mux := http.NewServeMux()
 	// The consumer /mcp endpoint + /healthz (the MCP server owns this mux).
@@ -165,6 +153,22 @@ func runHTTP(
 		return fmt.Errorf("bind %s: %w", addr, err)
 	}
 	logger.Info("takuhai listening", "addr", ln.Addr().String())
+
+	crawlCtx, cancelCrawls := context.WithCancel(ctx)
+	var crawlsDone chan struct{}
+	if crawls != nil {
+		crawlsDone = make(chan struct{})
+		go func() {
+			crawls.Run(crawlCtx)
+			close(crawlsDone)
+		}()
+	}
+	defer func() {
+		cancelCrawls()
+		if crawlsDone != nil {
+			<-crawlsDone
+		}
+	}()
 
 	// Serve in the background. serveErr carries the loop's single terminal error —
 	// ErrServerClosed after a clean Shutdown, or the fail-fast cause if the listener
@@ -236,22 +240,6 @@ func runMigrations(ctx context.Context, databaseURL string) error {
 	return dbmigrations.Run(ctx, sqlDB)
 }
 
-func stringFlag(name, env, def, usage string) *string {
-	if v := os.Getenv(env); v != "" {
-		def = v
-	}
-	return flag.String(name, def, fmt.Sprintf("%s (env %s)", usage, env))
-}
-
-func intFlag(name, env string, def int, usage string) *int {
-	if v := os.Getenv(env); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			def = n
-		}
-	}
-	return flag.Int(name, def, fmt.Sprintf("%s (env %s)", usage, env))
-}
-
 func parseLogLevel(s string) (slog.Level, error) {
 	switch s {
 	case "debug":
@@ -263,6 +251,68 @@ func parseLogLevel(s string) (slog.Level, error) {
 	case "error":
 		return slog.LevelError, nil
 	default:
-		return 0, fmt.Errorf("invalid --log-level %q", s)
+		return 0, fmt.Errorf("invalid log level %q", s)
 	}
+}
+
+const crawlPageSize = 200
+
+func newCrawlRunner(
+	cfg config.Config,
+	ingester *ingest.Processor,
+	metricsSrv *metrics.Takuhai,
+	logger *slog.Logger,
+) (*crawlrunner.Runner, error) {
+	var jobs []crawlrunner.Job
+	if source := cfg.Sources.DMHY; source.Enabled {
+		category, err := strconv.Atoi(source.Category)
+		if err != nil {
+			return nil, fmt.Errorf("parse DMHY category: %w", err)
+		}
+		crawler := dmhy.NewHTTPCrawler(source.URL, category, source.MaxRPS, source.CacheTTL)
+		jobs = append(jobs, crawlrunner.Job{
+			Source:   rawpost.SourceDMHY,
+			Interval: source.Interval,
+			Timeout:  source.Timeout,
+			Crawl: func(ctx context.Context) ([]rawpost.RawPost, error) {
+				return crawler.Crawl(ctx, crawlPageSize)
+			},
+		})
+	}
+	if source := cfg.Sources.Nyaa; source.Enabled {
+		crawler := nyaa.NewHTTPCrawler(source.URL, source.Query, source.Category, source.Filter, source.MaxRPS)
+		jobs = append(jobs, crawlrunner.Job{
+			Source:   rawpost.SourceNyaa,
+			Interval: source.Interval,
+			Timeout:  source.Timeout,
+			Crawl: func(ctx context.Context) ([]rawpost.RawPost, error) {
+				return crawler.Crawl(ctx, crawlPageSize)
+			},
+		})
+	}
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+	return &crawlrunner.Runner{
+		Jobs:    jobs,
+		Ingest:  ingester.Batch,
+		Metrics: metricsSrv,
+		Logger:  logger,
+	}, nil
+}
+
+func loadConfig() (cfg config.Config, showVersion bool, err error) {
+	configPath := flag.String("config", config.DefaultPath, "TOML configuration file")
+	show := flag.Bool("version", false, "print version and exit")
+	flag.Parse()
+
+	if flag.NArg() != 0 {
+		return config.Config{}, false, fmt.Errorf("unexpected positional arguments: %v", flag.Args())
+	}
+	if *show {
+		return config.Config{}, true, nil
+	}
+
+	cfg, err = config.Load(*configPath, os.Getenv("KURA_RELEASES_DATABASE_URL"))
+	return cfg, false, err
 }

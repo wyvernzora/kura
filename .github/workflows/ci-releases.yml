@@ -35,7 +35,7 @@ jobs:
           go-version-file: services/release-indexer/go.mod
           cache: true
 
-      # gofmt drift check across every module's source roots.
+      # gofmt drift check across the release-indexer module.
       - name: gofmt
         run: |
           drift=$(gofmt -l cmd internal pkg sources)
@@ -57,35 +57,23 @@ jobs:
       - name: install golangci-lint
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 
-      # Explicit module list with GOWORK=off: under the monorepo workspace,
-      # `go list -m` would enumerate every workspace module including the
-      # library; each releases module must gate standalone, exactly as its
-      # docker builds run.
-      - name: per-module vet / build / test / lint
+      - name: vet / build / test / lint
         env:
           GOWORK: "off"
         run: |
-          for m in . sources/dmhy sources/nyaa; do
-            echo "::group::module $m"
-            (cd "$m" \
-              && go vet ./... \
-              && go build ./... \
-              && go build -tags=conformance ./... \
-              && go test -race -count=1 -tags=conformance ./... \
-              && golangci-lint run ./...) || { echo "::error::module $m failed"; exit 1; }
-            echo "::endgroup::"
-          done
+          go vet ./...
+          go build ./...
+          go build -tags=conformance ./...
+          go test -race -count=1 -tags=conformance ./...
+          golangci-lint run ./...
 
-      - name: go build (binaries)
+      - name: go build (release binary)
         env:
           GOWORK: "off"
-        run: |
-          (cd . && go build -trimpath -o bin/kura-release-indexer ./cmd/kura-release-indexer)
-          (cd sources/dmhy && go build -trimpath -o ../../bin/kura-releases-dmhy ./cmd/kura-releases-dmhy)
-          (cd sources/nyaa && go build -trimpath -o ../../bin/kura-releases-nyaa ./cmd/kura-releases-nyaa)
+        run: go build -trimpath -o bin/kura-release-indexer ./cmd/kura-release-indexer
 
   # Real-binary smoke over the deployable shape: real Postgres via
-  # testcontainers, builds + runs cmd/kura-releases.
+  # testcontainers, builds + runs cmd/kura-release-indexer.
   smoke:
     name: smoke
     runs-on: ubuntu-24.04
@@ -103,7 +91,8 @@ jobs:
       - name: real-binary smoke
         run: go test -tags=smoke -run TestSmoke -count=1 ./cmd/kura-release-indexer
 
-  # End-to-end over built service + crawler images, fake DMHY, Postgres.
+  # End-to-end consolidated deploy shape: one release-indexer image crawls fake
+  # DMHY in-process and persists to Postgres before the match workflow runs.
   e2e:
     name: e2e
     runs-on: ubuntu-24.04
@@ -155,26 +144,8 @@ jobs:
             image: ghcr.io/wyvernzora/kura/release-indexer
             context: services/release-indexer
             file: services/release-indexer/Dockerfile
-            build_args: |
-              BUILD_DIR=.
-              CMD_PKG=./cmd/kura-release-indexer
-            description: Anime release indexer + match work queue (REST + MCP)
-          - component: kura-releases-crawler-dmhy
-            image: ghcr.io/wyvernzora/kura-releases-crawler-dmhy
-            context: services/release-indexer
-            file: services/release-indexer/Dockerfile
-            build_args: |
-              BUILD_DIR=sources/dmhy
-              CMD_PKG=./cmd/kura-releases-dmhy
-            description: DMHY stateless crawler (POST /crawl)
-          - component: kura-releases-crawler-nyaa
-            image: ghcr.io/wyvernzora/kura-releases-crawler-nyaa
-            context: services/release-indexer
-            file: services/release-indexer/Dockerfile
-            build_args: |
-              BUILD_DIR=sources/nyaa
-              CMD_PKG=./cmd/kura-releases-nyaa
-            description: Nyaa stateless crawler (POST /crawl)
+            build_args: ''
+            description: Anime release indexer, source crawlers, and match work queue
           - component: kura-releases-n8n-nodes
             image: ghcr.io/wyvernzora/kura-releases-n8n-nodes
             context: .
@@ -243,8 +214,6 @@ jobs:
       matrix:
         package:
           - kura/release-indexer
-          - kura-releases-crawler-dmhy
-          - kura-releases-crawler-nyaa
           - kura-releases-n8n-nodes
     steps:
       - name: Delete untagged versions, keep last 10

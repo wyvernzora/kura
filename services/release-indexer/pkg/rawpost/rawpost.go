@@ -1,8 +1,6 @@
-// Package rawpost holds the shared push-ingestion wire contract: the RawPost
-// shape exchanged between a crawler's POST /crawl response and takuhai's
-// POST /ingest request, plus the IngestSummary that POST /ingest returns. It is
-// a leaf — it imports nothing internal — so both the takuhai service module and
-// the nested crawler modules can depend on it without coupling.
+// Package rawpost holds the shared ingestion contract between source crawlers,
+// in-process ingestion, and POST /ingest. It is a leaf and imports nothing
+// internal.
 package rawpost
 
 import "time"
@@ -20,17 +18,15 @@ var knownSources = []string{SourceDMHY, SourceNyaa}
 // Sources returns the canonical registry of source identifiers known to the
 // shared wire contract.
 //
-// Adding a new source still requires manual edits to: go.work; Makefile MODULES;
-// the CI/release module and image lists; Dockerfile ADDR envs; compose.yaml.
+// Adding a source requires registering its runtime configuration and scheduler
+// wiring in the release-indexer binary.
 func Sources() []string {
 	return append([]string(nil), knownSources...)
 }
 
-// RawPost is one crawled post: the POST /crawl-response ↔ POST /ingest-request
-// shape. The crawler is DUMB — it emits raw fields (title, magnet, metadata,
-// size) and does NOT normalize the infohash; takuhai derives the canonical dedup
-// key from Magnet on /ingest (via internal/infohash). There is deliberately NO
-// infohash field here.
+// RawPost is one crawled post. Source packages emit raw fields (title, magnet,
+// metadata, size) and do not normalize the infohash; internal/ingest derives the
+// canonical dedup key from Magnet. There is deliberately no infohash field here.
 //
 // Field names/types mirror store.IngestParams (the persistence input) so the P4
 // /ingest mapping is a trivial field copy, but this leaf imports neither store

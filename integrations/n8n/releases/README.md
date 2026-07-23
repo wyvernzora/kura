@@ -1,105 +1,45 @@
-# takuhai n8n nodes
+# Release-indexer n8n nodes
 
-Custom [n8n](https://n8n.io) nodes for **takuhai** — the anime release index. They let
-n8n drive the whole loop: fetch from a crawler, push to `/ingest`, claim queue work,
-submit matcher results, and get release details or magnet links.
+Custom n8n nodes for the Kura release indexer. Crawling and crawl scheduling run
+inside `kura-release-indexer`; n8n only drives the external matcher loop and may
+push posts through `POST /ingest` when an out-of-process producer is useful.
 
-## Design
-
-### Nodes
+## Nodes
 
 | Node | Kind | Credential | What it does |
-|---|---|---|---|
-| **Takuhai** | action | Takuhai API | The takuhai service surface. Resource **Releases** (ingest / get release / get magnet link) or **Queue** (claim / submit / queue stats). |
-| **Takuhai Crawler** | action + trigger | Takuhai Crawler API | Generic `POST /crawl` action plus a polling trigger that stores cursor/watermark state in n8n and emits one batch item only when new posts exist. |
-| **Takuhai Queue Trigger** | trigger | Takuhai API | Polls `/queue/claim` and emits one batch item of claimed releases. |
+| --- | --- | --- | --- |
+| **Takuhai** | action | Takuhai API | Ingest posts, inspect releases and magnets, claim queue work, submit dispositions, and read queue stats. |
+| **Takuhai Queue Trigger** | trigger | Takuhai API | Poll `/queue/claim` and emit one batch of claimed releases. |
 
-Operation I/O (the cardinalities differ by design):
+Operation cardinalities:
 
-- **Releases → Ingest** — forwards the page's `posts` blob as one batched `/ingest`
-  call → one summary item.
-- **Releases → Get Release** — fetches one `infohash` via `/releases/{infohash}` and emits
-  the release detail object unchanged.
-- **Releases → Get Magnet Link** — fetches one `infohash` via `/magnets/{infohash}` and emits
-  `{infohash, magnet}`.
-- **Queue → Claim** — manual claim operation; emits one item containing `{items, count}`.
-- **Queue → Submit Dispositions** — accepts one JSON body: a single disposition object, an array of
-  disposition objects, one `{items}` batch object, or structured-output `{output:{items}}`;
-  emits `{items:[{infohash, metadataRef, ok, error?}], count}`. HTTP 409 conflicts become per-item
-  `{ok:false,error:"conflict"}` results; other errors still fail the node.
-- **Queue → Get Queue Stats** — one stats item.
-- **Crawler → Crawl** — one item = the page `{posts, next_cursor, has_more}`.
-- **Crawler trigger** — keeps a node-local crawl watermark and emits one
-  `{posts, count}` item when new posts exist. The reset option clears its saved cursor
-  and watermark for one-off recovery/backfill.
-- **Takuhai Queue Trigger** — claims on each poll and emits one item containing
-  `{items, count}` so one AI agent call can handle the whole batch.
+- **Releases → Ingest** forwards one `posts` batch to `/ingest` and emits one
+  summary item.
+- **Releases → Get Release** emits the release detail unchanged.
+- **Releases → Get Magnet Link** emits `{infohash, magnet}`.
+- **Queue → Claim** emits one `{items, count}` item.
+- **Queue → Submit Dispositions** accepts one disposition, an array, one
+  `{items}` batch, or structured-output `{output:{items}}`; it emits compact
+  per-item results.
+- **Queue → Get Queue Stats** emits one stats item.
+- **Takuhai Queue Trigger** emits one `{items, count}` item per non-empty poll.
 
-Claim and Ingest return endpoint envelopes in full so new server fields flow through
-without a node change. Submit returns a compact per-disposition result because `/submit`
-only returns `{"ok":true}`.
+Claim and ingest preserve the server envelopes so new response fields flow
+through without a node change.
 
-### The opaque-shuttle principle
+## Packaging
 
-n8n is **transport**, not a participant in the data. The `posts` payload (and the
-`raw_items` evidence the matcher reads) is a sealed contract between the crawler and
-takuhai — n8n forwards it verbatim and never models a `RawPost`. The only fields n8n
-actually *speaks* are the control/fencing ones: `claim_token`, `infohash`, the crawler
-`next_cursor`/`has_more`, and the queue counts. The matcher produces the submit body
-as JSON. So these nodes pin to the **endpoint envelopes**, not the data schema: a new
-`RawPost` field changes nothing here.
-
-### Example: backfill loop
-
-```
-Loop ─► Takuhai Crawler (cursor = prev next_cursor)
-     ─► Takuhai · Ingest (Posts = {{$json.posts}})
-     ─► IF has_more is false: stop, else set cursor = next_cursor and loop
-```
-
-### Example: steady crawl
-
-```
-Takuhai Crawler trigger ─► Takuhai · Ingest (Posts = {{$json.posts}})
-```
-
-### Example: match loop
-
-```
-Takuhai Queue Trigger ─► [matcher over $json.items] ─► Takuhai · Submit Dispositions
-```
-
-## Packaging & deployment
-
-Built as a **minimal init container** (`ghcr.io/wyvernzora/kura-releases-n8n-nodes`), versioned
-`vX.Y.Z` in lockstep with the service (`ghcr.io/wyvernzora/kura/release-indexer`) and crawler
-images (`ghcr.io/wyvernzora/kura-releases-crawler-dmhy`, `ghcr.io/wyvernzora/kura-releases-crawler-nyaa`) — all published atomically by one CI release job and pinned together by a single deploy `version`.
-
-The init container ships the built nodes and, on pod start, copies them into an
-`emptyDir` that n8n mounts and reads via `N8N_CUSTOM_EXTENSIONS`:
-
-```
-initContainer (takuhai/n8n-nodes)  ──cp──►  emptyDir /opt/n8n/custom  ◄──  n8n container
-                                            N8N_CUSTOM_EXTENSIONS=/opt/n8n/custom
-```
-
-Updates ride the rollout: bump `version` → n8n restarts → init repopulates the volume →
-n8n loads the new nodes at boot. The deployment system owns the manifest shape.
+The package is built as the `ghcr.io/wyvernzora/kura-releases-n8n-nodes` init
+image. At pod startup it copies the compiled nodes into the `emptyDir` mounted
+at `N8N_CUSTOM_EXTENSIONS`.
 
 ## Development
-
-Uses **corepack pnpm** (pinned via `packageManager` in `package.json`).
 
 ```sh
 corepack enable
 corepack pnpm install --frozen-lockfile
-corepack pnpm build            # tsc → dist/ + node icon
+corepack pnpm build
 ```
 
-All nodes and credentials share one icon —
-[`docs/assets/logo-n8n.svg`](../../docs/assets/logo-n8n.svg). The build copies it into
-each compiled node dir and credentials dir. The container image builds from the repo
-root so that asset is in scope.
-
-Local n8n: point `N8N_CUSTOM_EXTENSIONS` at this package, or symlink `dist` into
-`~/.n8n/custom`.
+The build copies the shared release-indexer icon beside every compiled node and
+credential.

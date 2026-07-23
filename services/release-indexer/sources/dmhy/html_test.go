@@ -6,9 +6,7 @@ import (
 )
 
 // TestRowPublishedAtCST pins the DMHY hidden-timestamp zone (CST, UTC+8). A hidden span
-// "2026/06/20 12:00" is a CST instant, i.e. 2026/06/20 04:00 UTC — NOT 12:00 UTC. A
-// zone-less parse (the prior bug) would skew the lookback window by ~8h. This is the
-// regression a self-consistent fixture-through-same-parser path cannot catch.
+// "2026/06/20 12:00" is a CST instant, i.e. 2026/06/20 04:00 UTC — NOT 12:00 UTC.
 func TestRowPublishedAtCST(t *testing.T) {
 	row := `<tr class=""><span style="display: none;">2026/06/20 12:00</span></tr>`
 	got := rowPublishedAt(row)
@@ -26,7 +24,7 @@ func TestRowPublishedAtCST(t *testing.T) {
 }
 
 // TestRowPublishedAtMissing confirms a missing/unparseable hidden date yields the zero
-// time (the post is still emitted; the lookback walk treats zero-time as in-window).
+// time while the post remains parseable.
 func TestRowPublishedAtMissing(t *testing.T) {
 	if got := rowPublishedAt(`<tr class=""></tr>`); !got.IsZero() {
 		t.Fatalf("rowPublishedAt(no date) = %v, want zero time", got)

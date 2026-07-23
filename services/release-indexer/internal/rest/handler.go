@@ -3,22 +3,29 @@
 package rest
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
+	"github.com/wyvernzora/kura/services/release-indexer/internal/ingest"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/metrics"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
 )
 
 type Handler struct {
 	dispatch *dispatch.Dispatcher
-	ingest   ingestStore
+	ingest   *ingest.Processor
+	stats    ingestStats
 	mux      *http.ServeMux
 	metrics  *metrics.Takuhai
 	logger   *slog.Logger
+}
+
+type ingestStats interface {
+	QueueStats(ctx context.Context) (store.QueueStats, error)
 }
 
 func New(s store.Store) *Handler {
@@ -32,7 +39,8 @@ func NewWithMetrics(s store.Store, m *metrics.Takuhai) *Handler {
 func NewWithMetricsAndLogger(s store.Store, m *metrics.Takuhai, logger *slog.Logger) *Handler {
 	h := &Handler{
 		dispatch: dispatch.New(s),
-		ingest:   s,
+		ingest:   ingest.New(s, m),
+		stats:    s,
 		metrics:  m,
 		logger:   logger,
 	}

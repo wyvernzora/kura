@@ -872,8 +872,8 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum by (result) (rate(takuhai_dmhy_crawl_requests_total[$__rate_interval]))",
-          "legendFormat": "dmhy crawl {{result}}",
+          "expr": "sum by (source, result) (rate(takuhai_source_crawls_total[$__rate_interval]))",
+          "legendFormat": "{{source}} crawl {{result}}",
           "range": true,
           "refId": "A"
         },
@@ -883,32 +883,10 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(takuhai_dmhy_parse_posts_total[$__rate_interval]))",
-          "legendFormat": "dmhy parsed posts",
+          "expr": "sum by (source) (rate(takuhai_source_crawl_posts_total[$__rate_interval]))",
+          "legendFormat": "{{source}} posts",
           "range": true,
           "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "sum by (result) (rate(takuhai_nyaa_crawl_requests_total[$__rate_interval]))",
-          "legendFormat": "nyaa crawl {{result}}",
-          "range": true,
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "sum(rate(takuhai_nyaa_parse_posts_total[$__rate_interval]))",
-          "legendFormat": "nyaa parsed posts",
-          "range": true,
-          "refId": "D"
         }
       ],
       "title": "Crawler Activity",
@@ -967,43 +945,10 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(takuhai_dmhy_crawl_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "dmhy crawl p95",
+          "expr": "histogram_quantile(0.95, sum by (le, source) (rate(takuhai_source_crawl_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{source}} crawl p95",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(takuhai_dmhy_fetch_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "dmhy fetch p95",
-          "range": true,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(takuhai_nyaa_crawl_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "nyaa crawl p95",
-          "range": true,
-          "refId": "C"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(takuhai_nyaa_fetch_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "nyaa fetch p95",
-          "range": true,
-          "refId": "D"
         }
       ],
       "title": "Crawler Latency",

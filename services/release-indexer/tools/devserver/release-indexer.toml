@@ -1,0 +1,23 @@
+[server]
+addr = ":8080"
+log_level = "debug"
+
+[queue]
+max_attempts = 3
+
+[sources.dmhy]
+interval = "5m"
+timeout = "2m"
+url = "https://share.dmhy.org"
+category = "2"
+max_rps = 0.5
+cache_ttl = "10m"
+
+[sources.nyaa]
+interval = "5m"
+timeout = "2m"
+url = "https://nyaa.si"
+query = ""
+category = "1_4"
+filter = "0"
+max_rps = 0.5

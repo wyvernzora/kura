@@ -1,45 +1,131 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
-// validBase returns a Config that passes Validate, so each table case can vary exactly
-// one field and isolate the rule under test.
-func validBase() Config {
-	return Config{
-		Addr:             ":8080",
-		DatabaseURL:      "postgres://localhost/takuhai",
-		LogLevel:         "info",
-		QueueMaxAttempts: 3,
+const testDatabaseURL = "postgres://localhost/releases"
+
+func TestLoadDefaultsAndSources(t *testing.T) {
+	path := writeConfig(t, `
+[sources.dmhy]
+interval = "5m"
+
+[sources.nyaa]
+interval = "10m"
+category = "1_2"
+max_rps = 0
+`)
+
+	cfg, err := Load(path, testDatabaseURL)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Addr != ":8080" || cfg.LogLevel != "info" || cfg.QueueMaxAttempts != 3 {
+		t.Fatalf("server/queue defaults = %+v", cfg)
+	}
+	if !cfg.Sources.DMHY.Enabled || cfg.Sources.DMHY.Interval != 5*time.Minute {
+		t.Fatalf("DMHY = %+v", cfg.Sources.DMHY)
+	}
+	if cfg.Sources.DMHY.Category != "2" || cfg.Sources.DMHY.URL != defaultDMHYURL {
+		t.Fatalf("DMHY defaults = %+v", cfg.Sources.DMHY)
+	}
+	if !cfg.Sources.Nyaa.Enabled || cfg.Sources.Nyaa.Interval != 10*time.Minute {
+		t.Fatalf("Nyaa = %+v", cfg.Sources.Nyaa)
+	}
+	if cfg.Sources.Nyaa.Category != "1_2" || cfg.Sources.Nyaa.MaxRPS != 0 {
+		t.Fatalf("Nyaa overrides = %+v", cfg.Sources.Nyaa)
 	}
 }
 
-func TestConfigValidate(t *testing.T) {
-	tests := []struct {
-		name    string
-		mutate  func(*Config)
-		wantErr bool
-	}{
-		{"valid", func(*Config) {}, false},
+func TestLoadAbsentAndDisabledSources(t *testing.T) {
+	path := writeConfig(t, `
+[sources.dmhy]
+enabled = false
+`)
 
-		// Validations must fire.
-		{"blank-database-url", func(c *Config) { c.DatabaseURL = "" }, true},
-		{"unknown-log-level", func(c *Config) { c.LogLevel = "trace" }, true},
-		{"zero-queue-max-attempts", func(c *Config) { c.QueueMaxAttempts = 0 }, true},
+	cfg, err := Load(path, testDatabaseURL)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Sources.DMHY.Enabled || cfg.Sources.Nyaa.Enabled {
+		t.Fatalf("sources = %+v, want disabled", cfg.Sources)
+	}
+}
+
+func TestLoadRejectsInvalidConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "unknown field",
+			body: "[server]\naddress = \":9090\"\n",
+			want: "strict mode",
+		},
+		{
+			name: "missing interval",
+			body: "[sources.dmhy]\nenabled = true\n",
+			want: "sources.dmhy.interval is required",
+		},
+		{
+			name: "category must be string",
+			body: "[sources.dmhy]\ninterval = \"5m\"\ncategory = 2\n",
+			want: "cannot decode TOML integer into struct field",
+		},
+		{
+			name: "invalid DMHY category",
+			body: "[sources.dmhy]\ninterval = \"5m\"\ncategory = \"anime\"\n",
+			want: "non-negative integer string",
+		},
+		{
+			name: "negative rate",
+			body: "[sources.nyaa]\ninterval = \"5m\"\nmax_rps = -1\n",
+			want: "max_rps must be >= 0",
+		},
+		{
+			name: "invalid duration",
+			body: "[sources.nyaa]\ninterval = \"five minutes\"\n",
+			want: "sources.nyaa.interval",
+		},
+		{
+			name: "missing database URL",
+			body: "",
+			want: "KURA_RELEASES_DATABASE_URL",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := validBase()
-			tt.mutate(&cfg)
-			err := cfg.Validate()
-			if tt.wantErr && err == nil {
-				t.Fatalf("Validate() = nil, want error")
+			databaseURL := testDatabaseURL
+			if tt.name == "missing database URL" {
+				databaseURL = ""
 			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("Validate() = %v, want nil", err)
+			_, err := Load(writeConfig(t, tt.body), databaseURL)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load() error = %v, want substring %q", err, tt.want)
 			}
 		})
 	}
+}
+
+func TestLoadMissingFile(t *testing.T) {
+	_, err := Load(filepath.Join(t.TempDir(), "missing.toml"), testDatabaseURL)
+	if err == nil || !strings.Contains(err.Error(), "open") {
+		t.Fatalf("Load() error = %v, want open error", err)
+	}
+}
+
+func writeConfig(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "release-indexer.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
 }
