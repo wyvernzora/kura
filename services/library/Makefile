@@ -33,7 +33,7 @@ INSPECTOR_PROXY_PORT ?= 6277
 VITE_PORT            ?= 5173
 STORYBOOK_PORT       ?= 6006
 
-WEB_DIR          := web
+WEB_DIR          := ../webui
 WEB_DIST         := $(WEB_DIR)/dist
 WEBUI_EMBED_DIST := internal/server/webui/dist
 
@@ -44,20 +44,20 @@ WEBUI_EMBED_DIST := internal/server/webui/dist
 build:
 	go build -trimpath -ldflags='$(GO_LDFLAGS)' -o bin/kura ./cmd/kura
 
-# gen-ts regenerates web/src/api/types.gen.ts from internal/response.
+# gen-ts regenerates ../webui/src/api/types.gen.ts from internal/response.
 # The wrapper at tools/tygo runs tygo and post-processes the closed
 # string-enum aliases (Status, ListStatus, ScanStatus) into TS literal
 # unions — tygo emits them as `= string` otherwise.
 gen-ts:
 	cd tools/tygo && go run .
-	cd web && pnpm exec biome check --write src/api/types.gen.ts >/dev/null
+	cd ../webui && pnpm exec biome check --write src/api/types.gen.ts >/dev/null
 
 # check-gen regenerates and fails if the committed file drifted. Wired
 # into `check` so PRs that change response types without running gen-ts
-# fail in CI. Assumes web/src/api/types.gen.ts is tracked — the first
+# fail in CI. Assumes ../webui/src/api/types.gen.ts is tracked — the first
 # commit that lands tygo must include it.
 check-gen: gen-ts
-	@git diff --exit-code -- web/src/api/types.gen.ts \
+	@git diff --exit-code -- ../webui/src/api/types.gen.ts \
 	  || (echo "types.gen.ts is stale; run 'make gen-ts' and commit the result" && exit 1)
 
 # `install` always rebuilds the embedded web bundle so the resulting

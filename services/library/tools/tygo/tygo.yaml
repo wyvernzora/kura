@@ -1,6 +1,6 @@
 packages:
   - path: "github.com/wyvernzora/kura/services/library/internal/response"
-    output_path: "../../web/src/api/types.gen.ts"
+    output_path: "../../../webui/src/api/types.gen.ts"
     type_mappings:
       "time.Time": "string"
       "*time.Time": "string"

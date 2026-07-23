@@ -131,7 +131,7 @@ export interface JobProgress {
 export interface JobError {
   kind: string;
   message: string;
-  data?: { [key: string]: any };
+  data?: { [key: string]: any};
 }
 
 //////////
@@ -142,28 +142,28 @@ export interface JobError {
  * Library-level (vs episode-level Status above): does the series have
  * any tracked metadata, are any episodes missing, are any unaired, etc.
  */
-export type ListStatus = 'untracked' | 'complete' | 'incomplete' | 'error';
+export type ListStatus = string;
 /**
  * ListStatusUntracked: directory under the library root has no
  * .kura/series.json (Kura does not manage it).
  */
-export const ListStatusUntracked: ListStatus = 'untracked';
+export const ListStatusUntracked: ListStatus = "untracked";
 /**
  * ListStatusComplete: every currently actionable episode has active
  * or staged media. Pending-only series are complete because there is
  * no missing media to act on yet.
  */
-export const ListStatusComplete: ListStatus = 'complete';
+export const ListStatusComplete: ListStatus = "complete";
 /**
  * ListStatusIncomplete: at least one aired episode is missing
  * active media, or the series has no episodes at all.
  */
-export const ListStatusIncomplete: ListStatus = 'incomplete';
+export const ListStatusIncomplete: ListStatus = "incomplete";
 /**
  * ListStatusError: the row could not be computed (parse error,
  * load error). The Error field carries the message.
  */
-export const ListStatusError: ListStatus = 'error';
+export const ListStatusError: ListStatus = "error";
 /**
  * ListRow is one row in the library list response. Counts and quality
  * rollups exclude specials (season 0) — they don't factor into series
@@ -470,11 +470,11 @@ export interface Evidence {
 /**
  * ScanStatus is the per-episode outcome of a scan pass.
  */
-export type ScanStatus = 'added' | 'updated' | 'unchanged' | 'removed';
-export const ScanStatusAdded: ScanStatus = 'added';
-export const ScanStatusUpdated: ScanStatus = 'updated';
-export const ScanStatusUnchanged: ScanStatus = 'unchanged';
-export const ScanStatusRemoved: ScanStatus = 'removed';
+export type ScanStatus = string;
+export const ScanStatusAdded: ScanStatus = "added";
+export const ScanStatusUpdated: ScanStatus = "updated";
+export const ScanStatusUnchanged: ScanStatus = "unchanged";
+export const ScanStatusRemoved: ScanStatus = "removed";
 /**
  * ScanResult is workflow.Scan's response. Synced is the per-episode
  * reconciliation log (what changed); Skipped is the list of files /
@@ -524,32 +524,32 @@ export interface ScanSkip {
  * Skip code constants. Exported so renderers and MCP schemas can
  * reference them by name.
  */
-export const SkipCodeSpecialNumberNotInferred = 'special_number_not_inferred';
+export const SkipCodeSpecialNumberNotInferred = "special_number_not_inferred";
 /**
  * Skip code constants. Exported so renderers and MCP schemas can
  * reference them by name.
  */
-export const SkipCodeEpisodeNumberNotInferred = 'episode_number_not_inferred';
+export const SkipCodeEpisodeNumberNotInferred = "episode_number_not_inferred";
 /**
  * Skip code constants. Exported so renderers and MCP schemas can
  * reference them by name.
  */
-export const SkipCodeSeasonMismatch = 'season_mismatch';
+export const SkipCodeSeasonMismatch = "season_mismatch";
 /**
  * Skip code constants. Exported so renderers and MCP schemas can
  * reference them by name.
  */
-export const SkipCodeIgnoredDirectory = 'ignored_directory';
+export const SkipCodeIgnoredDirectory = "ignored_directory";
 /**
  * Skip code constants. Exported so renderers and MCP schemas can
  * reference them by name.
  */
-export const SkipCodeDuplicateSlot = 'duplicate_slot';
+export const SkipCodeDuplicateSlot = "duplicate_slot";
 /**
  * Skip code constants. Exported so renderers and MCP schemas can
  * reference them by name.
  */
-export const SkipCodeMetadataSlotMissing = 'metadata_slot_missing';
+export const SkipCodeMetadataSlotMissing = "metadata_slot_missing";
 
 //////////
 // source: scan_all.go
@@ -737,7 +737,7 @@ export interface MediaShow {
   mtime?: string;
   file: string;
   companions: CompanionShow[];
-  attrs?: { [key: string]: string };
+  attrs?: { [key: string]: string};
 }
 export interface CompanionShow {
   path: string;
@@ -821,32 +821,32 @@ in internal/workflow/ as unexported helpers.
  * Status is the observed state of one episode at the time a read
  * workflow ran. Mirrors Product.md § "Episode State (Observed)."
  */
-export type Status = 'pending' | 'missing' | 'present' | 'staged' | 'staged_replacement';
+export type Status = string;
 /**
  * StatusPending: episode air date is in the future and no media is
  * recorded.
  */
-export const StatusPending: Status = 'pending';
+export const StatusPending: Status = "pending";
 /**
  * StatusMissing: episode air date has passed and no media is
  * recorded.
  */
-export const StatusMissing: Status = 'missing';
+export const StatusMissing: Status = "missing";
 /**
  * StatusPresent: episode has an active media record and the file is
  * reachable on disk.
  */
-export const StatusPresent: Status = 'present';
+export const StatusPresent: Status = "present";
 /**
  * StatusStaged: episode has a staged media record awaiting
  * reconcile (no active record present).
  */
-export const StatusStaged: Status = 'staged';
+export const StatusStaged: Status = "staged";
 /**
  * StatusStagedReplacement: episode has both an active record and a
  * staged record; reconcile will replace the active one.
  */
-export const StatusStagedReplacement: Status = 'staged_replacement';
+export const StatusStagedReplacement: Status = "staged_replacement";
 
 //////////
 // source: tags.go
