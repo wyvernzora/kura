@@ -1,0 +1,42 @@
+# Binaries and build output
+bin/
+# root binary from a bare `go build .` (the canonical build, `make build`, outputs to bin/takuhai)
+/takuhai
+dist/
+build/
+tmp/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go workspace and coverage artifacts
+coverage.out
+*.coverprofile
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+.envrc
+*.private.*
+*.private/
+LOCAL_NOTES.md
+docs/LOCAL.md
+.local/
+scratch
+.checkpoint/
+.claude
+.codex
+.reviews
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log

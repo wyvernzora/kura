@@ -1,0 +1,23 @@
+.git
+.github
+.githooks
+.gitignore
+.dockerignore
+Dockerfile
+*.md
+# Exclude docs/ from build contexts EXCEPT the icon asset the n8n image bakes in.
+# Spelled out so a parent-dir exclusion
+# does not mask the re-include.
+docs/*
+!docs/assets
+docs/assets/*
+!docs/assets/logo-face.svg
+!docs/assets/logo-n8n.svg
+testdata/
+**/*_test.go
+crawl.private/
+# n8n package build artifacts — must never overlay the in-image frozen install when the
+# n8n image builds from this (repo-root) context.
+**/node_modules/
+integrations/n8n/dist/
+integrations/n8n/.pnpm-store/
