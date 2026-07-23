@@ -1,7 +1,7 @@
 # Binaries and build output
 bin/
-# root binary from a bare `go build .` (the canonical build, `make build`, outputs to bin/takuhai)
-/takuhai
+# root binary from a bare `go build .` (canonical build outputs to bin/kura-releases)
+/kura-releases
 dist/
 build/
 tmp/
