@@ -2,8 +2,6 @@ package rest
 
 import (
 	"net/http"
-
-	"github.com/wyvernzora/kura/services/library/internal/server/webui"
 )
 
 // buildRouter wires the URL surface and applies the middleware chain.
@@ -28,7 +26,8 @@ import (
 //	version   - sets X-Kura-Version on every response
 //	cors      - origin allow-list + preflight
 //	recover   - turns panics into 500 internal errors
-//	(rootMux: /api/* → bearer → apiMux; / → webui)
+//	(rootMux: /api/* → bearer → apiMux; no other routes — the web UI
+//	lives in services/webui and fronts this API through its proxy)
 //
 // recover sits closest to the inner muxes so panics in middleware itself
 // still propagate; they're rare enough not to deserve their own net.
@@ -91,7 +90,6 @@ func (s *Server) buildRouter() http.Handler {
 
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/api/", apiHandler)
-	rootMux.Handle("/", webui.Handler())
 
 	return s.applyMiddleware(rootMux)
 }

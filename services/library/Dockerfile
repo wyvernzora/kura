@@ -1,21 +1,3 @@
-# Pinned to $BUILDPLATFORM: the web bundle is plain HTML/JS/CSS (no
-# arch-specific output), so building once on the runner's native arch
-# and reusing the dist/ across every TARGETPLATFORM avoids running
-# pnpm + Vite under QEMU for each target.
-FROM --platform=$BUILDPLATFORM node:24-alpine AS web
-
-WORKDIR /src/web
-
-# Enable pnpm via the version pinned in package.json#packageManager.
-RUN corepack enable
-
-COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
-
-COPY web/ ./
-
-RUN pnpm build
-
 # Pinned to $BUILDPLATFORM (the host the build is running on, e.g. the
 # amd64 GitHub runner), not $TARGETPLATFORM. Go cross-compiles natively
 # via GOOS/GOARCH, so we run the compiler under the runner's native
@@ -47,7 +29,6 @@ COPY internal ./internal
 
 # Bring the freshly built web bundle into the embed package's dist/
 # subtree. The Go embed directive picks it up at compile time.
-COPY --from=web /src/web/dist/. ./internal/server/webui/dist/
 
 # CGO_ENABLED=0 forces a fully static binary so it runs identically on
 # musl (Alpine) and glibc hosts without shared-library shims.
