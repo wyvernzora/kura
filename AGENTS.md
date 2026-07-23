@@ -12,13 +12,13 @@ section are relative to that service's directory unless they start with
 | Path | What it is |
 |---|---|
 | `services/library-manager/` | kura core: library manager, REST + MCP API (no embedded UI) |
-| `services/release-indexer/` | release indexer + `sources/{dmhy,nyaa}` crawler modules |
+| `services/release-indexer/` | release indexer with built-in `sources/{dmhy,nyaa}` crawlers |
 | `services/webui/` | suite web UI: static SPA + Caddy proxy to the service APIs |
 | `integrations/n8n/{kura,releases}/` | the two n8n node packages |
 | `prompts/` | reserved: versioned agent/matcher prompts |
 | `deploy/` | reserved: deployment manifests |
 
-One `go.work` spans all four Go modules. `make check` at the root fans
+One `go.work` spans both Go modules. `make check` at the root fans
 out to per-service Makefiles; prefer per-service `make` during iteration.
 
 Tooling config is repo-wide and lives at the root: `.golangci.yml`,
