@@ -1,7 +1,7 @@
 # Kura monorepo — root orchestration. Each service owns its Makefile;
 # these targets fan out.
 
-SERVICES := services/library services/releases
+SERVICES := services/library services/releases services/webui
 
 .PHONY: check build test
 
