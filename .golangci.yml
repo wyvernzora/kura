@@ -1,5 +1,6 @@
-# golangci-lint config. Replaces the prior gopls-check workflow.
-# Run via: make lint  →  golangci-lint run ./...
+# Repo-wide golangci-lint config. Each Go service's `make lint` runs
+# `golangci-lint run ./...` from its own module directory; config
+# resolution walks up to this file.
 #
 # Linter selection per project policy:
 #   - govet         standard go vet checks; baseline correctness.
@@ -10,10 +11,17 @@
 #                   simple, unused).
 version: "2"
 run:
+  # Exclusion path patterns below resolve against the invoking module
+  # directory, not this file's directory.
+  relative-path-mode: wd
+  # Union of every service's test build tags so tagged suites are
+  # linted too. Tags with no matching files in a module are inert.
   build-tags:
     - e2e
     - e2e_stub
     - legacy_cli_tests
+    - conformance
+    - smoke
   modules-download-mode: readonly
   tests: true
 linters:
@@ -59,6 +67,11 @@ linters:
     rules:
       - linters:
           - cyclop
+        path: e2e/
+      # t.Cleanup closures correctly use a fresh context — the test's
+      # ctx is already canceled when cleanup runs.
+      - linters:
+          - contextcheck
         path: e2e/
       - linters:
           - contextcheck
