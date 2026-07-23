@@ -4,12 +4,14 @@
 		"config:recommended",
 		"helpers:pinGitHubActionDigests",
 		":dependencyDashboard",
-		":semanticCommitsDisabled",
+		":semanticCommits",
 		":separateMajorReleases"
 	],
-	"commitMessagePrefix": "deps:",
 	"timezone": "America/Los_Angeles",
-	"schedule": ["after 6pm every weekday", "every weekend"],
+	"schedule": [
+		"after 6pm every weekday",
+		"every weekend"
+	],
 	"minimumReleaseAge": "5 days",
 	"internalChecksFilter": "strict",
 	"prCreation": "not-pending",
@@ -20,30 +22,45 @@
 		"enabled": false
 	},
 	"vulnerabilityAlerts": {
-		"labels": ["security"],
+		"labels": [
+			"security"
+		],
 		"automerge": true
 	},
 	"packageRules": [
 		{
 			"description": "Auto-merge GitHub action digest refreshes (pinned-sha hygiene)",
-			"matchManagers": ["github-actions"],
-			"matchUpdateTypes": ["digest", "pin"],
+			"matchManagers": [
+				"github-actions"
+			],
+			"matchUpdateTypes": [
+				"digest",
+				"pin"
+			],
 			"automerge": true
 		},
 		{
 			"description": "Auto-merge patch bumps everywhere (CI gates)",
-			"matchUpdateTypes": ["patch"],
+			"matchUpdateTypes": [
+				"patch"
+			],
 			"automerge": true
 		},
 		{
 			"description": "Group golang.org/x/* family - they version-lockstep",
-			"matchPackagePatterns": ["^golang\\.org/x/"],
+			"matchPackagePatterns": [
+				"^golang\\.org/x/"
+			],
 			"groupName": "golang.org/x"
 		},
 		{
 			"description": "Group docker/* GitHub actions",
-			"matchPackagePatterns": ["^docker/"],
-			"matchManagers": ["github-actions"],
+			"matchPackagePatterns": [
+				"^docker/"
+			],
+			"matchManagers": [
+				"github-actions"
+			],
 			"groupName": "docker github actions"
 		},
 		{
@@ -57,33 +74,53 @@
 		},
 		{
 			"description": "Group react + react-dom + @types/react*",
-			"matchPackagePatterns": ["^react$", "^react-dom$", "^@types/react"],
+			"matchPackagePatterns": [
+				"^react$",
+				"^react-dom$",
+				"^@types/react"
+			],
 			"groupName": "react"
 		},
 		{
 			"description": "Group storybook monorepo",
-			"matchPackagePatterns": ["^@storybook/", "^storybook$"],
+			"matchPackagePatterns": [
+				"^@storybook/",
+				"^storybook$"
+			],
 			"groupName": "storybook"
 		},
 		{
 			"description": "Group @tanstack/* family",
-			"matchPackagePatterns": ["^@tanstack/"],
+			"matchPackagePatterns": [
+				"^@tanstack/"
+			],
 			"groupName": "tanstack"
 		},
 		{
 			"description": "Group @radix-ui/*",
-			"matchPackagePatterns": ["^@radix-ui/"],
+			"matchPackagePatterns": [
+				"^@radix-ui/"
+			],
 			"groupName": "radix-ui"
 		},
 		{
 			"description": "vite / vitest / plugin-react are peer-dep coupled",
-			"matchPackageNames": ["vite", "vitest", "@vitejs/plugin-react"],
+			"matchPackageNames": [
+				"vite",
+				"vitest",
+				"@vitejs/plugin-react"
+			],
 			"groupName": "vite stack"
 		},
 		{
 			"description": "Major bumps surface for human triage",
-			"matchUpdateTypes": ["major"],
-			"labels": ["major-bump", "needs-review"]
+			"matchUpdateTypes": [
+				"major"
+			],
+			"labels": [
+				"major-bump",
+				"needs-review"
+			]
 		}
 	]
 }
