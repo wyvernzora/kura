@@ -8,11 +8,11 @@ commit-msg:
 pre-commit:
   commands:
     gofmt-releases:
-      glob: "services/releases/**/*.go"
+      glob: "services/release-indexer/**/*.go"
       run: |
-        drift=$(cd services/releases && gofmt -l cmd internal pkg sources)
+        drift=$(cd services/release-indexer && gofmt -l cmd internal pkg sources)
         if [ -n "$drift" ]; then
-          echo "gofmt drift in services/releases:" >&2
+          echo "gofmt drift in services/release-indexer:" >&2
           echo "$drift" >&2
           exit 1
         fi

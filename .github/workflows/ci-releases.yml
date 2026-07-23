@@ -4,12 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "services/releases/**"
+      - "services/release-indexer/**"
       - "integrations/n8n/releases/**"
       - ".github/workflows/ci-releases.yml"
   pull_request:
     paths:
-      - "services/releases/**"
+      - "services/release-indexer/**"
       - "integrations/n8n/releases/**"
       - ".github/workflows/ci-releases.yml"
 
@@ -26,13 +26,13 @@ jobs:
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: services/releases
+        working-directory: services/release-indexer
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: services/releases/go.mod
+          go-version-file: services/release-indexer/go.mod
           cache: true
 
       # gofmt drift check across every module's source roots.
@@ -80,7 +80,7 @@ jobs:
         env:
           GOWORK: "off"
         run: |
-          (cd . && go build -trimpath -o bin/kura-releases ./cmd/kura-releases)
+          (cd . && go build -trimpath -o bin/kura-release-indexer ./cmd/kura-release-indexer)
           (cd sources/dmhy && go build -trimpath -o ../../bin/kura-releases-dmhy ./cmd/kura-releases-dmhy)
           (cd sources/nyaa && go build -trimpath -o ../../bin/kura-releases-nyaa ./cmd/kura-releases-nyaa)
 
@@ -91,17 +91,17 @@ jobs:
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: services/releases
+        working-directory: services/release-indexer
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: services/releases/go.mod
+          go-version-file: services/release-indexer/go.mod
           cache: true
 
       - name: real-binary smoke
-        run: go test -tags=smoke -run TestSmoke -count=1 ./cmd/kura-releases
+        run: go test -tags=smoke -run TestSmoke -count=1 ./cmd/kura-release-indexer
 
   # End-to-end over built service + crawler images, fake DMHY, Postgres.
   e2e:
@@ -109,13 +109,13 @@ jobs:
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: services/releases
+        working-directory: services/release-indexer
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version-file: services/releases/go.mod
+          go-version-file: services/release-indexer/go.mod
           cache: true
 
       - name: end-to-end workflow
@@ -151,26 +151,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - component: kura-releases
+          - component: kura-release-indexer
             image: ghcr.io/wyvernzora/kura-releases
-            context: services/releases
-            file: services/releases/Dockerfile
+            context: services/release-indexer
+            file: services/release-indexer/Dockerfile
             build_args: |
               BUILD_DIR=.
-              CMD_PKG=./cmd/kura-releases
+              CMD_PKG=./cmd/kura-release-indexer
             description: Anime release indexer + match work queue (REST + MCP)
           - component: kura-releases-crawler-dmhy
             image: ghcr.io/wyvernzora/kura-releases-crawler-dmhy
-            context: services/releases
-            file: services/releases/Dockerfile
+            context: services/release-indexer
+            file: services/release-indexer/Dockerfile
             build_args: |
               BUILD_DIR=sources/dmhy
               CMD_PKG=./cmd/kura-releases-dmhy
             description: DMHY stateless crawler (POST /crawl)
           - component: kura-releases-crawler-nyaa
             image: ghcr.io/wyvernzora/kura-releases-crawler-nyaa
-            context: services/releases
-            file: services/releases/Dockerfile
+            context: services/release-indexer
+            file: services/release-indexer/Dockerfile
             build_args: |
               BUILD_DIR=sources/nyaa
               CMD_PKG=./cmd/kura-releases-nyaa

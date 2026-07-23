@@ -21,7 +21,7 @@ COPY integrations/n8n/releases/package.json integrations/n8n/releases/pnpm-lock.
 RUN corepack pnpm install --frozen-lockfile
 COPY integrations/n8n/releases/ ./
 # The node icon asset (resolved as ../../docs/assets at build time).
-COPY services/releases/docs/assets/logo-n8n.svg /src/services/releases/docs/assets/logo-n8n.svg
+COPY services/release-indexer/docs/assets/logo-n8n.svg /src/services/release-indexer/docs/assets/logo-n8n.svg
 RUN corepack pnpm build
 # Reduce to the loadable package: the n8n manifest (package.json) + compiled dist/.
 RUN mkdir -p /pkg && cp -r package.json dist /pkg/

@@ -9,7 +9,7 @@ tmp/
 *.dylib
 *.test
 # root binary from a bare `go build .` (canonical build outputs to bin/)
-/services/releases/kura-releases
+/services/release-indexer/kura-release-indexer
 
 # Go coverage artifacts
 coverage.out

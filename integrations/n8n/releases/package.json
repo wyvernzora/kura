@@ -1,5 +1,5 @@
 {
-  "name": "n8n-nodes-kura-releases",
+  "name": "n8n-nodes-kura-release-indexer",
   "version": "0.0.0",
   "description": "n8n nodes for takuhai — drive ingest, the queue match loop, and any takuhai-shaped crawler.",
   "keywords": ["n8n-community-node-package", "takuhai", "anime"],
