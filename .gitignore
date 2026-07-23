@@ -20,3 +20,5 @@ scratch
 
 # Logs
 *.log
+.design-sync
+.ds-sync
