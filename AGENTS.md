@@ -11,8 +11,8 @@ section are relative to that service's directory unless they start with
 
 | Path | What it is |
 |---|---|
-| `services/library/` | kura core: library manager, REST + MCP API (no embedded UI) |
-| `services/releases/` | release indexer + `sources/{dmhy,nyaa}` crawler modules |
+| `services/library-manager/` | kura core: library manager, REST + MCP API (no embedded UI) |
+| `services/release-indexer/` | release indexer + `sources/{dmhy,nyaa}` crawler modules |
 | `services/webui/` | suite web UI: static SPA + Caddy proxy to the service APIs |
 | `integrations/n8n/{kura,releases}/` | the two n8n node packages |
 | `prompts/` | reserved: versioned agent/matcher prompts |
@@ -57,9 +57,16 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - Repo-wide versioning: one `vX.Y.Z` tag line for the whole monorepo,
   continuing the original kura lineage. The release workflow builds every
   service image at that version.
-- Directories and commit scopes are unprefixed; binaries and images keep
-  the `kura-` prefix (`kura-releases`, `ghcr.io/wyvernzora/kura-server`,
-  …) because they leave the repo's namespace.
+- Directories and commit scopes are unprefixed. Service images live
+  under the registry namespace `ghcr.io/wyvernzora/kura/<component>`
+  (`library-manager`, `release-indexer`, `webui`). Binaries keep the
+  `kura-` prefix (`kura-library-manager`, `kura-release-indexer`) since
+  PATH has no namespace.
+- Legacy image names still published pending consolidation: the crawler
+  images (`kura-releases-crawler-{dmhy,nyaa}` — crawlers are slated to
+  be absorbed into release-indexer) and the two n8n-nodes images
+  (`kura-n8n-nodes`, `kura-releases-n8n-nodes` — slated to merge into
+  `kura/n8n-nodes`).
 
 ## End-to-end tests (all services)
 
@@ -86,7 +93,7 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 
 ---
 
-## services/library — kura core
+## services/library-manager — kura core
 
 ### About Kura
 
@@ -95,13 +102,13 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Priority:** anime behavior comes first; other series types can work when compatible but should not drive the design.
 - **Product shape:** no bloat. Prefer CLI tools for manual use and MCP tools for agentic use.
 - **Operational scale:** personal anime library automation, not a high-throughput multi-writer file transaction system. Expect new episodes a few times a week and occasional season upgrades, usually flowing qbit/download inbox -> Kura -> library with an LLM agent driving Kura. Kura is the only intended writer inside the library root; other tools should be readonly there, and direct human writes are rare. Avoid engineering for AWS-S3-scale concurrency or hostile library writers unless the product requirements explicitly change.
-- **UI:** none embedded — the suite web UI lives in `services/webui` (SPA + Caddy proxy fronting this service's REST API). `kura serve --rest` serves the API only.
+- **UI:** none embedded — the suite web UI lives in `services/webui` (SPA + Caddy proxy fronting this service's REST API). `kura-library-manager serve --rest` serves the API only.
 - **Distribution:** Go application shipped as a Docker container.
 
 ### Stack
 
 - **Language:** Go (1.26.3 or newer; the codebase uses the generic `errors.AsType` from the 1.26 stdlib). Pinned in `go.mod`, `.tool-versions`, and `Dockerfile`.
-- **Main command entrypoint:** `cmd/kura`.
+- **Main command entrypoint:** `cmd/kura-library-manager`.
 - **Workflow facade:** `internal/workflow` exposes Add/Import/Show/List/Stage/Scan/Reset/Trash/Reindex/Remove + Reconcile{Plan,Apply,Recover}. The public Go API for CLI and MCP transports.
 - **Reconcile internals:** `internal/reconcile` builds plans, applies them, and recovers stuck claims. Imported only via the workflow shim.
 - **Scan internals:** `internal/scan` walks a series directory, parses filenames, and reconciles findings against persisted state. Imported only via the workflow shim.
@@ -113,19 +120,19 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Domain types:** `internal/domain/{refs,media,series,filename,selector}` are pure types shared across packages. Leaf-level — they do not import sibling internal packages.
 - **Inbox:** `internal/inbox` walks the `KURA_INBOX_ROOT` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
 - **Search keys:** `internal/searchkey` computes the per-series fuzzy-search blob shipped on `ListRow` — flattened, deduplicated alias lines fed to client-side fuse.js. Never user-facing.
-- **Transports:** `kura serve` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, bearer-token auth via `internal/server/auth`). Servers depend on `internal/workflow` for behavior. `cmd/kura` hosts the CLI; its verbs are REST clients via `internal/cli/client` (discovery through `KURA_SERVER_URL`, default `http://127.0.0.1:8080`) — only the `serve` command imports `internal/workflow` in-process.
+- **Transports:** `kura-library-manager serve` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, bearer-token auth via `internal/server/auth`). Servers depend on `internal/workflow` for behavior. `cmd/kura-library-manager` hosts the CLI; its verbs are REST clients via `internal/cli/client` (discovery through `KURA_SERVER_URL`, default `http://127.0.0.1:8080`) — only the `serve` command imports `internal/workflow` in-process.
 - **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (env loading), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `internal/response` (wire response shapes), `internal/cli/*` (CLI rendering / stdio / REST client).
 - **Container:** Docker, single-binary image.
 
 ### Commands
 
 ```sh
-go run ./cmd/kura          # run the CLI from source
+go run ./cmd/kura-library-manager          # run the CLI from source
 go test ./...              # full test suite
-go build -o bin/kura ./cmd/kura
+go build -o bin/kura-library-manager ./cmd/kura-library-manager
 make check                 # lint + vet + tests (preferred verification)
-docker build -t kura .
-docker run --rm kura
+docker build -t kura-library-manager .
+docker run --rm kura-library-manager
 ```
 
 Prefer single-package or single-test runs during iteration (`go test ./internal/workflow/...`, `go test -run TestX ./...`). Full suite is for the final verification pass.
@@ -154,21 +161,21 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - Prefer clear CLI/MCP surfaces over background magic.
 - Preserve a small, automation-friendly core before adding optional layers.
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
-- `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura reindex` to rebuild it from per-series metadata.
-- `KURA_INBOX_ROOT` is the download-inbox root that `inbox:<rel>` selectors resolve against. Required at `kura serve` startup (must exist, be a directory, and be disjoint from the library root); CLI verbs reach the inbox only through the server's REST surface.
-- `KURA_HOST_ID` overrides `os.Hostname()` for the identity Kura stamps into claim holders and CAS mutators. Set this in container deployments to a stable value (e.g. the underlying host's actual hostname) so a previous container's stuck claim is detected as same-host on restart and can be auto-broken; without it, every container restart mid-apply requires a manual `kura reconcile recover`.
+- `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura-library-manager reindex` to rebuild it from per-series metadata.
+- `KURA_INBOX_ROOT` is the download-inbox root that `inbox:<rel>` selectors resolve against. Required at `kura-library-manager serve` startup (must exist, be a directory, and be disjoint from the library root); CLI verbs reach the inbox only through the server's REST surface.
+- `KURA_HOST_ID` overrides `os.Hostname()` for the identity Kura stamps into claim holders and CAS mutators. Set this in container deployments to a stable value (e.g. the underlying host's actual hostname) so a previous container's stuck claim is detected as same-host on restart and can be auto-broken; without it, every container restart mid-apply requires a manual `kura-library-manager reconcile recover`.
 - `KURA_AIRING_TAIL_DAYS` controls how many days after a cour's last episode airs it still counts as airing. Default `7`; `0` disables the tail. Integer days; empty / invalid / negative values fall back to the default.
 - `KURA_LOG_RETENTION_DAYS` sets how long the periodic sweep retains forensic JSONL logs — reconcile plan logs at `<series>/.kura/reconcile/*.jsonl` and per-job history logs at `<library>/.kura/jobs/<ulid>.jsonl`. Default `7`. Integer days; empty / invalid / negative values fall back to the default.
 
 ### Current workflows
 
-- `kura scan <series>` — scan a tracked series directory, record recognized episode media into `series.json`, refresh changed facts for same-path episodes, keep empty spine episodes, and report skipped files/directories.
-- `kura scan --replace <series>` — required when a discovered file replaces an existing active season/episode at a different media path.
-- `kura stage episode <selector terms> <SxxEyy> <inbox:media-selector>` (plus `stage trash`, `stage extra`) — record an explicit external media file inside the target episode's `series.json` staged record. Media is an `inbox:<rel>` selector under `KURA_INBOX_ROOT` (or `series:<rel>` for in-place metadata override); absolute paths are not accepted. Active or staged season/episode collisions require `--replace`.
-- `kura reconcile plan <series>` — resolve the series selector through the library index, write a JSONL plan under `<series>/.kura/reconcile/<token>.jsonl`, and print the token. Token = snapshot hash; apply re-validates the snapshot at execute time. Empty plans write no plan file.
-- `kura reconcile apply <series> <token>` — apply a saved reconcile plan, move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, append move/result records to the plan JSONL file, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
+- `kura-library-manager scan <series>` — scan a tracked series directory, record recognized episode media into `series.json`, refresh changed facts for same-path episodes, keep empty spine episodes, and report skipped files/directories.
+- `kura-library-manager scan --replace <series>` — required when a discovered file replaces an existing active season/episode at a different media path.
+- `kura-library-manager stage episode <selector terms> <SxxEyy> <inbox:media-selector>` (plus `stage trash`, `stage extra`) — record an explicit external media file inside the target episode's `series.json` staged record. Media is an `inbox:<rel>` selector under `KURA_INBOX_ROOT` (or `series:<rel>` for in-place metadata override); absolute paths are not accepted. Active or staged season/episode collisions require `--replace`.
+- `kura-library-manager reconcile plan <series>` — resolve the series selector through the library index, write a JSONL plan under `<series>/.kura/reconcile/<token>.jsonl`, and print the token. Token = snapshot hash; apply re-validates the snapshot at execute time. Empty plans write no plan file.
+- `kura-library-manager reconcile apply <series> <token>` — apply a saved reconcile plan, move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, append move/result records to the plan JSONL file, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
 - If scan or reconcile plan has no changes, the CLI must not ask to apply anything.
-- Kura does not auto-scan or auto-import the inbox. `kura inbox list [path]` lists entries under `KURA_INBOX_ROOT` on demand (recursive up to depth 5, kind/glob filters, hidden files omitted unless `--all`; accepts an exact file path); `kura stage` consumes `inbox:<rel>` selectors from it.
+- Kura does not auto-scan or auto-import the inbox. `kura-library-manager inbox list [path]` lists entries under `KURA_INBOX_ROOT` on demand (recursive up to depth 5, kind/glob filters, hidden files omitted unless `--all`; accepts an exact file path); `kura-library-manager stage` consumes `inbox:<rel>` selectors from it.
 
 ### Forbidden
 
@@ -183,7 +190,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 
 When the user corrects your approach, append a one-line rule here before ending the session. Write it concretely ("Always use X for Y"), never abstractly ("be careful with Y"). If an existing line already covers the correction, tighten it instead of adding a new one. Remove lines when the underlying issue goes away (model upgrades, refactors, process changes).
 
-- For `kura import`, prepend dirname only for empty/text extra terms, preserve `tvdb:<id>` as authoritative, pass mixed text/`tvdb:` terms to the resolver, and treat `dir:` terms as text unless a strategy claims that prefix.
+- For `kura-library-manager import`, prepend dirname only for empty/text extra terms, preserve `tvdb:<id>` as authoritative, pass mixed text/`tvdb:` terms to the resolver, and treat `dir:` terms as text unless a strategy claims that prefix.
 - Attach CLI progress reporting through `context.Context` using `internal/progress` so nested workflows like implicit `reindex` can report.
 - Organize commits as appropriate for the work; split unrelated or review-distinct changes into separate commits.
 - Keep selector `Term` string-like; strategies own any prefix or shape parsing they need. In resolver strategy matching, treat prefixed terms as text unless a registered strategy claims the prefix; authoritative strategies like metadata ID stop later strategy matching.
@@ -194,7 +201,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - When extracting an implementation subpackage, move the full cohesive workflow or leave it in place; do not leave runner/helper remnants in the facade package unless they are intentional public API.
 - Workflow responses must never carry raw filesystem paths. Every path field is a scheme-tagged selector: `series:<rel>` for files inside a series root, `inbox:<rel>` for files under the inbox root, `library:<rel>` for paths under `KURA_LIBRARY_ROOT` (e.g. `Show.Root` emits as `library:<series-dir>`). Use the `seriesSelector` / `inboxSelector` / `librarySelector` helpers in `internal/workflow/paths.go` at the response-construction boundary; they panic on outside-root paths so contract violations fail loudly. CLI table renderers strip the prefix for human display via `stripPathScheme`; JSON / MCP / REST keep the prefix.
 - Treat Kura's library as a single-writer personal anime library on low-IOPS storage, often NFS-backed; do not add high-throughput, multi-writer, or cloud-object-store durability machinery unless a real Kura workflow requires it.
-- Thread deploy-time row-building policy from `cmd/kura` through workflow/index builders; do not read env vars directly from storage packages.
+- Thread deploy-time row-building policy from `cmd/kura-library-manager` through workflow/index builders; do not read env vars directly from storage packages.
 - Kura does not guarantee forward compatibility for old binaries reading newer on-disk metadata; prefer a clear current-schema contract over version machinery whose only benefit is rollback ergonomics.
 - Use namespaced workflow-tag conventions in the UI and integration guidance: `priority:high`, `priority:low`, `maintenance:requested`, and `maintenance:disabled`.
 - Commit subjects use Conventional Commits with the closed scope enum above; the former `<scope>: <message>` convention is retired (2026-07, monorepo migration).
@@ -203,20 +210,20 @@ When the user corrects your approach, append a one-line rule here before ending 
 
 ---
 
-## services/releases — release indexer
+## services/release-indexer — release indexer
 
-**The canonical reference is [`services/releases/docs/design.md`](services/releases/docs/design.md)** —
+**The canonical reference is [`services/release-indexer/docs/design.md`](services/release-indexer/docs/design.md)** —
 the load-bearing design (identity model, data model, queue semantics,
 external contracts, seams). Its §2 invariants are settled; do not
 relitigate them. For deployment and ops see
-[`services/releases/docs/operations.md`](services/releases/docs/operations.md);
+[`services/release-indexer/docs/operations.md`](services/release-indexer/docs/operations.md);
 for the spec→test map see
-[`services/releases/docs/conformance-matrix.md`](services/releases/docs/conformance-matrix.md).
+[`services/release-indexer/docs/conformance-matrix.md`](services/release-indexer/docs/conformance-matrix.md).
 Read design.md before any sizable change.
 
 ### About the release indexer
 
-- **Name:** kura-releases (was the standalone takuhai repo, 宅配 — "home delivery / courier").
+- **Name:** release-indexer (binary `kura-release-indexer`; was the standalone takuhai repo, 宅配 — "home delivery / courier").
 - **Domain:** anime **release index** — a dumb, durable store + work queue + query
   API. It records what an external matching agent reports; it holds no matching policy.
 - **Ingestion is external push.** n8n drives stateless crawlers (`POST /crawl`) and
@@ -250,7 +257,7 @@ Read design.md before any sizable change.
 - **Language:** Go 1.26.3+ (pinned in `go.mod` / `.tool-versions`). Three Go modules
   live here — the service module plus the `sources/{dmhy,nyaa}` crawler modules — all
   members of the monorepo-root `go.work`. CI builds each module with `GOWORK=off`.
-- **Entry point:** `cmd/kura-releases/main.go` — flag-driven, env fallbacks (prefix
+- **Entry point:** `cmd/kura-release-indexer/main.go` — flag-driven, env fallbacks (prefix
   `KURA_RELEASES_`). Runs migrations at startup, then serves HTTP.
 - **Store:** PostgreSQL via `pgx`. Migrations are **embedded goose** in
   `db/migrations/`, run at startup under an advisory lock.
@@ -260,7 +267,7 @@ Read design.md before any sizable change.
 ### Package map
 
 ```
-cmd/kura-releases/   flag-driven entrypoint: wiring and lifecycle (migrate → serve → drain)
+cmd/kura-release-indexer/   flag-driven entrypoint: wiring and lifecycle (migrate → serve → drain)
 pkg/rawpost/         shared wire contract: RawPost + IngestSummary (a leaf)
 internal/config/     Config struct; flag + env binding; validation
 internal/infohash/   NormalizeInfohash + ErrSkipInfohash — the dedup key
@@ -286,7 +293,7 @@ the `sources/*` modules.
 ```sh
 make check                     # fmt + vet + lint + test + build
 go test -race -tags=conformance ./...   # conformance suite (real PG via testcontainers)
-make smoke                     # real-binary smoke (go test -tags=smoke ./cmd/kura-releases)
+make smoke                     # real-binary smoke (go test -tags=smoke ./cmd/kura-release-indexer)
 # per-module (matches CI):
 for m in . sources/dmhy sources/nyaa; do (cd "$m" && GOWORK=off go build ./... && go vet ./... && go test -race ./...); done
 ```
@@ -313,4 +320,4 @@ for structure and commands (`make check` = lint + typecheck + test + build).
 
 - `src/api/types.gen.ts` is generated by the library service's
   `make gen-ts` (tygo owns the response contract). Never hand-edit it;
-  regenerate from `services/library` and commit the result.
+  regenerate from `services/library-manager` and commit the result.
