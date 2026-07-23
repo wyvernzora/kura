@@ -30,18 +30,18 @@ The Nyaa crawler exposes the same `/crawl` shape:
 
 ## Configuration
 
-Every service flag honors a `TAKUHAI_` environment fallback.
+Every service flag honors a `KURA_RELEASES_` environment fallback.
 
 | Flag | Env | Default | Notes |
 | --- | --- | --- | --- |
-| `--addr` | `TAKUHAI_ADDR` | `:8080` | HTTP listen address |
-| `--database-url` | `TAKUHAI_DATABASE_URL` | unset | PostgreSQL URL; required |
-| `--log-level` | `TAKUHAI_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
-| `--queue-max-attempts` | `TAKUHAI_QUEUE_MAX_ATTEMPTS` | `3` | Failed unmatched submits before `exhausted` |
+| `--addr` | `KURA_RELEASES_ADDR` | `:8080` | HTTP listen address |
+| `--database-url` | `KURA_RELEASES_DATABASE_URL` | unset | PostgreSQL URL; required |
+| `--log-level` | `KURA_RELEASES_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `--queue-max-attempts` | `KURA_RELEASES_QUEUE_MAX_ATTEMPTS` | `3` | Failed unmatched submits before `exhausted` |
 
-The DMHY crawler uses `TAKUHAI_DMHY_` variables for its own flags (`--addr`,
+The DMHY crawler uses `KURA_RELEASES_DMHY_` variables for its own flags (`--addr`,
 `--dmhy-base-url`, `--sort-id`, `--rate-rps`, `--cache-ttl`, `--log-level`).
-The Nyaa crawler uses `TAKUHAI_NYAA_` variables (`--addr`, `--nyaa-base-url`,
+The Nyaa crawler uses `KURA_RELEASES_NYAA_` variables (`--addr`, `--nyaa-base-url`,
 `--query`, `--category`, `--filter`, `--rate-rps`, `--log-level`).
 
 ## Database

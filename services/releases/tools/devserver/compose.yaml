@@ -27,9 +27,9 @@ services:
         CMD_PKG: ./cmd/takuhai
         VERSION: dev
     environment:
-      TAKUHAI_ADDR: :8080
-      TAKUHAI_DATABASE_URL: postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable
-      TAKUHAI_LOG_LEVEL: debug
+      KURA_RELEASES_ADDR: :8080
+      KURA_RELEASES_DATABASE_URL: postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable
+      KURA_RELEASES_LOG_LEVEL: debug
     ports:
       - "8080:8080"
     depends_on:
@@ -45,10 +45,10 @@ services:
         CMD_PKG: ./cmd/takuhai-dmhy
         VERSION: dev
     environment:
-      TAKUHAI_DMHY_ADDR: :8080
-      TAKUHAI_DMHY_BASE_URL: https://share.dmhy.org
-      TAKUHAI_DMHY_SORT_ID: "2"
-      TAKUHAI_DMHY_LOG_LEVEL: debug
+      KURA_RELEASES_DMHY_ADDR: :8080
+      KURA_RELEASES_DMHY_BASE_URL: https://share.dmhy.org
+      KURA_RELEASES_DMHY_SORT_ID: "2"
+      KURA_RELEASES_DMHY_LOG_LEVEL: debug
     ports:
       - "8081:8080"
 
@@ -61,10 +61,10 @@ services:
         CMD_PKG: ./cmd/takuhai-nyaa
         VERSION: dev
     environment:
-      TAKUHAI_NYAA_ADDR: :8080
-      TAKUHAI_NYAA_BASE_URL: https://nyaa.si
-      TAKUHAI_NYAA_CATEGORY: "1_0"
-      TAKUHAI_NYAA_FILTER: "0"
-      TAKUHAI_NYAA_LOG_LEVEL: debug
+      KURA_RELEASES_NYAA_ADDR: :8080
+      KURA_RELEASES_NYAA_BASE_URL: https://nyaa.si
+      KURA_RELEASES_NYAA_CATEGORY: "1_0"
+      KURA_RELEASES_NYAA_FILTER: "0"
+      KURA_RELEASES_NYAA_LOG_LEVEL: debug
     ports:
       - "8082:8080"

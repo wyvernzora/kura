@@ -13,8 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 
-	"github.com/wyvernzora/takuhai/internal/store"
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 func TestHTTPWrapRecordsRouteAndStatus(t *testing.T) {

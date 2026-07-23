@@ -20,8 +20,8 @@ import (
 	// timezone-dependent parsing works in distroless/scratch images.
 	_ "time/tzdata"
 
-	"github.com/wyvernzora/takuhai/internal/metrics"
-	"github.com/wyvernzora/takuhai/sources/nyaa"
+	"github.com/wyvernzora/kura/services/releases/internal/metrics"
+	"github.com/wyvernzora/kura/services/releases/sources/nyaa"
 )
 
 var (
@@ -93,18 +93,18 @@ func parseServe(args []string) (ServeCmd, error) {
 }
 
 func serveDefaults() (ServeCmd, error) {
-	rateRPS, err := envFloat("TAKUHAI_NYAA_RATE_RPS", 0.5)
+	rateRPS, err := envFloat("KURA_RELEASES_NYAA_RATE_RPS", 0.5)
 	if err != nil {
 		return ServeCmd{}, err
 	}
 	return ServeCmd{
-		Addr:     envString("TAKUHAI_NYAA_ADDR", ":8082"),
-		BaseURL:  envString("TAKUHAI_NYAA_BASE_URL", "https://nyaa.si"),
-		Query:    envString("TAKUHAI_NYAA_QUERY", ""),
-		Category: envString("TAKUHAI_NYAA_CATEGORY", "1_0"),
-		Filter:   envString("TAKUHAI_NYAA_FILTER", "0"),
+		Addr:     envString("KURA_RELEASES_NYAA_ADDR", ":8082"),
+		BaseURL:  envString("KURA_RELEASES_NYAA_BASE_URL", "https://nyaa.si"),
+		Query:    envString("KURA_RELEASES_NYAA_QUERY", ""),
+		Category: envString("KURA_RELEASES_NYAA_CATEGORY", "1_0"),
+		Filter:   envString("KURA_RELEASES_NYAA_FILTER", "0"),
 		RateRPS:  rateRPS,
-		LogLevel: envString("TAKUHAI_NYAA_LOG_LEVEL", "info"),
+		LogLevel: envString("KURA_RELEASES_NYAA_LOG_LEVEL", "info"),
 	}, nil
 }
 

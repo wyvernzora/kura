@@ -18,7 +18,7 @@ COPY . .
 # BUILD_DIR is the module root to build from (`.` for the service,
 # `sources/*` for a crawler). CMD_PKG is the main package within it.
 ARG BUILD_DIR=.
-ARG CMD_PKG=./cmd/takuhai
+ARG CMD_PKG=./cmd/kura-releases
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG TARGETOS=linux
@@ -40,9 +40,9 @@ COPY --from=build /out/app /usr/local/bin/app
 # images run different binaries with different flag sets. Both addr vars are pinned
 # to :8080 (matching EXPOSE 8080) so each binary binds the published port from its
 # own env var; the var the other binary ignores is harmless.
-ENV TAKUHAI_ADDR=:8080
-ENV TAKUHAI_DMHY_ADDR=:8080
-ENV TAKUHAI_NYAA_ADDR=:8080
+ENV KURA_RELEASES_ADDR=:8080
+ENV KURA_RELEASES_DMHY_ADDR=:8080
+ENV KURA_RELEASES_NYAA_ADDR=:8080
 
 # The shared CMD supplies the crawler's required `serve` subcommand. The service binary
 # has no subcommands, so it ignores the trailing positional and configures from env.

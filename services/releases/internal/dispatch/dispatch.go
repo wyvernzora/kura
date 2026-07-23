@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/wyvernzora/takuhai/internal/cursor"
-	"github.com/wyvernzora/takuhai/internal/infohash"
-	"github.com/wyvernzora/takuhai/internal/store"
+	"github.com/wyvernzora/kura/services/releases/internal/cursor"
+	"github.com/wyvernzora/kura/services/releases/internal/infohash"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
 )
 
 var ErrInvalidInput = errors.New("takuhai/dispatch: invalid input")

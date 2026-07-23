@@ -20,7 +20,7 @@ import (
 	tcnetwork "github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 const (
@@ -168,12 +168,12 @@ func startCrawler(t *testing.T, ctx context.Context, nw *testcontainers.DockerNe
 		}),
 		tcnetwork.WithNetwork([]string{"crawler"}, nw),
 		testcontainers.WithEnv(map[string]string{
-			"TAKUHAI_DMHY_ADDR":      ":8080",
-			"TAKUHAI_DMHY_BASE_URL":  "http://dmhy",
-			"TAKUHAI_DMHY_SORT_ID":   "2",
-			"TAKUHAI_DMHY_RATE_RPS":  "0",
-			"TAKUHAI_DMHY_CACHE_TTL": "0",
-			"TAKUHAI_DMHY_LOG_LEVEL": "debug",
+			"KURA_RELEASES_DMHY_ADDR":      ":8080",
+			"KURA_RELEASES_DMHY_BASE_URL":  "http://dmhy",
+			"KURA_RELEASES_DMHY_SORT_ID":   "2",
+			"KURA_RELEASES_DMHY_RATE_RPS":  "0",
+			"KURA_RELEASES_DMHY_CACHE_TTL": "0",
+			"KURA_RELEASES_DMHY_LOG_LEVEL": "debug",
 		}),
 		testcontainers.WithExposedPorts("8080/tcp"),
 		testcontainers.WithWaitStrategy(wait.ForListeningPort("8080/tcp").WithStartupTimeout(2*time.Minute)),
@@ -206,10 +206,10 @@ func startTakuhai(t *testing.T, ctx context.Context, nw *testcontainers.DockerNe
 		}),
 		tcnetwork.WithNetwork([]string{"takuhai"}, nw),
 		testcontainers.WithEnv(map[string]string{
-			"TAKUHAI_ADDR":               ":8080",
-			"TAKUHAI_DATABASE_URL":       "postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable",
-			"TAKUHAI_QUEUE_MAX_ATTEMPTS": "2",
-			"TAKUHAI_LOG_LEVEL":          "debug",
+			"KURA_RELEASES_ADDR":               ":8080",
+			"KURA_RELEASES_DATABASE_URL":       "postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable",
+			"KURA_RELEASES_QUEUE_MAX_ATTEMPTS": "2",
+			"KURA_RELEASES_LOG_LEVEL":          "debug",
 		}),
 		testcontainers.WithExposedPorts("8080/tcp"),
 		testcontainers.WithWaitStrategy(wait.ForHTTP("/healthz").WithPort("8080/tcp").WithStartupTimeout(2*time.Minute)),

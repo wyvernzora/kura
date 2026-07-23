@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/wyvernzora/takuhai/internal/cursor"
-	"github.com/wyvernzora/takuhai/internal/store"
+	"github.com/wyvernzora/kura/services/releases/internal/cursor"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
 )
 
 const (

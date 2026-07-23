@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/wyvernzora/takuhai/internal/dispatch"
+	"github.com/wyvernzora/kura/services/releases/internal/dispatch"
 )
 
 func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {

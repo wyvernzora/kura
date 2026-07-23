@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 // PageFetcher fetches the raw bytes for a 1-based page number. It is the network seam

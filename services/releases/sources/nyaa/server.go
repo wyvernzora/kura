@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wyvernzora/takuhai/internal/metrics"
-	"github.com/wyvernzora/takuhai/pkg/crawl"
+	"github.com/wyvernzora/kura/services/releases/internal/metrics"
+	"github.com/wyvernzora/kura/services/releases/pkg/crawl"
 )
 
 // Threshold is the Nyaa consecutive-empty feed-floor threshold.

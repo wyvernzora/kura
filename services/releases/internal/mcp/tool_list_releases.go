@@ -9,7 +9,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/wyvernzora/takuhai/internal/dispatch"
+	"github.com/wyvernzora/kura/services/releases/internal/dispatch"
 )
 
 //go:embed tool_list_releases.md

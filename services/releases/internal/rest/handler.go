@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/wyvernzora/takuhai/internal/dispatch"
-	"github.com/wyvernzora/takuhai/internal/metrics"
-	"github.com/wyvernzora/takuhai/internal/store"
+	"github.com/wyvernzora/kura/services/releases/internal/dispatch"
+	"github.com/wyvernzora/kura/services/releases/internal/metrics"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
 )
 
 type Handler struct {

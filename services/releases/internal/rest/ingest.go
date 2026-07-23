@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/takuhai/internal/infohash"
-	"github.com/wyvernzora/takuhai/internal/store"
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/internal/infohash"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 // maxBatchPosts is the hard cap on one POST /ingest body (an oversized batch -> 400

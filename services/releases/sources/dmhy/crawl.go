@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/wyvernzora/takuhai/internal/metrics"
-	"github.com/wyvernzora/takuhai/pkg/crawl"
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/internal/metrics"
+	"github.com/wyvernzora/kura/services/releases/pkg/crawl"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 // PageFetcher fetches the raw bytes for a 1-based DMHY page number and sort_id.

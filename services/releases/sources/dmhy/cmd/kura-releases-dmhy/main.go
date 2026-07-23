@@ -11,7 +11,7 @@
 // normalize the infohash or dedup; takuhai derives the dedup key on /ingest. It holds
 // no state across requests — n8n passes the cursor in and stores next_cursor.
 //
-// serve flags each honor a TAKUHAI_DMHY_-prefixed environment-variable fallback so
+// serve flags each honor a KURA_RELEASES_DMHY_-prefixed environment-variable fallback so
 // container deployments configure the binary without crafting an args list.
 package main
 
@@ -34,8 +34,8 @@ import (
 	// timezone-dependent parsing works in distroless/scratch images.
 	_ "time/tzdata"
 
-	"github.com/wyvernzora/takuhai/internal/metrics"
-	"github.com/wyvernzora/takuhai/sources/dmhy"
+	"github.com/wyvernzora/kura/services/releases/internal/metrics"
+	"github.com/wyvernzora/kura/services/releases/sources/dmhy"
 )
 
 // version and commit are overridable at link time via -ldflags.
@@ -76,7 +76,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 }
 
-// ServeCmd serves POST /crawl. Its flags honor TAKUHAI_DMHY_-prefixed env fallbacks.
+// ServeCmd serves POST /crawl. Its flags honor KURA_RELEASES_DMHY_-prefixed env fallbacks.
 type ServeCmd struct {
 	Addr     string
 	BaseURL  string
@@ -113,25 +113,25 @@ func parseServe(args []string) (ServeCmd, error) {
 }
 
 func serveDefaults() (ServeCmd, error) {
-	sortID, err := envInt("TAKUHAI_DMHY_SORT_ID", 2)
+	sortID, err := envInt("KURA_RELEASES_DMHY_SORT_ID", 2)
 	if err != nil {
 		return ServeCmd{}, err
 	}
-	rateRPS, err := envFloat("TAKUHAI_DMHY_RATE_RPS", 0.5)
+	rateRPS, err := envFloat("KURA_RELEASES_DMHY_RATE_RPS", 0.5)
 	if err != nil {
 		return ServeCmd{}, err
 	}
-	cacheTTL, err := envDuration("TAKUHAI_DMHY_CACHE_TTL", 10*time.Minute)
+	cacheTTL, err := envDuration("KURA_RELEASES_DMHY_CACHE_TTL", 10*time.Minute)
 	if err != nil {
 		return ServeCmd{}, err
 	}
 	return ServeCmd{
-		Addr:     envString("TAKUHAI_DMHY_ADDR", ":8081"),
-		BaseURL:  envString("TAKUHAI_DMHY_BASE_URL", "https://share.dmhy.org"),
+		Addr:     envString("KURA_RELEASES_DMHY_ADDR", ":8081"),
+		BaseURL:  envString("KURA_RELEASES_DMHY_BASE_URL", "https://share.dmhy.org"),
 		SortID:   sortID,
 		RateRPS:  rateRPS,
 		CacheTTL: cacheTTL,
-		LogLevel: envString("TAKUHAI_DMHY_LOG_LEVEL", "info"),
+		LogLevel: envString("KURA_RELEASES_DMHY_LOG_LEVEL", "info"),
 	}, nil
 }
 

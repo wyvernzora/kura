@@ -1,4 +1,4 @@
-module github.com/wyvernzora/takuhai
+module github.com/wyvernzora/kura/services/releases
 
 go 1.26.3
 

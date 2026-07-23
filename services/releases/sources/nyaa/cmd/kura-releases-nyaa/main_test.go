@@ -24,7 +24,7 @@ func TestServeDefaultsAndOverrides(t *testing.T) {
 	})
 
 	t.Run("env-override", func(t *testing.T) {
-		t.Setenv("TAKUHAI_NYAA_CATEGORY", "1_4")
+		t.Setenv("KURA_RELEASES_NYAA_CATEGORY", "1_4")
 		cmd, err := parseServe(nil)
 		if err != nil {
 			t.Fatalf("parse: %v", err)

@@ -16,9 +16,9 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	dbmigrations "github.com/wyvernzora/takuhai/db/migrations"
-	"github.com/wyvernzora/takuhai/internal/store"
-	"github.com/wyvernzora/takuhai/internal/store/postgres"
+	dbmigrations "github.com/wyvernzora/kura/services/releases/db/migrations"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
+	"github.com/wyvernzora/kura/services/releases/internal/store/postgres"
 )
 
 // sharedPG is the single testcontainers-go Postgres container shared across every

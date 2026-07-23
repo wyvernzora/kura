@@ -57,7 +57,7 @@ sizable change.
 - **Language:** Go 1.26.3+ (pinned in `go.mod` / `.tool-versions`). It is a Go
   **workspace** (`go.work`): root service module + `sources/dmhy` crawler module.
 - **Entry point:** `cmd/takuhai/main.go` — flag-driven, env fallbacks (prefix
-  `TAKUHAI_`). Runs migrations at startup, then serves HTTP.
+  `KURA_RELEASES_`). Runs migrations at startup, then serves HTTP.
 - **Store:** PostgreSQL via `pgx`. Migrations are **embedded goose** in
   `db/migrations/`, run at startup under an advisory lock.
 - **MCP SDK:** `github.com/modelcontextprotocol/go-sdk` (streamable HTTP at `/mcp`).

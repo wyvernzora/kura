@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/wyvernzora/takuhai/internal/dispatch"
-	"github.com/wyvernzora/takuhai/internal/infohash"
-	"github.com/wyvernzora/takuhai/internal/store"
+	"github.com/wyvernzora/kura/services/releases/internal/dispatch"
+	"github.com/wyvernzora/kura/services/releases/internal/infohash"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
 )
 
 type magnetResponse struct {

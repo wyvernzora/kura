@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
-	"github.com/wyvernzora/takuhai/sources/dmhy"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/sources/dmhy"
 )
 
 // ParseCmd turns locally-saved DMHY archive HTML into RawPost JSONL — one rawpost.RawPost

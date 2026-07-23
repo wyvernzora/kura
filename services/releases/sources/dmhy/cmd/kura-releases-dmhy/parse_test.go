@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
-	"github.com/wyvernzora/takuhai/sources/dmhy"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/sources/dmhy"
 )
 
 // fixtureDir holds the same DMHY archive fixtures the conformance suite drives, reached

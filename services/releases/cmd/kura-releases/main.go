@@ -7,7 +7,7 @@
 // endpoint. The actual identity matching is performed by an external agent; the
 // indexer only records what that agent reports.
 //
-// All configuration is via flags, each honoring a TAKUHAI_-prefixed
+// All configuration is via flags, each honoring a KURA_RELEASES_-prefixed
 // environment-variable fallback so container deployments can configure the
 // binary without crafting an args list.
 package main
@@ -30,13 +30,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 
-	dbmigrations "github.com/wyvernzora/takuhai/db/migrations"
-	"github.com/wyvernzora/takuhai/internal/config"
-	"github.com/wyvernzora/takuhai/internal/health"
-	"github.com/wyvernzora/takuhai/internal/mcp"
-	"github.com/wyvernzora/takuhai/internal/metrics"
-	"github.com/wyvernzora/takuhai/internal/rest"
-	"github.com/wyvernzora/takuhai/internal/store/postgres"
+	dbmigrations "github.com/wyvernzora/kura/services/releases/db/migrations"
+	"github.com/wyvernzora/kura/services/releases/internal/config"
+	"github.com/wyvernzora/kura/services/releases/internal/health"
+	"github.com/wyvernzora/kura/services/releases/internal/mcp"
+	"github.com/wyvernzora/kura/services/releases/internal/metrics"
+	"github.com/wyvernzora/kura/services/releases/internal/rest"
+	"github.com/wyvernzora/kura/services/releases/internal/store/postgres"
 
 	// time/tzdata bakes the IANA zoneinfo database into the binary so
 	// timezone-dependent parsing works in distroless/scratch images that
@@ -60,10 +60,10 @@ func main() {
 func run() error {
 	var (
 		showVersion      = flag.Bool("version", false, "print version and exit")
-		addr             = stringFlag("addr", "TAKUHAI_ADDR", ":8080", "listen address")
-		databaseURL      = stringFlag("database-url", "TAKUHAI_DATABASE_URL", "", "PostgreSQL connection string")
-		logLevel         = stringFlag("log-level", "TAKUHAI_LOG_LEVEL", "info", "log level: debug, info, warn, error")
-		queueMaxAttempts = intFlag("queue-max-attempts", "TAKUHAI_QUEUE_MAX_ATTEMPTS", 3, "max unmatched submits before a release becomes exhausted")
+		addr             = stringFlag("addr", "KURA_RELEASES_ADDR", ":8080", "listen address")
+		databaseURL      = stringFlag("database-url", "KURA_RELEASES_DATABASE_URL", "", "PostgreSQL connection string")
+		logLevel         = stringFlag("log-level", "KURA_RELEASES_LOG_LEVEL", "info", "log level: debug, info, warn, error")
+		queueMaxAttempts = intFlag("queue-max-attempts", "KURA_RELEASES_QUEUE_MAX_ATTEMPTS", 3, "max unmatched submits before a release becomes exhausted")
 	)
 	flag.Parse()
 

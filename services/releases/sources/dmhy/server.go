@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/takuhai/internal/metrics"
-	"github.com/wyvernzora/takuhai/pkg/crawl"
+	"github.com/wyvernzora/kura/services/releases/internal/metrics"
+	"github.com/wyvernzora/kura/services/releases/pkg/crawl"
 )
 
 // Threshold is the DMHY consecutive-empty end-of-archive threshold N. It is the

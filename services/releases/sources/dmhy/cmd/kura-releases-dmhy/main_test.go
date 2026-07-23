@@ -27,7 +27,7 @@ func TestServeSortIDResolution(t *testing.T) {
 	})
 
 	t.Run("env-override", func(t *testing.T) {
-		t.Setenv("TAKUHAI_DMHY_SORT_ID", "7")
+		t.Setenv("KURA_RELEASES_DMHY_SORT_ID", "7")
 		cmd, err := parseServe(nil)
 		if err != nil {
 			t.Fatalf("parse: %v", err)
@@ -38,9 +38,9 @@ func TestServeSortIDResolution(t *testing.T) {
 	})
 
 	t.Run("empty-env-fails-fast", func(t *testing.T) {
-		t.Setenv("TAKUHAI_DMHY_SORT_ID", "")
+		t.Setenv("KURA_RELEASES_DMHY_SORT_ID", "")
 		if _, err := parseServe(nil); err == nil {
-			t.Fatal("parse: want error on explicitly-empty TAKUHAI_DMHY_SORT_ID, got nil")
+			t.Fatal("parse: want error on explicitly-empty KURA_RELEASES_DMHY_SORT_ID, got nil")
 		}
 	})
 }

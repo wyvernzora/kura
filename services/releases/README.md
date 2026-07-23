@@ -46,11 +46,11 @@ release. Consumers read the catalog over an **MCP** API (`list_releases`,
 make devserver                                     # Postgres + takuhai + crawler services
 
 make build                                          # → bin/takuhai
-TAKUHAI_DATABASE_URL=postgres://… \
+KURA_RELEASES_DATABASE_URL=postgres://… \
   ./bin/takuhai --addr=:8080                        # /ingest, /queue/*, /submit, /mcp, /healthz
 ```
 
-The binary runs its migrations on startup. Config is flag- or `TAKUHAI_`-env driven
+The binary runs its migrations on startup. Config is flag- or `KURA_RELEASES_`-env driven
 (`--addr`, `--database-url`, `--log-level`). See [docs/operations.md](docs/operations.md)
 for deployment and the container build.
 

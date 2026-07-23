@@ -13,10 +13,10 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/wyvernzora/takuhai/internal/dispatch"
-	takuhaimcp "github.com/wyvernzora/takuhai/internal/mcp"
-	"github.com/wyvernzora/takuhai/internal/rest"
-	"github.com/wyvernzora/takuhai/internal/store"
+	"github.com/wyvernzora/kura/services/releases/internal/dispatch"
+	takuhaimcp "github.com/wyvernzora/kura/services/releases/internal/mcp"
+	"github.com/wyvernzora/kura/services/releases/internal/rest"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
 )
 
 type fakeClock struct {

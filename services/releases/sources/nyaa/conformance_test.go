@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/takuhai/pkg/crawl"
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/pkg/crawl"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 const (

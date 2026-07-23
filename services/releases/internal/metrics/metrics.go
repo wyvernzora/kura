@@ -13,8 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/wyvernzora/takuhai/internal/store"
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 type HTTP struct {

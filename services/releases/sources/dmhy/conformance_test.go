@@ -37,7 +37,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 // ---------------------------------------------------------------------------

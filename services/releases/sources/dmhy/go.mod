@@ -1,8 +1,8 @@
-module github.com/wyvernzora/takuhai/sources/dmhy
+module github.com/wyvernzora/kura/services/releases/sources/dmhy
 
 go 1.26.3
 
-require github.com/wyvernzora/takuhai v0.0.0
+require github.com/wyvernzora/kura/services/releases v0.0.0
 
 require github.com/felixge/httpsnoop v1.1.0
 
@@ -22,4 +22,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/wyvernzora/takuhai => ../..
+replace github.com/wyvernzora/kura/services/releases => ../..

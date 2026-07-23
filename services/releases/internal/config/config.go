@@ -1,8 +1,8 @@
-// Package config owns takuhai's flag + env (TAKUHAI_-prefixed) configuration and
+// Package config owns takuhai's flag + env (KURA_RELEASES_-prefixed) configuration and
 // its validation (design §10, implementation-plan 1d). It moves config out of
 // cmd/takuhai/main.go's inline helper into a first-class package.
 //
-// Flag/env binding (the TAKUHAI_ prefix) is wired in cmd/takuhai; this package
+// Flag/env binding (the KURA_RELEASES_ prefix) is wired in cmd/takuhai; this package
 // owns the Config shape and its Validate rules.
 package config
 

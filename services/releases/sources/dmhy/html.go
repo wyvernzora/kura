@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/takuhai/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/releases/pkg/rawpost"
 )
 
 // archiveRowRe splits a DMHY archive page's <tbody> into content rows. A content row

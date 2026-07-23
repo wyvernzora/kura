@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/takuhai/internal/store"
+	"github.com/wyvernzora/kura/services/releases/internal/store"
 )
 
 type fakeStore struct {

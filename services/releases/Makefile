@@ -30,10 +30,10 @@ GOLANGCI_LINT ?= $(shell if command -v golangci-lint >/dev/null 2>&1; then \
 build:
 	@for m in $(MODULES); do \
 		if [ "$$m" = "." ]; then \
-			name=takuhai; \
-			out=bin/takuhai; \
+			name=kura-releases; \
+			out=bin/kura-releases; \
 		else \
-			name=takuhai-$$(basename "$$m"); \
+			name=kura-releases-$$(basename "$$m"); \
 			out=../../bin/$$name; \
 		fi; \
 		echo "==> go build $$name ($$m)"; \
@@ -74,13 +74,13 @@ check: fmt vet lint test build
 devserver:
 	docker compose -f tools/devserver/compose.yaml up --build
 
-# Real-binary smoke (cmd/takuhai/smoke_test.go, //go:build smoke): builds + runs the
+# Real-binary smoke (cmd/kura-releases/smoke_test.go, //go:build smoke): builds + runs the
 # actual binary against a testcontainers Postgres and asserts the wired deploy shape
 # (migrations -> /healthz -> /ingest -> /queue -> /mcp -> fail-fast bind -> bounded
 # drain). Needs Docker; kept OUT of `check` so the default loop stays container-free.
 # CI runs this same command in the dedicated `smoke` job.
 smoke:
-	go test -tags=smoke -run TestSmoke -count=1 ./cmd/takuhai
+	go test -tags=smoke -run TestSmoke -count=1 ./cmd/kura-releases
 
 # Install lefthook-managed commit-msg and pre-commit hooks.
 hooks:
