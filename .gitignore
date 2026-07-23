@@ -1,22 +1,52 @@
 # Build output
 bin/
+dist/
+build/
+tmp/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+# root binary from a bare `go build .` (canonical build outputs to bin/)
+/services/releases/kura-releases
+
+# Go coverage artifacts
+coverage.out
+*.coverprofile
+
+# Node / web tooling
+node_modules/
+.vite/
+*.tsbuildinfo
+pnpm-debug.log
+.pnpm-store/
+storybook-static/
+# TanStack Router file-based plugin generates this on dev/build.
+/services/webui/src/routeTree.gen.ts
 
 # Machine-local working dirs and env (session/agent state, scratch notes)
 scratch
 .claude
 .codex
 .checkpoint
+.reviews
 .envrc
 .env
 .env.*
 !.env.example
-.pnpm-store/
+*.private.*
+*.private/
+LOCAL_NOTES.md
+docs/LOCAL.md
+.local/
 
 # Editor and OS files
 .DS_Store
 .idea/
 .vscode/
 *.swp
+*.swo
 
 # Logs
 *.log
