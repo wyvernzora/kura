@@ -35,6 +35,6 @@ If you are new to Kura, read in this order:
 ## Contributing
 
 Coding agents and human contributors should read
-[AGENTS.md](../AGENTS.md) first. It covers the operating ground rules
+[AGENTS.md](../../../AGENTS.md) first. It covers the operating ground rules
 (no flattery, no fabrication, surgical changes), the project's
 guiding principles, and the Go engineering conventions.

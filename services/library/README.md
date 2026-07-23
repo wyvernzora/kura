@@ -127,5 +127,5 @@ make check
 go test ./...
 ```
 
-Read [AGENTS.md](AGENTS.md) before contributing. It contains the repo-specific
+Read [AGENTS.md](../../AGENTS.md) before contributing. It contains the repo-specific
 rules for code changes, tests, e2e scenarios, and commit subjects.
