@@ -1,9 +1,9 @@
-// Command takuhai-dmhy is the stateless DMHY crawler.
+// Command kura-releases-dmhy is the stateless DMHY crawler.
 //
-//	takuhai-dmhy serve   serves POST /crawl: given {page_size, cursor?, lookback?} it
+//	kura-releases-dmhy serve   serves POST /crawl: given {page_size, cursor?, lookback?} it
 //	                     walks the DMHY HTML archive newest→oldest (page 1 is the latest)
 //	                     and returns {posts, next_cursor, has_more}.
-//	takuhai-dmhy parse   parses locally-saved DMHY archive HTML into RawPost JSONL — the
+//	kura-releases-dmhy parse   parses locally-saved DMHY archive HTML into RawPost JSONL — the
 //	                     same parser the live crawl uses, fed from a file instead of the
 //	                     network — for offline backfill (POST the JSONL into /ingest).
 //
@@ -46,7 +46,7 @@ var (
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "takuhai-dmhy:", err)
+		fmt.Fprintln(os.Stderr, "kura-releases-dmhy:", err)
 		os.Exit(1)
 	}
 }
@@ -211,7 +211,7 @@ func (c *ServeCmd) Run() error {
 	mux.Handle("/metrics", metricsSrv.Handler())
 	httpSrv := &http.Server{Addr: c.Addr, Handler: logHTTP(logger, metricsSrv.HTTP, metricsSrv.HTTP.Wrap(mux))}
 
-	logger.Info("takuhai-dmhy starting",
+	logger.Info("kura-releases-dmhy starting",
 		"version", version,
 		"addr", c.Addr,
 		"dmhy_base_url", c.BaseURL,
@@ -234,14 +234,14 @@ func (c *ServeCmd) Run() error {
 	case <-ctx.Done():
 	}
 
-	logger.Info("takuhai-dmhy shutting down")
+	logger.Info("kura-releases-dmhy shutting down")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpSrv.Shutdown(shutCtx); err != nil {
 		logger.Warn("graceful shutdown timed out", "err", err)
 		return err
 	}
-	logger.Info("takuhai-dmhy stopped")
+	logger.Info("kura-releases-dmhy stopped")
 	return nil
 }
 

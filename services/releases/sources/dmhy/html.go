@@ -56,7 +56,7 @@ var hiddenDateRe = regexp.MustCompile(`display:\s*none;?">\s*([0-9]{4}/[0-9]{2}/
 
 // ParseArchivePage parses a DMHY HTML-archive page's content rows into raw posts. It is
 // the crawler's exported HTML primitive — the page-walk uses it live, and the
-// `takuhai-dmhy parse` backfill command reuses it on locally-saved pages. It is the
+// `kura-releases-dmhy parse` backfill command reuses it on locally-saved pages. It is the
 // DUMB-crawler successor of internal/source/dmhy/backfill.go's
 // parseArchivePage: it emits EVERY content row as a rawpost.RawPost (raw
 // title+magnet+metadata+size), including rows whose magnet has no canonical v1 btih

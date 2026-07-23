@@ -1,8 +1,8 @@
 // Package config owns takuhai's flag + env (KURA_RELEASES_-prefixed) configuration and
 // its validation (design §10, implementation-plan 1d). It moves config out of
-// cmd/takuhai/main.go's inline helper into a first-class package.
+// cmd/kura-releases/main.go's inline helper into a first-class package.
 //
-// Flag/env binding (the KURA_RELEASES_ prefix) is wired in cmd/takuhai; this package
+// Flag/env binding (the KURA_RELEASES_ prefix) is wired in cmd/kura-releases; this package
 // owns the Config shape and its Validate rules.
 package config
 
@@ -14,7 +14,7 @@ import (
 var validLogLevels = []string{"debug", "info", "warn", "error"}
 
 // Config is the validated runtime configuration (design §10). Fields mirror the
-// cmd/takuhai flags; Phase 1 adds binding + ingestion knobs.
+// cmd/kura-releases flags; Phase 1 adds binding + ingestion knobs.
 type Config struct {
 	Addr             string // listen address
 	DatabaseURL      string // PostgreSQL connection string (required)

@@ -1,4 +1,4 @@
-// Command takuhai-nyaa is the stateless Nyaa crawler.
+// Command kura-releases-nyaa is the stateless Nyaa crawler.
 package main
 
 import (
@@ -41,7 +41,7 @@ type ServeCmd struct {
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "takuhai-nyaa:", err)
+		fmt.Fprintln(os.Stderr, "kura-releases-nyaa:", err)
 		os.Exit(1)
 	}
 }
@@ -143,7 +143,7 @@ func (c *ServeCmd) Run() error {
 	mux.Handle("/metrics", metricsSrv.Handler())
 	httpSrv := &http.Server{Addr: c.Addr, Handler: logHTTP(logger, metricsSrv.HTTP, metricsSrv.HTTP.Wrap(mux))}
 
-	logger.Info("takuhai-nyaa starting",
+	logger.Info("kura-releases-nyaa starting",
 		"version", version,
 		"addr", c.Addr,
 		"nyaa_base_url", c.BaseURL,
@@ -167,14 +167,14 @@ func (c *ServeCmd) Run() error {
 	case <-ctx.Done():
 	}
 
-	logger.Info("takuhai-nyaa shutting down")
+	logger.Info("kura-releases-nyaa shutting down")
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := httpSrv.Shutdown(shutCtx); err != nil {
 		logger.Warn("graceful shutdown timed out", "err", err)
 		return err
 	}
-	logger.Info("takuhai-nyaa stopped")
+	logger.Info("kura-releases-nyaa stopped")
 	return nil
 }
 

@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
       args:
         BUILD_DIR: .
-        CMD_PKG: ./cmd/takuhai
+        CMD_PKG: ./cmd/kura-releases
         VERSION: dev
     environment:
       KURA_RELEASES_ADDR: :8080
@@ -42,7 +42,7 @@ services:
       dockerfile: Dockerfile
       args:
         BUILD_DIR: sources/dmhy
-        CMD_PKG: ./cmd/takuhai-dmhy
+        CMD_PKG: ./cmd/kura-releases-dmhy
         VERSION: dev
     environment:
       KURA_RELEASES_DMHY_ADDR: :8080
@@ -58,7 +58,7 @@ services:
       dockerfile: Dockerfile
       args:
         BUILD_DIR: sources/nyaa
-        CMD_PKG: ./cmd/takuhai-nyaa
+        CMD_PKG: ./cmd/kura-releases-nyaa
         VERSION: dev
     environment:
       KURA_RELEASES_NYAA_ADDR: :8080

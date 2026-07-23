@@ -163,7 +163,7 @@ func startCrawler(t *testing.T, ctx context.Context, nw *testcontainers.DockerNe
 			Dockerfile:     "Dockerfile",
 			Repo:           "takuhai-e2e-crawler",
 			Tag:            "latest",
-			BuildArgs:      buildArgs(map[string]string{"BUILD_DIR": "sources/dmhy", "CMD_PKG": "./cmd/takuhai-dmhy", "VERSION": "e2e"}),
+			BuildArgs:      buildArgs(map[string]string{"BUILD_DIR": "sources/dmhy", "CMD_PKG": "./cmd/kura-releases-dmhy", "VERSION": "e2e"}),
 			BuildLogWriter: os.Stderr,
 		}),
 		tcnetwork.WithNetwork([]string{"crawler"}, nw),
@@ -201,7 +201,7 @@ func startTakuhai(t *testing.T, ctx context.Context, nw *testcontainers.DockerNe
 			Dockerfile:     "Dockerfile",
 			Repo:           "takuhai-e2e-service",
 			Tag:            "latest",
-			BuildArgs:      buildArgs(map[string]string{"BUILD_DIR": ".", "CMD_PKG": "./cmd/takuhai", "VERSION": "e2e"}),
+			BuildArgs:      buildArgs(map[string]string{"BUILD_DIR": ".", "CMD_PKG": "./cmd/kura-releases", "VERSION": "e2e"}),
 			BuildLogWriter: os.Stderr,
 		}),
 		tcnetwork.WithNetwork([]string{"takuhai"}, nw),
@@ -433,8 +433,10 @@ func repoRoot(t *testing.T) string {
 		t.Fatalf("getwd: %v", err)
 	}
 	root := filepath.Clean(filepath.Join(wd, ".."))
-	if _, err := os.Stat(filepath.Join(root, "go.work")); err != nil {
-		t.Fatalf("resolve repo root from %s: %v", wd, err)
+	// go.work moved to the monorepo root; go.mod marks the service root,
+	// which is what the docker build contexts here need.
+	if _, err := os.Stat(filepath.Join(root, "go.mod")); err != nil {
+		t.Fatalf("resolve service root from %s: %v", wd, err)
 	}
 	return root
 }
