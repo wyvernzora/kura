@@ -1,5 +1,10 @@
 # Changelog
 
+> Note: on 2026-07-23 the repo was consolidated into the kura monorepo
+> and all commit subjects were normalized to Conventional Commits. Entries
+> below predate the monorepo and refer to the library service's lineage,
+> which the repo-wide version line continues.
+
 Notable release changes for Kura.
 
 ## v0.5.1 - 2026-07-20
