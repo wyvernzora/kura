@@ -137,6 +137,6 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Thread deploy-time row-building policy from `cmd/kura` through workflow/index builders; do not read env vars directly from storage packages.
 - Kura does not guarantee forward compatibility for old binaries reading newer on-disk metadata; prefer a clear current-schema contract over version machinery whose only benefit is rollback ergonomics.
 - Use namespaced workflow-tag conventions in the UI and integration guidance: `priority:high`, `priority:low`, `maintenance:requested`, and `maintenance:disabled`.
-- Format commit subjects as `<scope>: <message>`; do not use unscoped subjects or Conventional Commits `type(scope):` syntax.
+- Commit subjects use Conventional Commits with the closed scope enum from the root AGENTS.md; the former `<scope>: <message>` convention is retired (2026-07, monorepo migration).
 - Run LTO/LTFS tooling on a dedicated VM with its own read-only `KURA_LIBRARY_ROOT` mount and VM-local disposable tape state; derive hot/cold placement from payload-change history rather than raw metadata-write frequency.
 - Treat LTO as operator-assisted homelab archival for valuable-but-replaceable data; prefer visible manual recovery conflicts and operator-approved risk over high-availability protocols or automatic conflict resolution.
