@@ -27,7 +27,7 @@ This file holds project-specific context, learnings, and overrides only. Rules i
 - **Priority:** anime behavior comes first; other series types can work when compatible but should not drive the design.
 - **Product shape:** no bloat. Prefer CLI tools for manual use and MCP tools for agentic use.
 - **Operational scale:** personal anime library automation, not a high-throughput multi-writer file transaction system. Expect new episodes a few times a week and occasional season upgrades, usually flowing qbit/download inbox -> Kura -> library with an LLM agent driving Kura. Kura is the only intended writer inside the library root; other tools should be readonly there, and direct human writes are rare. Avoid engineering for AWS-S3-scale concurrency or hostile library writers unless the product requirements explicitly change.
-- **UI:** possible in the distant future, but not a current priority.
+- **UI:** a web UI (`web/`, pnpm + vite) is built and embedded into the binary (`internal/server/webui`), served by `kura serve --rest` at `/`.
 - **Distribution:** Go application shipped as a Docker container.
 
 ### Stack
@@ -43,8 +43,10 @@ This file holds project-specific context, learnings, and overrides only. Rules i
 - **Jobs:** `internal/jobs` runs async workflow ops and exposes a registry for polling-based clients (MCP).
 - **Provider:** `internal/provider` is the metadata-provider abstraction; `internal/provider/tvdb` is the only implementation today.
 - **Domain types:** `internal/domain/{refs,media,series,filename,selector}` are pure types shared across packages. Leaf-level — they do not import sibling internal packages.
-- **Transports:** `internal/server/mcp` hosts the MCP tool surface; `cmd/kura` hosts the CLI. Both depend only on `internal/workflow` for behavior.
-- **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (env loading), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `internal/response` (wire response shapes), `internal/cli/*` (CLI rendering / stdio).
+- **Inbox:** `internal/inbox` walks the `KURA_INBOX_ROOT` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
+- **Search keys:** `internal/searchkey` computes the per-series fuzzy-search blob shipped on `ListRow` — flattened, deduplicated alias lines fed to client-side fuse.js. Never user-facing.
+- **Transports:** `kura serve` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, bearer-token auth via `internal/server/auth`, embedded web UI from `internal/server/webui` at `/`). Servers depend on `internal/workflow` for behavior. `cmd/kura` hosts the CLI; its verbs are REST clients via `internal/cli/client` (discovery through `KURA_SERVER_URL`, default `http://127.0.0.1:8080`) — only the `serve` command imports `internal/workflow` in-process.
+- **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (env loading), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `internal/response` (wire response shapes), `internal/cli/*` (CLI rendering / stdio / REST client).
 - **Container:** Docker, single-binary image.
 
 ### Commands
@@ -85,6 +87,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - Preserve a small, automation-friendly core before adding optional layers.
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
 - `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura reindex` to rebuild it from per-series metadata.
+- `KURA_INBOX_ROOT` is the download-inbox root that `inbox:<rel>` selectors resolve against. Required at `kura serve` startup (must exist, be a directory, and be disjoint from the library root); CLI verbs reach the inbox only through the server's REST surface.
 - `KURA_HOST_ID` overrides `os.Hostname()` for the identity Kura stamps into claim holders and CAS mutators. Set this in container deployments to a stable value (e.g. the underlying host's actual hostname) so a previous container's stuck claim is detected as same-host on restart and can be auto-broken; without it, every container restart mid-apply requires a manual `kura reconcile recover`.
 - `KURA_AIRING_TAIL_DAYS` controls how many days after a cour's last episode airs it still counts as airing. Default `7`; `0` disables the tail. Integer days; empty / invalid / negative values fall back to the default.
 - `KURA_LOG_RETENTION_DAYS` sets how long the periodic sweep retains forensic JSONL logs — reconcile plan logs at `<series>/.kura/reconcile/*.jsonl` and per-job history logs at `<library>/.kura/jobs/<ulid>.jsonl`. Default `7`. Integer days; empty / invalid / negative values fall back to the default.
@@ -93,11 +96,11 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 
 - `kura scan <series>` — scan a tracked series directory, record recognized episode media into `series.json`, refresh changed facts for same-path episodes, keep empty spine episodes, and report skipped files/directories.
 - `kura scan --replace <series>` — required when a discovered file replaces an existing active season/episode at a different media path.
-- `kura stage <series> [opts] <absolute-media-path>` — record an explicit external media file inside the target episode's `series.json` staged record. Active or staged season/episode collisions require `--replace`.
+- `kura stage episode <selector terms> <SxxEyy> <inbox:media-selector>` (plus `stage trash`, `stage extra`) — record an explicit external media file inside the target episode's `series.json` staged record. Media is an `inbox:<rel>` selector under `KURA_INBOX_ROOT` (or `series:<rel>` for in-place metadata override); absolute paths are not accepted. Active or staged season/episode collisions require `--replace`.
 - `kura reconcile plan <series>` — resolve the series selector through the library index, write a JSONL plan under `<series>/.kura/reconcile/<token>.jsonl`, and print the token. Token = snapshot hash; apply re-validates the snapshot at execute time. Empty plans write no plan file.
 - `kura reconcile apply <series> <token>` — apply a saved reconcile plan, move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, append move/result records to the plan JSONL file, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
 - If scan or reconcile plan has no changes, the CLI must not ask to apply anything.
-- Kura does not currently scan a central inbox. `kura stage` accepts explicitly referenced absolute media paths from any inbox or download directory.
+- Kura does not auto-scan or auto-import the inbox. `kura inbox list [path]` lists entries under `KURA_INBOX_ROOT` on demand (recursive up to depth 5, kind/glob filters, hidden files omitted unless `--all`; accepts an exact file path); `kura stage` consumes `inbox:<rel>` selectors from it.
 
 ### Documentation
 
@@ -135,3 +138,5 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Kura does not guarantee forward compatibility for old binaries reading newer on-disk metadata; prefer a clear current-schema contract over version machinery whose only benefit is rollback ergonomics.
 - Use namespaced workflow-tag conventions in the UI and integration guidance: `priority:high`, `priority:low`, `maintenance:requested`, and `maintenance:disabled`.
 - Format commit subjects as `<scope>: <message>`; do not use unscoped subjects or Conventional Commits `type(scope):` syntax.
+- Run LTO/LTFS tooling on a dedicated VM with its own read-only `KURA_LIBRARY_ROOT` mount and VM-local disposable tape state; derive hot/cold placement from payload-change history rather than raw metadata-write frequency.
+- Treat LTO as operator-assisted homelab archival for valuable-but-replaceable data; prefer visible manual recovery conflicts and operator-approved risk over high-availability protocols or automatic conflict resolution.
