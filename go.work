@@ -1,0 +1,8 @@
+go 1.26.3
+
+use (
+	./services/library
+	./services/releases
+	./services/releases/sources/dmhy
+	./services/releases/sources/nyaa
+)
