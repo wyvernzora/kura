@@ -28,7 +28,7 @@ RUN mkdir -p /pkg && cp -r package.json dist /pkg/
 
 # ---- init image ----
 FROM busybox:1.38-musl
-LABEL org.opencontainers.image.source="https://github.com/wyvernzora/takuhai"
+LABEL org.opencontainers.image.source="https://github.com/wyvernzora/kura"
 COPY --from=build /pkg /takuhai-nodes
 COPY integrations/n8n/releases/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

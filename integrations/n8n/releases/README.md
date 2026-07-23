@@ -71,9 +71,9 @@ Takuhai Queue Trigger ─► [matcher over $json.items] ─► Takuhai · Submit
 
 ## Packaging & deployment
 
-Built as a **minimal init container** (`ghcr.io/wyvernzora/takuhai/n8n-nodes`), versioned
-`vX.Y.Z` in lockstep with the service (`ghcr.io/wyvernzora/takuhai`) and crawler
-images (`ghcr.io/wyvernzora/takuhai/crawler-dmhy`, `ghcr.io/wyvernzora/takuhai/crawler-nyaa`) — all published atomically by one CI release job and pinned together by a single deploy `version`.
+Built as a **minimal init container** (`ghcr.io/wyvernzora/kura-releases-n8n-nodes`), versioned
+`vX.Y.Z` in lockstep with the service (`ghcr.io/wyvernzora/kura/release-indexer`) and crawler
+images (`ghcr.io/wyvernzora/kura-releases-crawler-dmhy`, `ghcr.io/wyvernzora/kura-releases-crawler-nyaa`) — all published atomically by one CI release job and pinned together by a single deploy `version`.
 
 The init container ships the built nodes and, on pod start, copies them into an
 `emptyDir` that n8n mounts and reads via `N8N_CUSTOM_EXTENSIONS`:

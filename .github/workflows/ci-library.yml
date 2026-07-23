@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 env:
-  IMAGE_NAME: ghcr.io/wyvernzora/kura-server
+  IMAGE_NAME: ghcr.io/wyvernzora/kura/library-manager
 
 jobs:
   go:

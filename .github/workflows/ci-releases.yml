@@ -152,7 +152,7 @@ jobs:
       matrix:
         include:
           - component: kura-release-indexer
-            image: ghcr.io/wyvernzora/kura-releases
+            image: ghcr.io/wyvernzora/kura/release-indexer
             context: services/release-indexer
             file: services/release-indexer/Dockerfile
             build_args: |
@@ -242,7 +242,7 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - kura-releases
+          - kura/release-indexer
           - kura-releases-crawler-dmhy
           - kura-releases-crawler-nyaa
           - kura-releases-n8n-nodes
