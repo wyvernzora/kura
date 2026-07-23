@@ -447,14 +447,14 @@ func fakeDMHYContext(t *testing.T) string {
 	writeFile(t, filepath.Join(dir, "Dockerfile"), `FROM nginx:1.29-alpine
 COPY topics /usr/share/nginx/html/topics
 `)
-	writeFile(t, filepath.Join(dir, "topics/list/sort_id/2/page/1"), fakeArchivePage(
+	writeFile(t, filepath.Join(dir, "topics", "list", "sort_id", "2", "page", "1"), fakeArchivePage(
 		row("1001", "E2E Match Release", matchInfohash, "1.5GB", "2026/06/24 22:25", "udp://tracker.match/announce"),
 		row("1002", "E2E Suppress Release", suppressInfohash, "700MB", "2026/06/24 22:24", "udp://tracker.suppress/announce"),
 		row("1003", "E2E Exhaust Release", exhaustInfohash, "350MB", "2026/06/24 22:23", "udp://tracker.exhaust/announce"),
 	))
 	empty := fakeArchivePage()
-	writeFile(t, filepath.Join(dir, "topics/list/sort_id/2/page/2"), empty)
-	writeFile(t, filepath.Join(dir, "topics/list/sort_id/2/page/3"), empty)
+	writeFile(t, filepath.Join(dir, "topics", "list", "sort_id", "2", "page", "2"), empty)
+	writeFile(t, filepath.Join(dir, "topics", "list", "sort_id", "2", "page", "3"), empty)
 	return dir
 }
 

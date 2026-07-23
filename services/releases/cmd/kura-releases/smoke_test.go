@@ -316,7 +316,7 @@ func waitHealthy(t *testing.T, ctx context.Context, url string, timeout time.Dur
 	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: 2 * time.Second}
 	for time.Now().Before(deadline) {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 		resp, err := client.Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
