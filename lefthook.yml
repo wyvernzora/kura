@@ -1,0 +1,18 @@
+commit-msg:
+  commands:
+    block-ai-brand:
+      run: ./.githooks/block-ai-brand-commit-msg.sh {1}
+    check-subject-format:
+      run: ./.githooks/check-commit-subject.sh {1}
+
+pre-commit:
+  commands:
+    gofmt-releases:
+      glob: "services/releases/**/*.go"
+      run: |
+        drift=$(cd services/releases && gofmt -l cmd internal pkg sources)
+        if [ -n "$drift" ]; then
+          echo "gofmt drift in services/releases:" >&2
+          echo "$drift" >&2
+          exit 1
+        fi
