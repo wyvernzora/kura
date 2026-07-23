@@ -21,6 +21,14 @@ section are relative to that service's directory unless they start with
 One `go.work` spans all four Go modules. `make check` at the root fans
 out to per-service Makefiles; prefer per-service `make` during iteration.
 
+Tooling config is repo-wide and lives at the root: `.golangci.yml`,
+`.gitignore`, `.gitattributes`, `.editorconfig`, `.tool-versions`,
+`lefthook.yml`. Do not add per-service copies — prefer unifying
+conventions repo-wide in general. Two exceptions: `.dockerignore` stays
+per-service (each service is its own docker build context), and
+Makefiles stay fully self-contained per service — no shared make
+fragments unless the whole Makefile system moves to the root someday.
+
 `scratch/` at the repo root is the gitignored agent scratch directory —
 coding-agent context, specs, plans, and local notes. Read it before
 starting non-trivial work; update it when context shifts.
