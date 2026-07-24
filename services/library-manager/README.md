@@ -31,7 +31,7 @@ Requirements:
 - Docker if you want the container image.
 - Lefthook if you contribute changes.
 
-Build the CLI/server binary:
+Build the server binary:
 
 ```sh
 make build
@@ -39,6 +39,14 @@ make build
 
 The binary is written to `bin/kura-library-manager`. `make install` installs
 the same binary to your Go bin directory.
+
+The REST CLI lives in the top-level [`cli`](../../cli/) module:
+
+```sh
+make -C ../../cli build
+```
+
+Its binary is written to `../../cli/bin/kura`.
 
 ## Quick Start
 
@@ -53,7 +61,7 @@ Then start one Kura server for the library:
 
 ```sh
 export KURA_TVDB_KEY=...
-bin/kura-library-manager serve --config=/tmp/library-manager.toml
+bin/kura-library-manager --config=/tmp/library-manager.toml
 ```
 
 Then use the CLI from another shell. It talks to the REST server at
@@ -63,17 +71,17 @@ Then use the CLI from another shell. It talks to the REST server at
 export KURA_SERVER_URL=http://127.0.0.1:8080
 # Export KURA_TOKEN too unless auth.disabled=true in the server config.
 
-bin/kura-library-manager add "Bocchi the Rock!"
-bin/kura-library-manager scan "Bocchi the Rock!"
-bin/kura-library-manager show "Bocchi the Rock!"
+../../cli/bin/kura add "Bocchi the Rock!"
+../../cli/bin/kura scan "Bocchi the Rock!"
+../../cli/bin/kura show "Bocchi the Rock!"
 ```
 
 The normal episode flow is:
 
 ```sh
-bin/kura-library-manager stage episode "Bocchi the Rock!" S01E03 'inbox:Bocchi/file.mkv'
-bin/kura-library-manager reconcile plan "Bocchi the Rock!"
-bin/kura-library-manager reconcile apply "Bocchi the Rock!" <token>
+../../cli/bin/kura stage episode "Bocchi the Rock!" S01E03 'inbox:Bocchi/file.mkv'
+../../cli/bin/kura reconcile plan "Bocchi the Rock!"
+../../cli/bin/kura reconcile apply "Bocchi the Rock!" <token>
 ```
 
 `stage` records intent only. `reconcile plan` previews moves. `reconcile apply`
@@ -90,7 +98,7 @@ moves files and sends displaced media to trash.
 
 ## Deployment
 
-The Docker image runs `kura serve --config=/etc/kura/library-manager.toml`
+The Docker image runs `kura-library-manager --config=/etc/kura/library-manager.toml`
 by default. Its bundled config serves REST on `:8080`, MCP over HTTP on
 `:8081`, and expects mounts at `/library` and `/inbox`.
 

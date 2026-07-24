@@ -15,10 +15,10 @@ Bind safety is the bearer token: any reachable client must present
 `Authorization: Bearer <token>`. Token resolution order:
 
 1. `auth.disabled = true` — auth bypassed entirely (use only when
-   fronting `kura serve` with an authenticating proxy).
+   fronting the library-manager server with an authenticating proxy).
 2. `KURA_TOKEN=<value>` — explicit env var.
 3. `/var/lib/kura/token` — file persisted on first start. If absent,
-   `kura serve` generates a 32-byte hex token, writes it (mode
+   the library-manager server generates a 32-byte hex token, writes it (mode
    `0600`), and logs it once at INFO level. Subsequent restarts read
    the same file and do not regenerate.
 

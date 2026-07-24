@@ -558,7 +558,7 @@ mid-flight, the in-progress claim recorded in `series.json` may
 remain. `kura reconcile recover <selector>` clears it. By default the
 recover verb only breaks claims whose holder process is no longer
 running on the same host; `--force` breaks any claim unconditionally.
-On `kura serve` startup, a one-shot sweep clears same-host stale
+On library-manager server startup, a one-shot sweep clears same-host stale
 claims automatically (see [deployment.md](deployment.md)).
 
 ### Recovery matrix

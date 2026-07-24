@@ -467,10 +467,11 @@ is honest about its edges.
   added later if needed for agent decisioning. Currently, the
   presence of a tracked series implies "wanted."
 - **Cross-process concurrent mutation.** Normal CLI use is already a
-  thin REST client of `kura serve`, so same-host CLI/server overlap is
-  not the target problem. NFS / SMB-mounted libraries are supported
-  under the single-writer constraint; multi-replica deployment and
-  other direct disk-writing peers are explicitly out of scope.
+  thin REST client of the library-manager server, so same-host
+  CLI/server overlap is not the target problem. NFS / SMB-mounted
+  libraries are supported under the single-writer constraint;
+  multi-replica deployment and other direct disk-writing peers are
+  explicitly out of scope.
 - **In-place file replacement detection.** A file replaced in place
   without changing mtime/size is not re-mediainfo'd by `scan`.
   Explicit accepted limitation; full-rehash flag exists for paranoid
@@ -483,8 +484,8 @@ is honest about its edges.
   series; library-wide scan of a 1k-series library will be
   bottlenecked by provider rate limits, not just disk. Bulk-scan
   flows are expected to be operator-initiated or scheduled by
-  `kura serve`'s MCP/REST consumer with appropriate pacing; no
-  in-product rate-limiting affordance for now.
+  an MCP/REST consumer of the library-manager server with appropriate
+  pacing; no in-product rate-limiting affordance for now.
 - **Multi-user, OIDC, scopes, federation.** Auth is a deploy-time
   bearer-token gate, not user identity. Multi-user concerns belong to
   an authenticating proxy (Authelia, oauth2-proxy, Caddy

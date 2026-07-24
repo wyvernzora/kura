@@ -1,7 +1,8 @@
 # CLI reference
 
-`kura <verb>` talks to a running kura serve REST instance. The CLI discovers
-the server from `KURA_SERVER_URL`, defaulting to `http://127.0.0.1:8080`.
+The top-level `cli/` module ships the `kura` binary, a pure REST client.
+`kura <verb>` talks to a running library-manager server discovered through
+`KURA_SERVER_URL`, defaulting to `http://127.0.0.1:8080`.
 
 The server's TOML config owns the library and inbox roots, metadata provider
 settings, and all filesystem writes. Verbs that take a `<selector>` resolve
@@ -143,10 +144,12 @@ kura trash empty <selector>                # permanently delete them
 
 ## Configuration
 
-`kura serve` accepts only `--config`, defaulting to
-`/etc/kura/library-manager.toml`. The file is strict TOML; unknown fields fail
-startup. See [config.example.toml](../config.example.toml) for every field,
-required markers, and defaults.
+The serve-only `kura-library-manager` binary accepts `-config`, defaulting
+to `/etc/kura/library-manager.toml`, and `-version`. Test-only
+`-use-test-stubs` and `-stub-provider-fixture` flags are honored only in
+builds compiled with `-tags=e2e_stub`. The config file is strict TOML;
+unknown fields fail startup. See [config.example.toml](../config.example.toml)
+for every field, required markers, and defaults.
 
 Environment variables remain only where runtime injection is useful:
 

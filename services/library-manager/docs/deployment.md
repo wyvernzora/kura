@@ -1,24 +1,24 @@
 # Deployment
 
-Kura ships as a single Go binary distributed via an Alpine-based Docker
-image. This doc covers the operational rules and the container /
-Kubernetes setup.
+The library manager ships as a serve-only Go binary distributed via an
+Alpine-based Docker image. This doc covers the operational rules and the
+container / Kubernetes setup.
 
 For terminology, see [concepts.md](concepts.md). For the REST surface
-exposed by `kura serve`, see [rest-api.md](rest-api.md).
+exposed by the library-manager server, see [rest-api.md](rest-api.md).
 
 ## Single-writer rule
 
-Kura is **single-writer by design**. Run a single `kura serve`
-instance per library — multi-replica deployments are not supported.
+Kura is **single-writer by design**. Run a single library-manager
+server per library — multi-replica deployments are not supported.
 Kura does not implement the cross-host coordination required to make
 concurrent writers safe on a shared filesystem, and the homelab /
 single-tenant shape it targets does not benefit from horizontal
 scaling. For Kubernetes, use `replicas: 1` with `strategy: Recreate`.
 
 Normal `kura` CLI invocations talk to the server's REST API, so the server
-remains the sole writer. Do not run a second `kura serve` against the same
-library.
+remains the sole writer. Do not run a second library-manager server against
+the same library.
 
 The library may live on local disk, NFS, or SMB. Correctness depends
 on the single-writer rule, not on the underlying filesystem.
@@ -28,14 +28,14 @@ on the single-writer rule, not on the underlying filesystem.
 Bearer token, deploy-gate posture. Resolution order:
 
 1. `auth.disabled = true` in TOML — auth bypassed entirely. Use only when
-   fronting `kura serve` with an authenticating proxy
+   fronting the library-manager server with an authenticating proxy
    (Traefik+Authelia, nginx+oauth2-proxy, Caddy+forward_auth, etc.)
    that handles user identity.
 2. `KURA_TOKEN=<value>` — explicit env var. Recommended for
    Kubernetes (inject from a Secret).
 3. `auth.token_path` (default `/var/lib/kura/token`) — file persisted
    on first start. If absent,
-   `kura serve` generates a 32-byte hex token, writes it (mode
+   the library-manager server generates a 32-byte hex token, writes it (mode
    `0600`), and logs it once at INFO level. Subsequent restarts read
    the same file.
 
@@ -47,20 +47,22 @@ Multi-user, OIDC, scopes, and federation remain proxy responsibility
 The published image is built `FROM alpine:3.24`. `mediainfo`,
 `ca-certificates`, and `tzdata` are installed via `apk` so apk pulls
 the full dependency closure (libmediainfo, libzen, libcurl,
-libtinyxml2, locale data, etc.). The `kura` binary is statically
-linked (`CGO_ENABLED=0`) and runs identically against musl. Alpine's
+libtinyxml2, locale data, etc.). The `kura-library-manager` binary is
+statically linked (`CGO_ENABLED=0`) and runs identically against musl. Alpine's
 busybox shell + coreutils stay in the image so operators can
 `kubectl exec` and inspect filesystem state when something breaks.
 
-`ENTRYPOINT` is `kura`; `CMD` defaults to
-`["serve", "--config=/etc/kura/library-manager.toml"]`, so a pod or
-`docker run` invocation with no `args:` / `command:` starts both
-transports using the bundled config — REST on `:8080` and
-MCP-over-HTTP on `:8081`. Both use `EXPOSE 8080 8081`. The same bearer
-token gates both. Mount a ConfigMap or file at
-`/etc/kura/library-manager.toml` to change settings. Override `args:`
-only to invoke a CLI verb (`args: ["list"]`,
-`args: ["scan", "tvdb:370070"]`).
+`ENTRYPOINT` is `kura-library-manager`; `CMD` defaults to
+`["--config=/etc/kura/library-manager.toml"]`, so a pod or `docker run`
+invocation with no `args:` / `command:` starts both transports using the
+bundled config — REST on `:8080` and MCP-over-HTTP on `:8081`. Both use
+`EXPOSE 8080 8081`. The same bearer token gates both. Mount a ConfigMap
+or file at `/etc/kura/library-manager.toml` to change settings.
+
+The image is serve-only. CLI verbs live in the separate top-level `cli/`
+module, whose `kura` binary is a pure REST client configured through
+`KURA_SERVER_URL` and `KURA_TOKEN`. Do not override the container's
+`args:` to run CLI verbs; they are not part of this image.
 
 If you only want REST (or only MCP), disable the unwanted transport in
 TOML by setting its address to `""`.
@@ -122,8 +124,8 @@ the file path is then ignored.
 
 ### Stuck-claim recovery
 
-`kura serve` runs a one-shot recovery sweep at boot: it iterates the
-index, loads each series's `series.json`, and clears any
+The library-manager server runs a one-shot recovery sweep at boot: it
+iterates the index, loads each series's `series.json`, and clears any
 `inProgress` claim whose holder's PID is gone on the same host. This
 is the auto-healing path for a pod that died mid-`reconcile apply`
 (OOMKill, eviction, rolling update). Cross-host stale claims and live

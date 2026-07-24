@@ -14,6 +14,7 @@ One repo, several services, one version line:
 
 | Component | What it does |
 |---|---|
+| [`cli`](cli/) | `kura` developer/operator CLI: REST client for the suite services; no image |
 | [`services/library-manager`](services/library-manager/) | The library manager: scans, stages, and reconciles an anime library; REST + MCP APIs |
 | [`services/release-indexer`](services/release-indexer/) | Release indexer: durable store + match work queue over raw releases (DMHY, Nyaa crawlers) |
 | [`integrations/n8n`](integrations/n8n/) | Custom n8n nodes for the suite — n8n drives the acquisition pipeline |

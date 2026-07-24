@@ -609,7 +609,7 @@ busy-recovery guidance.
 | `kura_inbox_list` returns `path does not exist` | Subpath doesn't exist under the configured inbox root. | List the parent dir; correct the path. |
 | `kura_stage` rejects whole batch with `invalid_params` (Phase 1) | Trash invariant violated (path is active record / companion / inside a staged record), duplicate episode in batch, duplicate path across batch, or extras destination collision. Error message names the offender. | Fix the offending item and re-submit the whole batch. |
 | `kura_stage` returns success but with `skipped[]` entries (Phase 2) | Per-item probe failed (mediainfo, file vanished mid-flight). The rest of the batch was applied. | Inspect the `code` per skipped row; re-stage the failed items individually. |
-| `kura_reconcile_apply` fails as busy | Prior reconcile crashed and left a claim. | Route user to `kura-library-manager reconcile recover <ref>` (CLI). |
+| `kura_reconcile_apply` fails as busy | Prior reconcile crashed and left a claim. | Route user to `kura reconcile recover <ref>` (CLI). |
 | Series shows `error` in `kura_list` | Library couldn't read the series. | `kura_show(ref)` surfaces the reason; usually requires user intervention. |
 | `kura_list` returns `server_not_ready` | Index is rebuilding (cold start, schema mismatch, or corruption recovery). | Wait a few seconds and retry. Don't tight-loop. |
 | `kura_list` returns `invalid_cursor` | Cursor corrupt, or anchor row removed in a way that can't resume. | Restart from page 1 (no cursor). |
@@ -639,11 +639,11 @@ exactly `maxResults` rows.
 ## 13. What you cannot do via MCP today
 
 - **Inspect or restore trashed files.** CLI or REST operator route
-  (`kura-library-manager trash list/restore/empty`).
+  (`kura trash list/restore/empty`).
 - **Recover a stuck reconcile.** CLI or REST operator route
-  (`kura-library-manager reconcile recover <ref>`).
+  (`kura reconcile recover <ref>`).
 - **Untrack or delete a series.** CLI or REST operator route
-  (`kura-library-manager remove`).
+  (`kura remove`).
 - **Cross-series moves or merges.** Not modeled.
 - **Reach files outside the configured inbox root or a series root.**
   Selectors gate every path-bearing input. To stage a file the agent
