@@ -35,7 +35,7 @@ type Runner struct {
 // optional (pass nil to discard); when non-nil, scan emits skip
 // events at WARN level so operators can grep server logs to find
 // series with problems. preferredLanguages is the user's
-// KURA_PREFERRED_LANGUAGES list (BCP-47 base form) — fed into the
+// configured preferred-languages list (BCP-47 base form) — fed into the
 // searchKey fold each scan; empty disables the translation channel.
 func NewRunner(root string, ref refs.Series, source provider.Source, inspector media.Inspector, now func() time.Time, logger *slog.Logger, preferredLanguages []string) Runner {
 	return Runner{

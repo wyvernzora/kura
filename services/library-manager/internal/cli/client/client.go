@@ -1,5 +1,5 @@
 // Package client is the HTTP client the CLI uses to talk to a running
-// `kura serve --rest`. CLI verbs dispatch through this package instead
+// kura serve REST transport. CLI verbs dispatch through this package instead
 // of importing internal/workflow directly, keeping the server as the
 // normal filesystem writer.
 //
@@ -33,11 +33,6 @@ const (
 	// every request. Same convention as the server's KURA_TOKEN
 	// resolver — operators export it once and both ends pick it up.
 	EnvToken = "KURA_TOKEN"
-
-	// EnvDisableToken suppresses the bearer header on the client
-	// when set truthy. Use for proxy-fronted deploys where the
-	// proxy injects its own auth.
-	EnvDisableToken = "KURA_DISABLE_TOKEN"
 
 	headerOperator = "X-Kura-Operator"
 	headerConfirm  = "X-Confirm"
@@ -77,28 +72,14 @@ func New(baseURL string) *Client {
 
 // FromEnv constructs a Client using getenv(EnvBaseURL) or
 // DefaultBaseURL when unset. Also reads KURA_TOKEN for the bearer
-// header sent on every request; when KURA_DISABLE_TOKEN=1, the
-// header is intentionally suppressed (proxy-fronted deploys where
-// the proxy injects auth).
+// header sent on every request.
 func FromEnv(getenv func(string) string) *Client {
 	if getenv == nil {
 		return New("")
 	}
 	c := New(getenv(EnvBaseURL))
-	if !isTrue(getenv(EnvDisableToken)) {
-		c.BearerToken = strings.TrimSpace(getenv(EnvToken))
-	}
+	c.BearerToken = strings.TrimSpace(getenv(EnvToken))
 	return c
-}
-
-// isTrue mirrors auth.isTrue; duplicated to avoid importing the
-// server-side auth package from the client.
-func isTrue(s string) bool {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "1", "true", "yes", "on":
-		return true
-	}
-	return false
 }
 
 // AsOperator returns a copy of c with the operator gate set. Use for
@@ -240,7 +221,7 @@ func decodeHTTPResponse(resp *http.Response, respBody any) error {
 // a fresh `kura` invocation.
 func discoveryHint(err error, baseURL string) error {
 	if _, ok := errors.AsType[*url.Error](err); ok {
-		return fmt.Errorf("cannot reach kura server at %s — is it running?\n  hint: start `kura serve --rest=:8080` or set %s=<url>\n  underlying: %w",
+		return fmt.Errorf("cannot reach kura server at %s — is it running?\n  hint: start `kura serve --config=/path/to/library-manager.toml` or set %s=<url>\n  underlying: %w",
 			baseURL, EnvBaseURL, err)
 	}
 	return err

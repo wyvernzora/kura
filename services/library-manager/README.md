@@ -27,7 +27,7 @@ you point at it.
 Requirements:
 
 - Go 1.26.3 or newer.
-- `mediainfo` on `PATH`, or `KURA_MEDIAINFO_COMMAND` set to its path.
+- `mediainfo` on `PATH`, or `metadata.mediainfo_command` set in TOML.
 - Docker if you want the container image.
 - Lefthook if you contribute changes.
 
@@ -37,20 +37,23 @@ Build the CLI/server binary:
 make build
 ```
 
-The binary is written to `bin/kura-library-manager`. `make install` also builds the embedded web
-bundle before installing the binary to your Go bin directory.
+The binary is written to `bin/kura-library-manager`. `make install` installs
+the same binary to your Go bin directory.
 
 ## Quick Start
 
-Start one Kura server for the library:
+Copy the documented config and set the two required roots:
 
 ```sh
-export KURA_LIBRARY_ROOT=/media/anime
-export KURA_INBOX_ROOT=/media/inbox
-export KURA_TVDB_KEY=...
-export KURA_DISABLE_TOKEN=1
+cp config.example.toml /tmp/library-manager.toml
+# Edit library.root and library.inbox in /tmp/library-manager.toml.
+```
 
-bin/kura-library-manager serve --rest=:8080
+Then start one Kura server for the library:
+
+```sh
+export KURA_TVDB_KEY=...
+bin/kura-library-manager serve --config=/tmp/library-manager.toml
 ```
 
 Then use the CLI from another shell. It talks to the REST server at
@@ -58,7 +61,7 @@ Then use the CLI from another shell. It talks to the REST server at
 
 ```sh
 export KURA_SERVER_URL=http://127.0.0.1:8080
-export KURA_DISABLE_TOKEN=1
+# Export KURA_TOKEN too unless auth.disabled=true in the server config.
 
 bin/kura-library-manager add "Bocchi the Rock!"
 bin/kura-library-manager scan "Bocchi the Rock!"
@@ -83,17 +86,17 @@ moves files and sends displaced media to trash.
 | CLI | Human/scripted operations against a running server. | [docs/cli.md](docs/cli.md) |
 | REST | Custom UI, automation, and the CLI transport. | [docs/rest-api.md](docs/rest-api.md) |
 | MCP | Local agent workflows with no permanent-delete tools. | [docs/mcp.md](docs/mcp.md) |
-| Web UI | Browser dashboard served by `kura serve --rest`. | [docs/deployment.md](docs/deployment.md) |
+| Web UI | Browser dashboard using the configured REST transport. | [docs/deployment.md](docs/deployment.md) |
 
 ## Deployment
 
-The Docker image runs `kura serve --rest=:8080 --mcp-http=:8081` by default.
+The Docker image runs `kura serve --config=/etc/kura/library-manager.toml`
+by default. Its bundled config serves REST on `:8080`, MCP over HTTP on
+`:8081`, and expects mounts at `/library` and `/inbox`.
 
 ```sh
 docker build --build-arg VERSION=v0.5.1 -t kura:v0.5.1 .
 docker run --rm \
-  -e KURA_LIBRARY_ROOT=/library \
-  -e KURA_INBOX_ROOT=/inbox \
   -e KURA_TVDB_KEY=... \
   -v /media/anime:/library \
   -v /downloads:/inbox \

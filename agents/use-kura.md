@@ -64,7 +64,7 @@ are accepted as input.
 | `kura_aliases` | None. Returns provider titles plus user aliases for a tracked series. |
 | `kura_list` | None. Returns one page of series with summary state. Paginated — default 100 rows/page, max 1000. See §12. |
 | `kura_show` | None. Returns full state of one series. |
-| `kura_inbox_list` | None. Lists files under `KURA_INBOX_ROOT` so you can discover what's available to stage. Structured output, mtime-desc sorted. See §4.d + §13. |
+| `kura_inbox_list` | None. Lists files under the configured inbox root so you can discover what's available to stage. Structured output, mtime-desc sorted. See §4.d + §13. |
 | `kura_add` | Creates a new tracked series. Empty directory. |
 | `kura_import` | Marks an existing untracked directory as tracked. |
 | `kura_stage` | Queues a batch of staging changes against one series: episode stages, trash items, extras placements. Files are **not** moved until reconcile. **Async.** See §4.d. |
@@ -128,7 +128,7 @@ until the job's `state` is terminal (`succeeded`, `failed`, or
 11. **User references to inbox locations are `inbox:` selectors.**
     When the user says "look at inbox/pending", "the bdrip dir
     under inbox", "inbox/foo/bar", "the pending folder", etc.,
-    they mean the path under `KURA_INBOX_ROOT` — i.e. the
+    they mean the path under the configured inbox root — i.e. the
     `inbox:<rel>` selector format kura tools already accept. Pass
     the relative path to `kura_inbox_list(path=<rel>)` to scope a
     listing to that subdir, and use `inbox:<rel>/...` selectors
@@ -538,7 +538,7 @@ Escalate to the user only when:
   conventionally. Bulk discovery and refresh.
 - **Stage + reconcile** is for any case scan can't (or shouldn't)
   handle on its own:
-  - File lives in the inbox (`KURA_INBOX_ROOT`) and you want to
+  - File lives in the configured inbox and you want to
     install it. Discover via `kura_inbox_list`, stage with `inbox:`
     selector.
   - File is in the series directory but in the wrong subdirectory or
@@ -606,7 +606,7 @@ busy-recovery guidance.
 | `kura_stage` errors with episode-already-exists | Slot already has a recorded file at a different path. | Confirm with user, then re-call with `replace: true` on the episode item. |
 | `kura_stage` rejects with "expected inbox: scheme" / "expected series: scheme" | Selector type wrong for the field. Episode `media` accepts `inbox:` normally and `series:` only for in-place metadata override; episode companions and extras `source` need `inbox:` selectors; trash `path` + companions need `series:` selectors. | Re-build the selector with the right scheme. |
 | `kura_stage` rejects with "missing scheme" / "selector escapes root" / "leading slash not allowed" | Bare path or absolute path passed where a selector was expected. Selectors look like `inbox:<rel>` or `series:<rel>`, never `/abs/path`. | Discover the right selector via `kura_inbox_list`; rebuild and retry. |
-| `kura_inbox_list` returns `path does not exist` | Subpath doesn't exist under `KURA_INBOX_ROOT`. | List the parent dir; correct the path. |
+| `kura_inbox_list` returns `path does not exist` | Subpath doesn't exist under the configured inbox root. | List the parent dir; correct the path. |
 | `kura_stage` rejects whole batch with `invalid_params` (Phase 1) | Trash invariant violated (path is active record / companion / inside a staged record), duplicate episode in batch, duplicate path across batch, or extras destination collision. Error message names the offender. | Fix the offending item and re-submit the whole batch. |
 | `kura_stage` returns success but with `skipped[]` entries (Phase 2) | Per-item probe failed (mediainfo, file vanished mid-flight). The rest of the batch was applied. | Inspect the `code` per skipped row; re-stage the failed items individually. |
 | `kura_reconcile_apply` fails as busy | Prior reconcile crashed and left a claim. | Route user to `kura-library-manager reconcile recover <ref>` (CLI). |
@@ -645,7 +645,7 @@ exactly `maxResults` rows.
 - **Untrack or delete a series.** CLI or REST operator route
   (`kura-library-manager remove`).
 - **Cross-series moves or merges.** Not modeled.
-- **Reach files outside `KURA_INBOX_ROOT` or a series root.**
+- **Reach files outside the configured inbox root or a series root.**
   Selectors gate every path-bearing input. To stage a file the agent
   has access to but kura doesn't, the user moves it into the inbox
   first.

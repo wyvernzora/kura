@@ -1,6 +1,7 @@
 # REST API
 
-`kura serve --rest=:8080` runs the REST transport. All endpoints are
+Set `server.rest` in the library-manager TOML config to run the REST
+transport. All endpoints are
 under `/api/v1/`.
 
 For underlying terms, see [concepts.md](concepts.md). For the
@@ -13,7 +14,7 @@ operations each endpoint implements, see
 Bind safety is the bearer token: any reachable client must present
 `Authorization: Bearer <token>`. Token resolution order:
 
-1. `KURA_DISABLE_TOKEN=1` — auth bypassed entirely (use only when
+1. `auth.disabled = true` — auth bypassed entirely (use only when
    fronting `kura serve` with an authenticating proxy).
 2. `KURA_TOKEN=<value>` — explicit env var.
 3. `/var/lib/kura/token` — file persisted on first start. If absent,
@@ -30,13 +31,14 @@ Multi-user, OIDC, scopes, and federation remain proxy responsibility.
 
 ## CORS
 
-Denied by default. Pass `--rest-cors-origin=https://your-ui.example`
-(repeatable) to allow specific browser origins.
+Denied by default. Set `server.rest_cors_origins` to allow specific
+browser origins.
 
-```sh
-kura serve --rest=:8080                                   # REST only
-kura serve --rest=:8080 --mcp-stdio                       # REST + MCP stdio
-kura serve --rest=:8080 --mcp-http=:8081 --rest-cors-origin=https://ui.local
+```toml
+[server]
+rest = ":8080"
+mcp_http = ":8081"
+rest_cors_origins = ["https://ui.local"]
 ```
 
 ## Operator gating
@@ -150,10 +152,10 @@ stream emits `progress` events while the job runs and a terminal
 event with the result. The stream caps at 30 minutes and polls every
 250 ms internally.
 
-`KURA_JOB_TIMEOUT` bounds individual job duration. Unset means no
-timeout. Per-job forensic logs are written to
+`jobs.timeout` bounds individual job duration; `"0s"` means no timeout.
+Per-job forensic logs are written to
 `<library>/.kura/jobs/<jobId>.jsonl` and pruned after
-`KURA_LOG_RETENTION_DAYS` days (default 7).
+`sweep.log_retention_days` days (default 7).
 
 ## Version surfacing
 

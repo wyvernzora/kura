@@ -64,19 +64,20 @@ RUN apk add --no-cache \
 # bootstrap can write the persisted token file.
 RUN addgroup -S -g ${KURA_GID} kura \
  && adduser -S -D -H -u ${KURA_UID} -G kura kura \
- && mkdir -p /var/lib/kura \
+ && mkdir -p /etc/kura /var/lib/kura \
  && chown -R ${KURA_UID}:${KURA_GID} /var/lib/kura
 
 # kura binary. Static (CGO_ENABLED=0) so musl-vs-glibc doesn't matter.
 COPY --from=go-build /out/kura-library-manager /usr/local/bin/kura-library-manager
+COPY config.example.toml /etc/kura/library-manager.toml
 
 # Volume for the persisted bearer token. Mount a PVC / Docker volume
 # to retain across pod restarts, or inject KURA_TOKEN from a Secret to
 # bypass the file path entirely.
 VOLUME ["/var/lib/kura"]
 
-# Default bind ports: REST on 8080, MCP-over-HTTP on 8081. Adjust
-# if you override CMD with different `--rest=:NNNN` / `--mcp-http=:NNNN`.
+# Default bind ports: REST on 8080, MCP-over-HTTP on 8081. Adjust the
+# mounted config if you bind different ports.
 EXPOSE 8080 8081
 
 USER ${KURA_UID}:${KURA_GID}
@@ -88,10 +89,7 @@ USER ${KURA_UID}:${KURA_GID}
 
 ENTRYPOINT ["/usr/local/bin/kura-library-manager"]
 
-# Default command: serve both REST (8080) and MCP-over-HTTP (8081) —
-# the primary mode for the image. Override via pod `args:` (or
-# `docker run <image> <verb>`) to invoke a CLI verb instead. Ports are
-# hard-coded to match EXPOSE and to give k8s livenessProbe a stable
-# target; bind to different addresses by overriding args. The same
-# bearer token gates both transports (see docs/rest-api.md).
-CMD ["serve", "--rest=:8080", "--mcp-http=:8081"]
+# The bundled config serves REST and MCP-over-HTTP and expects library
+# and inbox mounts at /library and /inbox. Mount a replacement at
+# /etc/kura/library-manager.toml for deployment-specific settings.
+CMD ["serve", "--config=/etc/kura/library-manager.toml"]

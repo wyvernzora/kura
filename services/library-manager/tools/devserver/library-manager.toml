@@ -1,0 +1,15 @@
+[server]
+rest = "0.0.0.0:8080"
+mcp_http = "0.0.0.0:8081"
+rest_cors_origins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]
+log_level = "debug"
+
+[library]
+root = "/mnt/library"
+inbox = "/mnt/inbox"
+
+[auth]
+disabled = true

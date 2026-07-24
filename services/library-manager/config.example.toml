@@ -1,0 +1,116 @@
+# Library-manager runtime configuration.
+#
+# The file is decoded strictly: unknown tables and fields fail startup.
+# Secrets do not belong here. Supply KURA_TVDB_KEY and, when desired,
+# KURA_TOKEN through the environment.
+
+# This table and all its fields are optional.
+[server]
+
+# Optional; default = ":8080". Set to "" to disable REST.
+rest = ":8080"
+
+# Optional; default = ":8081". Set to "" to disable MCP over HTTP.
+mcp_http = ":8081"
+
+# Optional; default = false.
+mcp_stdio = false
+
+# Optional; default = []. Use ["*"] to allow any Origin.
+rest_cors_origins = []
+
+# Optional; default = "". Writes the resolved REST port after binding.
+# Primarily useful with an ephemeral REST address ending in ":0".
+rest_port_file = ""
+
+# Optional; default = "info". Allowed: debug, info, warn, error.
+log_level = "info"
+
+# Optional; default = "10s".
+shutdown_timeout = "10s"
+
+# Optional; default = "" (inherit the process umask).
+# Quote the octal value so TOML preserves leading zeroes.
+umask = ""
+
+
+# This table is required.
+[library]
+
+# Required. Absolute root containing tracked series directories.
+root = "/library"
+
+# Required. Absolute download-inbox root. Must exist, be a directory,
+# and be disjoint from library.root.
+inbox = "/inbox"
+
+# Optional; default = 7. Set to 0 to disable the post-finale airing tail.
+airing_tail_days = 7
+
+
+# This table and all its fields are optional.
+[metadata]
+
+# Optional; default = []. Ordered BCP-47 language tags.
+preferred_languages = []
+
+# Optional; default = "mediainfo".
+mediainfo_command = "mediainfo"
+
+# Optional; default = "" (the production TVDB API).
+# Useful for a local mock; the API key still comes from KURA_TVDB_KEY.
+tvdb_url = ""
+
+
+# This table and all its fields are optional.
+[auth]
+
+# Optional; default = false. Disable only behind an authenticating proxy
+# or in a loopback-only development environment.
+disabled = false
+
+# Optional; default = "/var/lib/kura/token".
+token_path = "/var/lib/kura/token"
+
+
+# This table and all its fields are optional.
+[jobs]
+
+# Optional; default = "0s" (no per-job deadline).
+timeout = "0s"
+
+# Optional; default = "30m". Set to "0s" to disable terminal-job eviction.
+retention = "30m"
+
+# Optional; default = "5m". Set to "0s" to disable the reaper loop.
+reaper_interval = "5m"
+
+
+# This table and all its fields are optional.
+[index]
+
+# Optional; default = "2s". Set to "0s" to disable probing.
+probe_interval = "2s"
+
+# Optional; default = "1h". Set to "0s" to disable periodic rebuilding.
+rebuild_interval = "1h"
+
+# Optional; default = "3s". Set to "0s" for immediate rebuilds.
+library_root_debounce = "3s"
+
+
+# This table and all its fields are optional.
+[sweep]
+
+# Optional; default = "1h".
+interval = "1h"
+
+# Optional; default = 7.
+log_retention_days = 7
+
+
+# This table and all its fields are optional.
+[coordination]
+
+# Optional; default = 1. Number of retries after the initial CAS attempt.
+conflict_retries = 1

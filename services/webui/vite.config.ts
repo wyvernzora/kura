@@ -1,9 +1,8 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-
+import tailwindcss from '@tailwindcss/vite';
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
 // Polling watcher is mandatory inside Docker on macOS / Windows hosts:
@@ -17,14 +16,12 @@ import { defineConfig } from 'vite';
 const inDocker = existsSync('/.dockerenv');
 const usePolling =
   process.env.KURA_DISABLE_POLLING !== '1' &&
-  (inDocker ||
-    process.env.CHOKIDAR_USEPOLLING === '1' ||
-    process.env.VITE_USE_POLLING === '1');
+  (inDocker || process.env.CHOKIDAR_USEPOLLING === '1' || process.env.VITE_USE_POLLING === '1');
 
 // Vite proxy keeps browser requests same-origin in dev (browser hits :5173,
 // Vite forwards /api to :8080). No CORS dance, no token rewrite — bearer
 // auth flows through unchanged when token mode is enabled, and works
-// transparently in KURA_DISABLE_TOKEN / proxy mode.
+// transparently when auth is disabled in the library-manager config.
 export default defineConfig({
   plugins: [
     TanStackRouterVite({

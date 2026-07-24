@@ -109,7 +109,7 @@ type StagedExtraItem struct {
 }
 
 // Episode is the persisted shape for one episode slot. PreferredTitle
-// follows the operator's KURA_PREFERRED_LANGUAGES order; falls back to
+// follows the operator's configured preferred-language order; falls back to
 // CanonicalTitle when no provider translation exists. CanonicalTitle is
 // the provider's default-language episode name.
 type Episode struct {
@@ -345,7 +345,7 @@ func (s *Series) RemoveUserAlias(alias textnorm.NFCString) bool {
 // path passes nil for both — TVDB material lands back on the next
 // scan.
 //
-// `prefs` is the user's KURA_PREFERRED_LANGUAGES (BCP-47 base form).
+// prefs is the user's configured language preference (BCP-47 base form).
 // Empty list disables the translation channel.
 func (s *Series) RecomputeSearchKey(
 	prefs []string,

@@ -1,9 +1,9 @@
-# permissions_umask_0007: KURA_UMASK=0007 should keep Kura-managed
+# permissions_umask_0007: server.umask=0007 should keep Kura-managed
 # library artifacts group-writable while removing all "other" bits.
 # A downloader-created 0600 source media file should land as 0660
 # after reconcile apply.
 # kura_e2e_unix
-# kura_e2e_env KURA_UMASK=0007
+# kura_e2e_config server.umask=0007
 
 kura_add stub:1001
 kura_assert_lib_mode 770 .kura

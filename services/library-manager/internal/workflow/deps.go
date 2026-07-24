@@ -29,9 +29,8 @@ type Deps struct {
 	LibRoot string
 
 	// InboxRoot is the absolute filesystem path to the inbox where new
-	// media drops before being staged into the library. Resolved from
-	// KURA_INBOX_ROOT at startup. Used by inbox.Selector resolution and
-	// the inbox listing workflow.
+	// media drops before being staged into the library. Used by
+	// inbox.Selector resolution and the inbox listing workflow.
 	InboxRoot string
 
 	// Index is the in-memory metadata-ref → series-ref cache loaded at
@@ -68,16 +67,20 @@ type Deps struct {
 	// CLI runs leave it nil; kura serve sets it.
 	Logger *slog.Logger
 
-	// PreferredLanguages mirrors KURA_PREFERRED_LANGUAGES (BCP-47 base
-	// form, ordered). Used by the searchkey fold to gate which
-	// translated titles flow into a series's `searchKey` blob. Empty
-	// disables the translation channel — only ASCII aliases + user
-	// aliases contribute to searchKey.
+	// PreferredLanguages contains ordered BCP-47 base forms. Used by the
+	// searchkey fold to gate which translated titles flow into a series's
+	// `searchKey` blob. Empty disables the translation channel — only
+	// ASCII aliases + user aliases contribute to searchKey.
 	PreferredLanguages []string
 
 	// RowBuildOptions controls list/show row projection policy. Nil uses
 	// Kura defaults; cmd/kura-library-manager sets this from deploy-time config.
 	RowBuildOptions *indexfile.BuildOptions
+
+	// ConflictAttempts is the total number of attempts for short CAS
+	// mutations: one initial attempt plus configured retries. Zero uses
+	// coord.DefaultMaxAttempts.
+	ConflictAttempts int
 }
 
 func rowBuildOptions(deps Deps) indexfile.BuildOptions {
@@ -85,6 +88,13 @@ func rowBuildOptions(deps Deps) indexfile.BuildOptions {
 		return indexfile.DefaultBuildOptions()
 	}
 	return *deps.RowBuildOptions
+}
+
+func conflictAttempts(deps Deps) int {
+	if deps.ConflictAttempts < 1 {
+		return coord.DefaultMaxAttempts
+	}
+	return deps.ConflictAttempts
 }
 
 // logFileMove emits one structured log line per filesystem move

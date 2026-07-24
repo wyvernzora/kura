@@ -27,8 +27,7 @@ type Config struct {
 	Interval time.Duration
 	// LogRetention is the age threshold for deleting forensic JSONLs
 	// (mtime), shared by reconcile plan logs and per-job history
-	// logs. Default 7d. Configured via KURA_LOG_RETENTION_DAYS at
-	// the serve binary boundary.
+	// logs. Default 7d. Configured at the serve binary boundary.
 	LogRetention time.Duration
 	// Registry, when non-nil, lets the sweep skip files that belong
 	// to currently-running jobs. Tests pass nil.

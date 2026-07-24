@@ -68,7 +68,7 @@ func mutateUserAliases[T any](
 	normalized := normalizeUserAliasInputs(rawInputs)
 	var out response.UserAliasList
 	err := deps.Coordinator.WithSeries(ctx, ref, func() error {
-		return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
+		return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 			model, err := seriesfile.Load(deps.LibRoot, ref)
 			if err != nil {
 				return err

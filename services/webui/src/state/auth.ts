@@ -4,7 +4,7 @@ import { create } from 'zustand';
  * Auth mode — the state machine documented in scratch/design/web-ui.md
  * (Auth modes + handshake). The two "happy" terminal states are
  * `authenticated-token` (bearer-mode kura) and `authenticated-anon`
- * (KURA_DISABLE_TOKEN or behind an authenticating proxy). The UI
+ * (auth.disabled in the server config, or behind an authenticating proxy). The UI
  * distinguishes them so the fetch wrapper knows whether to attach a
  * bearer header, and so destructive ops can hide themselves under a
  * proxy.

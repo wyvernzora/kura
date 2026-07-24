@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,41 +19,41 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// buildSourceFromFlags constructs the metadata source from the global CLI flags.
-func buildSourceFromFlags(rt *runContext, flags *cli) (provider.Source, error) {
+func buildMetadataSource(rt *runContext, cfg config.Config) (provider.Source, error) {
 	return config.BuildMetadataSource(config.MetadataSourceOptions{
-		TVDBBaseURL: flags.TVDBBaseURL,
-		Getenv:      rt.Getenv,
+		APIKey:             rt.Getenv("KURA_TVDB_KEY"),
+		TVDBURL:            cfg.Metadata.TVDBURL,
+		PreferredLanguages: cfg.Metadata.PreferredLanguages,
 	})
 }
 
 // buildDepsAsyncIndex constructs Deps without blocking on the index
 // rebuild. Used by serve to surface KindServerNotReady to early
 // requests instead of delaying transport startup.
-func buildDepsAsyncIndex(rt *runContext, coordinator coord.Coordinator, logger *slog.Logger) (workflow.Deps, error) {
-	libRoot := rt.Getenv("KURA_LIBRARY_ROOT")
+func buildDepsAsyncIndex(
+	rt *runContext,
+	cfg config.Config,
+	coordinator coord.Coordinator,
+	logger *slog.Logger,
+) (workflow.Deps, error) {
+	libRoot := cfg.Library.Root
 	if err := validateLibraryRoot(libRoot); err != nil {
 		return workflow.Deps{}, err
 	}
-	rowBuildOptions := rowBuildOptionsFromEnv(rt.Getenv)
+	rowBuildOptions := indexfile.DefaultBuildOptions()
+	rowBuildOptions.AiringTailDays = cfg.Library.AiringTailDays
 	index, err := loadOrRebuildIndex(rt.Context, libRoot, rowBuildOptions, coordinator.WithIndex, logger)
 	if err != nil {
 		return workflow.Deps{}, err
 	}
 	inspector := mediainfo.New()
-	if cmd := rt.Getenv("KURA_MEDIAINFO_COMMAND"); cmd != "" {
-		inspector.Command = cmd
-	}
+	inspector.Command = cfg.Metadata.MediaInfoCommand
 	provider := workflow.NewProviderFactory(func() (provider.Source, error) {
-		return buildSourceFromFlags(rt, rt.flags)
+		return buildMetadataSource(rt, cfg)
 	})
-	// Placeholder registry: buildServeDeps replaces it with a long-lived
-	// registry configured from KURA_JOB_* before transports start.
+	// Placeholder registry: buildServeDeps replaces it with the
+	// configured long-lived registry before transports start.
 	registry := jobs.NewRegistry(rt.Context, jobs.Config{}, nil)
-	prefs, err := config.ParsePreferredLanguages(rt.Getenv("KURA_PREFERRED_LANGUAGES"))
-	if err != nil {
-		return workflow.Deps{}, err
-	}
 	return workflow.Deps{
 		LibRoot:            libRoot,
 		Index:              index,
@@ -63,14 +62,15 @@ func buildDepsAsyncIndex(rt *runContext, coordinator coord.Coordinator, logger *
 		Inspector:          inspector,
 		Now:                time.Now,
 		Jobs:               registry,
-		PreferredLanguages: prefs.Tags(),
+		PreferredLanguages: cfg.Metadata.PreferredLanguages,
 		RowBuildOptions:    &rowBuildOptions,
+		ConflictAttempts:   cfg.Coordination.ConflictRetries + 1,
 	}, nil
 }
 
 func validateLibraryRoot(root string) error {
 	if root == "" {
-		return errors.New("KURA_LIBRARY_ROOT is required")
+		return errors.New("library.root is required")
 	}
 	info, err := os.Stat(root)
 	if errors.Is(err, os.ErrNotExist) {
@@ -91,17 +91,17 @@ func validateLibraryRoot(root string) error {
 // the server's REST surface.
 func validateInboxRoot(root string) error {
 	if root == "" {
-		return errors.New("KURA_INBOX_ROOT is required")
+		return errors.New("library.inbox is required")
 	}
 	info, err := os.Stat(root)
 	if errors.Is(err, os.ErrNotExist) {
-		return errors.New("KURA_INBOX_ROOT does not exist")
+		return errors.New("library.inbox does not exist")
 	}
 	if err != nil {
 		return err
 	}
 	if !info.IsDir() {
-		return errors.New("KURA_INBOX_ROOT is not a directory")
+		return errors.New("library.inbox is not a directory")
 	}
 	return nil
 }
@@ -120,13 +120,13 @@ func validateRootsDisjoint(libRoot, inboxRoot string) error {
 		return err
 	}
 	if lib == inbox {
-		return errors.New("KURA_LIBRARY_ROOT and KURA_INBOX_ROOT must be distinct paths")
+		return errors.New("library.root and library.inbox must be distinct paths")
 	}
 	if hasPathPrefix(inbox, lib) {
-		return errors.New("KURA_INBOX_ROOT must not live inside KURA_LIBRARY_ROOT")
+		return errors.New("library.inbox must not live inside library.root")
 	}
 	if hasPathPrefix(lib, inbox) {
-		return errors.New("KURA_LIBRARY_ROOT must not live inside KURA_INBOX_ROOT")
+		return errors.New("library.root must not live inside library.inbox")
 	}
 	return nil
 }
@@ -181,18 +181,4 @@ func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.Buil
 	}
 	_ = os.Remove(paths.LegacyIndexFile(libRoot))
 	return index, nil
-}
-
-func rowBuildOptionsFromEnv(getenv func(string) string) indexfile.BuildOptions {
-	opts := indexfile.DefaultBuildOptions()
-	raw := strings.TrimSpace(getenv("KURA_AIRING_TAIL_DAYS"))
-	if raw == "" {
-		return opts
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil || n < 0 {
-		return opts
-	}
-	opts.AiringTailDays = n
-	return opts
 }

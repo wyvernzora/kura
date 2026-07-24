@@ -1,10 +1,10 @@
 # CLI reference
 
-`kura <verb>` talks to a running `kura serve --rest` instance. The CLI discovers
+`kura <verb>` talks to a running kura serve REST instance. The CLI discovers
 the server from `KURA_SERVER_URL`, defaulting to `http://127.0.0.1:8080`.
 
-The server owns `KURA_LIBRARY_ROOT`, `KURA_INBOX_ROOT`, metadata provider
-configuration, and all filesystem writes. Verbs that take a `<selector>` resolve
+The server's TOML config owns the library and inbox roots, metadata provider
+settings, and all filesystem writes. Verbs that take a `<selector>` resolve
 text terms or `tvdb:<id>` refs through the server; supplying a metadata ref
 bypasses fuzzy search.
 
@@ -143,18 +143,17 @@ kura trash empty <selector>                # permanently delete them
 
 ## Configuration
 
-| Env / flag | Purpose |
-|------------|---------|
+`kura serve` accepts only `--config`, defaulting to
+`/etc/kura/library-manager.toml`. The file is strict TOML; unknown fields fail
+startup. See [config.example.toml](../config.example.toml) for every field,
+required markers, and defaults.
+
+Environment variables remain only where runtime injection is useful:
+
+| Environment variable | Purpose |
+|----------------------|---------|
 | `KURA_SERVER_URL` | REST server URL for CLI commands. Default `http://127.0.0.1:8080`. |
-| `KURA_TOKEN` / `KURA_DISABLE_TOKEN` | Bearer token behavior for both server and CLI. See [deployment.md](deployment.md). |
-| `KURA_LIBRARY_ROOT` | Server-side library root directory (required by `kura serve`). |
-| `KURA_INBOX_ROOT` | Server-side inbox root for staged downloads (required by `kura serve`). Must be disjoint from `KURA_LIBRARY_ROOT`. |
-| `KURA_TVDB_KEY` | Server-side TVDB API key. Required by provider-needing verbs (`add`, `import`, `scan`, `resolve`). |
-| `KURA_PREFERRED_LANGUAGES` | Server-side comma-separated BCP-47 preferred metadata languages. |
-| `KURA_MEDIAINFO_COMMAND` | Server-side override for the `mediainfo` executable path. |
-| `KURA_AIRING_TAIL_DAYS` | Server-side integer days after a cour's last episode airs that the series still counts as airing. Default `7`; `0` disables the tail; empty / invalid / negative values fall back to default. |
-| `KURA_HOST_ID` | Server-side override for claim holder identity. Set in container deployments to a stable value. |
-| `KURA_UMASK` | Server-side process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. |
-| `KURA_LOG_RETENTION_DAYS` | Server-side days to retain forensic JSONL logs (reconcile plan + per-job). Default `7`. |
-| `KURA_JOB_TIMEOUT` | Server-side per-job deadline duration (e.g. `60m`). Unset means no timeout. |
-| `--tvdb-base-url` | Server-side TVDB API base URL override (test/dev). |
+| `KURA_TOKEN` | Server bearer secret and CLI bearer header. See [deployment.md](deployment.md). |
+| `KURA_TVDB_KEY` | Server TVDB API key. Required lazily by provider-needing verbs (`add`, `import`, `scan`, `resolve`). |
+| `KURA_HOST_ID` | Server claim-holder identity. Set to a stable value in container deployments. |
+| `KURA_LIBRARY_ROOT` | Used only by the local `path` CLI command to translate a `library:` selector to an absolute path. |

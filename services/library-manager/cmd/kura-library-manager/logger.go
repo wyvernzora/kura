@@ -16,10 +16,10 @@ import (
 // redirects, systemd journal); tinted human format with relative
 // timestamps when stderr is an interactive terminal.
 //
-// Level is read from KURA_LOG_LEVEL (debug/info/warn/error). Default
-// info. Unknown values fall back to info silently — no panic at boot.
-func newServerLogger(w io.Writer, getenv func(string) string) *slog.Logger {
-	level := parseLogLevel(getenv("KURA_LOG_LEVEL"))
+// Level is supplied by the validated serve config. Unknown values
+// still fall back to info so this helper remains safe in unit tests.
+func newServerLogger(w io.Writer, rawLevel string) *slog.Logger {
+	level := parseLogLevel(rawLevel)
 	if file, ok := w.(*os.File); ok && isatty.IsTerminal(file.Fd()) {
 		return slog.New(tint.NewHandler(w, &tint.Options{
 			Level:      level,

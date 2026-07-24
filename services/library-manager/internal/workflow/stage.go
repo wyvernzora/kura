@@ -86,13 +86,13 @@ type ExtraStageItem struct {
 // hand the ID off to a polling client.
 //
 // Wrapped in coord.WithSeries with caller-side coord.RetryOnConflict:
-// a peer CAS-conflict triggers retries up to KURA_CONFLICT_RETRIES+1
+// a peer CAS conflict retries up to the configured attempt budget
 // before surfacing.
 func Stage(ctx context.Context, deps Deps, in StageInput) *jobs.Job[response.StageResult] {
 	return jobs.Submit(deps.Jobs, ctx, jobs.KindStage, in.Ref, func(jobCtx context.Context) (response.StageResult, error) {
 		var out response.StageResult
 		err := deps.Coordinator.WithSeries(jobCtx, in.Ref, func() error {
-			return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
+			return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 				result, runErr := stageBatch(jobCtx, deps, in)
 				if runErr != nil {
 					return runErr

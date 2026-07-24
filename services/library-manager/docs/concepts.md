@@ -352,7 +352,7 @@ are real.
   via CLI. Structural property, not convention.
 - **Single binary, multiple surfaces.** Everything ships as `kura`.
   CLI verbs run as `kura <verb>`. Long-running surfaces run as
-  `kura serve --mcp-stdio` / `--mcp-http=:port` / `--rest=:port`;
+  transports enabled in the library-manager TOML config;
   flags can combine to host multiple transports under one process
   sharing one Coordinator + index cache.
 - **Single writer at any moment.** Kura is built for single-replica
@@ -377,7 +377,7 @@ are real.
   and renders inline (operator sees no behavioral change). MCP / REST
   return a `JobHandle` to the client and let it poll `kura_job_status`
   / `GET /jobs/{id}`. Same registry, same lifecycle, same
-  `KURA_JOB_TIMEOUT` bounds runaway operations across all surfaces.
+  `jobs.timeout` bounds runaway operations across all surfaces.
 
 ## Hard invariants
 
@@ -447,9 +447,9 @@ optional series ref, status (`running` / `succeeded` / `failed`),
 result, end time, and a latest progress event. The registry retains
 recently-terminal jobs for status polling. Per-job forensic logs are
 written to `<library>/.kura/jobs/<ulid>.jsonl` and pruned by the sweep
-goroutine after `KURA_LOG_RETENTION_DAYS` days (default 7).
+goroutine after `sweep.log_retention_days` days (default 7).
 
-`KURA_JOB_TIMEOUT` bounds individual job duration. Unset (or zero)
+`jobs.timeout` bounds individual job duration. `"0s"`
 means no timeout.
 
 ## Out of scope

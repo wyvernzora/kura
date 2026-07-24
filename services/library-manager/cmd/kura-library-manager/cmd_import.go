@@ -10,7 +10,7 @@ import (
 )
 
 type importCmd struct {
-	Dirname  string   `arg:"" required:"" help:"Existing directory below KURA_LIBRARY_ROOT."`
+	Dirname  string   `arg:"" required:"" help:"Existing directory below the configured library root."`
 	JSON     bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Force    bool     `name:"force" help:"Replace existing .kura/series.json while preserving other .kura contents."`
 	Ordering string   `name:"ordering" help:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`

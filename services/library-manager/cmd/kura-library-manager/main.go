@@ -5,16 +5,8 @@ import (
 	"os"
 )
 
-// cli is the kong root binding for `kura`. Hidden global flags (kong
-// `hidden:""`) live here at the root rather than on individual command
-// structs so they apply to every subcommand uniformly without
-// per-command duplication. Add new global toggles here and document
-// them in this comment.
+// cli is the kong root binding for kura-library-manager.
 type cli struct {
-	// TVDBBaseURL overrides the TVDB API base URL. Hidden from --help
-	// output; intended for tests and local-mock setups.
-	TVDBBaseURL string `name:"tvdb-base-url" hidden:"" help:"Override the TVDB API base URL."`
-
 	Add       addCmd       `cmd:"" help:"Add a brand new series to the library."`
 	Alias     aliasCmd     `cmd:"" help:"Manage user-coined search aliases for a series."`
 	Import    importCmd    `cmd:"" help:"Import an existing directory as a tracked series."`

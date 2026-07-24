@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"testing"
 
@@ -82,7 +81,7 @@ func runScenario(t *testing.T, path string) {
 
 	libRoot := t.TempDir()
 	inboxRoot := t.TempDir()
-	b := startDaemon(t, libRoot, inboxRoot, config.env)
+	b := startDaemon(t, libRoot, inboxRoot, config.umask)
 	eng := newEngine(t, b)
 
 	workdir := inboxRoot
@@ -128,7 +127,7 @@ func runScenario(t *testing.T, path string) {
 }
 
 type scenarioConfig struct {
-	env      []string
+	umask    string
 	unixOnly bool
 }
 
@@ -137,23 +136,26 @@ func parseScenarioConfig(scriptBody string) (scenarioConfig, error) {
 	scanner := bufio.NewScanner(strings.NewReader(scriptBody))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		const envPrefix = "# kura_e2e_env "
-		if !strings.HasPrefix(line, envPrefix) {
+		const configPrefix = "# kura_e2e_config "
+		if !strings.HasPrefix(line, configPrefix) {
 			if line == "# kura_e2e_unix" {
 				config.unixOnly = true
 			}
 			continue
 		}
-		entry := strings.TrimSpace(strings.TrimPrefix(line, envPrefix))
-		if entry == "" || !strings.Contains(entry, "=") {
-			return scenarioConfig{}, fmt.Errorf("invalid kura_e2e_env directive %q", line)
+		entry := strings.TrimSpace(strings.TrimPrefix(line, configPrefix))
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || strings.TrimSpace(key) != "server.umask" || strings.TrimSpace(value) == "" {
+			return scenarioConfig{}, fmt.Errorf("invalid kura_e2e_config directive %q", line)
 		}
-		config.env = append(config.env, entry)
+		if config.umask != "" {
+			return scenarioConfig{}, fmt.Errorf("duplicate server.umask directive")
+		}
+		config.umask = strings.TrimSpace(value)
 	}
 	if err := scanner.Err(); err != nil {
 		return scenarioConfig{}, err
 	}
-	slices.Sort(config.env)
 	return config, nil
 }
 

@@ -1,9 +1,9 @@
-# permissions_umask_0027: KURA_UMASK=0027 should reduce the same
+# permissions_umask_0027: server.umask=0027 should reduce the same
 # group-friendly requested modes to stricter owner-write-only modes.
 # This guards that chmod/normalization still respects the deploy-time
 # mask instead of forcing group write unconditionally.
 # kura_e2e_unix
-# kura_e2e_env KURA_UMASK=0027
+# kura_e2e_config server.umask=0027
 
 kura_add stub:1001
 kura_assert_lib_mode 750 .kura

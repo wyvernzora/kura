@@ -50,7 +50,7 @@ const (
 //   - BearerToken: when non-empty, every request must carry
 //     "Authorization: Bearer <token>" or be rejected with 401. Empty
 //     means auth disabled — only set this when the deployer explicitly
-//     opts out via KURA_DISABLE_TOKEN.
+//     opts out in the serve config.
 type Deps struct {
 	Workflow       workflow.Deps
 	Logger         *slog.Logger
@@ -65,7 +65,7 @@ type Deps struct {
 
 // Server holds the prebuilt http.Handler plus startup-time metadata
 // (process start instant for /health uptime). One instance per
-// `kura serve --rest` invocation; safe for concurrent requests.
+// kura serve invocation; safe for concurrent requests.
 type Server struct {
 	deps      Deps
 	handler   http.Handler

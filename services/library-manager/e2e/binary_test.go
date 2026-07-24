@@ -18,6 +18,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 // e2eBinaryPath is the path to the kura-e2e binary built once for the
@@ -77,7 +79,6 @@ type e2eBinary struct {
 	inboxRoot string
 	port      int
 	url       string
-	env       []string
 	cmd       *exec.Cmd
 	stderr    *syncBuffer
 	stopOnce  sync.Once
@@ -111,32 +112,22 @@ func (s *syncBuffer) String() string {
 }
 
 // startDaemon builds (if needed) the kura-e2e binary and boots
-// `kura-e2e serve --rest=:0 --rest-port-file=... --use-test-stubs`
-// against libRoot. Blocks up to 5s waiting for the port file to
-// appear and the /health endpoint to respond.
-func startDaemon(t *testing.T, libRoot, inboxRoot string, extraEnv []string) *e2eBinary {
+// `kura-e2e serve --config=... --use-test-stubs` against libRoot.
+// Blocks up to 5s waiting for the port file to appear and the /health
+// endpoint to respond.
+func startDaemon(t *testing.T, libRoot, inboxRoot, umask string) *e2eBinary {
 	t.Helper()
 	bin := buildKuraE2E(t)
 
 	dir := t.TempDir()
 	portFile := filepath.Join(dir, "port")
+	configFile := writeDaemonConfig(t, dir, libRoot, inboxRoot, portFile, umask)
 
 	cmd := exec.Command(bin, "serve",
-		"--rest=127.0.0.1:0",
-		"--rest-port-file="+portFile,
+		"--config="+configFile,
 		"--use-test-stubs",
 	)
-	cmd.Env = append(os.Environ(),
-		"KURA_LIBRARY_ROOT="+libRoot,
-		"KURA_INBOX_ROOT="+inboxRoot,
-		"KURA_LOG_LEVEL=ERROR",
-		// E2E doesn't exercise the auth path; the subprocess is
-		// already isolated inside the test process group, and
-		// generating per-scenario tokens would force harness commands
-		// to plumb the secret into every kura-e2e invocation.
-		"KURA_DISABLE_TOKEN=1",
-	)
-	cmd.Env = append(cmd.Env, extraEnv...)
+	cmd.Env = os.Environ()
 	stderr := &syncBuffer{}
 	cmd.Stderr = stderr
 	cmd.Stdout = io.Discard
@@ -150,7 +141,6 @@ func startDaemon(t *testing.T, libRoot, inboxRoot string, extraEnv []string) *e2
 		bin:       bin,
 		libRoot:   libRoot,
 		inboxRoot: inboxRoot,
-		env:       append([]string(nil), extraEnv...),
 		cmd:       cmd,
 		stderr:    stderr,
 	}
@@ -169,6 +159,56 @@ func startDaemon(t *testing.T, libRoot, inboxRoot string, extraEnv []string) *e2
 		t.Fatalf("daemon health: %v", err)
 	}
 	return b
+}
+
+type daemonConfig struct {
+	Server  daemonServer  `toml:"server"`
+	Library daemonLibrary `toml:"library"`
+	Auth    daemonAuth    `toml:"auth"`
+}
+
+type daemonServer struct {
+	RESTAddr     string `toml:"rest"`
+	MCPHTTPAddr  string `toml:"mcp_http"`
+	RESTPortFile string `toml:"rest_port_file"`
+	LogLevel     string `toml:"log_level"`
+	Umask        string `toml:"umask,omitempty"`
+}
+
+type daemonLibrary struct {
+	Root  string `toml:"root"`
+	Inbox string `toml:"inbox"`
+}
+
+type daemonAuth struct {
+	Disabled bool `toml:"disabled"`
+}
+
+func writeDaemonConfig(t *testing.T, dir, libRoot, inboxRoot, portFile, umask string) string {
+	t.Helper()
+	cfg := daemonConfig{
+		Server: daemonServer{
+			RESTAddr:     "127.0.0.1:0",
+			MCPHTTPAddr:  "",
+			RESTPortFile: portFile,
+			LogLevel:     "error",
+			Umask:        umask,
+		},
+		Library: daemonLibrary{
+			Root:  libRoot,
+			Inbox: inboxRoot,
+		},
+		Auth: daemonAuth{Disabled: true},
+	}
+	buf, err := toml.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal daemon config: %v", err)
+	}
+	path := filepath.Join(dir, "library-manager.toml")
+	if err := os.WriteFile(path, buf, 0o600); err != nil {
+		t.Fatalf("write daemon config: %v", err)
+	}
+	return path
 }
 
 // stop sends SIGTERM, waits 5s for clean exit, and SIGKILLs on
@@ -201,9 +241,7 @@ func (b *e2eBinary) run(ctx context.Context, args ...string) (stdout, stderr str
 	cmd.Env = append(os.Environ(),
 		"KURA_LIBRARY_ROOT="+b.libRoot,
 		"KURA_SERVER_URL="+b.url,
-		"KURA_DISABLE_TOKEN=1",
 	)
-	cmd.Env = append(cmd.Env, b.env...)
 	var so, se bytes.Buffer
 	cmd.Stdout = &so
 	cmd.Stderr = &se

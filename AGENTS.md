@@ -100,7 +100,7 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Priority:** anime behavior comes first; other series types can work when compatible but should not drive the design.
 - **Product shape:** no bloat. Prefer CLI tools for manual use and MCP tools for agentic use.
 - **Operational scale:** personal anime library automation, not a high-throughput multi-writer file transaction system. Expect new episodes a few times a week and occasional season upgrades, usually flowing qbit/download inbox -> Kura -> library with an LLM agent driving Kura. Kura is the only intended writer inside the library root; other tools should be readonly there, and direct human writes are rare. Avoid engineering for AWS-S3-scale concurrency or hostile library writers unless the product requirements explicitly change.
-- **UI:** none embedded — the suite web UI lives in `services/webui` (SPA + Caddy proxy fronting this service's REST API). `kura-library-manager serve --rest` serves the API only.
+- **UI:** none embedded — the suite web UI lives in `services/webui` (SPA + Caddy proxy fronting this service's REST API). The configured REST transport serves the API only.
 - **Distribution:** Go application shipped as a Docker container.
 
 ### Stack
@@ -116,10 +116,10 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Jobs:** `internal/jobs` runs async workflow ops and exposes a registry for polling-based clients (MCP).
 - **Provider:** `internal/provider` is the metadata-provider abstraction; `internal/provider/tvdb` is the only implementation today.
 - **Domain types:** `internal/domain/{refs,media,series,filename,selector}` are pure types shared across packages. Leaf-level — they do not import sibling internal packages.
-- **Inbox:** `internal/inbox` walks the `KURA_INBOX_ROOT` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
+- **Inbox:** `internal/inbox` walks the configured `library.inbox` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
 - **Search keys:** `internal/searchkey` computes the per-series fuzzy-search blob shipped on `ListRow` — flattened, deduplicated alias lines fed to client-side fuse.js. Never user-facing.
 - **Transports:** `kura-library-manager serve` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, bearer-token auth via `internal/server/auth`). Servers depend on `internal/workflow` for behavior. `cmd/kura-library-manager` hosts the CLI; its verbs are REST clients via `internal/cli/client` (discovery through `KURA_SERVER_URL`, default `http://127.0.0.1:8080`) — only the `serve` command imports `internal/workflow` in-process.
-- **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (env loading), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `internal/response` (wire response shapes), `internal/cli/*` (CLI rendering / stdio / REST client).
+- **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (strict TOML loading, defaults, validation, metadata-source construction), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `internal/response` (wire response shapes), `internal/cli/*` (CLI rendering / stdio / REST client).
 - **Container:** Docker, single-binary image.
 
 ### Commands
@@ -159,21 +159,21 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - Prefer clear CLI/MCP surfaces over background magic.
 - Preserve a small, automation-friendly core before adding optional layers.
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
-- `KURA_LIBRARY_ROOT` scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura-library-manager reindex` to rebuild it from per-series metadata.
-- `KURA_INBOX_ROOT` is the download-inbox root that `inbox:<rel>` selectors resolve against. Required at `kura-library-manager serve` startup (must exist, be a directory, and be disjoint from the library root); CLI verbs reach the inbox only through the server's REST surface.
+- `library.root` in the strict TOML config scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura-library-manager reindex` to rebuild it from per-series metadata. `KURA_LIBRARY_ROOT` remains only for the local `path` CLI command.
+- `library.inbox` is the download-inbox root that `inbox:<rel>` selectors resolve against. Required at `kura-library-manager serve` startup (must exist, be a directory, and be disjoint from the library root); CLI verbs reach the inbox only through the server's REST surface.
 - `KURA_HOST_ID` overrides `os.Hostname()` for the identity Kura stamps into claim holders and CAS mutators. Set this in container deployments to a stable value (e.g. the underlying host's actual hostname) so a previous container's stuck claim is detected as same-host on restart and can be auto-broken; without it, every container restart mid-apply requires a manual `kura-library-manager reconcile recover`.
-- `KURA_AIRING_TAIL_DAYS` controls how many days after a cour's last episode airs it still counts as airing. Default `7`; `0` disables the tail. Integer days; empty / invalid / negative values fall back to the default.
-- `KURA_LOG_RETENTION_DAYS` sets how long the periodic sweep retains forensic JSONL logs — reconcile plan logs at `<series>/.kura/reconcile/*.jsonl` and per-job history logs at `<library>/.kura/jobs/<ulid>.jsonl`. Default `7`. Integer days; empty / invalid / negative values fall back to the default.
+- `library.airing_tail_days` controls how many days after a cour's last episode airs it still counts as airing. Default `7`; `0` disables the tail.
+- `sweep.log_retention_days` sets how long the periodic sweep retains forensic JSONL logs — reconcile plan logs at `<series>/.kura/reconcile/*.jsonl` and per-job history logs at `<library>/.kura/jobs/<ulid>.jsonl`. Default `7`.
 
 ### Current workflows
 
 - `kura-library-manager scan <series>` — scan a tracked series directory, record recognized episode media into `series.json`, refresh changed facts for same-path episodes, keep empty spine episodes, and report skipped files/directories.
 - `kura-library-manager scan --replace <series>` — required when a discovered file replaces an existing active season/episode at a different media path.
-- `kura-library-manager stage episode <selector terms> <SxxEyy> <inbox:media-selector>` (plus `stage trash`, `stage extra`) — record an explicit external media file inside the target episode's `series.json` staged record. Media is an `inbox:<rel>` selector under `KURA_INBOX_ROOT` (or `series:<rel>` for in-place metadata override); absolute paths are not accepted. Active or staged season/episode collisions require `--replace`.
+- `kura-library-manager stage episode <selector terms> <SxxEyy> <inbox:media-selector>` (plus `stage trash`, `stage extra`) — record an explicit external media file inside the target episode's `series.json` staged record. Media is an `inbox:<rel>` selector under the configured inbox root (or `series:<rel>` for in-place metadata override); absolute paths are not accepted. Active or staged season/episode collisions require `--replace`.
 - `kura-library-manager reconcile plan <series>` — resolve the series selector through the library index, write a JSONL plan under `<series>/.kura/reconcile/<token>.jsonl`, and print the token. Token = snapshot hash; apply re-validates the snapshot at execute time. Empty plans write no plan file.
 - `kura-library-manager reconcile apply <series> <token>` — apply a saved reconcile plan, move staged files into the active layout, move replaced active files under `.kura/trash/<trash_id>/`, write per-trash `meta.json`, append move/result records to the plan JSONL file, and update `series.json`. Does not rename the series root; uses the current directory name for generated media filenames.
 - If scan or reconcile plan has no changes, the CLI must not ask to apply anything.
-- Kura does not auto-scan or auto-import the inbox. `kura-library-manager inbox list [path]` lists entries under `KURA_INBOX_ROOT` on demand (recursive up to depth 5, kind/glob filters, hidden files omitted unless `--all`; accepts an exact file path); `kura-library-manager stage` consumes `inbox:<rel>` selectors from it.
+- Kura does not auto-scan or auto-import the inbox. `kura-library-manager inbox list [path]` lists entries under the configured inbox root on demand (recursive up to depth 5, kind/glob filters, hidden files omitted unless `--all`; accepts an exact file path); `kura-library-manager stage` consumes `inbox:<rel>` selectors from it.
 
 ### Forbidden
 
@@ -197,14 +197,15 @@ When the user corrects your approach, append a one-line rule here before ending 
 - For series-level actions that need review before mutation, use explicit selector-based `plan` and `apply <selector> <token>` workflows instead of combined dry-run/yes commands.
 - Top-level `internal` packages must not import child packages of sibling top-level packages; import the sibling facade instead, while child packages may import siblings under their own top-level package.
 - When extracting an implementation subpackage, move the full cohesive workflow or leave it in place; do not leave runner/helper remnants in the facade package unless they are intentional public API.
-- Workflow responses must never carry raw filesystem paths. Every path field is a scheme-tagged selector: `series:<rel>` for files inside a series root, `inbox:<rel>` for files under the inbox root, `library:<rel>` for paths under `KURA_LIBRARY_ROOT` (e.g. `Show.Root` emits as `library:<series-dir>`). Use the `seriesSelector` / `inboxSelector` / `librarySelector` helpers in `internal/workflow/paths.go` at the response-construction boundary; they panic on outside-root paths so contract violations fail loudly. CLI table renderers strip the prefix for human display via `stripPathScheme`; JSON / MCP / REST keep the prefix.
+- Workflow responses must never carry raw filesystem paths. Every path field is a scheme-tagged selector: `series:<rel>` for files inside a series root, `inbox:<rel>` for files under the inbox root, `library:<rel>` for paths under the configured library root (e.g. `Show.Root` emits as `library:<series-dir>`). Use the `seriesSelector` / `inboxSelector` / `librarySelector` helpers in `internal/workflow/paths.go` at the response-construction boundary; they panic on outside-root paths so contract violations fail loudly. CLI table renderers strip the prefix for human display via `stripPathScheme`; JSON / MCP / REST keep the prefix.
 - Treat Kura's library as a single-writer personal anime library on low-IOPS storage, often NFS-backed; do not add high-throughput, multi-writer, or cloud-object-store durability machinery unless a real Kura workflow requires it.
 - Thread deploy-time row-building policy from `cmd/kura-library-manager` through workflow/index builders; do not read env vars directly from storage packages.
 - Kura does not guarantee forward compatibility for old binaries reading newer on-disk metadata; prefer a clear current-schema contract over version machinery whose only benefit is rollback ergonomics.
 - Use namespaced workflow-tag conventions in the UI and integration guidance: `priority:high`, `priority:low`, `maintenance:requested`, and `maintenance:disabled`.
 - Commit subjects use Conventional Commits with the closed scope enum above; the former `<scope>: <message>` convention is retired (2026-07, monorepo migration).
-- Run LTO/LTFS tooling on a dedicated VM with its own read-only `KURA_LIBRARY_ROOT` mount and VM-local disposable tape state; derive hot/cold placement from payload-change history rather than raw metadata-write frequency.
+- Run LTO/LTFS tooling on a dedicated VM with its own read-only library-root mount and VM-local disposable tape state; derive hot/cold placement from payload-change history rather than raw metadata-write frequency.
 - Treat LTO as operator-assisted homelab archival for valuable-but-replaceable data; prefer visible manual recovery conflicts and operator-approved risk over high-availability protocols or automatic conflict resolution.
+- Keep library-manager serve settings in strict TOML; reserve environment variables for TVDB/token secrets, stable host identity, client discovery, and the local `path` command.
 
 ---
 

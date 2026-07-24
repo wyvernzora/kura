@@ -18,8 +18,8 @@
 #   - KURA_TOKEN  — bearer token; matches the server's gate
 #   - KURA_SERVER_URL  (optional; defaults to http://127.0.0.1:8080)
 #
-# Server-side: the kura serve target needs KURA_LIBRARY_ROOT +
-# KURA_TVDB_KEY in its own environment. Those are not read here.
+# Server-side: the serve config supplies library.root, while
+# KURA_TVDB_KEY remains a server secret. Neither is read here.
 
 set -euo pipefail
 

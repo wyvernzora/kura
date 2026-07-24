@@ -14,8 +14,12 @@ if [ ! -d "/src/cmd/kura-library-manager" ]; then
   echo "entrypoint: /src/cmd/kura-library-manager missing — bind-mount the kura repo at /src" >&2
   exit 1
 fi
-if [ ! -d "${KURA_LIBRARY_ROOT}" ]; then
-  echo "entrypoint: KURA_LIBRARY_ROOT=${KURA_LIBRARY_ROOT} not a directory" >&2
+if [ ! -d /mnt/library ]; then
+  echo "entrypoint: /mnt/library not a directory" >&2
+  exit 1
+fi
+if [ ! -d /mnt/inbox ]; then
+  echo "entrypoint: /mnt/inbox not a directory" >&2
   exit 1
 fi
 
@@ -37,24 +41,16 @@ if [ -z "${MCP_PROXY_AUTH_TOKEN}" ]; then
   export MCP_PROXY_AUTH_TOKEN
 fi
 
-REST_PORT="${KURA_REST_ADDR##*:}"
-MCP_HOST="${KURA_MCP_HTTP_ADDR%:*}"
-MCP_PORT="${KURA_MCP_HTTP_ADDR##*:}"
+REST_PORT=8080
+MCP_PORT=8081
 
 cat <<EOF >&2
 devserver: REST     listening on container 0.0.0.0:${REST_PORT}
-devserver: MCP HTTP listening on container ${MCP_HOST}:${MCP_PORT}
+devserver: MCP HTTP listening on container 0.0.0.0:${MCP_PORT}
 devserver: from host  →  export KURA_SERVER_URL=http://127.0.0.1:\$REST_DEV_PORT
 devserver: edit any .go file under cmd/ or internal/ and air rebuilds in ~3s
+devserver: bearer-token gate disabled by /etc/kura/library-manager.toml
 EOF
-
-if [ "${KURA_DISABLE_TOKEN:-}" = "1" ] || [ "${KURA_DISABLE_TOKEN:-}" = "true" ]; then
-  echo "devserver: bearer-token gate disabled (KURA_DISABLE_TOKEN)"
-elif [ -n "${KURA_TOKEN:-}" ]; then
-  echo "devserver: using bearer token from KURA_TOKEN env var"
-else
-  echo "devserver: bearer token will be generated at /var/lib/kura/token on first start"
-fi
 
 # Prefill-URL printer. Backgrounded so air can exec in the foreground.
 # Waits for kura to bind the MCP HTTP port, resolves the bearer token
@@ -69,34 +65,15 @@ fi
   while ! nc -z 127.0.0.1 "${MCP_PORT}" 2>/dev/null; do
     i=$((i + 1))
     if [ "${i}" -gt 600 ]; then
-      echo "devserver: kura did not bind ${KURA_MCP_HTTP_ADDR} within 60s; skipping inspector URL" >&2
+      echo "devserver: kura did not bind MCP HTTP :${MCP_PORT} within 60s; skipping inspector URL" >&2
       exit 0
     fi
     sleep 0.1
   done
 
-  # Resolve the kura bearer token to embed in the inspector prefill
-  # URL. Mirrors auth.Load's resolution order: KURA_DISABLE_TOKEN
-  # bypass > KURA_TOKEN literal > /var/lib/kura/token.
-  KURA_BEARER=""
-  case "${KURA_DISABLE_TOKEN:-}" in
-    1|true|TRUE|yes|on)
-      : ;;
-    *)
-      if [ -n "${KURA_TOKEN:-}" ]; then
-        KURA_BEARER="${KURA_TOKEN}"
-      elif [ -f /var/lib/kura/token ]; then
-        KURA_BEARER="$(tr -d '\r\n' < /var/lib/kura/token)"
-      fi
-      ;;
-  esac
-
   # serverUrl is the inspector proxy's view of kura — always reach
   # via loopback inside the container, regardless of kura's bind addr.
   INSPECTOR_URL="http://localhost:${CLIENT_PORT}/?MCP_PROXY_AUTH_TOKEN=${MCP_PROXY_AUTH_TOKEN}&transport=streamable-http&serverUrl=http%3A%2F%2F127.0.0.1%3A${MCP_PORT}%2Fmcp"
-  if [ -n "${KURA_BEARER}" ]; then
-    INSPECTOR_URL="${INSPECTOR_URL}&bearerToken=${KURA_BEARER}"
-  fi
 
   cat <<EOF >&2
 devserver: open the inspector UI at:

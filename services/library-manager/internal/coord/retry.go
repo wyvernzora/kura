@@ -2,31 +2,11 @@ package coord
 
 import (
 	"errors"
-	"os"
-	"strconv"
 )
 
 // DefaultMaxAttempts caps short-op CAS retries: one initial attempt
-// plus one silent retry on ConflictError. Matches the
-// KURA_CONFLICT_RETRIES=1 default.
+// plus one silent retry on ConflictError.
 const DefaultMaxAttempts = 2
-
-// AttemptsFromEnv reads KURA_CONFLICT_RETRIES and returns the total
-// attempt count (initial + retries). Defaults to DefaultMaxAttempts
-// when the env var is unset, malformed, or negative. Call sites that
-// compose RetryOnConflict use this so the operator-tunable retry
-// budget remains discoverable from one place.
-func AttemptsFromEnv() int {
-	v := os.Getenv("KURA_CONFLICT_RETRIES")
-	if v == "" {
-		return DefaultMaxAttempts
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil || n < 0 {
-		return DefaultMaxAttempts
-	}
-	return n + 1
-}
 
 // RetryOnConflict invokes fn up to maxAttempts times. Returns nil on
 // success, the last ConflictError on exhaustion, or any non-conflict

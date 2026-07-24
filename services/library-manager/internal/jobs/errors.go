@@ -30,8 +30,8 @@ func (e *JobNotFoundError) Error() string {
 	return fmt.Sprintf("job not found: %s", e.JobID)
 }
 
-// JobTimeoutError indicates the per-job deadline (KURA_JOB_TIMEOUT)
-// fired before the workflow returned.
+// JobTimeoutError indicates the configured per-job deadline fired
+// before the workflow returned.
 type JobTimeoutError struct {
 	JobID   string
 	JobKind JobKind

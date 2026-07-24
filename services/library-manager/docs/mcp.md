@@ -1,11 +1,11 @@
 # MCP tool surface
 
-Kura exposes its workflow surface as MCP tools for AI agents. Two
-transports:
+Kura exposes its workflow surface as MCP tools for AI agents. Enable
+transports in the library-manager TOML config:
 
-- `kura serve --mcp-stdio` — stdio MCP, for agents launched as a child
+- `server.mcp_stdio = true` — stdio MCP, for agents launched as a child
   process. Unauthenticated; the process boundary already trusts the parent.
-- `kura serve --mcp-http=:port` — MCP-over-HTTP. Auth gated by the
+- `server.mcp_http = ":port"` — MCP-over-HTTP. Auth gated by the
   same bearer token as REST (see [rest-api.md](rest-api.md#auth)).
 
 For underlying terms, see [concepts.md](concepts.md). For each tool's

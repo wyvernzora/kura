@@ -153,7 +153,7 @@ func (r *Registry) Shutdown(grace time.Duration) int {
 //
 //   - No existing job for series: a fresh tracked Job is created and
 //     returned. The goroutine runs fn with a derived ctx that carries
-//     the per-job timeout (KURA_JOB_TIMEOUT) and a capture-only
+//     the configured per-job timeout and a capture-only
 //     progress reporter that records the latest event into the job
 //     and entry. Consumers (CLI, MCP, REST) poll for progress via
 //     Job.LatestProgress / UntypedJob.Progress; the registry does
@@ -367,7 +367,7 @@ func runJob[T any](
 }
 
 // deriveJobCtx returns a ctx derived from the registry's parent ctx,
-// with KURA_JOB_TIMEOUT applied if configured.
+// with the configured job timeout applied.
 func (r *Registry) deriveJobCtx() (context.Context, context.CancelFunc) {
 	if r.cfg.JobTimeout <= 0 {
 		ctx, cancel := context.WithCancel(r.parentCtx)

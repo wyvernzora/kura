@@ -33,7 +33,7 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	var out response.ResetResult
 	err := deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
-		return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
+		return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 			result, err := resetAttempt(ctx, deps, in, seriesRoot)
 			if err != nil {
 				return err

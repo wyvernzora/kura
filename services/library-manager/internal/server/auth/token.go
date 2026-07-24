@@ -7,18 +7,16 @@
 //
 // Token resolution order, top-down (first match wins):
 //
-//  1. KURA_DISABLE_TOKEN=1|true  → auth bypassed entirely.
-//  2. KURA_TOKEN=<value>         → use literal value as bearer token.
-//  3. /var/lib/kura/token exists → read first non-empty line, trim.
-//  4. (default)                   → generate 32-byte random hex,
+//  1. Options.Disabled           → auth bypassed entirely.
+//  2. Options.Token              → use literal value as bearer token.
+//  3. Options.TokenPath exists   → read first non-empty line, trim.
+//  4. (default)                  → generate 32-byte random hex,
 //     persist to /var/lib/kura/token
 //     with mode 0600.
 //
-// Operators fronting kura with an authenticating proxy use (1) to
-// disable the gate. Operators who want a stable token across
-// container restarts mount a file at /var/lib/kura/token. Everyone
-// else gets a fresh token on first start that survives restart via
-// the persisted file.
+// The command layer sources Disabled and TokenPath from TOML and Token
+// from KURA_TOKEN. Operators fronting kura with an authenticating proxy
+// disable the gate in TOML.
 package auth
 
 import (
@@ -36,14 +34,8 @@ import (
 // directory exists and is writable by the kura process.
 const DefaultTokenPath = "/var/lib/kura/token"
 
-// EnvDisable is the env var name that, when "1" or "true", bypasses
-// the token gate entirely. Use only when fronting kura with an
-// authenticating proxy that handles user identity.
-const EnvDisable = "KURA_DISABLE_TOKEN"
-
 // EnvLiteral is the env var name that holds a literal bearer token
-// value. Skips the file step entirely; takes precedence over the
-// persisted file but not over EnvDisable.
+// value. The command layer reads it and passes the value to Load.
 const EnvLiteral = "KURA_TOKEN"
 
 // tokenBytes is the entropy of a generated token in bytes. Hex-
@@ -56,34 +48,37 @@ const tokenBytes = 32
 // than two competing writes.
 var generateMu sync.Mutex
 
-// Result captures the outcome of token resolution. Disabled=true
-// means EnvDisable was set; callers should bypass the auth
-// middleware. Token is the active bearer secret when Disabled=false.
+// Options contains already-resolved token settings.
+type Options struct {
+	Disabled  bool
+	Token     string
+	TokenPath string
+}
+
+// Result captures the outcome of token resolution. Disabled=true means
+// callers should bypass the auth middleware. Token is the active bearer
+// secret when Disabled=false.
 // Generated=true marks the case where Load wrote a fresh token to
 // the disk; callers can use this to print a copy-paste hint at boot.
 type Result struct {
 	Token     string
 	Disabled  bool
 	Generated bool
-	Source    string // "env-disable" | "env-literal" | "file" | "generated"
+	Source    string // "config-disabled" | "environment" | "file" | "generated"
 }
 
 // Load resolves the active bearer token per the package-level order.
-// getenv defaults to os.Getenv when nil. tokenPath defaults to
-// DefaultTokenPath when empty.
-func Load(getenv func(string) string, tokenPath string) (Result, error) {
-	if getenv == nil {
-		getenv = os.Getenv
-	}
-	if tokenPath == "" {
-		tokenPath = DefaultTokenPath
+// TokenPath defaults to DefaultTokenPath when empty.
+func Load(opts Options) (Result, error) {
+	if opts.TokenPath == "" {
+		opts.TokenPath = DefaultTokenPath
 	}
 
-	if isTrue(getenv(EnvDisable)) {
-		return Result{Disabled: true, Source: "env-disable"}, nil
+	if opts.Disabled {
+		return Result{Disabled: true, Source: "config-disabled"}, nil
 	}
-	if v := strings.TrimSpace(getenv(EnvLiteral)); v != "" {
-		return Result{Token: v, Source: "env-literal"}, nil
+	if v := strings.TrimSpace(opts.Token); v != "" {
+		return Result{Token: v, Source: "environment"}, nil
 	}
 
 	generateMu.Lock()
@@ -91,14 +86,14 @@ func Load(getenv func(string) string, tokenPath string) (Result, error) {
 
 	// Re-check the file under the lock so two parallel Load calls
 	// don't both decide to generate.
-	if buf, err := os.ReadFile(tokenPath); err == nil {
+	if buf, err := os.ReadFile(opts.TokenPath); err == nil {
 		token := strings.TrimSpace(string(buf))
 		if token == "" {
-			return Result{}, fmt.Errorf("auth: token file %s exists but is empty (delete it to regenerate)", tokenPath)
+			return Result{}, fmt.Errorf("auth: token file %s exists but is empty (delete it to regenerate)", opts.TokenPath)
 		}
 		return Result{Token: token, Source: "file"}, nil
 	} else if !os.IsNotExist(err) {
-		return Result{}, fmt.Errorf("auth: read token file %s: %w", tokenPath, err)
+		return Result{}, fmt.Errorf("auth: read token file %s: %w", opts.TokenPath, err)
 	}
 
 	// Generate.
@@ -108,21 +103,11 @@ func Load(getenv func(string) string, tokenPath string) (Result, error) {
 	}
 	token := hex.EncodeToString(buf)
 
-	if err := os.MkdirAll(filepath.Dir(tokenPath), 0o700); err != nil {
-		return Result{}, fmt.Errorf("auth: mkdir %s: %w", filepath.Dir(tokenPath), err)
+	if err := os.MkdirAll(filepath.Dir(opts.TokenPath), 0o700); err != nil {
+		return Result{}, fmt.Errorf("auth: mkdir %s: %w", filepath.Dir(opts.TokenPath), err)
 	}
-	if err := os.WriteFile(tokenPath, []byte(token+"\n"), 0o600); err != nil {
-		return Result{}, fmt.Errorf("auth: write token file %s: %w", tokenPath, err)
+	if err := os.WriteFile(opts.TokenPath, []byte(token+"\n"), 0o600); err != nil {
+		return Result{}, fmt.Errorf("auth: write token file %s: %w", opts.TokenPath, err)
 	}
 	return Result{Token: token, Generated: true, Source: "generated"}, nil
-}
-
-// isTrue treats the kura-conventional truthy spellings as true.
-// Matches Go's strconv.ParseBool plus the operator-friendly "TRUE".
-func isTrue(s string) bool {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "1", "true", "yes", "on":
-		return true
-	}
-	return false
 }

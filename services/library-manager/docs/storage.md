@@ -117,7 +117,7 @@ for fast selector lookup and `list` projections. JSON-lines:
   carry `series` plus `error`.
 - Materialized rows for `list` are projected in memory from these
   entries at query time, using deploy-time row policy such as
-  `KURA_AIRING_TAIL_DAYS`.
+  `library.airing_tail_days`.
 - Not authoritative. Regenerate from per-series metadata at any time
   via `kura reindex`.
 - Read via `indexfile.Load()`. Mutated via `Index.SaveModel`,
@@ -151,7 +151,7 @@ Path: `<library>/<SeriesRef>/.kura/reconcile/<token>.jsonl`. JSON-lines.
 - Events appended during apply, terminal `result` line on completion
   (success or partial). The log is forensic — operators consult it
   during recovery.
-- Pruned by the periodic sweep after `KURA_LOG_RETENTION_DAYS`
+- Pruned by the periodic sweep after `sweep.log_retention_days`
   (default 7).
 
 ## Trash `meta.json` (schema v1)
@@ -190,7 +190,7 @@ forensic record of one trashing event:
 Path: `<library>/.kura/jobs/<jobId>.jsonl`. Written by
 `internal/jobs/` for every async workflow (Scan, ApplyReconcile,
 Reindex, library Scan). Lifecycle events + result. Pruned by the
-periodic sweep after `KURA_LOG_RETENTION_DAYS` (default 7).
+periodic sweep after `sweep.log_retention_days` (default 7).
 
 ## Path package
 

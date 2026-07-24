@@ -17,12 +17,7 @@ func TestConfigureUmaskAppliesProcessUmask(t *testing.T) {
 		fsop.SetPermissionMask(old)
 	})
 
-	err := configureUmask(func(key string) string {
-		if key == envUmask {
-			return "0077"
-		}
-		return ""
-	})
+	err := configureUmask("0077")
 	if err != nil {
 		t.Fatalf("configureUmask: %v", err)
 	}

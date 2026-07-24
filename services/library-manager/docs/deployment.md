@@ -27,13 +27,14 @@ on the single-writer rule, not on the underlying filesystem.
 
 Bearer token, deploy-gate posture. Resolution order:
 
-1. `KURA_DISABLE_TOKEN=1` — auth bypassed entirely. Use only when
+1. `auth.disabled = true` in TOML — auth bypassed entirely. Use only when
    fronting `kura serve` with an authenticating proxy
    (Traefik+Authelia, nginx+oauth2-proxy, Caddy+forward_auth, etc.)
    that handles user identity.
 2. `KURA_TOKEN=<value>` — explicit env var. Recommended for
    Kubernetes (inject from a Secret).
-3. `/var/lib/kura/token` — file persisted on first start. If absent,
+3. `auth.token_path` (default `/var/lib/kura/token`) — file persisted
+   on first start. If absent,
    `kura serve` generates a 32-byte hex token, writes it (mode
    `0600`), and logs it once at INFO level. Subsequent restarts read
    the same file.
@@ -52,15 +53,17 @@ busybox shell + coreutils stay in the image so operators can
 `kubectl exec` and inspect filesystem state when something breaks.
 
 `ENTRYPOINT` is `kura`; `CMD` defaults to
-`["serve", "--rest=:8080", "--mcp-http=:8081"]`, so a pod or
+`["serve", "--config=/etc/kura/library-manager.toml"]`, so a pod or
 `docker run` invocation with no `args:` / `command:` starts both
-transports — REST on `:8080` and MCP-over-HTTP on `:8081`. Both use
-`EXPOSE 8080 8081`. The same bearer token gates both. Override
-`args:` to invoke a CLI verb (`args: ["list"]`,
-`args: ["scan", "tvdb:370070"]`) or to bind to different addresses.
+transports using the bundled config — REST on `:8080` and
+MCP-over-HTTP on `:8081`. Both use `EXPOSE 8080 8081`. The same bearer
+token gates both. Mount a ConfigMap or file at
+`/etc/kura/library-manager.toml` to change settings. Override `args:`
+only to invoke a CLI verb (`args: ["list"]`,
+`args: ["scan", "tvdb:370070"]`).
 
-If you only want REST (or only MCP), override `args:` accordingly
-— e.g. `args: ["serve", "--rest=:8080"]` to skip MCP-over-HTTP.
+If you only want REST (or only MCP), disable the unwanted transport in
+TOML by setting its address to `""`.
 
 The image runs as UID/GID baked at build time (default
 `10001:10001`). For NFS-backed library mounts where the export
@@ -82,27 +85,28 @@ Three knobs flow through `--build-arg`:
 | `KURA_GID` | `10001` | GID counterpart. Match your NFS export's enforced GID (or use k8s `securityContext.fsGroup` to chown the mounted volume to runtime GID). |
 | `VERSION` | `dev` | Stamped into the binary via `-ldflags`. Surfaces on `/api/v1/health` and the `X-Kura-Version` response header. |
 
-Mount your library and inbox roots writable by that UID, and provide
-the bearer token via either a mounted volume or an env-injected
-secret:
+Mount your library and inbox roots writable by that UID. Point the required
+`library.root` and `library.inbox` settings at those container paths. The full,
+commented schema with required markers and defaults lives in
+[config.example.toml](../config.example.toml); startup rejects unknown fields.
 
-| Path / env | Purpose | Recommendation |
+The remaining environment variables are deliberately narrow:
+
+| Environment variable | Purpose | Recommendation |
 |---|---|---|
-| `/var/lib/kura/` (volume) | Persisted bearer token. Without persistence, `kura serve` regenerates a fresh token on every restart and previously-issued client configs break. | Mount a small PVC, **or** skip the volume and inject `KURA_TOKEN` from a Secret. The latter is preferred in k8s — explicit, version-controlled, no PVC lifecycle. |
-| `KURA_LIBRARY_ROOT` | Library root (required). Series directories live here. | Mount a PV containing the library; both library and inbox roots must exist at start time and must not nest. |
-| `KURA_INBOX_ROOT` | Inbox root for staged downloads (required for `kura serve`). | Same PV with a `subPath`, or a separate PV. Must be disjoint from `KURA_LIBRARY_ROOT`. |
-| `KURA_HOST_ID` | Stable claim-stamp identity used by the boot-time stuck-claim recovery sweep. | **Set this** to a stable string (e.g. the underlying node hostname or a fixed deployment label). Without it, every container restart sees a different `os.Hostname()` and the auto-recovery cannot break a prior pod's stale claim. |
-| `KURA_UMASK` | Process umask for Kura-created files/directories and Kura-normalized moved media. Octal, e.g. `0022`, `0027`, or `0007`. Unset preserves the image/runtime default. | Set when the mounted library needs stricter metadata permissions or group-friendly writes. Kura requests group-writable modes for library artifacts and mirrors owner read/write onto group for media it moves; the umask reduces from there. |
+| `KURA_TOKEN` | Literal bearer secret. Takes precedence over `auth.token_path`. | Inject from a Secret in Kubernetes. |
 | `KURA_TVDB_KEY` | TVDB API key. Lazy: only required for metadata-needing workflows. | Inject from a Secret. |
-| `KURA_AIRING_TAIL_DAYS` | Integer days after a cour's last episode airs that it still appears in airing filters. Default `7`; `0` disables the tail; empty / invalid / negative values fall back to default. | Tune only if finale-week maintenance is too short or too sticky for your workflow. |
-| `KURA_LOG_RETENTION_DAYS` | Days of forensic JSONL logs to keep (reconcile plan logs, per-job history logs). Default `7`. | Override only if you need longer retention for incident review. |
-| `KURA_SWEEP_INTERVAL` | Period between scheduled forensic-log pruning sweeps. Go duration, default `1h`. | Usually leave at default; startup recovery and the scheduled sweep are enough for a single personal library. |
-| `KURA_JOB_TIMEOUT` | Per-job deadline. Unset means no timeout. | Set if you want runaway jobs killed. |
+| `KURA_HOST_ID` | Stable claim-stamp identity used by the boot-time stuck-claim recovery sweep. | **Set this** to a stable string such as a node hostname or fixed deployment label. |
+
+If `KURA_TOKEN` is absent and auth is enabled, mount `/var/lib/kura/` (or the
+parent of your configured `auth.token_path`) to persist the generated token.
+Without persistence, the server regenerates a token after each container
+replacement.
 
 Permission normalization after moving media is best-effort. On NFS
 exports or Kubernetes security contexts that reject `chown` / `chmod`,
 Kura keeps the successful move and relies on the operator to fix the
-mount UID/GID, parent setgid bit, `KURA_UMASK`, or existing file modes.
+mount UID/GID, parent setgid bit, `server.umask`, or existing file modes.
 For the intended single-writer personal-library deployment, this is an
 operational repair, not a reason to roll back a 100+ GB move.
 
@@ -152,8 +156,7 @@ readinessProbe:
   periodSeconds: 5
 ```
 
-Adjust the port if you bind `--rest=:N` to anything other than
-`8080`.
+Adjust the port if `server.rest` binds anything other than `:8080`.
 
 ### Runtime UID overrides
 

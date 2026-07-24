@@ -51,11 +51,11 @@ func (e *InboxDepthTooLargeError) Error() string {
 	return fmt.Sprintf("workflow: inbox list depth %d exceeds maximum %d", e.Depth, e.Max)
 }
 
-// InboxNotConfiguredError signals KURA_INBOX_ROOT was not configured.
+// InboxNotConfiguredError signals library.inbox was not configured.
 type InboxNotConfiguredError struct{}
 
 func (e *InboxNotConfiguredError) Error() string {
-	return "workflow: inbox is not configured (KURA_INBOX_ROOT unset)"
+	return "workflow: inbox is not configured (library.inbox is empty)"
 }
 
 // InboxList enumerates deps.InboxRoot/<in.Path>. Directory paths list

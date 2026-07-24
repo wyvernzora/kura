@@ -65,7 +65,7 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult,
 	var out response.ScanResult
 	var modelForIndex *series.Series
 	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
-		if err := coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
+		if err := coord.RetryOnConflict(conflictAttempts(deps), func() error {
 			internal, runErr := runner.Scan(ctx, scan.Input{
 				Refresh:      in.Refresh,
 				MetadataOnly: in.MetadataOnly,

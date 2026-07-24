@@ -21,7 +21,6 @@ type runContext struct {
 	Stdout  io.Writer
 	Stderr  io.Writer
 	Getenv  func(string) string
-	flags   *cli
 }
 
 func run(args []string, rt runContext) error {
@@ -42,7 +41,6 @@ func run(args []string, rt runContext) error {
 	}
 
 	flags := &cli{}
-	rt.flags = flags
 	parser, err := kong.New(flags,
 		kong.Name("kura-library-manager"),
 		kong.Description("Anime-first library manager."),
@@ -55,9 +53,6 @@ func run(args []string, rt runContext) error {
 
 	kctx, err := parser.Parse(args)
 	if err != nil {
-		return err
-	}
-	if err := configureUmask(rt.Getenv); err != nil {
 		return err
 	}
 

@@ -1,7 +1,7 @@
 // Package selector hosts kura's typed path locators. A Path carries a
 // scheme tag (inbox / series) plus a forward-slash, NFC, traversal-
 // safe relative path. Workflows resolve a Path against the matching
-// root (KURA_INBOX_ROOT for inbox; series dir for series) at the
+// root (the configured inbox for inbox; series dir for series) at the
 // filesystem boundary.
 //
 // Selectors are distinct from refs in domain/refs — refs identify
@@ -25,7 +25,7 @@ import (
 type Scheme string
 
 const (
-	// Inbox is the scheme for paths under KURA_INBOX_ROOT. Used for
+	// Inbox is the scheme for paths under the configured inbox root. Used for
 	// stage media + extras inputs and inbox listing outputs.
 	Inbox Scheme = "inbox"
 
@@ -34,8 +34,8 @@ const (
 	// trash inputs and reconcile library-internal step paths.
 	Series Scheme = "series"
 
-	// Library is the scheme for paths inside the library root
-	// (KURA_LIBRARY_ROOT). Used for emitting series-root locations
+	// Library is the scheme for paths inside the configured library root.
+	// Used for emitting series-root locations
 	// and other library-relative paths in responses. Selectors with
 	// this scheme are output-only today — no workflow input accepts
 	// them.

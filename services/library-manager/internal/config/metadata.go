@@ -2,36 +2,25 @@ package config
 
 import (
 	"errors"
-	"os"
+	"slices"
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider/tvdb"
 )
 
-type EnvFunc func(string) string
-
 type MetadataSourceOptions struct {
-	TVDBBaseURL string
-	Getenv      EnvFunc
+	APIKey             string
+	TVDBURL            string
+	PreferredLanguages []string
 }
 
 func BuildMetadataSource(opts MetadataSourceOptions) (provider.Source, error) {
-	getenv := opts.Getenv
-	if getenv == nil {
-		getenv = os.Getenv
-	}
-
-	apiKey := getenv("KURA_TVDB_KEY")
-	if apiKey == "" {
+	if opts.APIKey == "" {
 		return nil, errors.New("KURA_TVDB_KEY is required for TVDB metadata requests")
 	}
-	preferredLanguages, err := ParsePreferredLanguages(getenv("KURA_PREFERRED_LANGUAGES"))
-	if err != nil {
-		return nil, err
-	}
-	p, err := tvdb.New(apiKey, tvdb.Options{
-		BaseURL:            opts.TVDBBaseURL,
-		PreferredLanguages: preferredLanguages.Tags(),
+	p, err := tvdb.New(opts.APIKey, tvdb.Options{
+		BaseURL:            opts.TVDBURL,
+		PreferredLanguages: slices.Clone(opts.PreferredLanguages),
 	})
 	if err != nil {
 		return nil, err

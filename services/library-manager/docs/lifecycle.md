@@ -26,8 +26,8 @@ caller poll. Across surfaces:
 
 Per-job forensic logs are written to
 `<library>/.kura/jobs/<ulid>.jsonl` and pruned after
-`KURA_LOG_RETENTION_DAYS` days (default 7). `KURA_JOB_TIMEOUT` caps
-individual job duration; unset means no timeout.
+`sweep.log_retention_days` days (default 7). `jobs.timeout` caps
+individual job duration; `"0s"` means no timeout.
 
 ## Workflows
 
@@ -387,7 +387,7 @@ picked up by the server's index rebuild/watch path or by `reindex`.
 `isAiring` is independent of series status. A non-special cour counts
 as airing when its first episode has aired or is within the near-start
 horizon, and its last episode is no older than the configured
-`KURA_AIRING_TAIL_DAYS` window. Split-cour gaps are non-airing until
+`library.airing_tail_days` window. Split-cour gaps are non-airing until
 the next cour nears start.
 
 Specials do not affect status, season count, episode count, or the

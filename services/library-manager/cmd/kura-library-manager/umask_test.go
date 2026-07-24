@@ -36,8 +36,8 @@ func TestParseUmaskRejectsInvalidValues(t *testing.T) {
 		if err == nil {
 			t.Fatalf("parseUmask(%q) returned nil error", raw)
 		}
-		if !strings.Contains(err.Error(), envUmask) {
-			t.Fatalf("parseUmask(%q) error = %v, want mention of %s", raw, err, envUmask)
+		if !strings.Contains(err.Error(), "server.umask") {
+			t.Fatalf("parseUmask(%q) error = %v, want mention of server.umask", raw, err)
 		}
 	}
 }

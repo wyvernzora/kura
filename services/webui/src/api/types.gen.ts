@@ -611,7 +611,7 @@ export interface SeriesAliases {
  * All path fields in this response (Root, MediaShow.File,
  * CompanionShow.Path, TrashItemShow.Path, ExtraItemShow.Path, ...)
  * are scheme-tagged selectors: `library:<rel>` for paths under
- * KURA_LIBRARY_ROOT (Root emits as `library:<series-dir>`),
+ * the configured library root (Root emits as `library:<series-dir>`),
  * `series:<rel>` for files inside the request's series root,
  * `inbox:<rel>` for files under the inbox root. There are no raw
  * filesystem paths.
@@ -691,7 +691,7 @@ export interface SeasonSummary {
 /**
  * EpisodeShow is one episode row with computed status and the active /
  * staged media records (if any). Title fields are provider-supplied
- * display names: PreferredTitle follows KURA_PREFERRED_LANGUAGES with
+ * display names: PreferredTitle follows configured language preferences with
  * fallback to canonical; CanonicalTitle is the provider's
  * default-language form.
  */

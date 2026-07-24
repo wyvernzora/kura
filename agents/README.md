@@ -27,8 +27,8 @@ Paste the body of [use-kura.md](use-kura.md) into the agent's system
 prompt. The YAML frontmatter at the top is harmless if left in place,
 or strip it with `awk '/^---$/{n++; next} n>=2' use-kura.md`.
 
-The agent also needs a working MCP connection to a `kura-library-manager serve
---mcp-stdio` or `--mcp-http` instance — see
+The agent also needs a working MCP connection to a `kura-library-manager serve`
+instance with MCP stdio or HTTP enabled in its TOML config — see
 [../docs/mcp.md](../docs/mcp.md) and
 [../docs/deployment.md](../docs/deployment.md).
 

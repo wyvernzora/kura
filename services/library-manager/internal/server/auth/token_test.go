@@ -8,31 +8,24 @@ import (
 	"testing"
 )
 
-func TestLoad_EnvDisable(t *testing.T) {
-	cases := []string{"1", "true", "TRUE", "yes", "on"}
-	for _, v := range cases {
-		t.Run(v, func(t *testing.T) {
-			env := envMap{EnvDisable: v}
-			r, err := Load(env.Get, t.TempDir()+"/token")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !r.Disabled {
-				t.Errorf("Disabled: got false want true")
-			}
-			if r.Token != "" {
-				t.Errorf("Token: got %q want empty", r.Token)
-			}
-			if r.Source != "env-disable" {
-				t.Errorf("Source: got %q", r.Source)
-			}
-		})
+func TestLoad_ConfigDisabled(t *testing.T) {
+	r, err := Load(Options{Disabled: true, TokenPath: t.TempDir() + "/token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.Disabled {
+		t.Errorf("Disabled: got false want true")
+	}
+	if r.Token != "" {
+		t.Errorf("Token: got %q want empty", r.Token)
+	}
+	if r.Source != "config-disabled" {
+		t.Errorf("Source: got %q", r.Source)
 	}
 }
 
 func TestLoad_EnvLiteral(t *testing.T) {
-	env := envMap{EnvLiteral: "secret-value"}
-	r, err := Load(env.Get, t.TempDir()+"/token")
+	r, err := Load(Options{Token: "secret-value", TokenPath: t.TempDir() + "/token"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,14 +35,13 @@ func TestLoad_EnvLiteral(t *testing.T) {
 	if r.Token != "secret-value" {
 		t.Errorf("Token: got %q want secret-value", r.Token)
 	}
-	if r.Source != "env-literal" {
+	if r.Source != "environment" {
 		t.Errorf("Source: got %q", r.Source)
 	}
 }
 
 func TestLoad_EnvLiteral_TrimsWhitespace(t *testing.T) {
-	env := envMap{EnvLiteral: "  padded\n"}
-	r, err := Load(env.Get, t.TempDir()+"/token")
+	r, err := Load(Options{Token: "  padded\n", TokenPath: t.TempDir() + "/token"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +51,7 @@ func TestLoad_EnvLiteral_TrimsWhitespace(t *testing.T) {
 }
 
 func TestLoad_DisableTakesPrecedence(t *testing.T) {
-	env := envMap{EnvDisable: "1", EnvLiteral: "ignored"}
-	r, err := Load(env.Get, t.TempDir()+"/token")
+	r, err := Load(Options{Disabled: true, Token: "ignored", TokenPath: t.TempDir() + "/token"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +66,7 @@ func TestLoad_ReadExistingFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte("abc123\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	r, err := Load(envMap{}.Get, path)
+	r, err := Load(Options{TokenPath: path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +87,7 @@ func TestLoad_EmptyFileErrors(t *testing.T) {
 	if err := os.WriteFile(path, []byte("\n  \n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := Load(envMap{}.Get, path)
+	_, err := Load(Options{TokenPath: path})
 	if err == nil {
 		t.Fatal("expected error on empty file")
 	}
@@ -109,7 +100,7 @@ func TestLoad_GenerateAndPersist(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "token")
 
-	r1, err := Load(envMap{}.Get, path)
+	r1, err := Load(Options{TokenPath: path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +112,7 @@ func TestLoad_GenerateAndPersist(t *testing.T) {
 	}
 
 	// Subsequent Load reads the persisted file.
-	r2, err := Load(envMap{}.Get, path)
+	r2, err := Load(Options{TokenPath: path})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +130,7 @@ func TestLoad_GenerateAndPersist(t *testing.T) {
 func TestLoad_GeneratedFileIs0600(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "token")
-	if _, err := Load(envMap{}.Get, path); err != nil {
+	if _, err := Load(Options{TokenPath: path}); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
@@ -163,7 +154,7 @@ func TestLoad_RaceSafe_SingleGeneratedToken(t *testing.T) {
 	)
 	for i := range N {
 		wg.Go(func() {
-			results[i], errs[i] = Load(envMap{}.Get, path)
+			results[i], errs[i] = Load(Options{TokenPath: path})
 		})
 	}
 	wg.Wait()
@@ -190,9 +181,3 @@ func TestLoad_RaceSafe_SingleGeneratedToken(t *testing.T) {
 		t.Errorf("Generated count: got %d want 1", generated)
 	}
 }
-
-// envMap is a tiny stub for getenv. Cleaner than plumbing real env
-// vars through tests.
-type envMap map[string]string
-
-func (e envMap) Get(k string) string { return e[k] }

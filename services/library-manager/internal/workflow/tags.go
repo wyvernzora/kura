@@ -33,7 +33,7 @@ func UpdateTags(ctx context.Context, deps Deps, in UpdateTagsInput) (response.Se
 	}
 	var out response.SeriesTags
 	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
-		return coord.RetryOnConflict(coord.AttemptsFromEnv(), func() error {
+		return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 			model, loadErr := seriesfile.Load(deps.LibRoot, in.Ref)
 			if loadErr != nil {
 				return loadErr

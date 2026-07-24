@@ -21,37 +21,6 @@ func mustParseSeries(t *testing.T, name string) refs.Series {
 	return ref
 }
 
-func TestRowBuildOptionsFromEnv(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
-		want int
-	}{
-		{name: "unset", raw: "", want: 7},
-		{name: "custom", raw: "14", want: 14},
-		{name: "zero", raw: "0", want: 0},
-		{name: "invalid", raw: "nope", want: 7},
-		{name: "negative", raw: "-1", want: 7},
-		{name: "spaces", raw: " 3 ", want: 3},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := rowBuildOptionsFromEnv(func(key string) string {
-				if key == "KURA_AIRING_TAIL_DAYS" {
-					return tt.raw
-				}
-				return ""
-			})
-			if got.AiringTailDays != tt.want {
-				t.Fatalf("AiringTailDays = %d, want %d", got.AiringTailDays, tt.want)
-			}
-			if tt.raw == "" && got != indexfile.DefaultBuildOptions() {
-				t.Fatalf("default options = %+v, want %+v", got, indexfile.DefaultBuildOptions())
-			}
-		})
-	}
-}
-
 func TestLoadOrRebuildIndexColdRebuild(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "Show"), 0o755); err != nil {

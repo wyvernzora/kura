@@ -36,6 +36,7 @@ WORKDIR /src
 # /src is bind-mounted at runtime, overlaying anything we COPY there.
 # Stash air's config + scripts outside /src so they survive the mount.
 COPY tools/devserver/.air.toml /etc/kura/air.toml
+COPY tools/devserver/library-manager.toml /etc/kura/library-manager.toml
 COPY tools/devserver/run-kura.sh /usr/local/bin/run-kura.sh
 COPY tools/devserver/entrypoint.sh /entrypoint.sh
 RUN chmod +x /usr/local/bin/run-kura.sh /entrypoint.sh
@@ -45,11 +46,7 @@ RUN chmod +x /usr/local/bin/run-kura.sh /entrypoint.sh
 # not publicly reachable. The bearer-token gate (auth middleware) is
 # the actual security boundary. 6274 = inspector UI, 6277 = inspector
 # proxy (browser ↔ MCP).
-ENV KURA_LIBRARY_ROOT=/mnt/library \
-    KURA_INBOX_ROOT=/mnt/inbox \
-    KURA_REST_ADDR=0.0.0.0:8080 \
-    KURA_MCP_HTTP_ADDR=0.0.0.0:8081 \
-    HOST=0.0.0.0 \
+ENV HOST=0.0.0.0 \
     CLIENT_PORT=6274 \
     SERVER_PORT=6277 \
     MCP_AUTO_OPEN_ENABLED=false \
