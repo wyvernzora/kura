@@ -16,7 +16,7 @@ require (
 	github.com/google/renameio/v2 v2.0.2
 	github.com/jedib0t/go-pretty/v6 v6.8.2
 	github.com/lmittmann/tint v1.1.3
-	github.com/mattn/go-isatty v0.0.22
+	github.com/mattn/go-isatty v0.0.23
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/oklog/ulid/v2 v2.1.1
