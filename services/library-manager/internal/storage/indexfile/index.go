@@ -26,9 +26,9 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ErrNotReady is returned by Snapshot when a rebuild is in flight and
@@ -484,7 +484,7 @@ func (i *Index) rowForEntry(e entry) Row {
 		return Row{
 			Series: e.series,
 			Title:  e.series.String(),
-			Status: response.ListStatusError,
+			Status: api.ListStatusError,
 			Error:  e.err,
 		}
 	}

@@ -42,7 +42,7 @@ jobs:
       # gofmt drift check: -l lists offenders without mutation.
       - name: gofmt
         run: |
-          drift=$(gofmt -l cmd internal)
+          drift=$(gofmt -l cmd internal pkg)
           if [ -n "$drift" ]; then
             echo "::error::gofmt drift in:" >&2
             echo "$drift" >&2
@@ -66,24 +66,6 @@ jobs:
 
       - name: go build
         run: go build -trimpath -o bin/kura-library-manager ./cmd/kura-library-manager
-
-  # Hermetic CLI e2e scenarios against the stub provider (-tags=e2e_stub).
-  e2e:
-    name: e2e
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: services/library-manager
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
-        with:
-          go-version-file: services/library-manager/go.mod
-          cache: true
-
-      - name: e2e
-        run: go test -tags=e2e -race -count=1 -timeout=300s ./e2e/...
 
   # Regenerate web/src/api/types.gen.ts and fail on drift.
   gen-check:
@@ -124,7 +106,7 @@ jobs:
   # :dev image publish, gated on every test job.
   build-push:
     name: build & push
-    needs: [go, gen-check, e2e]
+    needs: [go, gen-check]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:

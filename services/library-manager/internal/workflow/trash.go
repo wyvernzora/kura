@@ -16,10 +16,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/fsop"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/trashfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // TrashListInput parameters for the TrashList workflow. Exactly one of
@@ -49,26 +49,26 @@ type TrashRestoreInput struct {
 // TrashList enumerates trash entries for one series (Ref) or across
 // the whole library (All). OlderThan filters to entries trashed at
 // least that long before Now (or deps.Now()).
-func TrashList(ctx context.Context, deps Deps, in TrashListInput) (response.TrashList, error) {
+func TrashList(ctx context.Context, deps Deps, in TrashListInput) (api.TrashList, error) {
 	progress.Start(ctx, "trash-list", "Scanning trash", 0)
 	refsList, err := trashTargetSeries(ctx, deps, in.Ref, in.All)
 	if err != nil {
 		progress.Failure(ctx, "trash-list", "Failed to list trash", 0, 0)
-		return response.TrashList{}, err
+		return api.TrashList{}, err
 	}
 	now := in.Now
 	if now.IsZero() {
 		now = deps.Now()
 	}
-	out := response.TrashList{Series: make([]response.TrashSeriesEntry, 0, len(refsList))}
+	out := api.TrashList{Series: make([]api.TrashSeriesEntry, 0, len(refsList))}
 	for index, ref := range refsList {
 		progress.Update(ctx, "trash-list", fmt.Sprintf("Listing trash for %s", ref), index+1, len(refsList))
 		metas, err := trashfile.List(deps.LibRoot, ref)
 		if err != nil {
-			return response.TrashList{}, err
+			return api.TrashList{}, err
 		}
 		seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
-		entry := response.TrashSeriesEntry{Ref: ref, Entries: make([]response.TrashEntry, 0, len(metas))}
+		entry := api.TrashSeriesEntry{Ref: ref, Entries: make([]api.TrashEntry, 0, len(metas))}
 		for _, meta := range metas {
 			if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
 				continue
@@ -94,21 +94,21 @@ func TrashList(ctx context.Context, deps Deps, in TrashListInput) (response.Tras
 // TrashEmpty deletes trash entries for one series (Ref) or across the
 // whole library (All). OlderThan filters to entries trashed at least
 // that long before Now (or deps.Now()).
-func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.TrashEmpty, error) {
+func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (api.TrashEmpty, error) {
 	progress.Start(ctx, "trash-empty", "Scanning trash", 0)
 	refsList, err := trashTargetSeries(ctx, deps, in.Ref, in.All)
 	if err != nil {
 		progress.Failure(ctx, "trash-empty", "Failed to empty trash", 0, 0)
-		return response.TrashEmpty{}, err
+		return api.TrashEmpty{}, err
 	}
 	now := in.Now
 	if now.IsZero() {
 		now = deps.Now()
 	}
-	out := response.TrashEmpty{Series: make([]response.TrashSeriesEmpty, 0, len(refsList))}
+	out := api.TrashEmpty{Series: make([]api.TrashSeriesEmpty, 0, len(refsList))}
 	for index, ref := range refsList {
 		progress.Update(ctx, "trash-empty", fmt.Sprintf("Emptying trash for %s", ref), index+1, len(refsList))
-		series := response.TrashSeriesEmpty{Ref: ref, Removed: make([]string, 0)}
+		series := api.TrashSeriesEmpty{Ref: ref, Removed: make([]string, 0)}
 		// attempts counts entries the inner closure actually tried to
 		// delete (matched OlderThan), so callers can distinguish "no
 		// trash for this series" from "every attempt failed."
@@ -157,7 +157,7 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 					"err", emptyErr.Error(),
 				)
 			}
-			out.Failures = append(out.Failures, response.TrashEmptyFailure{
+			out.Failures = append(out.Failures, api.TrashEmptyFailure{
 				Ref:   ref,
 				Error: emptyErr.Error(),
 			})
@@ -172,7 +172,7 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 				}
 				continue
 			}
-			return response.TrashEmpty{}, emptyErr
+			return api.TrashEmpty{}, emptyErr
 		}
 		if len(series.Removed) == 0 {
 			continue
@@ -190,8 +190,8 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (response.Tr
 // apply (or any other claim-holder) is mid-flight on the series.
 // Filesystem-only; caller runs scan afterward to re-adopt the files
 // into series.json.
-func TrashRestore(ctx context.Context, deps Deps, in TrashRestoreInput) (response.TrashRestore, error) {
-	var out response.TrashRestore
+func TrashRestore(ctx context.Context, deps Deps, in TrashRestoreInput) (api.TrashRestore, error) {
+	var out api.TrashRestore
 	err := deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
 		if err := refuseIfClaimed(deps, in.Ref); err != nil {
 			return err
@@ -206,10 +206,10 @@ func TrashRestore(ctx context.Context, deps Deps, in TrashRestoreInput) (respons
 	return out, err
 }
 
-func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore, error) {
+func trashRestoreLocked(deps Deps, in TrashRestoreInput) (api.TrashRestore, error) {
 	meta, err := trashfile.Read(deps.LibRoot, in.Ref, in.ID)
 	if err != nil {
-		return response.TrashRestore{}, err
+		return api.TrashRestore{}, err
 	}
 	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	type plannedMove struct {
@@ -232,16 +232,16 @@ func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore,
 		if _, err := os.Stat(move.to); err == nil {
 			conflicts = append(conflicts, move.to)
 		} else if !errors.Is(err, os.ErrNotExist) {
-			return response.TrashRestore{}, err
+			return api.TrashRestore{}, err
 		}
 	}
 	if len(conflicts) > 0 {
-		return response.TrashRestore{}, &TrashRestoreTargetExistsError{Ref: in.Ref, ID: in.ID.String(), Targets: conflicts}
+		return api.TrashRestore{}, &TrashRestoreTargetExistsError{Ref: in.Ref, ID: in.ID.String(), Targets: conflicts}
 	}
 	restored := make([]string, 0, len(moves))
 	for _, move := range moves {
 		if err := fsop.SafeMoveFile(move.from, move.to); err != nil {
-			return response.TrashRestore{}, fmt.Errorf("workflow: trash restore move %q -> %q: %w", move.from, move.to, err)
+			return api.TrashRestore{}, fmt.Errorf("workflow: trash restore move %q -> %q: %w", move.from, move.to, err)
 		}
 		logFileMove(deps, "trash_restore",
 			"ref", in.Ref.String(),
@@ -252,9 +252,9 @@ func trashRestoreLocked(deps Deps, in TrashRestoreInput) (response.TrashRestore,
 		restored = append(restored, seriesSelector(seriesRoot, move.to))
 	}
 	if _, err := trashfile.Delete(deps.LibRoot, in.Ref, in.ID); err != nil {
-		return response.TrashRestore{}, fmt.Errorf("workflow: trash restore cleanup %s: %w", in.ID, err)
+		return api.TrashRestore{}, fmt.Errorf("workflow: trash restore cleanup %s: %w", in.ID, err)
 	}
-	return response.TrashRestore{
+	return api.TrashRestore{
 		Episode:  meta.Episode,
 		Restored: restored,
 	}, nil
@@ -327,8 +327,8 @@ func trashAgePasses(trashedAt, now time.Time, olderThan time.Duration) bool {
 	return now.Sub(trashedAt) >= olderThan
 }
 
-func trashEntryView(seriesRoot string, meta trashfile.Meta) response.TrashEntry {
-	view := response.TrashEntry{
+func trashEntryView(seriesRoot string, meta trashfile.Meta) api.TrashEntry {
+	view := api.TrashEntry{
 		ID:         meta.ID.String(),
 		Episode:    meta.Episode,
 		TrashedAt:  meta.TrashedAt,
@@ -338,9 +338,9 @@ func trashEntryView(seriesRoot string, meta trashfile.Meta) response.TrashEntry 
 		Size:       meta.Record.Size,
 	}
 	if len(meta.Record.Companions) > 0 {
-		view.Companions = make([]response.TrashCompanion, 0, len(meta.Record.Companions))
+		view.Companions = make([]api.TrashCompanion, 0, len(meta.Record.Companions))
 		for _, c := range meta.Record.Companions {
-			view.Companions = append(view.Companions, response.TrashCompanion{
+			view.Companions = append(view.Companions, api.TrashCompanion{
 				Path: seriesSelector(seriesRoot, c.Path),
 				Size: c.Size,
 			})

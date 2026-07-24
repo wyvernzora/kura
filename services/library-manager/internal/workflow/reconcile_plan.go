@@ -8,8 +8,8 @@ import (
 
 	domainseries "github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
 	"github.com/wyvernzora/kura/services/library-manager/internal/reconcile"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/planfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // PlanReconcileInput parameters for the PlanReconcile workflow.
@@ -25,12 +25,12 @@ type PlanReconcileInput = reconcile.PlanInput
 // file level (existing planfile is returned as-is). Apply re-validates
 // the snapshot at execute time, so a stale plan whose series state has
 // drifted is caught by the snapshot check, not a TTL gate.
-func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (response.ReconcilePlan, error) {
+func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (api.ReconcilePlan, error) {
 	plan, err := reconcile.BuildPlan(ctx, reconcileDeps(deps), in)
 	if err != nil {
-		return response.ReconcilePlan{}, err
+		return api.ReconcilePlan{}, err
 	}
-	out := response.ReconcilePlan{Plan: planToResponse(plan)}
+	out := api.ReconcilePlan{Plan: planToResponse(plan)}
 	if !plan.HasWork() {
 		return out, nil
 	}
@@ -44,12 +44,12 @@ func PlanReconcile(ctx context.Context, deps Deps, in PlanReconcileInput) (respo
 		out.Plan = planToResponse(existing)
 		return out, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return response.ReconcilePlan{}, err
+		return api.ReconcilePlan{}, err
 	}
 
 	plan.Header.CreatedAt = deps.Now().UTC().Truncate(time.Second)
 	if err := planfile.WritePlan(deps.LibRoot, in.Ref, plan); err != nil {
-		return response.ReconcilePlan{}, err
+		return api.ReconcilePlan{}, err
 	}
 	out.Token = plan.Header.Token
 	ca := plan.Header.CreatedAt
@@ -92,8 +92,8 @@ func reconcileDeps(deps Deps) reconcile.Deps {
 // or Owner.Record); subsequent steps in the same group become
 // companion moves. Plan steps are emitted in episode-ref-sorted order
 // by the planner so first-encounter order is deterministic.
-func planToResponse(plan reconcile.Plan) response.ReconcilePlanDetail {
-	out := response.ReconcilePlanDetail{Series: plan.Header.Series}
+func planToResponse(plan reconcile.Plan) api.ReconcilePlanDetail {
+	out := api.ReconcilePlanDetail{Series: plan.Header.Series}
 	replaced := buildReplacedIndex(plan.Steps)
 	episodes, trash, extras := groupPlanSteps(plan.Steps, replaced)
 	emitGroupedChanges(&out, plan.Steps, episodes, trash, extras)
@@ -124,8 +124,8 @@ func applyMediaFacts(rec *reconcile.ReplacedRecord, source, resolution, codec *s
 // "trash step that replaces an active episode" entries keyed by the
 // episode they replace. groupPlanSteps consumes the result to attach
 // each ReconcileReplaced onto the triggering ReconcileChange.
-func buildReplacedIndex(steps []reconcile.Step) map[string]*response.ReconcileReplaced {
-	out := map[string]*response.ReconcileReplaced{}
+func buildReplacedIndex(steps []reconcile.Step) map[string]*api.ReconcileReplaced {
+	out := map[string]*api.ReconcileReplaced{}
 	for _, step := range steps {
 		if step.Owner.Kind != reconcile.OwnerTrash || step.Owner.OriginalEpisode.IsZero() {
 			continue
@@ -133,11 +133,11 @@ func buildReplacedIndex(steps []reconcile.Step) map[string]*response.ReconcileRe
 		key := step.Owner.OriginalEpisode.String()
 		rep, ok := out[key]
 		if !ok {
-			rep = &response.ReconcileReplaced{From: step.From, To: step.To}
+			rep = &api.ReconcileReplaced{From: step.From, To: step.To}
 			applyMediaFacts(step.Owner.Record, &rep.Source, &rep.Resolution, &rep.Codec, &rep.Size, &rep.MTime)
 			out[key] = rep
 		} else if step.Kind == reconcile.StepFileMove {
-			rep.Companions = append(rep.Companions, response.ReconcileMove{From: step.From, To: step.To})
+			rep.Companions = append(rep.Companions, api.ReconcileMove{From: step.From, To: step.To})
 		}
 		rep.StepIDs = append(rep.StepIDs, step.ID)
 	}
@@ -149,15 +149,15 @@ func buildReplacedIndex(steps []reconcile.Step) map[string]*response.ReconcileRe
 // per-kind helper so the parent stays a 3-arm switch.
 func groupPlanSteps(
 	steps []reconcile.Step,
-	replaced map[string]*response.ReconcileReplaced,
+	replaced map[string]*api.ReconcileReplaced,
 ) (
-	episodes map[string]*response.ReconcileChange,
-	trash map[string]*response.ReconcileTrashChange,
-	extras map[string]*response.ReconcileExtraChange,
+	episodes map[string]*api.ReconcileChange,
+	trash map[string]*api.ReconcileTrashChange,
+	extras map[string]*api.ReconcileExtraChange,
 ) {
-	episodes = map[string]*response.ReconcileChange{}
-	trash = map[string]*response.ReconcileTrashChange{}
-	extras = map[string]*response.ReconcileExtraChange{}
+	episodes = map[string]*api.ReconcileChange{}
+	trash = map[string]*api.ReconcileTrashChange{}
+	extras = map[string]*api.ReconcileExtraChange{}
 	for _, step := range steps {
 		switch step.Owner.Kind {
 		case reconcile.OwnerEpisode:
@@ -172,14 +172,14 @@ func groupPlanSteps(
 }
 
 func groupEpisodeStep(
-	episodes map[string]*response.ReconcileChange,
-	replaced map[string]*response.ReconcileReplaced,
+	episodes map[string]*api.ReconcileChange,
+	replaced map[string]*api.ReconcileReplaced,
 	step reconcile.Step,
 ) {
 	key := step.Owner.EpisodeRef.String()
 	entry, ok := episodes[key]
 	if !ok {
-		entry = &response.ReconcileChange{
+		entry = &api.ReconcileChange{
 			Kind:     step.Owner.EpisodeIntent,
 			Episode:  step.Owner.EpisodeRef,
 			From:     step.From,
@@ -189,13 +189,13 @@ func groupEpisodeStep(
 		applyMediaFacts(step.Owner.StagedRecord, &entry.Source, &entry.Resolution, &entry.Codec, &entry.Size, &entry.MTime)
 		episodes[key] = entry
 	} else if step.Kind == reconcile.StepFileMove {
-		entry.Companions = append(entry.Companions, response.ReconcileMove{From: step.From, To: step.To})
+		entry.Companions = append(entry.Companions, api.ReconcileMove{From: step.From, To: step.To})
 	}
 	entry.StepIDs = append(entry.StepIDs, step.ID)
 }
 
 func groupTrashStep(
-	trash map[string]*response.ReconcileTrashChange,
+	trash map[string]*api.ReconcileTrashChange,
 	step reconcile.Step,
 ) {
 	if !step.Owner.OriginalEpisode.IsZero() {
@@ -205,23 +205,23 @@ func groupTrashStep(
 	key := step.Owner.TrashID
 	entry, ok := trash[key]
 	if !ok {
-		entry = &response.ReconcileTrashChange{ID: key, From: step.From, To: step.To}
+		entry = &api.ReconcileTrashChange{ID: key, From: step.From, To: step.To}
 		applyMediaFacts(step.Owner.Record, &entry.Source, &entry.Resolution, &entry.Codec, &entry.Size, &entry.MTime)
 		trash[key] = entry
 	} else if step.Kind == reconcile.StepFileMove {
-		entry.Companions = append(entry.Companions, response.ReconcileMove{From: step.From, To: step.To})
+		entry.Companions = append(entry.Companions, api.ReconcileMove{From: step.From, To: step.To})
 	}
 	entry.StepIDs = append(entry.StepIDs, step.ID)
 }
 
 func groupExtraStep(
-	extras map[string]*response.ReconcileExtraChange,
+	extras map[string]*api.ReconcileExtraChange,
 	step reconcile.Step,
 ) {
 	key := step.Owner.ExtraID
 	entry, ok := extras[key]
 	if !ok {
-		entry = &response.ReconcileExtraChange{
+		entry = &api.ReconcileExtraChange{
 			ID:     key,
 			Season: step.Owner.Season,
 			Prefix: step.Owner.Prefix,
@@ -244,11 +244,11 @@ func groupExtraStep(
 // grouped per-Owner maps into out in deterministic first-encounter
 // order. Map iteration would lose that ordering.
 func emitGroupedChanges(
-	out *response.ReconcilePlanDetail,
+	out *api.ReconcilePlanDetail,
 	steps []reconcile.Step,
-	episodes map[string]*response.ReconcileChange,
-	trash map[string]*response.ReconcileTrashChange,
-	extras map[string]*response.ReconcileExtraChange,
+	episodes map[string]*api.ReconcileChange,
+	trash map[string]*api.ReconcileTrashChange,
+	extras map[string]*api.ReconcileExtraChange,
 ) {
 	seenEp := map[string]bool{}
 	seenTr := map[string]bool{}

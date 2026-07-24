@@ -19,9 +19,9 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-func buildMetadataSource(rt *runContext, cfg config.Config) (provider.Source, error) {
+func buildMetadataSource(getenv func(string) string, cfg config.Config) (provider.Source, error) {
 	return config.BuildMetadataSource(config.MetadataSourceOptions{
-		APIKey:             rt.Getenv("KURA_TVDB_KEY"),
+		APIKey:             getenv("KURA_TVDB_KEY"),
 		TVDBURL:            cfg.Metadata.TVDBURL,
 		PreferredLanguages: cfg.Metadata.PreferredLanguages,
 	})
@@ -31,7 +31,8 @@ func buildMetadataSource(rt *runContext, cfg config.Config) (provider.Source, er
 // rebuild. Used by serve to surface KindServerNotReady to early
 // requests instead of delaying transport startup.
 func buildDepsAsyncIndex(
-	rt *runContext,
+	ctx context.Context,
+	getenv func(string) string,
 	cfg config.Config,
 	coordinator coord.Coordinator,
 	logger *slog.Logger,
@@ -42,18 +43,18 @@ func buildDepsAsyncIndex(
 	}
 	rowBuildOptions := indexfile.DefaultBuildOptions()
 	rowBuildOptions.AiringTailDays = cfg.Library.AiringTailDays
-	index, err := loadOrRebuildIndex(rt.Context, libRoot, rowBuildOptions, coordinator.WithIndex, logger)
+	index, err := loadOrRebuildIndex(ctx, libRoot, rowBuildOptions, coordinator.WithIndex, logger)
 	if err != nil {
 		return workflow.Deps{}, err
 	}
 	inspector := mediainfo.New()
 	inspector.Command = cfg.Metadata.MediaInfoCommand
 	provider := workflow.NewProviderFactory(func() (provider.Source, error) {
-		return buildMetadataSource(rt, cfg)
+		return buildMetadataSource(getenv, cfg)
 	})
 	// Placeholder registry: buildServeDeps replaces it with the
 	// configured long-lived registry before transports start.
-	registry := jobs.NewRegistry(rt.Context, jobs.Config{}, nil)
+	registry := jobs.NewRegistry(ctx, jobs.Config{}, nil)
 	return workflow.Deps{
 		LibRoot:            libRoot,
 		Index:              index,
@@ -86,7 +87,7 @@ func validateLibraryRoot(root string) error {
 }
 
 // validateInboxRoot enforces the same shape as validateLibraryRoot:
-// non-empty, exists, is a directory. Used by `kura serve` startup; CLI
+// non-empty, exists, is a directory. Used by server startup; CLI
 // commands don't call this because all inbox interaction goes through
 // the server's REST surface.
 func validateInboxRoot(root string) error {

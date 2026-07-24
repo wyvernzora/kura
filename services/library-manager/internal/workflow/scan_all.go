@@ -12,8 +12,8 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // defaultScanAllConcurrency caps fan-out when ScanAllInput.Concurrency
@@ -50,26 +50,26 @@ type ScanAllInput struct {
 // Includes rows in error status — re-scan is a fix path for several
 // error classes, so skipping them defeats the purpose. Only untracked
 // rows are skipped.
-func ScanAll(ctx context.Context, deps Deps, in ScanAllInput) *jobs.Job[response.ScanAllResult] {
-	return jobs.Submit(deps.Jobs, ctx, jobs.KindScanAll, refs.Series{}, func(jobCtx context.Context) (response.ScanAllResult, error) {
+func ScanAll(ctx context.Context, deps Deps, in ScanAllInput) *jobs.Job[api.ScanAllResult] {
+	return jobs.Submit(deps.Jobs, ctx, jobs.KindScanAll, refs.Series{}, func(jobCtx context.Context) (api.ScanAllResult, error) {
 		return runScanAll(jobCtx, deps, in)
 	})
 }
 
-func runScanAll(ctx context.Context, deps Deps, in ScanAllInput) (response.ScanAllResult, error) {
+func runScanAll(ctx context.Context, deps Deps, in ScanAllInput) (api.ScanAllResult, error) {
 	if deps.Index == nil {
-		return response.ScanAllResult{}, errors.New("scan_all: index not available")
+		return api.ScanAllResult{}, errors.New("scan_all: index not available")
 	}
 	rows, err := deps.Index.Snapshot()
 	if errors.Is(err, indexfile.ErrNotReady) {
-		return response.ScanAllResult{}, &ServerNotReadyError{Reason: "library index is rebuilding"}
+		return api.ScanAllResult{}, &ServerNotReadyError{Reason: "library index is rebuilding"}
 	}
 	if err != nil {
-		return response.ScanAllResult{}, err
+		return api.ScanAllResult{}, err
 	}
 	targets := make([]refs.Series, 0, len(rows))
 	for _, row := range rows {
-		if row.Status == response.ListStatusUntracked {
+		if row.Status == api.ListStatusUntracked {
 			continue
 		}
 		targets = append(targets, row.Series)
@@ -79,7 +79,7 @@ func runScanAll(ctx context.Context, deps Deps, in ScanAllInput) (response.ScanA
 
 	if total == 0 {
 		progress.Success(ctx, "scan_all", "", 0)
-		return response.ScanAllResult{Total: 0}, nil
+		return api.ScanAllResult{Total: 0}, nil
 	}
 
 	workers := in.Concurrency
@@ -95,7 +95,7 @@ func runScanAll(ctx context.Context, deps Deps, in ScanAllInput) (response.ScanA
 		done      int
 		succeeded int
 		failed    int
-		failures  []response.ScanAllFailure
+		failures  []api.ScanAllFailure
 	)
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -130,11 +130,11 @@ func runScanAll(ctx context.Context, deps Deps, in ScanAllInput) (response.ScanA
 	_ = g.Wait()
 
 	if err := ctx.Err(); err != nil {
-		return response.ScanAllResult{}, err
+		return api.ScanAllResult{}, err
 	}
 
 	progress.Success(ctx, "scan_all", "", total)
-	return response.ScanAllResult{
+	return api.ScanAllResult{
 		Total:     total,
 		Succeeded: succeeded,
 		Failed:    failed,
@@ -142,12 +142,12 @@ func runScanAll(ctx context.Context, deps Deps, in ScanAllInput) (response.ScanA
 	}, nil
 }
 
-func classifyScanAllFailure(ref refs.Series, err error) response.ScanAllFailure {
+func classifyScanAllFailure(ref refs.Series, err error) api.ScanAllFailure {
 	kind := errkind.KindInternal
 	if coded, ok := errors.AsType[errkind.Coded](err); ok {
 		kind = coded.Kind()
 	}
-	return response.ScanAllFailure{
+	return api.ScanAllFailure{
 		Ref:     ref.String(),
 		Kind:    kind,
 		Message: err.Error(),

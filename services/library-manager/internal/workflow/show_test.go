@@ -14,10 +14,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/media"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func TestShow_PrecancelledCtxReturnsEarly(t *testing.T) {
@@ -195,7 +195,7 @@ func TestShow_EpisodeSelectorAiringSeasonComposesWithStatus(t *testing.T) {
 	out, err := Show(context.Background(), Deps{
 		LibRoot: root,
 		Now:     func() time.Time { return time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC) },
-	}, ShowInput{Ref: ref, Episodes: selector, Status: []response.Status{response.StatusMissing}})
+	}, ShowInput{Ref: ref, Episodes: selector, Status: []api.Status{api.StatusMissing}})
 	if err != nil {
 		t.Fatalf("Show: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestShow_EpisodeSelectorAiringSeasonComposesWithStatus(t *testing.T) {
 		t.Fatalf("Seasons = %+v, want only S2", out.Seasons)
 	}
 	eps := out.Seasons[0].Episodes
-	if len(eps) != 1 || eps[0].Episode.String() != "S02E0001" || eps[0].Status != response.StatusMissing {
+	if len(eps) != 1 || eps[0].Episode.String() != "S02E0001" || eps[0].Status != api.StatusMissing {
 		t.Fatalf("episodes = %+v, want missing S02E0001", eps)
 	}
 }
@@ -394,18 +394,18 @@ func TestBuildStagedExtras_ReadsPersistedIsDir(t *testing.T) {
 }
 
 func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
-	mk := func(season, ep int, st response.Status, source string) (refs.Episode, response.EpisodeShow) {
+	mk := func(season, ep int, st api.Status, source string) (refs.Episode, api.EpisodeShow) {
 		ref, _ := refs.NewEpisode(season, ep)
-		view := response.EpisodeShow{Episode: ref, Status: st}
+		view := api.EpisodeShow{Episode: ref, Status: st}
 		if source != "" {
-			view.Active = &response.MediaShow{Source: source, Resolution: "1080p"}
+			view.Active = &api.MediaShow{Source: source, Resolution: "1080p"}
 		}
 		return ref, view
 	}
-	r1, v1 := mk(1, 1, response.StatusPresent, "BluRay")
-	r2, v2 := mk(1, 2, response.StatusMissing, "")
-	r3, v3 := mk(2, 1, response.StatusPresent, "WebRip")
-	r4, v4 := mk(3, 1, response.StatusStagedReplacement, "")
+	r1, v1 := mk(1, 1, api.StatusPresent, "BluRay")
+	r2, v2 := mk(1, 2, api.StatusMissing, "")
+	r3, v3 := mk(2, 1, api.StatusPresent, "WebRip")
+	r4, v4 := mk(3, 1, api.StatusStagedReplacement, "")
 
 	cases := []struct {
 		name   string
@@ -429,12 +429,12 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 		},
 		{
 			name:   "status missing",
-			filter: episodeFilter{statuses: statusSet([]response.Status{response.StatusMissing})},
+			filter: episodeFilter{statuses: statusSet([]api.Status{api.StatusMissing})},
 			want:   []refs.Episode{r2},
 		},
 		{
 			name:   "status staged includes staged replacement",
-			filter: episodeFilter{statuses: statusSet([]response.Status{response.StatusStaged})},
+			filter: episodeFilter{statuses: statusSet([]api.Status{api.StatusStaged})},
 			want:   []refs.Episode{r4},
 		},
 		{
@@ -446,7 +446,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 			name: "compose S1 + present",
 			filter: episodeFilter{
 				selector: refs.EpisodeSelector{Kind: refs.EpisodeSelectorNormal, Season: 1},
-				statuses: statusSet([]response.Status{response.StatusPresent}),
+				statuses: statusSet([]api.Status{api.StatusPresent}),
 			},
 			want: []refs.Episode{r1},
 		},
@@ -456,7 +456,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 			got := []refs.Episode{}
 			for _, pair := range []struct {
 				ref  refs.Episode
-				view response.EpisodeShow
+				view api.EpisodeShow
 			}{{r1, v1}, {r2, v2}, {r3, v3}, {r4, v4}} {
 				if tc.filter.match(pair.ref, pair.view) {
 					got = append(got, pair.ref)
@@ -477,14 +477,14 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 func TestComputeEpisodeStatus_NoAirDateIsPending(t *testing.T) {
 	now := time.Date(2026, 6, 14, 0, 0, 0, 0, time.UTC)
 	got := computeEpisodeStatus(domainseries.Episode{}, now)
-	if got != response.StatusPending {
-		t.Fatalf("status = %s, want %s", got, response.StatusPending)
+	if got != api.StatusPending {
+		t.Fatalf("status = %s, want %s", got, api.StatusPending)
 	}
 
 	past := civil.DateOf(now).AddDays(-1)
 	got = computeEpisodeStatus(domainseries.Episode{AirDate: past}, now)
-	if got != response.StatusMissing {
-		t.Fatalf("past status = %s, want %s", got, response.StatusMissing)
+	if got != api.StatusMissing {
+		t.Fatalf("past status = %s, want %s", got, api.StatusMissing)
 	}
 }
 

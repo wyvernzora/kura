@@ -8,8 +8,8 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // TestScanAll_AlwaysReturnsTrackedJob mirrors the IsTracked invariant
@@ -58,9 +58,9 @@ func TestScanAll_EmptyLibrary(t *testing.T) {
 // re-scan-fixes-error invariant).
 func TestScanAll_SkipsUntrackedScansErrors(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "Tracked Complete", response.ListStatusComplete),
-		makeRow(t, "Tracked Errored", response.ListStatusError),
-		makeRow(t, "Untracked Dir", response.ListStatusUntracked),
+		makeRow(t, "Tracked Complete", api.ListStatusComplete),
+		makeRow(t, "Tracked Errored", api.ListStatusError),
+		makeRow(t, "Untracked Dir", api.ListStatusUntracked),
 	)
 	deps.Jobs = jobs.NewRegistry(context.Background(), jobs.Config{}, nil)
 	t.Cleanup(func() { deps.Jobs.Shutdown(0) })
@@ -94,9 +94,9 @@ func TestScanAll_SkipsUntrackedScansErrors(t *testing.T) {
 // monotonically from 0 toward total without gaps.
 func TestScanAll_ProgressMonotonic(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "A", response.ListStatusComplete),
-		makeRow(t, "B", response.ListStatusComplete),
-		makeRow(t, "C", response.ListStatusComplete),
+		makeRow(t, "A", api.ListStatusComplete),
+		makeRow(t, "B", api.ListStatusComplete),
+		makeRow(t, "C", api.ListStatusComplete),
 	)
 	deps.Jobs = jobs.NewRegistry(context.Background(), jobs.Config{}, nil)
 	t.Cleanup(func() { deps.Jobs.Shutdown(0) })

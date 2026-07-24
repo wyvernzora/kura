@@ -26,6 +26,7 @@ RUN go mod download
 
 COPY cmd ./cmd
 COPY internal ./internal
+COPY pkg ./pkg
 
 # CGO_ENABLED=0 forces a fully static binary so it runs identically on
 # musl (Alpine) and glibc hosts without shared-library shims.
@@ -92,4 +93,4 @@ ENTRYPOINT ["/usr/local/bin/kura-library-manager"]
 # The bundled config serves REST and MCP-over-HTTP and expects library
 # and inbox mounts at /library and /inbox. Mount a replacement at
 # /etc/kura/library-manager.toml for deployment-specific settings.
-CMD ["serve", "--config=/etc/kura/library-manager.toml"]
+CMD ["--config=/etc/kura/library-manager.toml"]

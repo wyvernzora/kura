@@ -11,9 +11,9 @@ import (
 	"cloud.google.com/go/civil"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 const (
@@ -130,7 +130,7 @@ func UntrackedRow(ref refs.Series, now time.Time) Row {
 	return Row{
 		Series: ref,
 		Title:  ref.String(),
-		Status: response.ListStatusUntracked,
+		Status: api.ListStatusUntracked,
 	}
 }
 
@@ -282,14 +282,14 @@ func splitIntoCours(sorted []civil.Date, gapDays int) [][]civil.Date {
 	return out
 }
 
-func listStatusFor(summary seriesSummary) response.ListStatus {
+func listStatusFor(summary seriesSummary) api.ListStatus {
 	if summary.episodes == 0 && summary.pending == 0 {
-		return response.ListStatusIncomplete
+		return api.ListStatusIncomplete
 	}
 	if summary.missing > 0 {
-		return response.ListStatusIncomplete
+		return api.ListStatusIncomplete
 	}
-	return response.ListStatusComplete
+	return api.ListStatusComplete
 }
 
 // collectActiveQuality walks active records on non-special episodes and

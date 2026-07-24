@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/inbox"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // InboxListInput parameters for the InboxList workflow.
@@ -62,10 +62,10 @@ func (e *InboxNotConfiguredError) Error() string {
 // their children; file paths return that exact entry. Limit and depth
 // are clamped to defaults when zero, rejected when above configured
 // maxima.
-func InboxList(ctx context.Context, deps Deps, in InboxListInput) (response.InboxList, error) {
+func InboxList(ctx context.Context, deps Deps, in InboxListInput) (api.InboxList, error) {
 	_ = ctx
 	if deps.InboxRoot == "" {
-		return response.InboxList{}, &InboxNotConfiguredError{}
+		return api.InboxList{}, &InboxNotConfiguredError{}
 	}
 
 	limit := in.Limit
@@ -73,10 +73,10 @@ func InboxList(ctx context.Context, deps Deps, in InboxListInput) (response.Inbo
 		limit = inboxListDefaultLimit
 	}
 	if limit < 0 {
-		return response.InboxList{}, fmt.Errorf("workflow: inbox list limit must be >= 0 (got %d)", limit)
+		return api.InboxList{}, fmt.Errorf("workflow: inbox list limit must be >= 0 (got %d)", limit)
 	}
 	if limit > inboxListMaxLimit {
-		return response.InboxList{}, &InboxLimitTooLargeError{Limit: in.Limit, Max: inboxListMaxLimit}
+		return api.InboxList{}, &InboxLimitTooLargeError{Limit: in.Limit, Max: inboxListMaxLimit}
 	}
 
 	depth := in.Depth
@@ -84,10 +84,10 @@ func InboxList(ctx context.Context, deps Deps, in InboxListInput) (response.Inbo
 		depth = inboxListDefaultDepth
 	}
 	if depth < 0 {
-		return response.InboxList{}, fmt.Errorf("workflow: inbox list depth must be >= 0 (got %d)", depth)
+		return api.InboxList{}, fmt.Errorf("workflow: inbox list depth must be >= 0 (got %d)", depth)
 	}
 	if depth > inboxListMaxDepth {
-		return response.InboxList{}, &InboxDepthTooLargeError{Depth: in.Depth, Max: inboxListMaxDepth}
+		return api.InboxList{}, &InboxDepthTooLargeError{Depth: in.Depth, Max: inboxListMaxDepth}
 	}
 
 	res, err := inbox.Walk(deps.InboxRoot, inbox.Options{
@@ -100,17 +100,17 @@ func InboxList(ctx context.Context, deps Deps, in InboxListInput) (response.Inbo
 		IncludeHidden: in.IncludeHidden,
 	})
 	if err != nil {
-		return response.InboxList{}, err
+		return api.InboxList{}, err
 	}
 
-	out := response.InboxList{
+	out := api.InboxList{
 		Path:        inboxSelector(deps.InboxRoot, res.Path),
-		Entries:     make([]response.InboxEntry, len(res.Entries)),
+		Entries:     make([]api.InboxEntry, len(res.Entries)),
 		Truncated:   res.Truncated,
 		ElidedCount: res.ElidedCount,
 	}
 	for i, e := range res.Entries {
-		entry := response.InboxEntry{
+		entry := api.InboxEntry{
 			Path: inboxSelector(deps.InboxRoot, e.RelPath),
 			Kind: string(e.Kind),
 			Size: e.Size,

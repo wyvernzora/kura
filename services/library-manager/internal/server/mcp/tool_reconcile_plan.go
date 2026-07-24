@@ -12,9 +12,9 @@ import (
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 type reconcilePlanInput struct {
@@ -127,7 +127,7 @@ func addReconcilePlanTool(s *sdkmcp.Server, deps Deps) {
 // redacts other absolute paths to basenames, and strips replaced.to
 // (trash path is invisible to the
 // agent — the file is "gone" as far as MCP is concerned).
-func projectReconcilePlan(in response.ReconcilePlan, seriesRoot, inboxRoot string) mcpReconcilePlan {
+func projectReconcilePlan(in api.ReconcilePlan, seriesRoot, inboxRoot string) mcpReconcilePlan {
 	out := mcpReconcilePlan{
 		Token:   in.Token,
 		Changes: make([]mcpReconcileChange, 0, len(in.Plan.Changes)),

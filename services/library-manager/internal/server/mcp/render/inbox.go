@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // InboxList formats an inbox listing as plain text suitable for an MCP
@@ -19,7 +19,7 @@ import (
 // lines so the data row's path column remains a copyable selector.
 // Hint lines (when truncated) follow as ' #'-prefixed lines so callers
 // can distinguish data from advice.
-func InboxList(r response.InboxList) string {
+func InboxList(r api.InboxList) string {
 	if len(r.Entries) == 0 && !r.Truncated {
 		return "(empty)\n"
 	}

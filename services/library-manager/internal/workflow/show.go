@@ -12,10 +12,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/media"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ShowInput parameters for the Show workflow. Filter fields compose
@@ -37,7 +37,7 @@ type ShowInput struct {
 	Preview     bool
 	Now         time.Time
 	Episodes    refs.EpisodeSelector
-	Status      []response.Status
+	Status      []api.Status
 	Source      []string
 	Resolution  []string
 }
@@ -47,15 +47,15 @@ type ShowInput struct {
 // probing. Drift between scans (a tracked active file going missing on
 // disk) is the responsibility of `kura scan`, which prunes missing
 // actives on the next walk; until then Show renders the persisted view.
-func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
+func Show(ctx context.Context, deps Deps, in ShowInput) (api.Show, error) {
 	if err := ctx.Err(); err != nil {
-		return response.Show{}, err
+		return api.Show{}, err
 	}
 	if in.Preview {
 		return showPreview(ctx, deps, in)
 	}
 	if in.Ref.IsZero() {
-		return response.Show{}, &NotFoundError{Ref: in.Ref}
+		return api.Show{}, &NotFoundError{Ref: in.Ref}
 	}
 	model, err := seriesfile.Load(deps.LibRoot, in.Ref)
 	if err != nil {
@@ -63,9 +63,9 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		// os.ErrNotExist with its on-disk path; transports map this
 		// to a 404 with a clean "series not tracked" message.
 		if errors.Is(err, os.ErrNotExist) {
-			return response.Show{}, &SeriesNotFoundError{Ref: in.Ref}
+			return api.Show{}, &SeriesNotFoundError{Ref: in.Ref}
 		}
-		return response.Show{}, err
+		return api.Show{}, err
 	}
 	now := in.Now
 	if now.IsZero() {
@@ -92,7 +92,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 			}
 		}
 		if !seen {
-			return response.Show{}, &EpisodeSelectorSeasonMissingError{
+			return api.Show{}, &EpisodeSelectorSeasonMissingError{
 				Ref:      in.Ref,
 				Selector: selector.String(),
 				Season:   selector.Season,
@@ -100,11 +100,11 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 		}
 	}
 	row := indexfile.BuildRowFromModelWithOptions(model, now, rowOpts)
-	seasons := []response.SeasonShow{}
+	seasons := []api.SeasonShow{}
 	if !noEpisodes {
 		seasons = buildSeasons(seriesRoot, model, now, filter, false)
 	}
-	out := response.Show{
+	out := api.Show{
 		MetadataRef:    model.Metadata,
 		Ref:            in.Ref,
 		Root:           librarySelector(deps.LibRoot, seriesRoot),
@@ -127,20 +127,20 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
 // The episode spine comes from the provider; every episode reports as
 // missing since nothing is on disk. Backs the UI's pre-add preview
 // (GET /series/{ref}?preview=true).
-func showPreview(ctx context.Context, deps Deps, in ShowInput) (response.Show, error) {
+func showPreview(ctx context.Context, deps Deps, in ShowInput) (api.Show, error) {
 	metadataSeries, metadataRef, err := fetchSeriesMetadata(ctx, deps, in.MetadataRef, "")
 	if err != nil {
-		return response.Show{}, err
+		return api.Show{}, err
 	}
 	// Derive the directory name the series would get on add, so the
 	// preview shows its eventual Ref.
 	ref, err := resolveAddRef(refs.Series{}, metadataSeries)
 	if err != nil {
-		return response.Show{}, err
+		return api.Show{}, err
 	}
 	model, err := seriesfile.NewFromMetadata(metadataRef, "", metadataSeries)
 	if err != nil {
-		return response.Show{}, err
+		return api.Show{}, err
 	}
 	model.Ref = ref
 	now := in.Now
@@ -155,11 +155,11 @@ func showPreview(ctx context.Context, deps Deps, in ShowInput) (response.Show, e
 	if preferredTitle == "" {
 		preferredTitle = ref.String()
 	}
-	seasons := []response.SeasonShow{}
+	seasons := []api.SeasonShow{}
 	if !noEpisodes {
 		seasons = buildSeasons(seriesRoot, model, now, filter, true)
 	}
-	return response.Show{
+	return api.Show{
 		MetadataRef:    metadataRef,
 		Ref:            ref,
 		Root:           librarySelector(deps.LibRoot, seriesRoot),
@@ -174,13 +174,13 @@ func showPreview(ctx context.Context, deps Deps, in ShowInput) (response.Show, e
 
 // artworkShow maps persisted series artwork to its response shape.
 // Returns nil when there's no artwork so the field omits cleanly.
-func artworkShow(a domainseries.Artwork) *response.ArtworkShow {
+func artworkShow(a domainseries.Artwork) *api.ArtworkShow {
 	if a.IsZero() {
 		return nil
 	}
-	out := &response.ArtworkShow{}
+	out := &api.ArtworkShow{}
 	if !a.Poster.IsZero() {
-		out.Poster = &response.PosterShow{
+		out.Poster = &api.PosterShow{
 			URL:          a.Poster.URL,
 			ThumbnailURL: a.Poster.ThumbnailURL,
 			Language:     a.Poster.Language,
@@ -189,18 +189,18 @@ func artworkShow(a domainseries.Artwork) *response.ArtworkShow {
 	return out
 }
 
-func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) []response.TrashItemShow {
+func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) []api.TrashItemShow {
 	if len(items) == 0 {
 		return nil
 	}
 	sorted := make([]domainseries.StagedTrashItem, len(items))
 	copy(sorted, items)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID.Compare(sorted[j].ID) < 0 })
-	out := make([]response.TrashItemShow, 0, len(sorted))
+	out := make([]api.TrashItemShow, 0, len(sorted))
 	for _, item := range sorted {
-		companions := make([]response.CompanionShow, 0, len(item.Companions))
+		companions := make([]api.CompanionShow, 0, len(item.Companions))
 		for _, c := range item.Companions {
-			companions = append(companions, response.CompanionShow{
+			companions = append(companions, api.CompanionShow{
 				Path:     seriesSelector(seriesRoot, c.Path),
 				Role:     c.Role,
 				Language: c.Language,
@@ -209,7 +209,7 @@ func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) [
 				MTime:    c.MTime.UTC().Format(time.RFC3339),
 			})
 		}
-		out = append(out, response.TrashItemShow{
+		out = append(out, api.TrashItemShow{
 			ID:         item.ID.String(),
 			Path:       seriesSelector(seriesRoot, item.Path),
 			Size:       item.Size,
@@ -221,16 +221,16 @@ func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) [
 	return out
 }
 
-func buildStagedExtras(inboxRoot string, items []domainseries.StagedExtraItem) []response.ExtraItemShow {
+func buildStagedExtras(inboxRoot string, items []domainseries.StagedExtraItem) []api.ExtraItemShow {
 	if len(items) == 0 {
 		return nil
 	}
 	sorted := make([]domainseries.StagedExtraItem, len(items))
 	copy(sorted, items)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID.Compare(sorted[j].ID) < 0 })
-	out := make([]response.ExtraItemShow, 0, len(sorted))
+	out := make([]api.ExtraItemShow, 0, len(sorted))
 	for _, item := range sorted {
-		out = append(out, response.ExtraItemShow{
+		out = append(out, api.ExtraItemShow{
 			ID:      item.ID.String(),
 			Season:  item.Season,
 			Path:    inboxSelector(inboxRoot, item.Path),
@@ -249,12 +249,12 @@ type episodeFilter struct {
 	selector           refs.EpisodeSelector
 	seasonFilterActive bool
 	seasons            map[int]struct{}
-	statuses           map[response.Status]struct{}
+	statuses           map[api.Status]struct{}
 	sources            map[string]struct{}
 	resolutions        map[string]struct{}
 }
 
-func (f episodeFilter) match(ref refs.Episode, view response.EpisodeShow) bool {
+func (f episodeFilter) match(ref refs.Episode, view api.EpisodeShow) bool {
 	if f.seasonFilterActive {
 		if _, ok := f.seasons[ref.Season()]; !ok {
 			return false
@@ -291,7 +291,7 @@ func showEpisodeFilter(
 	model *domainseries.Series,
 	now time.Time,
 	selector refs.EpisodeSelector,
-	statuses []response.Status,
+	statuses []api.Status,
 	sources []string,
 	resolutions []string,
 	rowOpts indexfile.BuildOptions,
@@ -313,19 +313,19 @@ func showEpisodeFilter(
 	return filter, false
 }
 
-func matchesCollapsedStatus(statuses map[response.Status]struct{}, status response.Status) bool {
-	if status != response.StatusStagedReplacement {
+func matchesCollapsedStatus(statuses map[api.Status]struct{}, status api.Status) bool {
+	if status != api.StatusStagedReplacement {
 		return false
 	}
-	_, ok := statuses[response.StatusStaged]
+	_, ok := statuses[api.StatusStaged]
 	return ok
 }
 
-func statusSet(in []response.Status) map[response.Status]struct{} {
+func statusSet(in []api.Status) map[api.Status]struct{} {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make(map[response.Status]struct{}, len(in))
+	out := make(map[api.Status]struct{}, len(in))
 	for _, s := range in {
 		out[s] = struct{}{}
 	}
@@ -343,8 +343,8 @@ func stringSet(in []string) map[string]struct{} {
 	return out
 }
 
-func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, filter episodeFilter, forceMissing bool) []response.SeasonShow {
-	bySeason := map[int][]response.EpisodeShow{}
+func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, filter episodeFilter, forceMissing bool) []api.SeasonShow {
+	bySeason := map[int][]api.EpisodeShow{}
 	allSeasons := map[int]struct{}{}
 	for ref, episode := range model.Episodes {
 		allSeasons[ref.Season()] = struct{}{}
@@ -352,9 +352,9 @@ func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, 
 		if forceMissing {
 			// Preview: nothing is on disk, so every episode reads as
 			// missing (collapses pending/future into missing too).
-			status = response.StatusMissing
+			status = api.StatusMissing
 		}
-		view := response.EpisodeShow{
+		view := api.EpisodeShow{
 			Episode:        ref,
 			Aired:          formatAirDate(episode.AirDate),
 			Status:         status,
@@ -384,11 +384,11 @@ func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, 
 		numbers = append(numbers, n)
 	}
 	sort.Ints(numbers)
-	out := make([]response.SeasonShow, 0, len(numbers))
+	out := make([]api.SeasonShow, 0, len(numbers))
 	for _, n := range numbers {
 		eps := bySeason[n]
 		sort.Slice(eps, func(i, j int) bool { return eps[i].Episode.Episode() < eps[j].Episode.Episode() })
-		out = append(out, response.SeasonShow{
+		out = append(out, api.SeasonShow{
 			Number:   n,
 			Summary:  summarizeSeason(eps),
 			Episodes: eps,
@@ -397,7 +397,7 @@ func buildSeasons(seriesRoot string, model *domainseries.Series, now time.Time, 
 	return out
 }
 
-func surfaceFilteredSeasons(bySeason map[int][]response.EpisodeShow, allSeasons map[int]struct{}, filter episodeFilter) {
+func surfaceFilteredSeasons(bySeason map[int][]api.EpisodeShow, allSeasons map[int]struct{}, filter episodeFilter) {
 	switch {
 	case filter.selector.IsNormal():
 		// Only the selected season; verified to exist by caller.
@@ -419,45 +419,45 @@ func surfaceFilteredSeasons(bySeason map[int][]response.EpisodeShow, allSeasons 
 	}
 }
 
-func summarizeSeason(eps []response.EpisodeShow) response.SeasonSummary {
-	out := response.SeasonSummary{EpisodeCount: len(eps)}
+func summarizeSeason(eps []api.EpisodeShow) api.SeasonSummary {
+	out := api.SeasonSummary{EpisodeCount: len(eps)}
 	for _, ep := range eps {
 		switch ep.Status {
-		case response.StatusPresent:
+		case api.StatusPresent:
 			out.Present++
-		case response.StatusMissing:
+		case api.StatusMissing:
 			out.Missing++
-		case response.StatusStaged:
+		case api.StatusStaged:
 			out.Staged++
-		case response.StatusStagedReplacement:
+		case api.StatusStagedReplacement:
 			out.StagedReplacement++
-		case response.StatusPending:
+		case api.StatusPending:
 			out.Pending++
 		}
 	}
 	return out
 }
 
-func computeEpisodeStatus(episode domainseries.Episode, now time.Time) response.Status {
+func computeEpisodeStatus(episode domainseries.Episode, now time.Time) api.Status {
 	if episode.Active != nil && episode.Staged != nil {
-		return response.StatusStagedReplacement
+		return api.StatusStagedReplacement
 	}
 	if episode.Staged != nil {
-		return response.StatusStaged
+		return api.StatusStaged
 	}
 	if episode.Active != nil {
-		return response.StatusPresent
+		return api.StatusPresent
 	}
 	if isPending(episode.AirDate, now) {
-		return response.StatusPending
+		return api.StatusPending
 	}
-	return response.StatusMissing
+	return api.StatusMissing
 }
 
-func mediaShow(seriesRoot string, record media.Record) response.MediaShow {
-	companions := make([]response.CompanionShow, 0, len(record.Companions))
+func mediaShow(seriesRoot string, record media.Record) api.MediaShow {
+	companions := make([]api.CompanionShow, 0, len(record.Companions))
 	for _, c := range record.Companions {
-		companions = append(companions, response.CompanionShow{
+		companions = append(companions, api.CompanionShow{
 			Path:     seriesSelector(seriesRoot, c.Path),
 			Role:     c.Role,
 			Language: c.Language,
@@ -470,7 +470,7 @@ func mediaShow(seriesRoot string, record media.Record) response.MediaShow {
 	if record.Resolution.Known() {
 		dimensions = record.Resolution.String()
 	}
-	return response.MediaShow{
+	return api.MediaShow{
 		Source:     record.Source.Display(),
 		Resolution: record.Resolution.Display(),
 		Dimensions: dimensions,

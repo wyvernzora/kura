@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/reconcile"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // RecoverReconcileInput parameters for the RecoverReconcile workflow.
@@ -17,12 +17,12 @@ type RecoverReconcileInput = reconcile.RecoverInput
 // Force=true breaks the claim regardless of holder identity. Without
 // Force the workflow only clears same-host stale claims; live or
 // cross-host claims surface as BusyError.
-func RecoverReconcile(ctx context.Context, deps Deps, in RecoverReconcileInput) (response.RecoverReconcile, error) {
+func RecoverReconcile(ctx context.Context, deps Deps, in RecoverReconcileInput) (api.RecoverReconcile, error) {
 	out, err := reconcile.Recover(ctx, reconcileDeps(deps), in)
 	if err != nil {
-		return response.RecoverReconcile{Ref: in.Ref}, err
+		return api.RecoverReconcile{Ref: in.Ref}, err
 	}
-	return response.RecoverReconcile{
+	return api.RecoverReconcile{
 		Ref:         out.Ref,
 		Cleared:     out.Cleared,
 		PriorHolder: out.PriorHolder,

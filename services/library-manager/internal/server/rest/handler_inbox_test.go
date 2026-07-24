@@ -12,9 +12,9 @@ import (
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func newInboxTestServer(t *testing.T) (server *Server, inboxRoot string) {
@@ -61,7 +61,7 @@ func TestHandleInboxList_Empty(t *testing.T) {
 	if rec.Header().Get(headerETag) == "" {
 		t.Error("ETag header missing")
 	}
-	var resp response.InboxList
+	var resp api.InboxList
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -81,7 +81,7 @@ func TestHandleInboxList_ListsFiles(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
 	}
-	var resp response.InboxList
+	var resp api.InboxList
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestHandleInboxList_RecursiveQuery(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
 	}
-	var resp response.InboxList
+	var resp api.InboxList
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}

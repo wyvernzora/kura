@@ -9,7 +9,7 @@ import (
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func mustEpisode(t *testing.T, season, episode int) refs.Episode {
@@ -98,24 +98,24 @@ func TestKuraShow_RejectsMalformedEpisodesAtBoundary(t *testing.T) {
 }
 
 func TestProjectShow_DropsOperatorFields(t *testing.T) {
-	in := response.Show{
+	in := api.Show{
 		MetadataRef:    refs.Metadata("tvdb:1"),
 		Ref:            mustSeries(t, "Bookworm"),
 		Root:           "/library/Bookworm",
 		LastScanned:    "2026-04-12T08:31:00Z",
 		PreferredTitle: "Bookworm",
-		Seasons: []response.SeasonShow{
-			{Number: 1, Episodes: []response.EpisodeShow{
+		Seasons: []api.SeasonShow{
+			{Number: 1, Episodes: []api.EpisodeShow{
 				{
 					Episode: mustEpisode(t, 1, 1),
 					Aired:   "2019-10-03",
-					Status:  response.StatusPresent,
-					Active: &response.MediaShow{
+					Status:  api.StatusPresent,
+					Active: &api.MediaShow{
 						Source:     "BDRip",
 						Resolution: "1080p",
 						Size:       1024,
 						File:       "series:Season 1/Bookworm S01E01.mkv",
-						Companions: []response.CompanionShow{
+						Companions: []api.CompanionShow{
 							{Path: "series:Season 1/Bookworm S01E01.en.srt"},
 						},
 						Attrs: map[string]string{"origin": "takuhai"},
@@ -150,14 +150,14 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 }
 
 func TestProjectEpisode_StagedReplacementCollapsesToStaged(t *testing.T) {
-	got := projectEpisode(response.EpisodeShow{
+	got := projectEpisode(api.EpisodeShow{
 		Episode: mustEpisode(t, 1, 2),
-		Status:  response.StatusStagedReplacement,
-		Active:  &response.MediaShow{Source: "WebRip", Size: 100},
-		Staged: &response.MediaShow{
+		Status:  api.StatusStagedReplacement,
+		Active:  &api.MediaShow{Source: "WebRip", Size: 100},
+		Staged: &api.MediaShow{
 			Source: "BDRip", Size: 200,
 			File: "/staging/x.mkv",
-			Companions: []response.CompanionShow{
+			Companions: []api.CompanionShow{
 				{Path: "/staging/x.en.srt"},
 			},
 		},
@@ -177,12 +177,12 @@ func TestProjectEpisode_StagedReplacementCollapsesToStaged(t *testing.T) {
 }
 
 func TestProjectShow_StagedReplacementSummaryCollapsesToStaged(t *testing.T) {
-	got := projectShow(response.Show{
+	got := projectShow(api.Show{
 		MetadataRef:    refs.Metadata("tvdb:370070"),
 		PreferredTitle: "Bookworm",
-		Seasons: []response.SeasonShow{{
+		Seasons: []api.SeasonShow{{
 			Number: 1,
-			Summary: response.SeasonSummary{
+			Summary: api.SeasonSummary{
 				EpisodeCount:      2,
 				Staged:            1,
 				StagedReplacement: 1,
@@ -273,23 +273,23 @@ func TestTruncateMCPShow_NoOpUnderBudget(t *testing.T) {
 }
 
 func TestProjectShow_PosterAndEpisodeTitles(t *testing.T) {
-	in := response.Show{
+	in := api.Show{
 		MetadataRef:    refs.Metadata("tvdb:1"),
 		Ref:            mustSeries(t, "Bookworm"),
 		Root:           "/library/Bookworm",
 		PreferredTitle: "Bookworm",
-		Artwork: &response.ArtworkShow{
-			Poster: &response.PosterShow{
+		Artwork: &api.ArtworkShow{
+			Poster: &api.PosterShow{
 				URL:          "https://artworks.thetvdb.com/poster.jpg",
 				ThumbnailURL: "https://artworks.thetvdb.com/poster_thumb.jpg",
 				Language:     "ja",
 			},
 		},
-		Seasons: []response.SeasonShow{{
+		Seasons: []api.SeasonShow{{
 			Number: 1,
-			Episodes: []response.EpisodeShow{{
+			Episodes: []api.EpisodeShow{{
 				Episode:        mustEpisode(t, 1, 1),
-				Status:         response.StatusMissing,
+				Status:         api.StatusMissing,
 				PreferredTitle: "本好きのお姫様",
 				CanonicalTitle: "The Bookworm Princess",
 			}},
@@ -315,21 +315,21 @@ func TestProjectShow_PosterAndEpisodeTitles(t *testing.T) {
 }
 
 func TestProjectShow_StagedTrashAndExtras(t *testing.T) {
-	in := response.Show{
+	in := api.Show{
 		MetadataRef:    refs.Metadata("tvdb:1"),
 		Ref:            mustSeries(t, "Bookworm"),
 		Root:           "/library/Bookworm",
 		PreferredTitle: "Bookworm",
-		StagedTrash: []response.TrashItemShow{{
+		StagedTrash: []api.TrashItemShow{{
 			ID:    "01H0000000000000000000AAAA",
 			Path:  "Season 1/loser.mkv",
 			Size:  1024,
 			MTime: "2026-04-12T08:31:00Z",
-			Companions: []response.CompanionShow{
+			Companions: []api.CompanionShow{
 				{Path: "Season 1/loser.en.srt", Size: 10},
 			},
 		}},
-		StagedExtras: []response.ExtraItemShow{{
+		StagedExtras: []api.ExtraItemShow{{
 			ID:     "01H0000000000000000000BBBB",
 			Season: 1,
 			Path:   "/inbox/bts",

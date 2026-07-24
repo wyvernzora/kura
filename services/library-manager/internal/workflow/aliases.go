@@ -7,20 +7,20 @@ import (
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ListAliases returns the persisted user aliases for the addressed
 // series. TVDB-derived aliases are not surfaced — they're folded
 // into searchKey at scan time and discarded.
-func ListUserAliases(ctx context.Context, deps Deps, ref refs.Series) (response.UserAliasList, error) {
+func ListUserAliases(ctx context.Context, deps Deps, ref refs.Series) (api.UserAliasList, error) {
 	model, err := seriesfile.Load(deps.LibRoot, ref)
 	if err != nil {
-		return response.UserAliasList{}, err
+		return api.UserAliasList{}, err
 	}
-	return response.UserAliasList{Aliases: userAliasStrings(model.UserAliases)}, nil
+	return api.UserAliasList{Aliases: userAliasStrings(model.UserAliases)}, nil
 }
 
 // AddAliases appends each non-empty entry to the series's UserAliases
@@ -31,7 +31,7 @@ func ListUserAliases(ctx context.Context, deps Deps, ref refs.Series) (response.
 // Transient TVDB aliases are not in scope on this path — searchKey
 // refolds against persisted titles + translations + the new user
 // alias set. The next provider scan re-folds them in.
-func AddUserAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (response.UserAliasList, error) {
+func AddUserAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (api.UserAliasList, error) {
 	return mutateUserAliases(ctx, deps, ref, "alias_add", func(model interface {
 		AddUserAlias(textnorm.NFCString) bool
 	}, normalized []textnorm.NFCString) {
@@ -44,7 +44,7 @@ func AddUserAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []s
 // RemoveAliases drops each entry from the series's UserAliases,
 // recomputes searchKey, and persists. Idempotent: removing a missing
 // alias is a no-op.
-func RemoveUserAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (response.UserAliasList, error) {
+func RemoveUserAliases(ctx context.Context, deps Deps, ref refs.Series, aliases []string) (api.UserAliasList, error) {
 	return mutateUserAliases(ctx, deps, ref, "alias_rm", func(model interface {
 		RemoveUserAlias(textnorm.NFCString) bool
 	}, normalized []textnorm.NFCString) {
@@ -64,9 +64,9 @@ func mutateUserAliases[T any](
 	op string,
 	apply func(model T, normalized []textnorm.NFCString),
 	rawInputs []string,
-) (response.UserAliasList, error) {
+) (api.UserAliasList, error) {
 	normalized := normalizeUserAliasInputs(rawInputs)
-	var out response.UserAliasList
+	var out api.UserAliasList
 	err := deps.Coordinator.WithSeries(ctx, ref, func() error {
 		return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 			model, err := seriesfile.Load(deps.LibRoot, ref)
@@ -87,7 +87,7 @@ func mutateUserAliases[T any](
 			if err := updateIndexModel(ctx, deps, model, op); err != nil {
 				return err
 			}
-			out = response.UserAliasList{Aliases: userAliasStrings(model.UserAliases)}
+			out = api.UserAliasList{Aliases: userAliasStrings(model.UserAliases)}
 			return nil
 		})
 	})

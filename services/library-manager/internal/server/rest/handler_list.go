@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 //	limit              — page cap (default 100, max 1000).
 //	cursor             — opaque pagination token from a prior response.
 //
-// Response: response.ListResult, with content-derived ETag.
+// Response: api.ListResult, with content-derived ETag.
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	statuses, err := parseListStatuses(q["status"])
@@ -104,13 +104,13 @@ func parseOptionalBool(raw, name string) (*bool, error) {
 
 // parseListStatuses validates each entry against the closed allowed
 // set. Unknown values yield 400 invalid_ref.
-func parseListStatuses(raw []string) ([]response.ListStatus, error) {
+func parseListStatuses(raw []string) ([]api.ListStatus, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	out := make([]response.ListStatus, 0, len(raw))
+	out := make([]api.ListStatus, 0, len(raw))
 	for _, s := range raw {
-		status := response.ListStatus(s)
+		status := api.ListStatus(s)
 		if !isAllowedListStatus(status) {
 			return nil, &validationError{
 				msg: fmt.Sprintf("unknown status %q (allowed: complete, incomplete, error, untracked)", s),
@@ -121,12 +121,12 @@ func parseListStatuses(raw []string) ([]response.ListStatus, error) {
 	return out, nil
 }
 
-func isAllowedListStatus(s response.ListStatus) bool {
+func isAllowedListStatus(s api.ListStatus) bool {
 	switch s {
-	case response.ListStatusComplete,
-		response.ListStatusIncomplete,
-		response.ListStatusError,
-		response.ListStatusUntracked:
+	case api.ListStatusComplete,
+		api.ListStatusIncomplete,
+		api.ListStatusError,
+		api.ListStatusUntracked:
 		return true
 	}
 	return false

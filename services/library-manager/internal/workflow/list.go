@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ListInput parameters for the List workflow.
@@ -25,7 +25,7 @@ import (
 //   - Cursor: empty for first page; otherwise an opaque token returned
 //     by the previous page's NextCursor.
 type ListInput struct {
-	Statuses []response.ListStatus
+	Statuses []api.ListStatus
 	// Airing is a tri-state filter on Row.IsAiring. nil = no filter,
 	// non-nil = admit only rows whose IsAiring matches.
 	Airing     *bool
@@ -51,36 +51,36 @@ const (
 //
 // Returns ServerNotReadyError when the index is rebuilding from a cold
 // start (or corruption recovery) and has nothing to serve yet.
-func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, error) {
+func List(ctx context.Context, deps Deps, in ListInput) (api.ListResult, error) {
 	rows, err := deps.Index.Snapshot()
 	if errors.Is(err, indexfile.ErrNotReady) {
-		return response.ListResult{}, &ServerNotReadyError{Reason: "library index is rebuilding"}
+		return api.ListResult{}, &ServerNotReadyError{Reason: "library index is rebuilding"}
 	}
 	if err != nil {
-		return response.ListResult{}, err
+		return api.ListResult{}, err
 	}
 
 	rows = applyStatusFilter(rows, in.Statuses)
 	rows = applyAiringFilter(rows, in.Airing)
 	tagFilter, err := parseTagExpressions(in.Tags, true)
 	if err != nil {
-		return response.ListResult{}, err
+		return api.ListResult{}, err
 	}
 	rows = applyTagFilter(rows, tagFilter)
 
 	pageSize, err := normalizePageSize(in.MaxResults)
 	if err != nil {
-		return response.ListResult{}, err
+		return api.ListResult{}, err
 	}
 
 	view := computeViewHash(rows)
 	startAt, dataChanged, err := resolveCursorPosition(rows, in.Cursor, view)
 	if err != nil {
-		return response.ListResult{}, err
+		return api.ListResult{}, err
 	}
 
 	page := paginateRows(rows, startAt, pageSize)
-	out := make([]response.ListRow, 0, len(page))
+	out := make([]api.ListRow, 0, len(page))
 	for _, row := range page {
 		out = append(out, rowToListRow(row))
 	}
@@ -88,7 +88,7 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 	progress.Start(ctx, "list", "Listing library contents", len(out))
 	progress.Success(ctx, "list", fmt.Sprintf("Listed library contents (%d series)", len(out)), len(out))
 
-	return response.ListResult{
+	return api.ListResult{
 		Rows:        out,
 		DataChanged: dataChanged,
 		NextCursor:  nextListCursor(view, page, pageSize, startAt, len(rows)),
@@ -97,7 +97,7 @@ func List(ctx context.Context, deps Deps, in ListInput) (response.ListResult, er
 
 // applyStatusFilter narrows rows to entries whose Status is in the
 // allow-list. Empty statuses returns rows unchanged.
-func applyStatusFilter(rows []indexfile.Row, statuses []response.ListStatus) []indexfile.Row {
+func applyStatusFilter(rows []indexfile.Row, statuses []api.ListStatus) []indexfile.Row {
 	if len(statuses) == 0 {
 		return rows
 	}
@@ -189,8 +189,8 @@ func nextListCursor(view []byte, page []indexfile.Row, pageSize, startAt, total 
 	return encodeListCursor(view, anchorHash(last.Series.String()))
 }
 
-func rowToListRow(row indexfile.Row) response.ListRow {
-	return response.ListRow{
+func rowToListRow(row indexfile.Row) api.ListRow {
+	return api.ListRow{
 		Status:             row.Status,
 		IsAiring:           row.IsAiring,
 		Staged:             row.Staged,

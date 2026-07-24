@@ -14,9 +14,9 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 type jobStatusInput struct {
@@ -182,7 +182,7 @@ func cloneJobErrorData(in map[string]any) map[string]any {
 	return out
 }
 
-func hasReconcileApplyDetail(result response.ReconcileApply) bool {
+func hasReconcileApplyDetail(result api.ReconcileApply) bool {
 	return !result.Series.IsZero() ||
 		result.AppliedSteps > 0 ||
 		result.TotalSteps > 0 ||

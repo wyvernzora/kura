@@ -8,8 +8,8 @@ import (
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 type listInput struct {
@@ -28,11 +28,11 @@ const (
 //go:embed tool_list.md
 var toolListDoc string
 
-var allowedListStatuses = map[response.ListStatus]struct{}{
-	response.ListStatusComplete:   {},
-	response.ListStatusIncomplete: {},
-	response.ListStatusError:      {},
-	response.ListStatusUntracked:  {},
+var allowedListStatuses = map[api.ListStatus]struct{}{
+	api.ListStatusComplete:   {},
+	api.ListStatusIncomplete: {},
+	api.ListStatusError:      {},
+	api.ListStatusUntracked:  {},
 }
 
 func addListTool(s *sdkmcp.Server, deps Deps) {
@@ -80,13 +80,13 @@ func addListTool(s *sdkmcp.Server, deps Deps) {
 // parseListStatuses validates each entry is in the closed allowed set
 // and returns the typed slice. An unknown value yields an
 // invalidInputError with kind=invalid_ref.
-func parseListStatuses(raw []string) ([]response.ListStatus, error) {
+func parseListStatuses(raw []string) ([]api.ListStatus, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
-	out := make([]response.ListStatus, 0, len(raw))
+	out := make([]api.ListStatus, 0, len(raw))
 	for _, s := range raw {
-		status := response.ListStatus(s)
+		status := api.ListStatus(s)
 		if _, ok := allowedListStatuses[status]; !ok {
 			return nil, &invalidInputError{
 				kind:    errkind.KindInvalidRef,

@@ -1,5 +1,5 @@
 GO_PACKAGES := ./...
-GOFMT_DIRS := cmd internal
+GOFMT_DIRS := cmd internal pkg
 
 # VERSION stamps the kura binary via -ldflags="-X main.Version=...".
 # Defaults to `git describe` (tag-based, falls back to short SHA on an
@@ -31,12 +31,12 @@ MCP_HTTP_PORT        ?= 8081
 INSPECTOR_PORT       ?= 6274
 INSPECTOR_PROXY_PORT ?= 6277
 
-.PHONY: build check check-gen fmt gen-ts install lint test vet devserver-build devserver-run e2e
+.PHONY: build check check-gen fmt gen-ts install lint test vet devserver-build devserver-run
 
 build:
 	go build -trimpath -ldflags='$(GO_LDFLAGS)' -o bin/kura-library-manager ./cmd/kura-library-manager
 
-# gen-ts regenerates ../webui/src/api/types.gen.ts from internal/response.
+# gen-ts regenerates ../webui/src/api/types.gen.ts from pkg/api.
 # The wrapper at tools/tygo runs tygo and post-processes the closed
 # string-enum aliases (Status, ListStatus, ScanStatus) into TS literal
 # unions — tygo emits them as `= string` otherwise.
@@ -72,9 +72,6 @@ test:
 	go test $(GO_PACKAGES)
 
 check: fmt vet lint test build check-gen
-
-e2e:
-	go test -tags=e2e -v -race -count=1 -timeout=120s ./e2e/...
 
 # Combined hot-reload dev container: REST + MCP HTTP + Inspector UI.
 # See tools/devserver/README.md for usage.

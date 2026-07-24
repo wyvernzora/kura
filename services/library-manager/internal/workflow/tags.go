@@ -8,9 +8,9 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 type tagExpressions struct {
@@ -26,12 +26,12 @@ type UpdateTagsInput struct {
 
 // UpdateTags applies plain expressions as additions and ! expressions as
 // removals. Tags are opaque to Kura; only their syntax is validated.
-func UpdateTags(ctx context.Context, deps Deps, in UpdateTagsInput) (response.SeriesTags, error) {
+func UpdateTags(ctx context.Context, deps Deps, in UpdateTagsInput) (api.SeriesTags, error) {
 	exprs, err := parseTagExpressions(in.Tags, false)
 	if err != nil {
-		return response.SeriesTags{}, err
+		return api.SeriesTags{}, err
 	}
-	var out response.SeriesTags
+	var out api.SeriesTags
 	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
 		return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 			model, loadErr := seriesfile.Load(deps.LibRoot, in.Ref)
@@ -60,7 +60,7 @@ func UpdateTags(ctx context.Context, deps Deps, in UpdateTagsInput) (response.Se
 			if tags == nil {
 				tags = []string{}
 			}
-			out = response.SeriesTags{MetadataRef: model.Metadata, Tags: tags}
+			out = api.SeriesTags{MetadataRef: model.Metadata, Tags: tags}
 			if !changed {
 				return nil
 			}

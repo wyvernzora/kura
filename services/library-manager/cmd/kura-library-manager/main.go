@@ -1,40 +1,54 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 )
 
-// cli is the kong root binding for kura-library-manager.
-type cli struct {
-	Add       addCmd       `cmd:"" help:"Add a brand new series to the library."`
-	Alias     aliasCmd     `cmd:"" help:"Manage user-coined search aliases for a series."`
-	Import    importCmd    `cmd:"" help:"Import an existing directory as a tracked series."`
-	Inbox     inboxCmd     `cmd:"" help:"Inspect the inbox where new media drops before staging."`
-	List      listCmd      `cmd:"" help:"List library contents."`
-	Path      pathCmd      `cmd:"" help:"Print the absolute path of a tracked series's root directory."`
-	Resolve   resolveCmd   `cmd:"" help:"Resolve selector terms to metadata candidates."`
-	Scan      scanCmd      `cmd:"" help:"Scan a tracked series for episode files."`
-	Show      showCmd      `cmd:"" help:"Show tracked series library state."`
-	Reindex   reindexCmd   `cmd:"" help:"Rebuild the library metadata index."`
-	Reconcile reconcileCmd `cmd:"" help:"Plan and apply filesystem reconciliation for tracked files."`
-	Remove    removeCmd    `cmd:"" help:"Untrack a series; with --purge wholesale delete its directory."`
-	Reset     resetCmd     `cmd:"" help:"Remove staged media from a tracked episode."`
-	Serve     serveCmd     `cmd:"" help:"Run kura as a long-lived REST/MCP server."`
-	Stage     stageCmd     `cmd:"" help:"Stage episode, trash, or extra intent for a series."`
-	Tag       tagCmd       `cmd:"" help:"Update opaque workflow tags on a series."`
-	Trash     trashCmd     `cmd:"" help:"Manage per-series trash entries."`
-}
+const defaultConfigPath = "/etc/kura/library-manager.toml"
+
+var errFlagAlreadyReported = errors.New("flag error already reported")
 
 func main() {
-	rt := runContext{
-		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
-		Getenv: os.Getenv,
-	}
-	if err := run(os.Args[1:], rt); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := run(context.Background(), os.Args[1:], os.Getenv, os.Stdout, os.Stderr); err != nil {
+		if !errors.Is(err, errFlagAlreadyReported) {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
+}
+
+func run(
+	ctx context.Context,
+	args []string,
+	getenv func(string) string,
+	stdout io.Writer,
+	stderr io.Writer,
+) error {
+	flags := flag.NewFlagSet("kura-library-manager", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+
+	opts := serverOptions{}
+	flags.StringVar(&opts.Config, "config", defaultConfigPath, "load serve settings from a strict TOML file")
+	printVersion := flags.Bool("version", false, "print the kura library-manager version and exit")
+	flags.BoolVar(&opts.UseTestStubs, "use-test-stubs", false, "test only: use the e2e stub provider and inspector")
+	flags.StringVar(&opts.StubProviderFixture, "stub-provider-fixture", "", "test only: load the e2e stub provider fixture from this path")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return errFlagAlreadyReported
+	}
+	if flags.NArg() != 0 {
+		return fmt.Errorf("unexpected arguments: %v", flags.Args())
+	}
+	if *printVersion {
+		_, err := fmt.Fprintln(stdout, Version)
+		return err
+	}
+	return runServer(ctx, opts, getenv, stderr)
 }

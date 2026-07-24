@@ -11,10 +11,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/trashfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // RemoveInput parameters for the Remove workflow. Purge=false untracks
@@ -32,13 +32,13 @@ type RemoveInput struct {
 // Default mode refuses if the series has staged records — caller must
 // reset/reconcile first. Purge mode bypasses the gate (the wholesale
 // delete drops staged records along with everything else).
-func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, error) {
+func Remove(ctx context.Context, deps Deps, in RemoveInput) (api.Remove, error) {
 	progress.Start(ctx, "remove", fmt.Sprintf("Removing %s", in.Ref), 0)
 	if in.Ref.IsZero() {
 		progress.Failure(ctx, "remove", "Failed to remove series", 0, 0)
-		return response.Remove{}, &NotFoundError{Ref: in.Ref}
+		return api.Remove{}, &NotFoundError{Ref: in.Ref}
 	}
-	var out response.Remove
+	var out api.Remove
 	err := deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
 		seriesDir := paths.SeriesDir(deps.LibRoot, in.Ref)
 		if _, err := os.Stat(seriesDir); err != nil {
@@ -80,11 +80,11 @@ func Remove(ctx context.Context, deps Deps, in RemoveInput) (response.Remove, er
 		}
 
 		progress.Success(ctx, "remove", fmt.Sprintf("Removed %s", in.Ref), 0)
-		out = response.Remove{ReclaimedBytes: bytes}
+		out = api.Remove{ReclaimedBytes: bytes}
 		return nil
 	})
 	if err != nil {
-		return response.Remove{}, err
+		return api.Remove{}, err
 	}
 	return out, nil
 }

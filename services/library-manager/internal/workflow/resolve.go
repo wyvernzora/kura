@@ -12,7 +12,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
 	"github.com/wyvernzora/kura/services/library-manager/internal/resolve"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ResolveInput parameters for the Resolve workflow.
@@ -25,12 +25,12 @@ type ResolveInput struct {
 // ambiguity; callers inspect the candidate-list cardinality and decide.
 //
 // Provider-needing: invokes deps.Provider() lazily.
-func Resolve(ctx context.Context, deps Deps, in ResolveInput) (response.Resolution, error) {
+func Resolve(ctx context.Context, deps Deps, in ResolveInput) (api.Resolution, error) {
 	progress.Start(ctx, "resolve", fmt.Sprintf("Resolving %s", strings.Join(in.Terms, " ")), 0)
 	source, err := deps.Provider()
 	if err != nil {
 		progress.Failure(ctx, "resolve", "Failed to resolve series", 0, 0)
-		return response.Resolution{}, err
+		return api.Resolution{}, err
 	}
 	resolver := resolve.New(
 		resolve.NewMetadataIDStrategy(source),
@@ -39,7 +39,7 @@ func Resolve(ctx context.Context, deps Deps, in ResolveInput) (response.Resoluti
 	res, err := resolver.Resolve(ctx, selector.ParseSelector(in.Terms))
 	if err != nil {
 		progress.Failure(ctx, "resolve", "Failed to resolve series", 0, 0)
-		return response.Resolution{}, err
+		return api.Resolution{}, err
 	}
 	// Search results carry no genres or artwork on TVDB (search endpoint
 	// omits them). Enrich ambiguous results with a parallel detail fetch
@@ -55,8 +55,8 @@ func Resolve(ctx context.Context, deps Deps, in ResolveInput) (response.Resoluti
 	}
 	progress.Success(ctx, "resolve", "Resolved series", len(res.Results))
 
-	out := response.Resolution{
-		Candidates: make([]response.Candidate, 0, len(res.Results)),
+	out := api.Resolution{
+		Candidates: make([]api.Candidate, 0, len(res.Results)),
 	}
 	for _, r := range res.Results {
 		genres := r.Summary.Genres
@@ -83,19 +83,19 @@ type enrichment struct {
 	posterThumb string
 }
 
-// candidateFrom builds a response.Candidate from a resolve.Result plus
+// candidateFrom builds a api.Candidate from a resolve.Result plus
 // the resolved genres and poster.
-func candidateFrom(r resolve.Result, genres []string, poster provider.Artwork) response.Candidate {
-	evidence := make([]response.Evidence, 0, len(r.Evidence))
+func candidateFrom(r resolve.Result, genres []string, poster provider.Artwork) api.Candidate {
+	evidence := make([]api.Evidence, 0, len(r.Evidence))
 	for _, ev := range r.Evidence {
-		evidence = append(evidence, response.Evidence{
+		evidence = append(evidence, api.Evidence{
 			Term:        ev.Term,
 			Rank:        ev.Rank,
 			MatchSource: ev.MatchSource,
 			Annotations: ev.Annotations,
 		})
 	}
-	return response.Candidate{
+	return api.Candidate{
 		Ref:                r.Summary.MetadataRef,
 		PreferredTitle:     r.Summary.PreferredTitle.String(),
 		CanonicalTitle:     r.Summary.CanonicalTitle.String(),

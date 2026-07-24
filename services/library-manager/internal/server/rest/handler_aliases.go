@@ -3,8 +3,8 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // handleAliasesList serves GET /api/v1/series/{ref}/aliases. Returns
@@ -35,7 +35,7 @@ func (s *Server) handleAliasesAdd(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	var req response.UserAliasMutation
+	var req api.UserAliasMutation
 	if err := decodeJSON(r.Body, &req); err != nil {
 		writeError(w, err)
 		return
@@ -57,7 +57,7 @@ func (s *Server) handleAliasesRemove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	var req response.UserAliasMutation
+	var req api.UserAliasMutation
 	if err := decodeJSON(r.Body, &req); err != nil {
 		writeError(w, err)
 		return

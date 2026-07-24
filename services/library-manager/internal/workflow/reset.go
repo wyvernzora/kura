@@ -9,9 +9,9 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/media"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	domainseries "github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ResetInput parameters for the Reset workflow. Episode/All target the
@@ -29,9 +29,9 @@ type ResetInput struct {
 // Reset clears one or every staged record on a series and persists the
 // updated series.json. Returns the dropped record(s) so callers can
 // surface what was undone.
-func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult, error) {
+func Reset(ctx context.Context, deps Deps, in ResetInput) (api.ResetResult, error) {
 	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
-	var out response.ResetResult
+	var out api.ResetResult
 	err := deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
 		return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 			result, err := resetAttempt(ctx, deps, in, seriesRoot)
@@ -43,7 +43,7 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 		})
 	})
 	if err != nil {
-		return response.ResetResult{}, err
+		return api.ResetResult{}, err
 	}
 	return out, nil
 }
@@ -51,28 +51,28 @@ func Reset(ctx context.Context, deps Deps, in ResetInput) (response.ResetResult,
 // resetAttempt is the body of one RetryOnConflict iteration: load the
 // model, dispatch on in.All vs targeted, persist + update the index.
 // Surfaces the typed errors callers expect (BusyError, etc.) directly.
-func resetAttempt(ctx context.Context, deps Deps, in ResetInput, seriesRoot string) (response.ResetResult, error) {
+func resetAttempt(ctx context.Context, deps Deps, in ResetInput, seriesRoot string) (api.ResetResult, error) {
 	model, err := seriesfile.Load(deps.LibRoot, in.Ref)
 	if err != nil {
-		return response.ResetResult{}, err
+		return api.ResetResult{}, err
 	}
 	if model.InProgress != nil {
-		return response.ResetResult{}, &coord.BusyError{Scope: coord.SeriesScope(in.Ref), Holder: *model.InProgress}
+		return api.ResetResult{}, &coord.BusyError{Scope: coord.SeriesScope(in.Ref), Holder: *model.InProgress}
 	}
 	if in.All {
 		return resetAllInPlace(ctx, deps, in.Ref, seriesRoot, model)
 	}
 	dropped, trashRemoved, extraRemoved, err := resetTargeted(model, in, seriesRoot)
 	if err != nil {
-		return response.ResetResult{}, err
+		return api.ResetResult{}, err
 	}
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {
-		return response.ResetResult{}, err
+		return api.ResetResult{}, err
 	}
 	if err := updateIndexModel(ctx, deps, model, "reset"); err != nil {
-		return response.ResetResult{}, err
+		return api.ResetResult{}, err
 	}
-	return response.ResetResult{
+	return api.ResetResult{
 		Record:       dropped,
 		TrashRemoved: trashRemoved,
 		ExtraRemoved: extraRemoved,
@@ -87,7 +87,7 @@ func resetTargeted(
 	model *domainseries.Series,
 	in ResetInput,
 	seriesRoot string,
-) (dropped *response.MediaShow, trashRemoved, extraRemoved []string, err error) {
+) (dropped *api.MediaShow, trashRemoved, extraRemoved []string, err error) {
 	for _, id := range in.TrashIDs {
 		if model.RemoveStagedTrash(id) {
 			trashRemoved = append(trashRemoved, id.String())
@@ -121,7 +121,7 @@ func resetTargeted(
 	return dropped, trashRemoved, extraRemoved, nil
 }
 
-func resetAllInPlace(ctx context.Context, deps Deps, _ refs.Series, seriesRoot string, model *domainseries.Series) (response.ResetResult, error) {
+func resetAllInPlace(ctx context.Context, deps Deps, _ refs.Series, seriesRoot string, model *domainseries.Series) (api.ResetResult, error) {
 	refsWithStaged := make([]refs.Episode, 0, len(model.Episodes))
 	for r, episode := range model.Episodes {
 		if episode.Staged != nil {
@@ -129,13 +129,13 @@ func resetAllInPlace(ctx context.Context, deps Deps, _ refs.Series, seriesRoot s
 		}
 	}
 	sort.Slice(refsWithStaged, func(i, j int) bool { return refsWithStaged[i].String() < refsWithStaged[j].String() })
-	records := make([]response.ResetRecord, 0, len(refsWithStaged))
+	records := make([]api.ResetRecord, 0, len(refsWithStaged))
 	for _, r := range refsWithStaged {
 		dropped := media.CloneRecord(*model.Episodes[r].Staged)
 		if err := model.ClearStaged(r); err != nil {
-			return response.ResetResult{}, err
+			return api.ResetResult{}, err
 		}
-		records = append(records, response.ResetRecord{Episode: r, Record: mediaShow(seriesRoot, dropped)})
+		records = append(records, api.ResetRecord{Episode: r, Record: mediaShow(seriesRoot, dropped)})
 	}
 	trashRemoved := make([]string, 0, len(model.StagedTrash))
 	for _, item := range model.StagedTrash {
@@ -149,11 +149,11 @@ func resetAllInPlace(ctx context.Context, deps Deps, _ refs.Series, seriesRoot s
 	model.ClearStagedExtras()
 	if len(records) > 0 || len(trashRemoved) > 0 || len(extraRemoved) > 0 {
 		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("reset")); err != nil {
-			return response.ResetResult{}, err
+			return api.ResetResult{}, err
 		}
 		if err := updateIndexModel(ctx, deps, model, "reset"); err != nil {
-			return response.ResetResult{}, err
+			return api.ResetResult{}, err
 		}
 	}
-	return response.ResetResult{Records: records, TrashRemoved: trashRemoved, ExtraRemoved: extraRemoved}, nil
+	return api.ResetResult{Records: records, TrashRemoved: trashRemoved, ExtraRemoved: extraRemoved}, nil
 }

@@ -10,10 +10,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesdir"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ImportInput parameters for the Import workflow. Ref is required —
@@ -56,13 +56,13 @@ func validateImportTarget(libRoot string, ref refs.Series, force bool) (string, 
 // Force) has no .kura/series.json.
 //
 // Provider-needing.
-func Import(ctx context.Context, deps Deps, in ImportInput) (result response.AddResult, err error) {
+func Import(ctx context.Context, deps Deps, in ImportInput) (result api.AddResult, err error) {
 	if in.Ref.IsZero() {
-		return response.AddResult{}, errors.New("workflow: series ref is required")
+		return api.AddResult{}, errors.New("workflow: series ref is required")
 	}
 	ref, err := refs.ParseSeries(in.Ref.String())
 	if err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	progress.Start(ctx, "import", fmt.Sprintf("Fetching metadata for %s", ref), 0)
 	// step tracks how far the workflow advanced so the deferred
@@ -76,14 +76,14 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 
 	metadataSeries, metadataRef, err := fetchSeriesMetadata(ctx, deps, in.Metadata, in.Ordering)
 	if err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	metadataPath, err := validateImportTarget(deps.LibRoot, ref, in.Force)
 	if err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	if err := checkMetadataAvailable(deps, metadataRef, ref); err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	var preservedTags []string
 	if in.Force {
@@ -91,14 +91,14 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 			preservedTags = slices.Clone(existing.Tags)
 		}
 		if rmErr := os.Remove(metadataPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
-			return response.AddResult{}, rmErr
+			return api.AddResult{}, rmErr
 		}
 	}
 	progress.Update(ctx, "import", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)
 	step = 1
 	model, err := seriesfile.NewFromMetadata(metadataRef, in.Ordering, metadataSeries)
 	if err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	model.Ref = ref
 	if in.Force {
@@ -106,13 +106,13 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result response.Add
 	}
 	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	if err := updateIndexModel(ctx, deps, model, "import"); err != nil {
-		return response.AddResult{}, translateIndexDuplicate(err)
+		return api.AddResult{}, translateIndexDuplicate(err)
 	}
 	progress.Success(ctx, "import", fmt.Sprintf("Imported %s", ref), 1)
-	return response.AddResult{
+	return api.AddResult{
 		MetadataRef:    metadataRef,
 		Ref:            ref,
 		PreferredTitle: metadataSeries.PreferredTitle.String(),

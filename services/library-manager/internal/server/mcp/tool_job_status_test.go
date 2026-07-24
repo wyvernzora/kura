@@ -16,10 +16,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/reconcile"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func connectInMemoryWithJobStatus(t *testing.T, deps Deps) *sdkmcp.ClientSession {
@@ -284,9 +284,9 @@ func TestProjectJobStatus_FailedReconcileApplyIncludesCategoryAndPartialResult(t
 	if out.Error.Category != errkind.CategoryInternalError {
 		t.Fatalf("Error.Category = %q, want %q", out.Error.Category, errkind.CategoryInternalError)
 	}
-	result, ok := out.Error.Data["result"].(response.ReconcileApply)
+	result, ok := out.Error.Data["result"].(api.ReconcileApply)
 	if !ok {
-		t.Fatalf("error.data.result = %T, want response.ReconcileApply", out.Error.Data["result"])
+		t.Fatalf("error.data.result = %T, want api.ReconcileApply", out.Error.Data["result"])
 	}
 	if result.AppliedSteps != 1 || result.TotalSteps != 2 || result.FailedStep == nil {
 		t.Fatalf("partial result = %+v", result)

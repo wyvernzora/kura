@@ -11,8 +11,8 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func seedTaggedSeries(t *testing.T, srv *Server) {
@@ -45,7 +45,7 @@ func TestHandleTagsUpdateMutatesAtomically(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
-	var got response.SeriesTags
+	var got api.SeriesTags
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestHandleListFiltersSpaceDelimitedTags(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
-	var got response.ListResult
+	var got api.ListResult
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}

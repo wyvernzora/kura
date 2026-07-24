@@ -3,7 +3,7 @@
 // Tygo emits Go `type X string` aliases as `export type X = string;`,
 // which loses literal-value narrowing on the TS side. This wrapper
 // substitutes a literal-union form for the closed enums in
-// internal/response. Keep the constants in sync with the Go source —
+// pkg/api. Keep the constants in sync with the Go source —
 // `make check-gen` will fail if a new value is added without updating
 // either the Go enum or this wrapper.
 package main

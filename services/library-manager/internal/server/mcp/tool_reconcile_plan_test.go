@@ -10,7 +10,7 @@ import (
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func connectInMemoryWithReconcilePlan(t *testing.T) *sdkmcp.ClientSession {
@@ -88,11 +88,11 @@ func TestProjectReconcilePreviewPath(t *testing.T) {
 }
 
 func TestProjectReconcilePlan_DropsCreatedAtAndPlanWrapper(t *testing.T) {
-	in := response.ReconcilePlan{
+	in := api.ReconcilePlan{
 		Token: "abc123",
-		Plan: response.ReconcilePlanDetail{
+		Plan: api.ReconcilePlanDetail{
 			Series: mustSeries(t, "Show"),
-			Changes: []response.ReconcileChange{
+			Changes: []api.ReconcileChange{
 				{
 					Kind:       "add",
 					Episode:    mustEpisode(t, 1, 1),
@@ -121,17 +121,17 @@ func TestProjectReconcilePlan_DropsCreatedAtAndPlanWrapper(t *testing.T) {
 }
 
 func TestProjectReconcilePlan_DropsReplacedTo(t *testing.T) {
-	in := response.ReconcilePlan{
+	in := api.ReconcilePlan{
 		Token: "tok",
-		Plan: response.ReconcilePlanDetail{
+		Plan: api.ReconcilePlanDetail{
 			Series: mustSeries(t, "Show"),
-			Changes: []response.ReconcileChange{
+			Changes: []api.ReconcileChange{
 				{
 					Kind:    "replace",
 					Episode: mustEpisode(t, 1, 1),
 					From:    "/lib/Show/staged.mkv",
 					To:      "/lib/Show/Season 1/x.mkv",
-					Replaced: &response.ReconcileReplaced{
+					Replaced: &api.ReconcileReplaced{
 						From:       "/lib/Show/Season 1/old.mkv",
 						To:         "/lib/Show/.kura/trash/01/old.mkv",
 						Source:     "WebRip",
@@ -155,11 +155,11 @@ func TestProjectReconcilePlan_DropsReplacedTo(t *testing.T) {
 }
 
 func TestProjectReconcilePlan_ExternalFromDoesNotLeakAbsolutePath(t *testing.T) {
-	in := response.ReconcilePlan{
+	in := api.ReconcilePlan{
 		Token: "tok",
-		Plan: response.ReconcilePlanDetail{
+		Plan: api.ReconcilePlanDetail{
 			Series: mustSeries(t, "Show"),
-			Changes: []response.ReconcileChange{
+			Changes: []api.ReconcileChange{
 				{
 					Kind:    "add",
 					Episode: mustEpisode(t, 1, 1),
@@ -180,11 +180,11 @@ func TestProjectReconcilePlan_ExternalFromDoesNotLeakAbsolutePath(t *testing.T) 
 }
 
 func TestProjectReconcilePlan_InboxFromBecomesSelector(t *testing.T) {
-	in := response.ReconcilePlan{
+	in := api.ReconcilePlan{
 		Token: "tok",
-		Plan: response.ReconcilePlanDetail{
+		Plan: api.ReconcilePlanDetail{
 			Series: mustSeries(t, "Show"),
-			Changes: []response.ReconcileChange{
+			Changes: []api.ReconcileChange{
 				{
 					Kind:    "add",
 					Episode: mustEpisode(t, 1, 1),
@@ -205,15 +205,15 @@ func TestProjectReconcilePlan_InboxFromBecomesSelector(t *testing.T) {
 }
 
 func TestProjectReconcilePlan_TrashItemsSurfaceAsRemovals(t *testing.T) {
-	in := response.ReconcilePlan{
+	in := api.ReconcilePlan{
 		Token: "tok",
-		Plan: response.ReconcilePlanDetail{
+		Plan: api.ReconcilePlanDetail{
 			Series: mustSeries(t, "Show"),
-			TrashItems: []response.ReconcileTrashChange{{
+			TrashItems: []api.ReconcileTrashChange{{
 				ID:   "01H0000000000000000000AAAA",
 				From: "/lib/Show/Season 1/loser.mkv",
 				To:   "/lib/Show/.kura/trash/01H0000000000000000000AAAA/loser.mkv",
-				Companions: []response.ReconcileMove{{
+				Companions: []api.ReconcileMove{{
 					From: "/lib/Show/Season 1/loser.en.srt",
 					To:   "/lib/Show/.kura/trash/01H0000000000000000000AAAA/loser.en.srt",
 				}},
@@ -242,11 +242,11 @@ func TestProjectReconcilePlan_TrashItemsSurfaceAsRemovals(t *testing.T) {
 }
 
 func TestProjectReconcilePlan_ExtrasProjectNormally(t *testing.T) {
-	in := response.ReconcilePlan{
+	in := api.ReconcilePlan{
 		Token: "tok",
-		Plan: response.ReconcilePlanDetail{
+		Plan: api.ReconcilePlanDetail{
 			Series: mustSeries(t, "Show"),
-			Extras: []response.ReconcileExtraChange{{
+			Extras: []api.ReconcileExtraChange{{
 				ID:     "01H0000000000000000000BBBB",
 				Season: 1,
 				From:   "/inbox/bts/intro.mp4",

@@ -11,7 +11,7 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-// newServerLogger builds the slog handler used by `kura serve`. JSON
+// newServerLogger builds the slog handler used by the library-manager server. JSON
 // to the supplied writer when not a TTY (k8s container logs, file
 // redirects, systemd journal); tinted human format with relative
 // timestamps when stderr is an interactive terminal.

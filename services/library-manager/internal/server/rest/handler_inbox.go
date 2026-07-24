@@ -19,7 +19,7 @@ import (
 //	name_glob      — filepath.Match glob filtered against basename
 //	include_hidden — "1"/"true" to surface dotfiles + .partial/.crdownload/...
 //
-// Response: response.InboxList, with content-derived ETag.
+// Response: api.InboxList, with content-derived ETag.
 func (s *Server) handleInboxList(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 

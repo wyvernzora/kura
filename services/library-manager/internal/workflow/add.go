@@ -11,10 +11,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // AddInput parameters for the Add workflow. Ref is optional; when zero,
@@ -34,7 +34,7 @@ type AddInput struct {
 // path.
 //
 // Provider-needing.
-func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult, err error) {
+func Add(ctx context.Context, deps Deps, in AddInput) (result api.AddResult, err error) {
 	progress.Start(ctx, "add", "Fetching series metadata", 0)
 	// step tracks how far the workflow advanced before failing so the
 	// deferred Failure reports the right counter (0 = pre-write, 1 =
@@ -49,29 +49,29 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult
 
 	metadataSeries, metadataRef, err := fetchSeriesMetadata(ctx, deps, in.Metadata, in.Ordering)
 	if err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	ref, err := resolveAddRef(in.Ref, metadataSeries)
 	if err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	target := paths.SeriesDir(deps.LibRoot, ref)
 	if _, statErr := os.Stat(target); statErr == nil {
-		return response.AddResult{}, &SeriesAlreadyExistsError{Ref: ref}
+		return api.AddResult{}, &SeriesAlreadyExistsError{Ref: ref}
 	} else if !errors.Is(statErr, os.ErrNotExist) {
-		return response.AddResult{}, statErr
+		return api.AddResult{}, statErr
 	}
 	if err := checkMetadataAvailable(deps, metadataRef, ref); err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	if err := os.MkdirAll(target, 0o775); err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	progress.Update(ctx, "add", fmt.Sprintf("Writing metadata for %s", ref), 1, 0)
 	step = 1
 	model, err := seriesfile.NewFromMetadata(metadataRef, in.Ordering, metadataSeries)
 	if err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	model.Ref = ref
 	// Aliases + translated titles fold into searchKey here and stay
@@ -79,13 +79,13 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result response.AddResult
 	// from TVDB.
 	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("add")); err != nil {
-		return response.AddResult{}, err
+		return api.AddResult{}, err
 	}
 	if err := updateIndexModel(ctx, deps, model, "add"); err != nil {
-		return response.AddResult{}, translateIndexDuplicate(err)
+		return api.AddResult{}, translateIndexDuplicate(err)
 	}
 	progress.Success(ctx, "add", fmt.Sprintf("Added %s", ref), 1)
-	return response.AddResult{
+	return api.AddResult{
 		MetadataRef:    metadataRef,
 		Ref:            ref,
 		PreferredTitle: metadataSeries.PreferredTitle.String(),

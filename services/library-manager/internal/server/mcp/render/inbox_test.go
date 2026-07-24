@@ -4,13 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func TestInboxList_BasicFormatting(t *testing.T) {
-	in := response.InboxList{
+	in := api.InboxList{
 		Path: "[BDrip] Hoshi.../",
-		Entries: []response.InboxEntry{
+		Entries: []api.InboxEntry{
 			{Path: "[BDrip] Hoshi.../E01.mkv", Kind: "file", Size: 1234567890, MTime: "2026-05-01T03:14:00Z"},
 			{Path: "[BDrip] Hoshi.../Subs", Kind: "dir", MTime: "2026-05-01T03:14:00Z"},
 		},
@@ -35,8 +35,8 @@ func TestInboxList_BasicFormatting(t *testing.T) {
 }
 
 func TestInboxList_SymlinkTargetSurfacedWithArrow(t *testing.T) {
-	in := response.InboxList{
-		Entries: []response.InboxEntry{
+	in := api.InboxList{
+		Entries: []api.InboxEntry{
 			{Path: "link", Kind: "symlink", SymlinkTarget: "/elsewhere", MTime: "2026-04-22T18:02:00Z"},
 		},
 	}
@@ -56,8 +56,8 @@ func TestInboxList_SymlinkTargetSurfacedWithArrow(t *testing.T) {
 }
 
 func TestInboxList_TruncationFooterAndHint(t *testing.T) {
-	in := response.InboxList{
-		Entries: []response.InboxEntry{
+	in := api.InboxList{
+		Entries: []api.InboxEntry{
 			{Path: "a.mkv", Kind: "file", Size: 1024, MTime: "2026-05-01T03:14:00Z"},
 		},
 		Truncated:   true,
@@ -77,7 +77,7 @@ func TestInboxList_TruncationFooterAndHint(t *testing.T) {
 }
 
 func TestInboxList_Empty(t *testing.T) {
-	out := InboxList(response.InboxList{})
+	out := InboxList(api.InboxList{})
 	if out != "(empty)\n" {
 		t.Errorf("empty: got %q", out)
 	}

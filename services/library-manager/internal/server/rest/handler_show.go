@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // handleShow serves GET /api/v1/series/{ref}.
@@ -18,7 +18,7 @@ import (
 //
 // Query: episodes, status (csv), source (csv), resolution (csv).
 //
-// Response: response.Show, content-derived ETag.
+// Response: api.Show, content-derived ETag.
 func (s *Server) handleShow(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -97,17 +97,17 @@ func (s *Server) resolveRefPath(raw string) (refs.Series, error) {
 	return seriesRef, nil
 }
 
-// parseStatusFilter passes through known response.Status strings. Unknown
+// parseStatusFilter passes through known api.Status strings. Unknown
 // values are ignored rather than rejected; the workflow treats them as
 // no-op filters anyway, and keeping the surface tolerant is cheaper
 // than mirroring the closed enum here.
-func parseStatusFilter(raw []string) []response.Status {
+func parseStatusFilter(raw []string) []api.Status {
 	if len(raw) == 0 {
 		return nil
 	}
-	out := make([]response.Status, 0, len(raw))
+	out := make([]api.Status, 0, len(raw))
 	for _, s := range raw {
-		out = append(out, response.Status(s))
+		out = append(out, api.Status(s))
 	}
 	return out
 }

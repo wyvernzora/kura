@@ -8,9 +8,9 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/scan"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ScanInput parameters for the Scan workflow. Refresh=true forces
@@ -45,8 +45,8 @@ type ScanInput struct {
 // MCP tool, future REST). Provider construction and the runner walk
 // happen inside the Submit closure so the goroutine, not the caller,
 // pays for I/O.
-func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanResult] {
-	return jobs.Submit(deps.Jobs, ctx, jobs.KindScan, in.Ref, func(jobCtx context.Context) (response.ScanResult, error) {
+func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[api.ScanResult] {
+	return jobs.Submit(deps.Jobs, ctx, jobs.KindScan, in.Ref, func(jobCtx context.Context) (api.ScanResult, error) {
 		return runScan(jobCtx, deps, in)
 	})
 }
@@ -55,14 +55,14 @@ func Scan(ctx context.Context, deps Deps, in ScanInput) *jobs.Job[response.ScanR
 // jobs.Submit (one tracked job per call); workflow.ScanAll calls it
 // inline per ref so a library-wide scan reports one aggregate job
 // rather than N tracked jobs.
-func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult, error) {
+func runScan(ctx context.Context, deps Deps, in ScanInput) (api.ScanResult, error) {
 	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	source, err := deps.Provider()
 	if err != nil {
-		return response.ScanResult{}, err
+		return api.ScanResult{}, err
 	}
 	runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger, deps.PreferredLanguages)
-	var out response.ScanResult
+	var out api.ScanResult
 	var modelForIndex *series.Series
 	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {
 		if err := coord.RetryOnConflict(conflictAttempts(deps), func() error {
@@ -90,15 +90,15 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (response.ScanResult,
 		return nil
 	})
 	if err != nil {
-		return response.ScanResult{}, err
+		return api.ScanResult{}, err
 	}
 	return out, nil
 }
 
-func toScanResponse(seriesRoot string, in scan.Result) response.ScanResult {
-	out := response.ScanResult{
-		Synced:      make([]response.ScannedEpisode, 0, len(in.Synced)),
-		Skipped:     make([]response.ScanSkip, 0, len(in.Skipped)),
+func toScanResponse(seriesRoot string, in scan.Result) api.ScanResult {
+	out := api.ScanResult{
+		Synced:      make([]api.ScannedEpisode, 0, len(in.Synced)),
+		Skipped:     make([]api.ScanSkip, 0, len(in.Skipped)),
 		OrphanSlots: append([]refs.Episode(nil), in.OrphanSlots...),
 	}
 	for _, ep := range in.Synced {
@@ -106,8 +106,8 @@ func toScanResponse(seriesRoot string, in scan.Result) response.ScanResult {
 		for _, c := range ep.Companions {
 			companions = append(companions, seriesSelector(seriesRoot, c))
 		}
-		out.Synced = append(out.Synced, response.ScannedEpisode{
-			Status:     response.ScanStatus(ep.Status),
+		out.Synced = append(out.Synced, api.ScannedEpisode{
+			Status:     api.ScanStatus(ep.Status),
 			Episode:    ep.Episode,
 			Source:     ep.Source,
 			Resolution: ep.Resolution,
@@ -116,7 +116,7 @@ func toScanResponse(seriesRoot string, in scan.Result) response.ScanResult {
 		})
 	}
 	for _, skip := range in.Skipped {
-		out.Skipped = append(out.Skipped, response.ScanSkip{
+		out.Skipped = append(out.Skipped, api.ScanSkip{
 			Path:       seriesSelector(seriesRoot, skip.Path),
 			Code:       skip.Code,
 			Reason:     skip.Reason,

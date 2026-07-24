@@ -13,8 +13,8 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/media"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/errkind"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 type showInput struct {
@@ -28,7 +28,7 @@ type showInput struct {
 //go:embed tool_show.md
 var toolShowDoc string
 
-// mcpShow is the lean projection of response.Show that this surface
+// mcpShow is the lean projection of api.Show that this surface
 // emits. Fields the agent can't act on (raw series ref) are dropped.
 // All path fields inherit the response contract: scheme-tagged
 // selectors (`series:<rel>` / `inbox:<rel>` / `library:<rel>`) the
@@ -154,9 +154,9 @@ func addShowTool(s *sdkmcp.Server, deps Deps) {
 		if !ok {
 			return toolErrorResult(&workflow.MetadataRefNotIndexedError{Ref: metaRef}), nil, nil
 		}
-		statuses := make([]response.Status, 0, len(in.Status))
+		statuses := make([]api.Status, 0, len(in.Status))
 		for _, s := range in.Status {
-			statuses = append(statuses, response.Status(s))
+			statuses = append(statuses, api.Status(s))
 		}
 		full, err := workflow.Show(ctx, deps.Workflow, workflow.ShowInput{
 			Ref:        seriesRef,
@@ -328,7 +328,7 @@ func compressDroppedRanges(dropped map[int][]int, seasons []mcpSeason) []string 
 
 // projectShow strips the operator-only fields and collapses
 // staged_replacement into staged.
-func projectShow(in response.Show) mcpShow {
+func projectShow(in api.Show) mcpShow {
 	out := mcpShow{
 		MetadataRef:    in.MetadataRef.String(),
 		PreferredTitle: in.PreferredTitle,
@@ -389,7 +389,7 @@ func projectShow(in response.Show) mcpShow {
 	return out
 }
 
-func projectEpisode(ep response.EpisodeShow) mcpEpisode {
+func projectEpisode(ep api.EpisodeShow) mcpEpisode {
 	out := mcpEpisode{
 		Episode:        ep.Episode.String(),
 		Aired:          ep.Aired,
@@ -424,14 +424,14 @@ func projectEpisode(ep response.EpisodeShow) mcpEpisode {
 
 // collapseStatus maps staged_replacement → staged. The replacement
 // nuance is encoded by `active` being present alongside `staged`.
-func collapseStatus(s response.Status) string {
-	if s == response.StatusStagedReplacement {
-		return string(response.StatusStaged)
+func collapseStatus(s api.Status) string {
+	if s == api.StatusStagedReplacement {
+		return string(api.StatusStaged)
 	}
 	return string(s)
 }
 
-func companionPaths(in []response.CompanionShow) []string {
+func companionPaths(in []api.CompanionShow) []string {
 	out := make([]string, 0, len(in))
 	for _, c := range in {
 		out = append(out, c.Path)

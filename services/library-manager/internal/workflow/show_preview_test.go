@@ -7,9 +7,9 @@ import (
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // previewSource returns a series with a two-episode spine (one aired,
@@ -92,8 +92,8 @@ func TestShowPreviewBuildsFromProviderAllMissing(t *testing.T) {
 		}
 		for _, e := range s.Episodes {
 			total++
-			if e.Status != response.StatusMissing {
-				t.Errorf("episode %s status = %q, want %q", e.Episode, e.Status, response.StatusMissing)
+			if e.Status != api.StatusMissing {
+				t.Errorf("episode %s status = %q, want %q", e.Episode, e.Status, api.StatusMissing)
 			}
 		}
 	}

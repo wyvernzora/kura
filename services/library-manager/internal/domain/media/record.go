@@ -6,7 +6,7 @@ import "time"
 // persists about it.
 //
 // JSON tags are transitional and get dropped once response types in
-// internal/response/ absorb the serialization concern.
+// pkg/api/ absorb the serialization concern.
 type Record struct {
 	Path       string      `json:"path"`
 	Source     Source      `json:"source"`

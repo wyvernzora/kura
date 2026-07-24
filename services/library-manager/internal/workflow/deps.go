@@ -2,7 +2,7 @@
 // surfaces compose. Every workflow is a stateless package-level function
 // matching:
 //
-//	func Op(ctx context.Context, deps Deps, in OpInput) (response.OpResult, error)
+//	func Op(ctx context.Context, deps Deps, in OpInput) (api.OpResult, error)
 //
 // Deps is constructed once at startup (cmd/kura-library-manager/build.go) and passed by value
 // to every workflow call. Do not stash state across calls; workflows execute,

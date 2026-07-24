@@ -15,6 +15,6 @@ fi
 # container is fine because requests without a valid token return
 # 401, and the host port mapping pins to 127.0.0.1 by default
 # (Makefile target).
-exec /src/tmp/kura serve \
+exec /src/tmp/kura \
   --config=/etc/kura/library-manager.toml \
   ${EXTRA_ARGS}

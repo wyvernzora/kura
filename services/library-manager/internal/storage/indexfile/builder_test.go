@@ -13,10 +13,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/media"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func mustEpisode(t *testing.T, season, ep int) refs.Episode {
@@ -48,7 +48,7 @@ func TestBuildRowFromModel_EmptyEpisodes(t *testing.T) {
 	if row.Series != model.Ref {
 		t.Fatalf("Series = %s, want %s", row.Series, model.Ref)
 	}
-	if row.Status != response.ListStatusIncomplete {
+	if row.Status != api.ListStatusIncomplete {
 		t.Fatalf("Status = %s, want incomplete (no episodes)", row.Status)
 	}
 	if row.EpisodeCount != 0 || row.SeasonCount != 0 {
@@ -85,7 +85,7 @@ func TestBuildRowFromModel_AllPendingIsComplete(t *testing.T) {
 				Episodes: tt.episodes,
 			}
 			row := indexfile.BuildRowFromModel(model, now)
-			if row.Status != response.ListStatusComplete {
+			if row.Status != api.ListStatusComplete {
 				t.Fatalf("Status = %s, want complete (all episodes pending)", row.Status)
 			}
 			if row.EpisodeCount != 0 || row.EpisodesAvailable != 0 {
@@ -111,7 +111,7 @@ func TestBuildRowFromModel_AllActiveIsComplete(t *testing.T) {
 		},
 	}
 	row := indexfile.BuildRowFromModel(model, now)
-	if row.Status != response.ListStatusComplete {
+	if row.Status != api.ListStatusComplete {
 		t.Fatalf("Status = %s, want complete", row.Status)
 	}
 	if row.EpisodeCount != 2 || row.EpisodesAvailable != 2 {
@@ -182,7 +182,7 @@ func TestBuildRowFromModel_AiringFlag_WeeklyCadence(t *testing.T) {
 		},
 	}
 	row := indexfile.BuildRowFromModel(model, now)
-	if row.Status != response.ListStatusComplete {
+	if row.Status != api.ListStatusComplete {
 		t.Fatalf("Status = %s, want complete (no missing past eps)", row.Status)
 	}
 	if !row.IsAiring {
@@ -504,7 +504,7 @@ func TestBuildRowFromModel_PendingExcludedFromTotals(t *testing.T) {
 	if row.SeasonsAvailable != 3 {
 		t.Fatalf("SeasonsAvailable = %d, want 3 (seasons 1-3 have active records)", row.SeasonsAvailable)
 	}
-	if row.Status != response.ListStatusIncomplete {
+	if row.Status != api.ListStatusIncomplete {
 		t.Fatalf("Status = %s, want incomplete (5 aired-missing eps)", row.Status)
 	}
 }
@@ -533,7 +533,7 @@ func TestBuildRowFromModel_TBAPlaceholderExcluded(t *testing.T) {
 		Episodes: episodes,
 	}
 	row := indexfile.BuildRowFromModel(model, now)
-	if row.Status != response.ListStatusComplete {
+	if row.Status != api.ListStatusComplete {
 		t.Fatalf("Status = %s, want complete (TBA placeholder must not count as missing)", row.Status)
 	}
 	if row.EpisodeCount != 24 || row.EpisodesAvailable != 24 {
@@ -578,7 +578,7 @@ func TestBuildRow_UntrackedDir(t *testing.T) {
 	if !ok {
 		t.Fatalf("GetRow(%s) absent", ref)
 	}
-	if row.Status != response.ListStatusUntracked {
+	if row.Status != api.ListStatusUntracked {
 		t.Fatalf("Status = %s, want untracked", row.Status)
 	}
 	if row.Title != ref.String() {
@@ -651,14 +651,14 @@ func TestRebuild_IncludesUntrackedAndSkipsDotDirs(t *testing.T) {
 		t.Fatalf("Rebuild rows = %d, want 2 (Bookworm + Untracked)", len(rows))
 	}
 
-	got := map[string]response.ListStatus{}
+	got := map[string]api.ListStatus{}
 	for _, row := range rows {
 		got[row.Series.String()] = row.Status
 	}
-	if got["Bookworm"] != response.ListStatusIncomplete {
+	if got["Bookworm"] != api.ListStatusIncomplete {
 		t.Fatalf("Bookworm Status = %s, want incomplete (empty model)", got["Bookworm"])
 	}
-	if got["Untracked"] != response.ListStatusUntracked {
+	if got["Untracked"] != api.ListStatusUntracked {
 		t.Fatalf("Untracked Status = %s, want untracked", got["Untracked"])
 	}
 	if _, ok := got[".kura"]; ok {

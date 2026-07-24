@@ -3,7 +3,7 @@ package indexfile
 import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // SchemaVersion is the on-disk schema version stamped into the JSONL header.
@@ -36,7 +36,7 @@ type Row struct {
 	Title          string `json:"title"`
 	CanonicalTitle string `json:"canonicalTitle,omitempty"`
 
-	Status response.ListStatus `json:"status"`
+	Status api.ListStatus `json:"status"`
 	// IsAiring is the observed-airing flag, independent of Status. See
 	// builder.go:summarizeSeries for the per-season rule.
 	IsAiring bool `json:"isAiring,omitempty"`

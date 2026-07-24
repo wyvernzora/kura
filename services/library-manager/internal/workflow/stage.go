@@ -18,10 +18,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/mediainfo"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // StageInput parameters for the Stage workflow. Stage queues per-batch
@@ -34,7 +34,7 @@ import (
 // reject) catches input shape and cross-state conflicts before any file
 // is touched; phase 2 (best-effort per-item) probes mediainfo for episode
 // items and stats trash/extras paths, with per-item failures landing in
-// response.StageResult.Skipped[].
+// api.StageResult.Skipped[].
 type StageInput struct {
 	Ref      domainrefs.Series
 	Episodes []EpisodeStageItem
@@ -88,9 +88,9 @@ type ExtraStageItem struct {
 // Wrapped in coord.WithSeries with caller-side coord.RetryOnConflict:
 // a peer CAS conflict retries up to the configured attempt budget
 // before surfacing.
-func Stage(ctx context.Context, deps Deps, in StageInput) *jobs.Job[response.StageResult] {
-	return jobs.Submit(deps.Jobs, ctx, jobs.KindStage, in.Ref, func(jobCtx context.Context) (response.StageResult, error) {
-		var out response.StageResult
+func Stage(ctx context.Context, deps Deps, in StageInput) *jobs.Job[api.StageResult] {
+	return jobs.Submit(deps.Jobs, ctx, jobs.KindStage, in.Ref, func(jobCtx context.Context) (api.StageResult, error) {
+		var out api.StageResult
 		err := deps.Coordinator.WithSeries(jobCtx, in.Ref, func() error {
 			return coord.RetryOnConflict(conflictAttempts(deps), func() error {
 				result, runErr := stageBatch(jobCtx, deps, in)
@@ -105,7 +105,7 @@ func Stage(ctx context.Context, deps Deps, in StageInput) *jobs.Job[response.Sta
 	})
 }
 
-func stageBatch(ctx context.Context, deps Deps, in StageInput) (response.StageResult, error) {
+func stageBatch(ctx context.Context, deps Deps, in StageInput) (api.StageResult, error) {
 	totalItems := len(in.Episodes) + len(in.Trash) + len(in.Extras)
 	progress.Start(ctx, "stage", fmt.Sprintf("Staging %d item(s) for %s", totalItems, in.Ref), 0)
 	// Single deferred failure path so new error returns don't have to
@@ -119,55 +119,55 @@ func stageBatch(ctx context.Context, deps Deps, in StageInput) (response.StageRe
 	}()
 
 	if totalItems == 0 {
-		return response.StageResult{}, &EmptyStageBatchError{}
+		return api.StageResult{}, &EmptyStageBatchError{}
 	}
 
 	seriesRoot := paths.SeriesDir(deps.LibRoot, in.Ref)
 	model, err := seriesfile.Load(deps.LibRoot, in.Ref)
 	if err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 	if model.InProgress != nil {
-		return response.StageResult{}, &coord.BusyError{Scope: coord.SeriesScope(in.Ref), Holder: *model.InProgress}
+		return api.StageResult{}, &coord.BusyError{Scope: coord.SeriesScope(in.Ref), Holder: *model.InProgress}
 	}
 
 	// Phase 1: validation. Resolve paths once so phase 2 doesn't re-pay
 	// the resolution cost; carries forward into per-item work.
 	episodes, err := validateEpisodeItems(deps, model, in.Episodes)
 	if err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 	trash, err := validateTrashItems(seriesRoot, model, in.Trash)
 	if err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 	extras, err := validateExtraItems(deps, seriesRoot, model, in.Extras)
 	if err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 
 	// Phase 2: per-item work. Apply successes to model; collect skipped[].
-	out := response.StageResult{}
+	out := api.StageResult{}
 	now := deps.Now().UTC()
 
 	out.Episodes, out.Skipped, err = applyEpisodeItemsLoop(ctx, deps, seriesRoot, model, episodes, totalItems, out.Skipped)
 	if err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 	out.Trash, out.Skipped, err = applyTrashItemsLoop(ctx, model, trash, len(episodes), totalItems, now, out.Skipped)
 	if err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 	out.Extras, out.Skipped, err = applyExtraItemsLoop(ctx, model, extras, len(episodes)+len(trash), totalItems, now, out.Skipped)
 	if err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("stage")); err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 	if err := updateIndexModel(ctx, deps, model, "stage"); err != nil {
-		return response.StageResult{}, err
+		return api.StageResult{}, err
 	}
 
 	progress.Success(ctx, "stage",
@@ -189,9 +189,9 @@ func applyEpisodeItemsLoop(
 	model *domainseries.Series,
 	items []resolvedEpisodeItem,
 	totalItems int,
-	skipped []response.StageSkip,
-) ([]response.StageEpisodeResult, []response.StageSkip, error) {
-	applied := make([]response.StageEpisodeResult, 0, len(items))
+	skipped []api.StageSkip,
+) ([]api.StageEpisodeResult, []api.StageSkip, error) {
+	applied := make([]api.StageEpisodeResult, 0, len(items))
 	for index, item := range items {
 		progress.Update(ctx, "stage", fmt.Sprintf("Inspecting %s", filepath.Base(item.resolvedPath)), index+1, totalItems)
 		result, skip, err := applyEpisodeItem(ctx, deps, seriesRoot, model, item)
@@ -216,9 +216,9 @@ func applyTrashItemsLoop(
 	items []resolvedTrashItem,
 	progressOffset, totalItems int,
 	now time.Time,
-	skipped []response.StageSkip,
-) ([]response.StageTrashResult, []response.StageSkip, error) {
-	applied := make([]response.StageTrashResult, 0, len(items))
+	skipped []api.StageSkip,
+) ([]api.StageTrashResult, []api.StageSkip, error) {
+	applied := make([]api.StageTrashResult, 0, len(items))
 	for index, item := range items {
 		progress.Update(ctx, "stage", fmt.Sprintf("Queuing trash %s", filepath.Base(item.resolvedPath)), progressOffset+index+1, totalItems)
 		result, skip, err := applyTrashItem(model, item, now)
@@ -242,9 +242,9 @@ func applyExtraItemsLoop(
 	items []resolvedExtraItem,
 	progressOffset, totalItems int,
 	now time.Time,
-	skipped []response.StageSkip,
-) ([]response.StageExtraResult, []response.StageSkip, error) {
-	applied := make([]response.StageExtraResult, 0, len(items))
+	skipped []api.StageSkip,
+) ([]api.StageExtraResult, []api.StageSkip, error) {
+	applied := make([]api.StageExtraResult, 0, len(items))
 	for index, item := range items {
 		progress.Update(ctx, "stage", fmt.Sprintf("Queuing extra %s", filepath.Base(item.resolvedPath)), progressOffset+index+1, totalItems)
 		result, skip, err := applyExtraItem(model, item, now)
@@ -847,7 +847,7 @@ func validateExtraPrefix(prefix string) error {
 	return nil
 }
 
-func applyEpisodeItem(ctx context.Context, deps Deps, seriesRoot string, model *domainseries.Series, item resolvedEpisodeItem) (response.StageEpisodeResult, *response.StageSkip, error) {
+func applyEpisodeItem(ctx context.Context, deps Deps, seriesRoot string, model *domainseries.Series, item resolvedEpisodeItem) (api.StageEpisodeResult, *api.StageSkip, error) {
 	// mediainfo probes the resolved abs path (the actual file on disk),
 	// but the record we persist carries the selector form so the
 	// stored path is portable across container redeploys.
@@ -864,7 +864,7 @@ func applyEpisodeItem(ctx context.Context, deps Deps, seriesRoot string, model *
 	}
 	record, err := mediainfo.NewBuilder(deps.Inspector).Build(ctx, builderInput)
 	if err != nil {
-		return response.StageEpisodeResult{}, &response.StageSkip{
+		return api.StageEpisodeResult{}, &api.StageSkip{
 			Kind:   "episode",
 			Path:   item.Media.String(),
 			Code:   "probe_failed",
@@ -874,23 +874,23 @@ func applyEpisodeItem(ctx context.Context, deps Deps, seriesRoot string, model *
 	record.Attrs = media.CloneAttrs(item.Attrs)
 	replaced := item.episodeStateBefore.Active != nil || item.episodeStateBefore.Staged != nil
 	if err := model.SetStaged(item.Episode, record); err != nil {
-		return response.StageEpisodeResult{}, nil, err
+		return api.StageEpisodeResult{}, nil, err
 	}
 	status := "staged"
 	if replaced {
 		status = "replaced"
 	}
-	return response.StageEpisodeResult{
+	return api.StageEpisodeResult{
 		Episode: item.Episode,
 		Status:  status,
 		Record:  mediaShow(seriesRoot, record),
 	}, nil, nil
 }
 
-func applyTrashItem(model *domainseries.Series, item resolvedTrashItem, now time.Time) (response.StageTrashResult, *response.StageSkip, error) {
+func applyTrashItem(model *domainseries.Series, item resolvedTrashItem, now time.Time) (api.StageTrashResult, *api.StageSkip, error) {
 	info, err := os.Stat(item.resolvedPath)
 	if err != nil {
-		return response.StageTrashResult{}, &response.StageSkip{
+		return api.StageTrashResult{}, &api.StageSkip{
 			Kind:   "trash",
 			Path:   seriesSelector("", item.relPath),
 			Code:   "stat_failed",
@@ -901,7 +901,7 @@ func applyTrashItem(model *domainseries.Series, item resolvedTrashItem, now time
 	for cIdx, cAbs := range item.resolvedCompanions {
 		cInfo, statErr := os.Stat(cAbs)
 		if statErr != nil {
-			return response.StageTrashResult{}, &response.StageSkip{
+			return api.StageTrashResult{}, &api.StageSkip{
 				Kind:   "trash",
 				Path:   seriesSelector("", item.relCompanions[cIdx]),
 				Code:   "stat_failed",
@@ -922,13 +922,13 @@ func applyTrashItem(model *domainseries.Series, item resolvedTrashItem, now time
 		AddedAt:    now,
 		Companions: companions,
 	})
-	return response.StageTrashResult{
+	return api.StageTrashResult{
 		ID:   item.id.String(),
 		Path: seriesSelector("", item.relPath),
 	}, nil, nil
 }
 
-func applyExtraItem(model *domainseries.Series, item resolvedExtraItem, now time.Time) (response.StageExtraResult, *response.StageSkip, error) {
+func applyExtraItem(model *domainseries.Series, item resolvedExtraItem, now time.Time) (api.StageExtraResult, *api.StageSkip, error) {
 	// Persisted Path carries the selector form so reconcile can
 	// re-resolve via deps.InboxRoot at apply time.
 	model.AddStagedExtra(domainseries.StagedExtraItem{
@@ -939,7 +939,7 @@ func applyExtraItem(model *domainseries.Series, item resolvedExtraItem, now time
 		IsDir:   item.isDir,
 		AddedAt: now,
 	})
-	return response.StageExtraResult{
+	return api.StageExtraResult{
 		ID:     item.id.String(),
 		Season: item.Season,
 		Path:   item.Source.String(),

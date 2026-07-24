@@ -3,8 +3,8 @@ package rest
 import (
 	"net/http"
 
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // handleTagsUpdate serves PATCH /api/v1/series/{ref}/tags. Plain tag
@@ -15,7 +15,7 @@ func (s *Server) handleTagsUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	var req response.TagUpdate
+	var req api.TagUpdate
 	if err := decodeJSON(r.Body, &req); err != nil {
 		writeError(w, err)
 		return

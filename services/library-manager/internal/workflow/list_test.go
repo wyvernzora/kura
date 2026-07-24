@@ -12,10 +12,10 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/series"
 	"github.com/wyvernzora/kura/services/library-manager/internal/progress"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 func mustParseSeries(t *testing.T, name string) refs.Series {
@@ -49,10 +49,10 @@ func listFixture(t *testing.T, rows ...indexfile.Row) workflow.Deps {
 
 func entryForListRow(t *testing.T, libRoot string, row indexfile.Row) indexfile.Entry {
 	t.Helper()
-	if row.Status == response.ListStatusUntracked {
+	if row.Status == api.ListStatusUntracked {
 		return indexfile.Entry{Series: row.Series}
 	}
-	if row.Status == response.ListStatusError {
+	if row.Status == api.ListStatusError {
 		return indexfile.Entry{Series: row.Series, Error: "test error"}
 	}
 	metadata := row.Metadata
@@ -75,7 +75,7 @@ func entryForListRow(t *testing.T, libRoot string, row indexfile.Row) indexfile.
 	}}
 }
 
-func makeRow(t *testing.T, title string, status response.ListStatus) indexfile.Row {
+func makeRow(t *testing.T, title string, status api.ListStatus) indexfile.Row {
 	t.Helper()
 	ref := mustParseSeries(t, title)
 	return indexfile.Row{
@@ -86,11 +86,11 @@ func makeRow(t *testing.T, title string, status response.ListStatus) indexfile.R
 }
 
 func TestList_FiltersTagsConjunctively(t *testing.T) {
-	priority := makeRow(t, "Priority", response.ListStatusComplete)
+	priority := makeRow(t, "Priority", api.ListStatusComplete)
 	priority.Tags = []string{"priority"}
-	muted := makeRow(t, "Muted", response.ListStatusComplete)
+	muted := makeRow(t, "Muted", api.ListStatusComplete)
 	muted.Tags = []string{"mute-notifications", "priority"}
-	plain := makeRow(t, "Plain", response.ListStatusComplete)
+	plain := makeRow(t, "Plain", api.ListStatusComplete)
 	deps := listFixture(t, priority, muted, plain)
 
 	result, err := workflow.List(context.Background(), deps, workflow.ListInput{
@@ -120,9 +120,9 @@ func TestList_RejectsConflictingTagExpressions(t *testing.T) {
 
 func TestList_ReturnsAllRowsSortedByTitle(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "Zebra", response.ListStatusComplete),
-		makeRow(t, "Apple", response.ListStatusComplete),
-		makeRow(t, "Mango", response.ListStatusComplete),
+		makeRow(t, "Zebra", api.ListStatusComplete),
+		makeRow(t, "Apple", api.ListStatusComplete),
+		makeRow(t, "Mango", api.ListStatusComplete),
 	)
 	result, err := workflow.List(context.Background(), deps, workflow.ListInput{})
 	if err != nil {
@@ -144,8 +144,8 @@ func TestList_ReturnsAllRowsSortedByTitle(t *testing.T) {
 
 func TestList_EmitsProgressOnInboundCtx(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "Apple", response.ListStatusComplete),
-		makeRow(t, "Mango", response.ListStatusComplete),
+		makeRow(t, "Apple", api.ListStatusComplete),
+		makeRow(t, "Mango", api.ListStatusComplete),
 	)
 	var events []progress.Event
 	ctx := progress.With(context.Background(), func(_ context.Context, ev progress.Event) {
@@ -167,12 +167,12 @@ func TestList_EmitsProgressOnInboundCtx(t *testing.T) {
 
 func TestList_FilterByStatus(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "A", response.ListStatusComplete),
-		makeRow(t, "B", response.ListStatusUntracked),
-		makeRow(t, "C", response.ListStatusComplete),
+		makeRow(t, "A", api.ListStatusComplete),
+		makeRow(t, "B", api.ListStatusUntracked),
+		makeRow(t, "C", api.ListStatusComplete),
 	)
 	result, err := workflow.List(context.Background(), deps, workflow.ListInput{
-		Statuses: []response.ListStatus{response.ListStatusUntracked},
+		Statuses: []api.ListStatus{api.ListStatusUntracked},
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -184,10 +184,10 @@ func TestList_FilterByStatus(t *testing.T) {
 
 func TestList_PaginationStableNoChange(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "A", response.ListStatusComplete),
-		makeRow(t, "B", response.ListStatusComplete),
-		makeRow(t, "C", response.ListStatusComplete),
-		makeRow(t, "D", response.ListStatusComplete),
+		makeRow(t, "A", api.ListStatusComplete),
+		makeRow(t, "B", api.ListStatusComplete),
+		makeRow(t, "C", api.ListStatusComplete),
+		makeRow(t, "D", api.ListStatusComplete),
 	)
 
 	page1, err := workflow.List(context.Background(), deps, workflow.ListInput{MaxResults: 2})
@@ -224,9 +224,9 @@ func TestList_PaginationStableNoChange(t *testing.T) {
 
 func TestList_PaginationDataChangedWhenIndexMutates(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "A", response.ListStatusComplete),
-		makeRow(t, "B", response.ListStatusComplete),
-		makeRow(t, "C", response.ListStatusComplete),
+		makeRow(t, "A", api.ListStatusComplete),
+		makeRow(t, "B", api.ListStatusComplete),
+		makeRow(t, "C", api.ListStatusComplete),
 	)
 
 	page1, err := workflow.List(context.Background(), deps, workflow.ListInput{MaxResults: 1})
@@ -238,7 +238,7 @@ func TestList_PaginationDataChangedWhenIndexMutates(t *testing.T) {
 	}
 
 	// Mutate the index between pages.
-	if err := deps.Index.Upsert(entryForListRow(t, deps.LibRoot, makeRow(t, "BB", response.ListStatusComplete))); err != nil {
+	if err := deps.Index.Upsert(entryForListRow(t, deps.LibRoot, makeRow(t, "BB", api.ListStatusComplete))); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 
@@ -260,9 +260,9 @@ func TestList_PaginationDataChangedWhenIndexMutates(t *testing.T) {
 
 func TestList_PaginationAnchorRemovedRestarts(t *testing.T) {
 	deps := listFixture(t,
-		makeRow(t, "A", response.ListStatusComplete),
-		makeRow(t, "B", response.ListStatusComplete),
-		makeRow(t, "C", response.ListStatusComplete),
+		makeRow(t, "A", api.ListStatusComplete),
+		makeRow(t, "B", api.ListStatusComplete),
+		makeRow(t, "C", api.ListStatusComplete),
 	)
 
 	page1, err := workflow.List(context.Background(), deps, workflow.ListInput{MaxResults: 1})
@@ -289,7 +289,7 @@ func TestList_PaginationAnchorRemovedRestarts(t *testing.T) {
 }
 
 func TestList_PaginationInvalidCursor(t *testing.T) {
-	deps := listFixture(t, makeRow(t, "A", response.ListStatusComplete))
+	deps := listFixture(t, makeRow(t, "A", api.ListStatusComplete))
 
 	_, err := workflow.List(context.Background(), deps, workflow.ListInput{
 		MaxResults: 10,

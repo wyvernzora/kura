@@ -6,7 +6,7 @@ import (
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/reconcile"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ProjectJobResultJSON maps an async workflow's persisted job result
@@ -31,13 +31,13 @@ func ProjectJobResultJSON(kind string, raw json.RawMessage) (json.RawMessage, er
 // ReconcileApplyJobResult decodes a projected reconcile-apply job
 // result. The boolean is false when raw is empty or belongs to another
 // job kind.
-func ReconcileApplyJobResult(kind string, raw json.RawMessage) (response.ReconcileApply, bool, error) {
+func ReconcileApplyJobResult(kind string, raw json.RawMessage) (api.ReconcileApply, bool, error) {
 	if len(raw) == 0 || kind != string(jobs.KindReconcileApply) {
-		return response.ReconcileApply{}, false, nil
+		return api.ReconcileApply{}, false, nil
 	}
 	var result reconcile.ApplyResult
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return response.ReconcileApply{}, false, fmt.Errorf("decode reconcile apply job result: %w", err)
+		return api.ReconcileApply{}, false, fmt.Errorf("decode reconcile apply job result: %w", err)
 	}
 	return ApplyReconcileResponse(result), true, nil
 }

@@ -8,8 +8,8 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/reconcile"
-	"github.com/wyvernzora/kura/services/library-manager/internal/response"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/planfile"
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 // ApplyReconcileResponse projects a reconcile.ApplyResult into the
@@ -21,15 +21,15 @@ import (
 // .kura/trash/<ulid>/ is operator territory (visible in the apply log
 // on disk), not part of the wire contract. The original `from` path
 // is preserved so callers know which file failed to land in trash.
-func ApplyReconcileResponse(result reconcile.ApplyResult) response.ReconcileApply {
-	out := response.ReconcileApply{
+func ApplyReconcileResponse(result reconcile.ApplyResult) api.ReconcileApply {
+	out := api.ReconcileApply{
 		Series:         result.Series,
 		AppliedSteps:   result.AppliedSteps,
 		TotalSteps:     result.TotalSteps,
 		AppliedStepIDs: append([]string(nil), result.AppliedStepIDs...),
 	}
 	if result.FailedStep != nil {
-		fs := &response.FailedReconcileStep{
+		fs := &api.FailedReconcileStep{
 			ID:         result.FailedStep.ID,
 			Kind:       string(result.FailedStep.Kind),
 			OwnerKind:  string(result.FailedStep.OwnerKind),
