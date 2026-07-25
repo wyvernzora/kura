@@ -1,0 +1,14 @@
+# generation_stable_on_tag: tags are transient workflow settings and do not
+# force a full-series archive rewrite.
+
+kura_add stub:1001
+
+kura_show $KURA_LAST_REF
+stdout '"generation":1'
+
+kura_tag_update $KURA_LAST_REF priority:high
+stdout '"tags":\["priority:high"\]'
+
+kura_show $KURA_LAST_REF
+stdout '"generation":1'
+stdout '"tags":\["priority:high"\]'

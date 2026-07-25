@@ -86,9 +86,13 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result api.AddResul
 		return api.AddResult{}, err
 	}
 	var preservedTags []string
+	var preservedGeneration int
 	if in.Force {
 		if existing, loadErr := seriesfile.Load(deps.LibRoot, ref); loadErr == nil {
 			preservedTags = slices.Clone(existing.Tags)
+			preservedGeneration = existing.Generation
+		} else {
+			preservedGeneration = seriesfile.PeekGeneration(deps.LibRoot, ref)
 		}
 		if rmErr := os.Remove(metadataPath); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
 			return api.AddResult{}, rmErr
@@ -103,6 +107,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result api.AddResul
 	model.Ref = ref
 	if in.Force {
 		model.Tags = preservedTags
+		model.Generation = preservedGeneration
 	}
 	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {

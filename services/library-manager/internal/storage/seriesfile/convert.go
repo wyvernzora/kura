@@ -53,6 +53,7 @@ func fromWire(in seriesV3) (*series.Series, error) {
 	}
 	out := &series.Series{
 		Metadata:       metadataRef,
+		Generation:     in.Generation,
 		PreferredTitle: textnorm.NFC(in.PreferredTitle),
 		CanonicalTitle: textnorm.NFC(in.CanonicalTitle),
 		DateAdded:      dateAdded.UTC(),
@@ -210,6 +211,7 @@ func toWire(in *series.Series) (seriesV3, error) {
 	}
 	out := seriesV3{
 		SchemaVersion:  currentSchemaVersion,
+		Generation:     in.Generation,
 		MetadataRef:    in.Metadata.String(),
 		PreferredTitle: in.PreferredTitle.String(),
 		CanonicalTitle: in.CanonicalTitle.String(),

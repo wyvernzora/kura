@@ -51,6 +51,7 @@ metadata file for a series.
 ```jsonc
 {
   "schemaVersion": 3,
+  "generation": 1,
   "metadataRef": "tvdb:370070",
   "preferredTitle": "Bocchi the Rock!",
   "canonicalTitle": "Bocchi the Rock!",
@@ -80,6 +81,13 @@ metadata file for a series.
 
 - Episode key format is `S<NN>E<NNNN>` (fixed-width). Lexicographic
   key order matches natural episode order.
+- `generation` starts at 1 and increases when series identity, ordering,
+  active media path / size / mtime / source / attrs, or companion path /
+  size / mtime changes. Provider-recoverable metadata, derived fields,
+  and transient workflow state do not increase it. Generation is monotonic
+  per tracked series but is not preserved across untracking and re-adding, so
+  backup agents must use `tape generation == disk generation` to mean current,
+  never `tape generation >= disk generation`.
 - Each episode value carries `airDate` plus optional preferred /
   canonical titles for that episode.
 - `dateAdded` is written by current Kura versions. Older files without

@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 
+	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
+	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/seriesfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
@@ -96,6 +99,55 @@ func TestImportForcePreservesTags(t *testing.T) {
 	}
 	if len(model.Tags) != 1 || model.Tags[0] != "priority" {
 		t.Fatalf("Tags = %v, want [priority]", model.Tags)
+	}
+}
+
+func TestImportForcePreservesGenerationFromCorruptFile(t *testing.T) {
+	deps, ref := seedSeries(t)
+	model, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	for i := range 6 {
+		if i%2 == 0 {
+			model.Ordering = "dvd"
+		} else {
+			model.Ordering = "absolute"
+		}
+		if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("generation_seed")); err != nil {
+			t.Fatalf("SaveCAS %d: %v", i, err)
+		}
+	}
+	if model.Generation != 7 {
+		t.Fatalf("generation before force import = %d, want 7", model.Generation)
+	}
+	metadataPath := paths.SeriesMetadata(deps.LibRoot, ref)
+	data, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if err := os.Truncate(metadataPath, int64(len(data)/2)); err != nil {
+		t.Fatalf("Truncate: %v", err)
+	}
+	if _, err := seriesfile.Load(deps.LibRoot, ref); err == nil {
+		t.Fatal("Load after truncate succeeded, want error")
+	}
+	deps.Index = indexfile.New(deps.LibRoot, indexfile.Config{BuildOptions: indexfile.DefaultBuildOptions()})
+	deps.Provider = func() (provider.Source, error) { return stubSource{}, nil }
+
+	if _, err := workflow.Import(context.Background(), deps, workflow.ImportInput{
+		Metadata: refs.Metadata("stub:42"),
+		Ref:      ref,
+		Force:    true,
+	}); err != nil {
+		t.Fatalf("Import force: %v", err)
+	}
+	reloaded, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Generation != 8 {
+		t.Fatalf("generation after force import = %d, want 8", reloaded.Generation)
 	}
 }
 

@@ -2,6 +2,7 @@ package seriesfile_test
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"strings"
 	"testing"
@@ -113,6 +114,13 @@ func TestSaveCASDetectsPreWriteDrift(t *testing.T) {
 	// Simulate a peer mutation between our load and our save.
 	peer := *model
 	peer.PreferredTitle = textnormFor(t, "Peer Won")
+	episode1, _ := refs.NewEpisode(1, 1)
+	peerEpisode := peer.Episodes[episode1]
+	peerActive := media.CloneRecord(*peerEpisode.Active)
+	peerActive.Size++
+	peerEpisode.Active = &peerActive
+	peer.Episodes = maps.Clone(peer.Episodes)
+	peer.Episodes[episode1] = peerEpisode
 	if err := seriesfile.SaveCAS(libRoot, &peer, coord.Mutator{
 		Op:   "scan",
 		PID:  999,
@@ -124,6 +132,11 @@ func TestSaveCASDetectsPreWriteDrift(t *testing.T) {
 
 	// Our save should now conflict — model.Hash matches the pre-peer state.
 	model.PreferredTitle = textnormFor(t, "We Tried")
+	modelEpisode := model.Episodes[episode1]
+	modelActive := media.CloneRecord(*modelEpisode.Active)
+	modelActive.Source = media.SourceWebDL
+	modelEpisode.Active = &modelActive
+	model.Episodes[episode1] = modelEpisode
 	err = seriesfile.SaveCAS(libRoot, model, coord.Mutator{Op: "stage", PID: 1, Host: "workstation", At: time.Now()})
 	var conflict *coord.ConflictError
 	if !errors.As(err, &conflict) {
@@ -134,6 +147,30 @@ func TestSaveCASDetectsPreWriteDrift(t *testing.T) {
 	}
 	if conflict.Mutator.Op != "scan" || conflict.Mutator.PID != 999 {
 		t.Fatalf("conflict mutator = %+v, want winning peer's", conflict.Mutator)
+	}
+	afterPeer, err := seriesfile.Load(libRoot, ref)
+	if err != nil {
+		t.Fatalf("reload after peer: %v", err)
+	}
+	if afterPeer.Generation != 2 {
+		t.Fatalf("generation after peer = %d, want 2", afterPeer.Generation)
+	}
+
+	retryEpisode := afterPeer.Episodes[episode1]
+	retryActive := media.CloneRecord(*retryEpisode.Active)
+	retryActive.Source = media.SourceWebDL
+	retryEpisode.Active = &retryActive
+	afterPeer.Episodes[episode1] = retryEpisode
+	if err := seriesfile.SaveCAS(libRoot, afterPeer, coord.Mutator{
+		Op:   "stage",
+		PID:  1,
+		Host: "workstation",
+		At:   time.Now(),
+	}); err != nil {
+		t.Fatalf("retry SaveCAS: %v", err)
+	}
+	if afterPeer.Generation != 3 {
+		t.Fatalf("generation after retry = %d, want 3", afterPeer.Generation)
 	}
 }
 

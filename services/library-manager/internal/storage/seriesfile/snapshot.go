@@ -19,12 +19,8 @@ func Encode(libRoot string, m *series.Series) ([]byte, error) {
 	if m.Ref.IsZero() {
 		return nil, errors.New("seriesfile: Encode called with zero Ref")
 	}
-	seriesDir := paths.SeriesDir(libRoot, m.Ref)
-	wire, err := toWire(m)
+	wire, err := wireForSeries(libRoot, m)
 	if err != nil {
-		return nil, err
-	}
-	if err := relativizeActiveWire(&wire, seriesDir); err != nil {
 		return nil, err
 	}
 	normalizeWire(&wire)

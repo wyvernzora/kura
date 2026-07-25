@@ -1,0 +1,14 @@
+# generation_bumps_on_adopt: adopting active media changes the archive-relevant
+# series payload and increments generation exactly once.
+
+kura_add stub:1001
+
+kura_show $KURA_LAST_REF
+stdout '"generation":1'
+
+kura_write_series_file $KURA_LAST_REF Season 1/show.s01e01.mp4
+kura_scan $KURA_LAST_REF
+stdout '"status":"added"'
+
+kura_show $KURA_LAST_REF
+stdout '"generation":2'

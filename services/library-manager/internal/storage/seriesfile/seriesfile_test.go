@@ -28,6 +28,9 @@ func TestLoadDecodesFixture(t *testing.T) {
 	if string(model.Metadata) != "tvdb:370070" {
 		t.Fatalf("Metadata = %s", model.Metadata)
 	}
+	if model.Generation != 1 {
+		t.Fatalf("Generation = %d, want 1 for legacy file", model.Generation)
+	}
 	if model.PreferredTitle.String() != "Bookworm" {
 		t.Fatalf("PreferredTitle = %q", model.PreferredTitle)
 	}

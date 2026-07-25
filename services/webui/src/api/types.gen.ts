@@ -620,6 +620,7 @@ export interface Show {
   metadataRef: string;
   ref: string;
   root: string;
+  generation?: number /* int */;
   lastScanned?: string;
   preferredTitle: string;
   canonicalTitle?: string;

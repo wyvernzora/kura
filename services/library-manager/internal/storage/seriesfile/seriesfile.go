@@ -7,8 +7,10 @@
 package seriesfile
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -105,7 +107,12 @@ func saveCASCreate(libRoot string, m *series.Series, mutator coord.Mutator, path
 		return err
 	}
 	m.LastMutated = mutator
-	data, err := encodeForSeries(libRoot, m)
+	wire, err := wireForSeries(libRoot, m)
+	if err != nil {
+		return err
+	}
+	wire.Generation = m.Generation + 1
+	data, err := encode(wire)
 	if err != nil {
 		return err
 	}
@@ -119,6 +126,7 @@ func saveCASCreate(libRoot string, m *series.Series, mutator coord.Mutator, path
 	if finalHash != hashHex(data) {
 		return &coord.ConflictError{Scope: scope, Phase: "post_write"}
 	}
+	m.Generation = wire.Generation
 	m.Hash = finalHash
 	return nil
 }
@@ -136,8 +144,17 @@ func saveCASUpdate(libRoot string, m *series.Series, mutator coord.Mutator, path
 			Mutator: peekMutatorBytes(currentBytes),
 		}
 	}
+	prev, err := decodeWire(currentBytes, false)
+	if err != nil {
+		return err
+	}
 	m.LastMutated = mutator
-	data, err := encodeForSeries(libRoot, m)
+	wire, err := wireForSeries(libRoot, m)
+	if err != nil {
+		return err
+	}
+	wire.Generation = nextGeneration(prev, wire)
+	data, err := encode(wire)
 	if err != nil {
 		return err
 	}
@@ -154,20 +171,21 @@ func saveCASUpdate(libRoot string, m *series.Series, mutator coord.Mutator, path
 	if finalHash != hashHex(data) {
 		return &coord.ConflictError{Scope: scope, Phase: "post_write"}
 	}
+	m.Generation = wire.Generation
 	m.Hash = finalHash
 	return nil
 }
 
-func encodeForSeries(libRoot string, m *series.Series) ([]byte, error) {
+func wireForSeries(libRoot string, m *series.Series) (seriesV3, error) {
 	seriesDir := paths.SeriesDir(libRoot, m.Ref)
 	wire, err := toWire(m)
 	if err != nil {
-		return nil, err
+		return seriesV3{}, err
 	}
 	if err := relativizeActiveWire(&wire, seriesDir); err != nil {
-		return nil, err
+		return seriesV3{}, err
 	}
-	return encode(wire)
+	return wire, nil
 }
 
 func hashHex(data []byte) string {
@@ -204,6 +222,43 @@ func peekMutatorBytes(data []byte) coord.Mutator {
 		return coord.Mutator{}
 	}
 	return mutator
+}
+
+// PeekGeneration reports the persisted generation for ref on a best-effort
+// basis, returning 0 when the file is missing or its generation cannot be read.
+func PeekGeneration(libRoot string, ref refs.Series) int {
+	data, err := os.ReadFile(paths.SeriesMetadata(libRoot, ref))
+	if err != nil {
+		return 0
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return 0
+	}
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return 0
+		}
+		key, ok := token.(string)
+		if !ok {
+			return 0
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return 0
+		}
+		if key != "generation" {
+			continue
+		}
+		var generation int
+		if err := json.Unmarshal(value, &generation); err != nil || generation < 1 {
+			return 0
+		}
+		return generation
+	}
+	return 0
 }
 
 // Exists reports whether series.json is present at the canonical path. It

@@ -16,6 +16,7 @@ type Show struct {
 	MetadataRef    refs.Metadata `json:"metadataRef"`
 	Ref            refs.Series   `json:"ref"`
 	Root           string        `json:"root"`
+	Generation     int           `json:"generation,omitempty"`
 	LastScanned    string        `json:"lastScanned,omitempty"`
 	PreferredTitle string        `json:"preferredTitle"`
 	CanonicalTitle string        `json:"canonicalTitle,omitempty"`

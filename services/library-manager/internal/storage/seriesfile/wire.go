@@ -12,6 +12,7 @@ const currentSchemaVersion = 3
 // decode path was removed once every series had been re-scanned.
 type seriesV3 struct {
 	SchemaVersion  int                  `json:"schemaVersion"`
+	Generation     int                  `json:"generation,omitempty"`
 	MetadataRef    string               `json:"metadataRef"`
 	PreferredTitle string               `json:"preferredTitle,omitempty"`
 	CanonicalTitle string               `json:"canonicalTitle,omitempty"`
@@ -184,6 +185,9 @@ func decodeWire(data []byte, validate bool) (seriesV3, error) {
 	}
 	if s.Episodes == nil {
 		s.Episodes = map[string]episodeV2{}
+	}
+	if s.Generation < 1 {
+		s.Generation = 1
 	}
 	if s.StagedTrash == nil {
 		s.StagedTrash = []stagedTrashEntryV1{}

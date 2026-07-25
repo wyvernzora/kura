@@ -49,6 +49,7 @@ func ParseAirDate(value string) (civil.Date, error) {
 type Series struct {
 	Ref            refs.Series
 	Metadata       refs.Metadata
+	Generation     int
 	PreferredTitle textnorm.NFCString
 	CanonicalTitle textnorm.NFCString
 	DateAdded      time.Time

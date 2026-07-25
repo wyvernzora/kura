@@ -25,6 +25,7 @@ func TestSnapshotEncodeDecodeRoundTrip(t *testing.T) {
 	}
 	seriesDir := paths.SeriesDir(libRoot, ref)
 	now := time.Date(2026, 5, 4, 12, 0, 0, 0, time.UTC)
+	model.Generation = 7
 	model.CanonicalTitle = textnormFor(t, "Honzuki no Gekokujou")
 	model.UserAliases = []textnorm.NFCString{textnormFor(t, "honzuki"), textnormFor(t, "bookworm")}
 	model.Tags = []string{"Priority", "maintenance-requested", "PRIORITY"}
@@ -62,6 +63,9 @@ func TestSnapshotEncodeDecodeRoundTrip(t *testing.T) {
 	if !bytes.Contains(data, []byte(`"schemaVersion":3`)) {
 		t.Fatalf("snapshot missing schemaVersion 3: %s", data)
 	}
+	if !bytes.Contains(data, []byte(`"generation":7`)) {
+		t.Fatalf("snapshot missing generation 7: %s", data)
+	}
 	if !bytes.Contains(data, []byte(`"dateAdded":"2026-04-20T03:00:00Z"`)) {
 		t.Fatalf("snapshot missing dateAdded: %s", data)
 	}
@@ -78,6 +82,9 @@ func TestSnapshotEncodeDecodeRoundTrip(t *testing.T) {
 	}
 	if decoded.Hash != "" {
 		t.Fatalf("Hash = %q, want empty", decoded.Hash)
+	}
+	if decoded.Generation != model.Generation {
+		t.Fatalf("Generation = %d, want %d", decoded.Generation, model.Generation)
 	}
 	if !decoded.DateAdded.Equal(model.DateAdded) {
 		t.Fatalf("DateAdded = %v, want %v", decoded.DateAdded, model.DateAdded)

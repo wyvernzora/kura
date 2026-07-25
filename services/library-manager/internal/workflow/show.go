@@ -108,6 +108,7 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (api.Show, error) {
 		MetadataRef:    model.Metadata,
 		Ref:            in.Ref,
 		Root:           librarySelector(deps.LibRoot, seriesRoot),
+		Generation:     model.Generation,
 		LastScanned:    formatOptionalTime(model.LastScanned),
 		PreferredTitle: preferredTitle,
 		CanonicalTitle: model.CanonicalTitle.String(),
