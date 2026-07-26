@@ -19,17 +19,20 @@ import (
 // On-disk layout constants. Exported so callers that need to compare or
 // log them have one source of truth.
 const (
-	KuraDir             = ".kura"
-	SeriesFileName      = "series.json"
-	IndexFileName       = "index.jsonl"
-	LegacyIndexFileName = "index.tsv"
-	TrashDirName        = "trash"
-	TrashMetaName       = "meta.json"
-	PlanDirName         = "reconcile"
-	PlanExtension       = ".jsonl"
-	JobsDirName         = "jobs"
-	JobLogExtension     = ".jsonl"
-	ExtraDirName        = "Extra"
+	KuraDir              = ".kura"
+	SeriesFileName       = "series.json"
+	IndexFileName        = "index.jsonl"
+	LegacyIndexFileName  = "index.tsv"
+	TrashDirName         = "trash"
+	TrashMetaName        = "meta.json"
+	PlanDirName          = "reconcile"
+	PlanExtension        = ".jsonl"
+	JobsDirName          = "jobs"
+	JobLogExtension      = ".jsonl"
+	BackupDirName        = "backup"
+	TapeCatalogDirName   = "tapes"
+	TapeCatalogExtension = ".json"
+	ExtraDirName         = "Extra"
 )
 
 // LibraryKuraDir returns <libRoot>/.kura/.
@@ -111,6 +114,21 @@ func JobsDir(libRoot string) string {
 // JobFile returns <libRoot>/.kura/jobs/<jobID>.jsonl.
 func JobFile(libRoot, jobID string) string {
 	return filepath.Join(JobsDir(libRoot), jobID+JobLogExtension)
+}
+
+// BackupDir returns <libRoot>/.kura/backup/.
+func BackupDir(libRoot string) string {
+	return filepath.Join(LibraryKuraDir(libRoot), BackupDirName)
+}
+
+// TapeCatalogDir returns <libRoot>/.kura/backup/tapes/.
+func TapeCatalogDir(libRoot string) string {
+	return filepath.Join(BackupDir(libRoot), TapeCatalogDirName)
+}
+
+// TapeCatalog returns <libRoot>/.kura/backup/tapes/<tapeID>.json.
+func TapeCatalog(libRoot, tapeID string) string {
+	return filepath.Join(TapeCatalogDir(libRoot), tapeID+TapeCatalogExtension)
 }
 
 // SeasonDir returns <libRoot>/<ref>/Season <N>/. Season 0 maps to the series
