@@ -4,16 +4,36 @@ package paths
 import "path/filepath"
 
 const (
-	TapeCatalogDirName   = "tapes"
-	TapeCatalogExtension = ".json"
+	VolumeCatalogDirName         = "volumes"
+	ActiveVolumeCatalogDirName   = "active"
+	DetachedVolumeCatalogDirName = "detached"
+	VolumeCatalogExtension       = ".json"
 )
 
-// TapeCatalogDir returns <state root>/tapes/.
-func TapeCatalogDir(stateRoot string) string {
-	return filepath.Join(stateRoot, TapeCatalogDirName)
+// ActiveVolumeCatalogDir returns <state root>/volumes/active/.
+func ActiveVolumeCatalogDir(stateRoot string) string {
+	return filepath.Join(stateRoot, VolumeCatalogDirName, ActiveVolumeCatalogDirName)
 }
 
-// TapeCatalog returns <state root>/tapes/<tapeID>.json.
-func TapeCatalog(stateRoot, tapeID string) string {
-	return filepath.Join(TapeCatalogDir(stateRoot), tapeID+TapeCatalogExtension)
+// ActiveVolumeCatalog returns
+// <state root>/volumes/active/<volumeID>.json.
+func ActiveVolumeCatalog(stateRoot, volumeID string) string {
+	return filepath.Join(
+		ActiveVolumeCatalogDir(stateRoot),
+		volumeID+VolumeCatalogExtension,
+	)
+}
+
+// DetachedVolumeCatalogDir returns <state root>/volumes/detached/.
+func DetachedVolumeCatalogDir(stateRoot string) string {
+	return filepath.Join(stateRoot, VolumeCatalogDirName, DetachedVolumeCatalogDirName)
+}
+
+// DetachedVolumeCatalog returns
+// <state root>/volumes/detached/<volumeID>.json.
+func DetachedVolumeCatalog(stateRoot, volumeID string) string {
+	return filepath.Join(
+		DetachedVolumeCatalogDir(stateRoot),
+		volumeID+VolumeCatalogExtension,
+	)
 }

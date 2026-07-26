@@ -8,62 +8,73 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
-	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/paths"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
 )
 
-func TestRoundTrip(t *testing.T) {
+const (
+	firstVolumeID  = volume.ID("01J8ZQ7W5TWHA6R6J8X4QZ9Y7V")
+	secondVolumeID = volume.ID("01J8ZQ7W5TWHA6R6J8X4QZ9Y7W")
+	thirdVolumeID  = volume.ID("01J8ZQ7W5TWHA6R6J8X4QZ9Y7X")
+)
+
+func TestRoundTripKeyedByVolumeID(t *testing.T) {
 	root := t.TempDir()
 	catalog := validCatalog()
 	catalog.LastVerifiedAt = time.Date(2026, 7, 22, 9, 0, 0, 0, time.UTC)
 	catalog.Snapshots[0].Incomplete = true
 
-	if err := tapecatalog.Save(root, catalog); err != nil {
-		t.Fatalf("Save: %v", err)
+	if err := tapecatalog.SaveActive(root, catalog); err != nil {
+		t.Fatalf("SaveActive: %v", err)
 	}
-	got, err := tapecatalog.Load(root, catalog.TapeID)
+	got, err := tapecatalog.LoadActive(root, catalog.VolumeID)
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadActive: %v", err)
 	}
 	if !reflect.DeepEqual(got, catalog) {
-		t.Fatalf("Load = %#v, want %#v", got, catalog)
+		t.Fatalf("LoadActive = %#v, want %#v", got, catalog)
 	}
 
-	data, err := os.ReadFile(paths.TapeCatalog(root, string(catalog.TapeID)))
+	data, err := os.ReadFile(
+		paths.ActiveVolumeCatalog(root, string(catalog.VolumeID)),
+	)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
 	if !bytes.Contains(data, []byte(`"incomplete": true`)) {
 		t.Fatalf("catalog does not contain incomplete marker:\n%s", data)
 	}
-	if bytes.Contains(data, []byte(`"mediaGeneration"`)) {
-		t.Fatalf("catalog contains derived mediaGeneration:\n%s", data)
+	if bytes.Contains(data, []byte(`"formatID"`)) {
+		t.Fatalf("catalog contains obsolete formatID:\n%s", data)
 	}
 }
 
-func TestBlankRegisteredTapeRoundTrip(t *testing.T) {
+func TestBlankRegisteredVolumeRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	catalog := validCatalog()
 	catalog.FreeBytes = catalog.CapacityBytes
 	catalog.LastVerifiedAt = time.Time{}
 	catalog.Snapshots = []tapecatalog.Snapshot{}
 
-	if err := tapecatalog.Save(root, catalog); err != nil {
-		t.Fatalf("Save: %v", err)
+	if err := tapecatalog.SaveDetached(root, catalog); err != nil {
+		t.Fatalf("SaveDetached: %v", err)
 	}
-	got, err := tapecatalog.Load(root, catalog.TapeID)
+	got, err := tapecatalog.LoadDetached(root, catalog.VolumeID)
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("LoadDetached: %v", err)
 	}
 	if !reflect.DeepEqual(got, catalog) {
-		t.Fatalf("Load = %#v, want %#v", got, catalog)
+		t.Fatalf("LoadDetached = %#v, want %#v", got, catalog)
 	}
 
-	data, err := os.ReadFile(paths.TapeCatalog(root, string(catalog.TapeID)))
+	data, err := os.ReadFile(
+		paths.DetachedVolumeCatalog(root, string(catalog.VolumeID)),
+	)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
@@ -75,138 +86,37 @@ func TestBlankRegisteredTapeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTapeIDMayChangeBetweenObservations(t *testing.T) {
+	root := t.TempDir()
+	catalog := validCatalog()
+	if err := tapecatalog.SaveActive(root, catalog); err != nil {
+		t.Fatalf("first SaveActive: %v", err)
+	}
+
+	catalog.TapeID = "XYZ987L7"
+	catalog.ObservedAt = catalog.ObservedAt.Add(time.Hour)
+	if err := tapecatalog.SaveActive(root, catalog); err != nil {
+		t.Fatalf("second SaveActive: %v", err)
+	}
+	got, err := tapecatalog.LoadActive(root, catalog.VolumeID)
+	if err != nil {
+		t.Fatalf("LoadActive: %v", err)
+	}
+	if !reflect.DeepEqual(got, catalog) {
+		t.Fatalf("LoadActive = %#v, want relabeled catalog %#v", got, catalog)
+	}
+}
+
 func TestUnsupportedSchemaVersion(t *testing.T) {
 	root := t.TempDir()
 	wire := validWire()
 	wire["schemaVersion"] = 2
-	writeWire(t, root, "ABC123L6", wire)
+	writeWire(t, paths.ActiveVolumeCatalog(root, string(firstVolumeID)), wire)
 
-	_, err := tapecatalog.Load(root, "ABC123L6")
-	if err == nil || !strings.Contains(err.Error(), "unsupported schemaVersion 2") {
-		t.Fatalf("Load error = %v, want unsupported schemaVersion 2", err)
-	}
-}
-
-func TestTapeIDValidation(t *testing.T) {
-	cases := []struct {
-		name string
-		id   tapecatalog.TapeID
-		want string
-	}{
-		{name: "LTO-1 data", id: "ABC123L1"},
-		{name: "LTO-2 data", id: "ABC123L2"},
-		{name: "LTO-3 data", id: "ABC123L3"},
-		{name: "LTO-4 data", id: "ABC123L4"},
-		{name: "LTO-5 data", id: "ABC123L5"},
-		{name: "LTO-6 data", id: "ABC123L6"},
-		{name: "LTO-7 data", id: "ABC123L7"},
-		{name: "LTO-8 data", id: "ABC123L8"},
-		{name: "LTO-9 data", id: "ABC123L9"},
-		{name: "LTO-10 data", id: "ABC123LA"},
-		{name: "LTO-7 Type M", id: "ABC123M8"},
-		{
-			name: "cleaning cartridge rejected",
-			id:   "ABC123CU",
-			want: `tapecatalog: tapeID "ABC123CU" identifies a cleaning cartridge`,
-		},
-		{
-			name: "WORM cartridge rejected",
-			id:   "ABC123LW",
-			want: `tapecatalog: tapeID "ABC123LW" identifies WORM media`,
-		},
-		{
-			name: "unassigned LR rejected as unsupported",
-			id:   "ABC123LR",
-			want: `tapecatalog: tapeID "ABC123LR" has unsupported media identifier "LR"`,
-		},
-		{
-			name: "unassigned LS rejected as unsupported",
-			id:   "ABC123LS",
-			want: `tapecatalog: tapeID "ABC123LS" has unsupported media identifier "LS"`,
-		},
-		{
-			name: "unsupported media identifier rejected",
-			id:   "ABC123ZZ",
-			want: `tapecatalog: tapeID "ABC123ZZ" has unsupported media identifier "ZZ"`,
-		},
-		{
-			name: "lowercase serial rejected",
-			id:   "abc123L6",
-			want: `tapecatalog: tapeID "abc123L6" must use uppercase letters`,
-		},
-		{
-			name: "seven characters rejected",
-			id:   "ABC12L6",
-			want: `tapecatalog: tapeID "ABC12L6" must be exactly 8 characters`,
-		},
-		{
-			name: "nine characters rejected",
-			id:   "ABCD123L6",
-			want: `tapecatalog: tapeID "ABCD123L6" must be exactly 8 characters`,
-		},
-		{
-			name: "lowercase suffix rejected",
-			id:   "ABC123l6",
-			want: `tapecatalog: tapeID "ABC123l6" must use uppercase letters`,
-		},
-		{
-			name: "non-alphanumeric serial rejected",
-			id:   "ABC-23L6",
-			want: `tapecatalog: tapeID "ABC-23L6" volume serial must contain only A-Z and 0-9`,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			catalog := validCatalog()
-			catalog.TapeID = tc.id
-			err := tapecatalog.Save(t.TempDir(), catalog)
-			if tc.want == "" {
-				if err != nil {
-					t.Fatalf("Save: %v", err)
-				}
-				return
-			}
-			if err == nil || err.Error() != tc.want {
-				t.Fatalf("Save error = %v, want %q", err, tc.want)
-			}
-		})
-	}
-}
-
-func TestTapeIDMediaGeneration(t *testing.T) {
-	cases := []struct {
-		name string
-		id   tapecatalog.TapeID
-		want string
-	}{
-		{name: "LTO-1", id: "ABC123L1", want: "LTO-1"},
-		{name: "LTO-2", id: "ABC123L2", want: "LTO-2"},
-		{name: "LTO-3", id: "ABC123L3", want: "LTO-3"},
-		{name: "LTO-4", id: "ABC123L4", want: "LTO-4"},
-		{name: "LTO-5", id: "ABC123L5", want: "LTO-5"},
-		{name: "LTO-6", id: "ABC123L6", want: "LTO-6"},
-		{name: "LTO-7", id: "ABC123L7", want: "LTO-7"},
-		{name: "LTO-8", id: "ABC123L8", want: "LTO-8"},
-		{name: "LTO-9", id: "ABC123L9", want: "LTO-9"},
-		{name: "LTO-10", id: "ABC123LA", want: "LTO-10"},
-		{name: "LTO-7 Type M", id: "ABC123M8", want: "LTO-7 Type M"},
-		{name: "L0", id: "ABC123L0"},
-		{name: "unsupported identifier", id: "ABC123ZZ"},
-		{name: "cleaning cartridge", id: "ABC123CU"},
-		{name: "WORM cartridge", id: "ABC123LW"},
-		{name: "lowercase", id: "abc123l6"},
-		{name: "invalid serial with allowlisted suffix", id: "ABC-23L6"},
-		{name: "short", id: "ABC"},
-		{name: "empty", id: ""},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.id.MediaGeneration(); got != tc.want {
-				t.Fatalf("MediaGeneration = %q, want %q", got, tc.want)
-			}
-		})
+	_, err := tapecatalog.LoadActive(root, firstVolumeID)
+	want := "tapecatalog: unsupported schemaVersion 2"
+	if err == nil || err.Error() != want {
+		t.Fatalf("LoadActive error = %v, want %q", err, want)
 	}
 }
 
@@ -217,71 +127,81 @@ func TestSaveValidation(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "format ID required",
-			mutate: func(c *tapecatalog.Catalog) { c.FormatID = "" },
-			want:   "formatID",
+			name:   "volume ID required",
+			mutate: func(c *tapecatalog.Catalog) { c.VolumeID = "" },
+			want:   "tapecatalog: volumeID is required",
+		},
+		{
+			name:   "tape ID required",
+			mutate: func(c *tapecatalog.Catalog) { c.TapeID = "" },
+			want:   "tapecatalog: tapeID is required",
+		},
+		{
+			name:   "tape ID valid",
+			mutate: func(c *tapecatalog.Catalog) { c.TapeID = "ABC123CU" },
+			want:   `tapecatalog: tapeID "ABC123CU" identifies a cleaning cartridge`,
 		},
 		{
 			name:   "capacity bytes nonnegative",
 			mutate: func(c *tapecatalog.Catalog) { c.CapacityBytes = -1 },
-			want:   "capacityBytes must not be negative",
+			want:   "tapecatalog: capacityBytes must not be negative",
 		},
 		{
 			name:   "free bytes nonnegative",
 			mutate: func(c *tapecatalog.Catalog) { c.FreeBytes = -1 },
-			want:   "freeBytes",
+			want:   "tapecatalog: freeBytes must not be negative",
 		},
 		{
 			name: "free bytes within capacity",
 			mutate: func(c *tapecatalog.Catalog) {
 				c.FreeBytes = c.CapacityBytes + 1
 			},
-			want: "freeBytes",
+			want: "tapecatalog: freeBytes must not exceed capacityBytes",
 		},
 		{
 			name:   "created at required",
 			mutate: func(c *tapecatalog.Catalog) { c.CreatedAt = time.Time{} },
-			want:   "createdAt",
+			want:   "tapecatalog: createdAt is required",
 		},
 		{
 			name:   "observed at required",
 			mutate: func(c *tapecatalog.Catalog) { c.ObservedAt = time.Time{} },
-			want:   "observedAt",
+			want:   "tapecatalog: observedAt is required",
 		},
 		{
 			name: "snapshot metadata ref required",
 			mutate: func(c *tapecatalog.Catalog) {
 				c.Snapshots[0].MetadataRef = ""
 			},
-			want: "metadataRef",
+			want: "tapecatalog: snapshot metadataRef is required",
 		},
 		{
 			name: "snapshot generation positive",
 			mutate: func(c *tapecatalog.Catalog) {
 				c.Snapshots[0].Generation = 0
 			},
-			want: "generation",
+			want: `tapecatalog: snapshot "tvdb:370070" generation must be at least 1`,
 		},
 		{
 			name: "snapshot bytes nonnegative",
 			mutate: func(c *tapecatalog.Catalog) {
 				c.Snapshots[0].Bytes = -1
 			},
-			want: "bytes",
+			want: `tapecatalog: snapshot ("tvdb:370070", 7) bytes must not be negative`,
 		},
 		{
 			name: "snapshot fingerprint required",
 			mutate: func(c *tapecatalog.Catalog) {
 				c.Snapshots[0].PayloadFingerprint = ""
 			},
-			want: "payloadFingerprint",
+			want: `tapecatalog: snapshot ("tvdb:370070", 7) payloadFingerprint is required`,
 		},
 		{
 			name: "snapshot captured at required",
 			mutate: func(c *tapecatalog.Catalog) {
 				c.Snapshots[0].CapturedAt = time.Time{}
 			},
-			want: "capturedAt",
+			want: `tapecatalog: snapshot ("tvdb:370070", 7) capturedAt is required`,
 		},
 	}
 
@@ -289,12 +209,9 @@ func TestSaveValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			catalog := validCatalog()
 			tc.mutate(&catalog)
-			err := tapecatalog.Save(t.TempDir(), catalog)
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("Save error = %v, want error containing %q", err, tc.want)
-			}
-			if !strings.HasPrefix(err.Error(), "tapecatalog: ") {
-				t.Fatalf("Save error = %q, want tapecatalog prefix", err)
+			err := tapecatalog.SaveActive(t.TempDir(), catalog)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("SaveActive error = %v, want %q", err, tc.want)
 			}
 		})
 	}
@@ -307,83 +224,92 @@ func TestLoadValidation(t *testing.T) {
 		want   string
 	}{
 		{
-			name:   "tape ID required",
-			mutate: func(w map[string]any) { w["tapeID"] = "" },
-			want:   "tapeID is required",
+			name:   "volume ID required",
+			mutate: func(w map[string]any) { w["volumeID"] = "" },
+			want:   "tapecatalog: volumeID is required",
 		},
 		{
-			name:   "format ID required",
-			mutate: func(w map[string]any) { w["formatID"] = "" },
-			want:   "formatID",
+			name:   "tape ID required",
+			mutate: func(w map[string]any) { w["tapeID"] = "" },
+			want:   "tapecatalog: tapeID is required",
+		},
+		{
+			name:   "tape ID valid",
+			mutate: func(w map[string]any) { w["tapeID"] = "ABC123CU" },
+			want:   `tapecatalog: tapeID "ABC123CU" identifies a cleaning cartridge`,
 		},
 		{
 			name:   "capacity bytes nonnegative",
 			mutate: func(w map[string]any) { w["capacityBytes"] = -1 },
-			want:   "capacityBytes must not be negative",
+			want:   "tapecatalog: capacityBytes must not be negative",
 		},
 		{
 			name:   "free bytes nonnegative",
 			mutate: func(w map[string]any) { w["freeBytes"] = -1 },
-			want:   "freeBytes",
+			want:   "tapecatalog: freeBytes must not be negative",
 		},
 		{
 			name: "free bytes within capacity",
 			mutate: func(w map[string]any) {
 				w["freeBytes"] = int64(2_500_000_000_001)
 			},
-			want: "freeBytes",
+			want: "tapecatalog: freeBytes must not exceed capacityBytes",
 		},
 		{
-			name:   "created at required",
-			mutate: func(w map[string]any) { w["createdAt"] = "0001-01-01T00:00:00Z" },
-			want:   "createdAt",
+			name: "created at required",
+			mutate: func(w map[string]any) {
+				w["createdAt"] = "0001-01-01T00:00:00Z"
+			},
+			want: "tapecatalog: createdAt is required",
 		},
 		{
-			name:   "observed at required",
-			mutate: func(w map[string]any) { w["observedAt"] = "0001-01-01T00:00:00Z" },
-			want:   "observedAt",
+			name: "observed at required",
+			mutate: func(w map[string]any) {
+				w["observedAt"] = "0001-01-01T00:00:00Z"
+			},
+			want: "tapecatalog: observedAt is required",
 		},
 		{
 			name: "last verified at RFC3339",
 			mutate: func(w map[string]any) {
 				w["lastVerifiedAt"] = "not-a-time"
 			},
-			want: "lastVerifiedAt",
+			want: `tapecatalog: parse lastVerifiedAt: parsing time "not-a-time" as "2006-01-02T15:04:05Z07:00": cannot parse "not-a-time" as "2006"`,
 		},
 		{
 			name: "snapshot metadata ref required",
 			mutate: func(w map[string]any) {
 				firstSnapshot(w)["metadataRef"] = ""
 			},
-			want: "metadataRef",
+			want: "tapecatalog: snapshot metadataRef is required",
 		},
 		{
 			name: "snapshot generation positive",
 			mutate: func(w map[string]any) {
 				firstSnapshot(w)["generation"] = 0
 			},
-			want: "generation",
+			want: `tapecatalog: snapshot "tvdb:370070" generation must be at least 1`,
 		},
 		{
 			name: "snapshot bytes nonnegative",
 			mutate: func(w map[string]any) {
 				firstSnapshot(w)["bytes"] = -1
 			},
-			want: "bytes",
+			want: `tapecatalog: snapshot ("tvdb:370070", 7) bytes must not be negative`,
 		},
 		{
 			name: "snapshot fingerprint required",
 			mutate: func(w map[string]any) {
 				firstSnapshot(w)["payloadFingerprint"] = ""
 			},
-			want: "payloadFingerprint",
+			want: `tapecatalog: snapshot ("tvdb:370070", 7) payloadFingerprint is required`,
 		},
 		{
 			name: "snapshot captured at required",
 			mutate: func(w map[string]any) {
 				firstSnapshot(w)["capturedAt"] = "0001-01-01T00:00:00Z"
 			},
-			want: "capturedAt",
+			want: `tapecatalog: snapshot ("tvdb:370070", 7) capturedAt is required`,
 		},
 	}
 
@@ -392,25 +318,30 @@ func TestLoadValidation(t *testing.T) {
 			root := t.TempDir()
 			wire := validWire()
 			tc.mutate(wire)
-			writeWire(t, root, "ABC123L6", wire)
+			writeWire(
+				t,
+				paths.ActiveVolumeCatalog(root, string(firstVolumeID)),
+				wire,
+			)
 
-			_, err := tapecatalog.Load(root, "ABC123L6")
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("Load error = %v, want error containing %q", err, tc.want)
-			}
-			if !strings.HasPrefix(err.Error(), "tapecatalog: ") {
-				t.Fatalf("Load error = %q, want tapecatalog prefix", err)
+			_, err := tapecatalog.LoadActive(root, firstVolumeID)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("LoadActive error = %v, want %q", err, tc.want)
 			}
 		})
 	}
 }
 
 func TestDuplicateSnapshotRejected(t *testing.T) {
+	const want = `tapecatalog: duplicate snapshot pair ("tvdb:370070", 7)`
+
 	t.Run("save", func(t *testing.T) {
 		catalog := validCatalog()
 		catalog.Snapshots = append(catalog.Snapshots, catalog.Snapshots[0])
-		err := tapecatalog.Save(t.TempDir(), catalog)
-		assertDuplicateError(t, err)
+		err := tapecatalog.SaveActive(t.TempDir(), catalog)
+		if err == nil || err.Error() != want {
+			t.Fatalf("SaveActive error = %v, want %q", err, want)
+		}
 	})
 
 	t.Run("load", func(t *testing.T) {
@@ -427,70 +358,79 @@ func TestDuplicateSnapshotRejected(t *testing.T) {
 				"capturedAt":         snapshot["capturedAt"],
 			},
 		)
-		writeWire(t, root, "ABC123L6", wire)
+		writeWire(
+			t,
+			paths.ActiveVolumeCatalog(root, string(firstVolumeID)),
+			wire,
+		)
 
-		_, err := tapecatalog.Load(root, "ABC123L6")
-		assertDuplicateError(t, err)
+		_, err := tapecatalog.LoadActive(root, firstVolumeID)
+		if err == nil || err.Error() != want {
+			t.Fatalf("LoadActive error = %v, want %q", err, want)
+		}
 	})
 }
 
-func TestTapeIDFilenameMismatchRejected(t *testing.T) {
+func TestVolumeIDFilenameMismatchRejected(t *testing.T) {
 	root := t.TempDir()
-	writeWire(t, root, "ABC124L6", validWire())
+	writeWire(
+		t,
+		paths.ActiveVolumeCatalog(root, string(secondVolumeID)),
+		validWire(),
+	)
 
-	_, err := tapecatalog.Load(root, "ABC124L6")
-	if err == nil ||
-		!strings.Contains(err.Error(), "tapeID mismatch") ||
-		!strings.Contains(err.Error(), "ABC123L6") ||
-		!strings.Contains(err.Error(), "ABC124L6") {
-		t.Fatalf("Load error = %v, want mismatch naming both tape IDs", err)
+	_, err := tapecatalog.LoadActive(root, secondVolumeID)
+	want := `tapecatalog: volumeID mismatch: filename is "01J8ZQ7W5TWHA6R6J8X4QZ9Y7W", file contains "01J8ZQ7W5TWHA6R6J8X4QZ9Y7V"`
+	if err == nil || err.Error() != want {
+		t.Fatalf("LoadActive error = %v, want %q", err, want)
 	}
 }
 
-func TestPathUnsafeTapeIDsRejected(t *testing.T) {
-	tooLong := strings.Repeat("a", 65)
-	ids := []tapecatalog.TapeID{
+func TestPathUnsafeVolumeIDsRejected(t *testing.T) {
+	ids := []volume.ID{
 		"",
 		".",
 		"..",
 		"../escape",
 		"a/b",
 		`a\b`,
-		"tape id",
-		tapecatalog.TapeID(tooLong),
+		"volume id",
+		"01j8zq7w5twha6r6j8x4qz9y7v",
+		"01J8ZQ7W5TWHA6R6J8X4QZ9Y7I",
 	}
 	for _, id := range ids {
 		t.Run(string(id), func(t *testing.T) {
 			root := t.TempDir()
 			catalog := validCatalog()
-			catalog.TapeID = id
+			catalog.VolumeID = id
 			var escapedPath string
 			var escapedData []byte
 			if id == "../escape" {
-				writeWire(t, root, string(id), validWire())
-				escapedPath = paths.TapeCatalog(root, string(id))
-				var err error
-				escapedData, err = os.ReadFile(escapedPath)
-				if err != nil {
-					t.Fatalf("ReadFile escaped catalog: %v", err)
+				escapedPath = paths.ActiveVolumeCatalog(root, string(id))
+				if err := os.MkdirAll(filepath.Dir(escapedPath), 0o755); err != nil {
+					t.Fatalf("MkdirAll escaped catalog: %v", err)
+				}
+				escapedData = []byte("do not overwrite")
+				if err := os.WriteFile(escapedPath, escapedData, 0o644); err != nil {
+					t.Fatalf("WriteFile escaped catalog: %v", err)
 				}
 			}
 
-			want := invalidTapeIDError(id)
-			if err := tapecatalog.Save(root, catalog); err == nil || err.Error() != want {
-				t.Fatalf("Save error = %v, want %q", err, want)
-			}
-			if _, err := tapecatalog.Load(root, id); err == nil || err.Error() != want {
-				t.Fatalf("Load error = %v, want %q", err, want)
-			}
+			want := invalidVolumeIDError(id)
+			assertExactError(
+				t,
+				tapecatalog.SaveActive(root, catalog),
+				want,
+			)
+			_, err := tapecatalog.LoadActive(root, id)
+			assertExactError(t, err, want)
+			_, err = tapecatalog.LoadDetached(root, id)
+			assertExactError(t, err, want)
+			assertExactError(t, tapecatalog.Detach(root, id), want)
+			assertExactError(t, tapecatalog.Attach(root, id), want)
+			assertExactError(t, tapecatalog.Purge(root, id), want)
 			if escapedPath != "" {
-				assertFileUnchanged(t, escapedPath, escapedData)
-			}
-			if err := tapecatalog.Delete(root, id); err == nil || err.Error() != want {
-				t.Fatalf("Delete error = %v, want %q", err, want)
-			}
-			if escapedPath != "" {
-				assertFileUnchanged(t, escapedPath, escapedData)
+				assertFileEquals(t, escapedPath, escapedData)
 			}
 		})
 	}
@@ -505,10 +445,11 @@ func TestSaveSortsSnapshotsDeterministically(t *testing.T) {
 		snapshot("tvdb:1", 4, capturedAt),
 		snapshot("tvdb:2", 1, capturedAt),
 	}
-	if err := tapecatalog.Save(root, catalog); err != nil {
-		t.Fatalf("first Save: %v", err)
+	if err := tapecatalog.SaveActive(root, catalog); err != nil {
+		t.Fatalf("first SaveActive: %v", err)
 	}
-	first, err := os.ReadFile(paths.TapeCatalog(root, string(catalog.TapeID)))
+	path := paths.ActiveVolumeCatalog(root, string(catalog.VolumeID))
+	first, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("first ReadFile: %v", err)
 	}
@@ -524,110 +465,502 @@ func TestSaveSortsSnapshotsDeterministically(t *testing.T) {
 	}
 	gotOrder := make([]string, 0, len(wire.Snapshots))
 	for _, got := range wire.Snapshots {
-		gotOrder = append(gotOrder, got.MetadataRef+":"+strconv.Itoa(got.Generation))
+		gotOrder = append(
+			gotOrder,
+			got.MetadataRef+":"+strconv.Itoa(got.Generation),
+		)
 	}
 	wantOrder := []string{"tvdb:1:4", "tvdb:2:1", "tvdb:2:2"}
 	if !reflect.DeepEqual(gotOrder, wantOrder) {
 		t.Fatalf("snapshot order = %v, want %v", gotOrder, wantOrder)
 	}
 
-	catalog.Snapshots[0], catalog.Snapshots[2] = catalog.Snapshots[2], catalog.Snapshots[0]
-	if err := tapecatalog.Save(root, catalog); err != nil {
-		t.Fatalf("second Save: %v", err)
+	catalog.Snapshots[0], catalog.Snapshots[2] =
+		catalog.Snapshots[2], catalog.Snapshots[0]
+	if err := tapecatalog.SaveActive(root, catalog); err != nil {
+		t.Fatalf("second SaveActive: %v", err)
 	}
-	second, err := os.ReadFile(paths.TapeCatalog(root, string(catalog.TapeID)))
+	second, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("second ReadFile: %v", err)
 	}
 	if !bytes.Equal(first, second) {
-		t.Fatalf("equivalent Saves differ:\nfirst:\n%s\nsecond:\n%s", first, second)
+		t.Fatalf("equivalent saves differ:\nfirst:\n%s\nsecond:\n%s", first, second)
+	}
+}
+
+func TestLoadSortsSnapshotsDeterministically(t *testing.T) {
+	root := t.TempDir()
+	wire := validWire()
+	wireSnapshot := func(metadataRef string, generation int) map[string]any {
+		return map[string]any{
+			"metadataRef":        metadataRef,
+			"generation":         generation,
+			"bytes":              int64(543_210_000_000),
+			"payloadFingerprint": "sha256:0123456789abcdef",
+			"capturedAt":         "2026-07-21T13:10:00Z",
+		}
+	}
+	wire["snapshots"] = []any{
+		wireSnapshot("tvdb:2", 2),
+		wireSnapshot("tvdb:1", 4),
+		wireSnapshot("tvdb:2", 1),
+	}
+	writeWire(
+		t,
+		paths.ActiveVolumeCatalog(root, string(firstVolumeID)),
+		wire,
+	)
+
+	catalog, err := tapecatalog.LoadActive(root, firstVolumeID)
+	if err != nil {
+		t.Fatalf("LoadActive: %v", err)
+	}
+	gotOrder := make([]string, 0, len(catalog.Snapshots))
+	for _, snapshot := range catalog.Snapshots {
+		gotOrder = append(
+			gotOrder,
+			snapshot.MetadataRef+":"+strconv.Itoa(snapshot.Generation),
+		)
+	}
+	wantOrder := []string{"tvdb:1:4", "tvdb:2:1", "tvdb:2:2"}
+	if !reflect.DeepEqual(gotOrder, wantOrder) {
+		t.Fatalf("snapshot order = %v, want %v", gotOrder, wantOrder)
 	}
 }
 
 func TestLoadMissing(t *testing.T) {
-	_, err := tapecatalog.Load(t.TempDir(), "ABC123L6")
+	_, err := tapecatalog.LoadActive(t.TempDir(), firstVolumeID)
 	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("Load error = %v, want os.ErrNotExist", err)
+		t.Fatalf("LoadActive error = %v, want os.ErrNotExist", err)
 	}
 }
 
-func TestList(t *testing.T) {
-	t.Run("missing directory", func(t *testing.T) {
-		got, err := tapecatalog.List(t.TempDir())
-		if err != nil {
-			t.Fatalf("List: %v", err)
-		}
-		if got == nil || len(got) != 0 {
-			t.Fatalf("List = %#v, want empty non-nil slice", got)
-		}
-	})
+func TestListActiveAndDetachedAreDisjoint(t *testing.T) {
+	root := t.TempDir()
+	activeFirst := validCatalog()
+	activeFirst.VolumeID = thirdVolumeID
+	activeSecond := validCatalog()
+	activeSecond.VolumeID = firstVolumeID
+	detached := validCatalog()
+	detached.VolumeID = secondVolumeID
 
-	t.Run("sorted IDs and ignored entries", func(t *testing.T) {
-		root := t.TempDir()
-		first := validCatalog()
-		first.TapeID = "ABC003L6"
-		second := validCatalog()
-		second.TapeID = "ABC001L6"
-		if err := tapecatalog.Save(root, first); err != nil {
-			t.Fatalf("Save first: %v", err)
-		}
-		if err := tapecatalog.Save(root, second); err != nil {
-			t.Fatalf("Save second: %v", err)
-		}
-		if err := os.WriteFile(
-			filepath.Join(paths.TapeCatalogDir(root), "notes.txt"),
-			[]byte("ignore"),
-			0o644,
-		); err != nil {
-			t.Fatalf("WriteFile: %v", err)
-		}
-		if err := os.Mkdir(
-			filepath.Join(paths.TapeCatalogDir(root), "ABC002L6.json"),
-			0o755,
-		); err != nil {
-			t.Fatalf("Mkdir: %v", err)
-		}
+	if err := tapecatalog.SaveActive(root, activeFirst); err != nil {
+		t.Fatalf("SaveActive first: %v", err)
+	}
+	if err := tapecatalog.SaveActive(root, activeSecond); err != nil {
+		t.Fatalf("SaveActive second: %v", err)
+	}
+	if err := tapecatalog.SaveDetached(root, detached); err != nil {
+		t.Fatalf("SaveDetached: %v", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(paths.ActiveVolumeCatalogDir(root), "notes.txt"),
+		[]byte("ignore"),
+		0o644,
+	); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.Mkdir(
+		filepath.Join(
+			paths.ActiveVolumeCatalogDir(root),
+			string(secondVolumeID)+paths.VolumeCatalogExtension,
+		),
+		0o755,
+	); err != nil {
+		t.Fatalf("Mkdir: %v", err)
+	}
 
-		got, err := tapecatalog.List(root)
-		if err != nil {
-			t.Fatalf("List: %v", err)
-		}
-		want := []tapecatalog.TapeID{"ABC001L6", "ABC003L6"}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("List = %v, want %v", got, want)
-		}
-	})
+	active, err := tapecatalog.ListActive(root)
+	if err != nil {
+		t.Fatalf("ListActive: %v", err)
+	}
+	wantActive := []volume.ID{firstVolumeID, thirdVolumeID}
+	if !reflect.DeepEqual(active, wantActive) {
+		t.Fatalf("ListActive = %v, want %v", active, wantActive)
+	}
+
+	gotDetached, err := tapecatalog.ListDetached(root)
+	if err != nil {
+		t.Fatalf("ListDetached: %v", err)
+	}
+	wantDetached := []volume.ID{secondVolumeID}
+	if !reflect.DeepEqual(gotDetached, wantDetached) {
+		t.Fatalf("ListDetached = %v, want %v", gotDetached, wantDetached)
+	}
 }
 
-func TestDeleteRetiresTape(t *testing.T) {
+func TestListIsolationWhenDetachedDirectoryIsAbsent(t *testing.T) {
 	root := t.TempDir()
 	catalog := validCatalog()
-	if err := tapecatalog.Save(root, catalog); err != nil {
-		t.Fatalf("Save: %v", err)
+	if err := tapecatalog.SaveActive(root, catalog); err != nil {
+		t.Fatalf("SaveActive: %v", err)
+	}
+	if _, err := os.Stat(paths.DetachedVolumeCatalogDir(root)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("detached directory exists: %v", err)
 	}
 
-	if err := tapecatalog.Delete(root, catalog.TapeID); err != nil {
-		t.Fatalf("Delete: %v", err)
-	}
-	if _, err := os.Stat(paths.TapeCatalog(root, string(catalog.TapeID))); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("catalog still exists after Delete: %v", err)
-	}
-	got, err := tapecatalog.List(root)
+	detached, err := tapecatalog.ListDetached(root)
 	if err != nil {
-		t.Fatalf("List: %v", err)
+		t.Fatalf("ListDetached: %v", err)
 	}
-	if len(got) != 0 {
-		t.Fatalf("List = %v, want no registered tapes", got)
+	if detached == nil || len(detached) != 0 {
+		t.Fatalf("ListDetached = %#v, want empty non-nil slice", detached)
 	}
-	if err := tapecatalog.Delete(root, catalog.TapeID); err != nil {
-		t.Fatalf("second Delete = %v, want idempotent success", err)
+	active, err := tapecatalog.ListActive(root)
+	if err != nil {
+		t.Fatalf("ListActive: %v", err)
 	}
+	wantActive := []volume.ID{firstVolumeID}
+	if !reflect.DeepEqual(active, wantActive) {
+		t.Fatalf("ListActive = %v, want %v", active, wantActive)
+	}
+}
+
+func TestListMissingDirectories(t *testing.T) {
+	root := t.TempDir()
+	active, err := tapecatalog.ListActive(root)
+	if err != nil {
+		t.Fatalf("ListActive: %v", err)
+	}
+	if active == nil || len(active) != 0 {
+		t.Fatalf("ListActive = %#v, want empty non-nil slice", active)
+	}
+	detached, err := tapecatalog.ListDetached(root)
+	if err != nil {
+		t.Fatalf("ListDetached: %v", err)
+	}
+	if detached == nil || len(detached) != 0 {
+		t.Fatalf("ListDetached = %#v, want empty non-nil slice", detached)
+	}
+}
+
+func TestDetachAttachRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	catalog := validCatalog()
+	if err := tapecatalog.SaveActive(root, catalog); err != nil {
+		t.Fatalf("SaveActive: %v", err)
+	}
+	original, err := os.ReadFile(
+		paths.ActiveVolumeCatalog(root, string(catalog.VolumeID)),
+	)
+	if err != nil {
+		t.Fatalf("ReadFile active: %v", err)
+	}
+
+	if err := tapecatalog.Detach(root, catalog.VolumeID); err != nil {
+		t.Fatalf("Detach: %v", err)
+	}
+	if _, err := os.Stat(
+		paths.ActiveVolumeCatalog(root, string(catalog.VolumeID)),
+	); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("active catalog still exists after Detach: %v", err)
+	}
+	assertFileEquals(
+		t,
+		paths.DetachedVolumeCatalog(root, string(catalog.VolumeID)),
+		original,
+	)
+
+	if err := tapecatalog.Attach(root, catalog.VolumeID); err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	if _, err := os.Stat(
+		paths.DetachedVolumeCatalog(root, string(catalog.VolumeID)),
+	); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("detached catalog still exists after Attach: %v", err)
+	}
+	assertFileEquals(
+		t,
+		paths.ActiveVolumeCatalog(root, string(catalog.VolumeID)),
+		original,
+	)
+}
+
+func TestSaveRefusesSiblingCatalog(t *testing.T) {
+	t.Run("active exists", func(t *testing.T) {
+		root := t.TempDir()
+		catalog := validCatalog()
+		if err := tapecatalog.SaveActive(root, catalog); err != nil {
+			t.Fatalf("SaveActive: %v", err)
+		}
+		activePath := paths.ActiveVolumeCatalog(root, string(catalog.VolumeID))
+		detachedPath := paths.DetachedVolumeCatalog(root, string(catalog.VolumeID))
+		activeBefore, err := os.ReadFile(activePath)
+		if err != nil {
+			t.Fatalf("ReadFile active: %v", err)
+		}
+
+		err = tapecatalog.SaveDetached(root, catalog)
+		want := "tapecatalog: save " + string(catalog.VolumeID) +
+			": catalog already exists at " + strconv.Quote(activePath) +
+			"; cannot also save at " + strconv.Quote(detachedPath)
+		assertExactError(t, err, want)
+		assertFileEquals(t, activePath, activeBefore)
+		if _, err := os.Stat(detachedPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("detached catalog exists after refused save: %v", err)
+		}
+	})
+
+	t.Run("detached exists", func(t *testing.T) {
+		root := t.TempDir()
+		catalog := validCatalog()
+		if err := tapecatalog.SaveDetached(root, catalog); err != nil {
+			t.Fatalf("SaveDetached: %v", err)
+		}
+		activePath := paths.ActiveVolumeCatalog(root, string(catalog.VolumeID))
+		detachedPath := paths.DetachedVolumeCatalog(root, string(catalog.VolumeID))
+		detachedBefore, err := os.ReadFile(detachedPath)
+		if err != nil {
+			t.Fatalf("ReadFile detached: %v", err)
+		}
+
+		err = tapecatalog.SaveActive(root, catalog)
+		want := "tapecatalog: save " + string(catalog.VolumeID) +
+			": catalog already exists at " + strconv.Quote(detachedPath) +
+			"; cannot also save at " + strconv.Quote(activePath)
+		assertExactError(t, err, want)
+		if _, err := os.Stat(activePath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("active catalog exists after refused save: %v", err)
+		}
+		assertFileEquals(t, detachedPath, detachedBefore)
+	})
+}
+
+func TestConcurrentSaveNeverPopulatesBothSets(t *testing.T) {
+	const rounds = 200
+
+	root := t.TempDir()
+	for round := range rounds {
+		roundRoot := filepath.Join(root, strconv.Itoa(round))
+		catalog := validCatalog()
+		start := make(chan struct{})
+		results := make(chan error, 2)
+		var group sync.WaitGroup
+
+		group.Go(func() {
+			<-start
+			results <- tapecatalog.SaveActive(roundRoot, catalog)
+		})
+		group.Go(func() {
+			<-start
+			results <- tapecatalog.SaveDetached(roundRoot, catalog)
+		})
+		close(start)
+		group.Wait()
+		close(results)
+
+		succeeded := 0
+		var saveErrors []error
+		for err := range results {
+			if err == nil {
+				succeeded++
+			} else {
+				saveErrors = append(saveErrors, err)
+			}
+		}
+		if succeeded == 0 {
+			t.Fatalf("round %d: both saves failed: %v", round, saveErrors)
+		}
+
+		activePath := paths.ActiveVolumeCatalog(
+			roundRoot,
+			string(catalog.VolumeID),
+		)
+		detachedPath := paths.DetachedVolumeCatalog(
+			roundRoot,
+			string(catalog.VolumeID),
+		)
+		activeExists := fileExists(t, activePath)
+		detachedExists := fileExists(t, detachedPath)
+		if activeExists && detachedExists {
+			t.Fatalf(
+				"round %d: volume %s found in both places: %q and %q",
+				round,
+				catalog.VolumeID,
+				activePath,
+				detachedPath,
+			)
+		}
+	}
+}
+
+func TestDetachAbsentVolumeErrors(t *testing.T) {
+	err := tapecatalog.Detach(t.TempDir(), firstVolumeID)
+	want := "tapecatalog: detach 01J8ZQ7W5TWHA6R6J8X4QZ9Y7V: active catalog does not exist"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Detach error = %v, want %q", err, want)
+	}
+}
+
+func TestAttachAbsentVolumeErrors(t *testing.T) {
+	err := tapecatalog.Attach(t.TempDir(), firstVolumeID)
+	want := "tapecatalog: attach 01J8ZQ7W5TWHA6R6J8X4QZ9Y7V: detached catalog does not exist"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Attach error = %v, want %q", err, want)
+	}
+}
+
+func TestDetachRefusesExistingDestination(t *testing.T) {
+	root := t.TempDir()
+	activePath := paths.ActiveVolumeCatalog(root, string(firstVolumeID))
+	detachedPath := paths.DetachedVolumeCatalog(root, string(firstVolumeID))
+	writeWire(t, activePath, validWire())
+	detachedWire := validWire()
+	detachedWire["tapeID"] = "XYZ987L7"
+	writeWire(t, detachedPath, detachedWire)
+	activeBefore, err := os.ReadFile(activePath)
+	if err != nil {
+		t.Fatalf("ReadFile active: %v", err)
+	}
+	detachedBefore, err := os.ReadFile(detachedPath)
+	if err != nil {
+		t.Fatalf("ReadFile detached: %v", err)
+	}
+
+	err = tapecatalog.Detach(root, firstVolumeID)
+	want := "tapecatalog: detach 01J8ZQ7W5TWHA6R6J8X4QZ9Y7V: detached catalog already exists"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Detach error = %v, want %q", err, want)
+	}
+	assertFileEquals(t, activePath, activeBefore)
+	assertFileEquals(t, detachedPath, detachedBefore)
+}
+
+func TestAttachRefusesExistingDestination(t *testing.T) {
+	root := t.TempDir()
+	activePath := paths.ActiveVolumeCatalog(root, string(firstVolumeID))
+	detachedPath := paths.DetachedVolumeCatalog(root, string(firstVolumeID))
+	writeWire(t, activePath, validWire())
+	detachedWire := validWire()
+	detachedWire["tapeID"] = "XYZ987L7"
+	writeWire(t, detachedPath, detachedWire)
+	activeBefore, err := os.ReadFile(activePath)
+	if err != nil {
+		t.Fatalf("ReadFile active: %v", err)
+	}
+	detachedBefore, err := os.ReadFile(detachedPath)
+	if err != nil {
+		t.Fatalf("ReadFile detached: %v", err)
+	}
+
+	err = tapecatalog.Attach(root, firstVolumeID)
+	want := "tapecatalog: attach 01J8ZQ7W5TWHA6R6J8X4QZ9Y7V: active catalog already exists"
+	if err == nil || err.Error() != want {
+		t.Fatalf("Attach error = %v, want %q", err, want)
+	}
+	assertFileEquals(t, activePath, activeBefore)
+	assertFileEquals(t, detachedPath, detachedBefore)
+}
+
+func TestPurgeFromEachLocation(t *testing.T) {
+	t.Run("active", func(t *testing.T) {
+		root := t.TempDir()
+		catalog := validCatalog()
+		if err := tapecatalog.SaveActive(root, catalog); err != nil {
+			t.Fatalf("SaveActive: %v", err)
+		}
+		if err := tapecatalog.Purge(root, catalog.VolumeID); err != nil {
+			t.Fatalf("Purge: %v", err)
+		}
+		if _, err := os.Stat(
+			paths.ActiveVolumeCatalog(root, string(catalog.VolumeID)),
+		); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("active catalog still exists after Purge: %v", err)
+		}
+	})
+
+	t.Run("detached", func(t *testing.T) {
+		root := t.TempDir()
+		catalog := validCatalog()
+		if err := tapecatalog.SaveDetached(root, catalog); err != nil {
+			t.Fatalf("SaveDetached: %v", err)
+		}
+		if err := tapecatalog.Purge(root, catalog.VolumeID); err != nil {
+			t.Fatalf("Purge: %v", err)
+		}
+		if _, err := os.Stat(
+			paths.DetachedVolumeCatalog(root, string(catalog.VolumeID)),
+		); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("detached catalog still exists after Purge: %v", err)
+		}
+	})
+
+	t.Run("already absent", func(t *testing.T) {
+		if err := tapecatalog.Purge(t.TempDir(), firstVolumeID); err != nil {
+			t.Fatalf("Purge absent volume: %v", err)
+		}
+	})
+}
+
+func TestPurgeBestEffortAcrossLocations(t *testing.T) {
+	t.Run("continues after active failure", func(t *testing.T) {
+		root := t.TempDir()
+		activePath := paths.ActiveVolumeCatalog(root, string(firstVolumeID))
+		if err := os.MkdirAll(activePath, 0o755); err != nil {
+			t.Fatalf("MkdirAll active path: %v", err)
+		}
+		if err := os.WriteFile(
+			filepath.Join(activePath, "blocker"),
+			[]byte("block removal"),
+			0o644,
+		); err != nil {
+			t.Fatalf("WriteFile active blocker: %v", err)
+		}
+		detachedPath := paths.DetachedVolumeCatalog(root, string(firstVolumeID))
+		writeWire(t, detachedPath, validWire())
+		removeErr := os.Remove(activePath)
+		if removeErr == nil {
+			t.Fatal("Remove active path unexpectedly succeeded")
+		}
+
+		err := tapecatalog.Purge(root, firstVolumeID)
+		want := "tapecatalog: purge " + string(firstVolumeID) +
+			": " + removeErr.Error()
+		assertExactError(t, err, want)
+		if _, err := os.Stat(detachedPath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("detached catalog still exists after Purge: %v", err)
+		}
+	})
+
+	t.Run("joins both failures", func(t *testing.T) {
+		root := t.TempDir()
+		pathsToBlock := []string{
+			paths.ActiveVolumeCatalog(root, string(firstVolumeID)),
+			paths.DetachedVolumeCatalog(root, string(firstVolumeID)),
+		}
+		removeErrors := make([]error, 0, len(pathsToBlock))
+		for _, path := range pathsToBlock {
+			if err := os.MkdirAll(path, 0o755); err != nil {
+				t.Fatalf("MkdirAll %s: %v", path, err)
+			}
+			if err := os.WriteFile(
+				filepath.Join(path, "blocker"),
+				[]byte("block removal"),
+				0o644,
+			); err != nil {
+				t.Fatalf("WriteFile blocker %s: %v", path, err)
+			}
+			removeErr := os.Remove(path)
+			if removeErr == nil {
+				t.Fatalf("Remove %s unexpectedly succeeded", path)
+			}
+			removeErrors = append(removeErrors, removeErr)
+		}
+
+		err := tapecatalog.Purge(root, firstVolumeID)
+		want := "tapecatalog: purge " + string(firstVolumeID) +
+			": " + removeErrors[0].Error() + "\n" +
+			"tapecatalog: purge " + string(firstVolumeID) +
+			": " + removeErrors[1].Error()
+		assertExactError(t, err, want)
+	})
 }
 
 func validCatalog() tapecatalog.Catalog {
 	return tapecatalog.Catalog{
+		VolumeID:      firstVolumeID,
 		TapeID:        "ABC123L6",
-		FormatID:      "9f3c1a7e-0000-4000-8000-000000000000",
 		CreatedAt:     time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 		ObservedAt:    time.Date(2026, 7, 24, 18, 3, 11, 0, time.UTC),
 		CapacityBytes: 2_500_000_000_000,
@@ -642,7 +975,11 @@ func validCatalog() tapecatalog.Catalog {
 	}
 }
 
-func snapshot(metadataRef string, generation int, capturedAt time.Time) tapecatalog.Snapshot {
+func snapshot(
+	metadataRef string,
+	generation int,
+	capturedAt time.Time,
+) tapecatalog.Snapshot {
 	return tapecatalog.Snapshot{
 		MetadataRef:        metadataRef,
 		Generation:         generation,
@@ -655,8 +992,8 @@ func snapshot(metadataRef string, generation int, capturedAt time.Time) tapecata
 func validWire() map[string]any {
 	return map[string]any{
 		"schemaVersion": 1,
+		"volumeID":      string(firstVolumeID),
 		"tapeID":        "ABC123L6",
-		"formatID":      "9f3c1a7e-0000-4000-8000-000000000000",
 		"createdAt":     "2026-07-21T12:00:00Z",
 		"observedAt":    "2026-07-24T18:03:11Z",
 		"capacityBytes": int64(2_500_000_000_000),
@@ -677,49 +1014,55 @@ func firstSnapshot(wire map[string]any) map[string]any {
 	return wire["snapshots"].([]any)[0].(map[string]any)
 }
 
-func writeWire(t *testing.T, root, filenameID string, wire map[string]any) {
+func writeWire(t *testing.T, path string, wire map[string]any) {
 	t.Helper()
 	data, err := json.MarshalIndent(wire, "", "  ")
 	if err != nil {
 		t.Fatalf("MarshalIndent: %v", err)
 	}
-	if err := os.MkdirAll(paths.TapeCatalogDir(root), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(
-		paths.TapeCatalog(root, filenameID),
-		append(data, '\n'),
-		0o644,
-	); err != nil {
+	if err := os.WriteFile(path, append(data, '\n'), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 }
 
-func invalidTapeIDError(id tapecatalog.TapeID) string {
-	value := string(id)
-	if value == "" {
-		return "tapecatalog: tapeID is required"
+func invalidVolumeIDError(id volume.ID) string {
+	if id == "" {
+		return "tapecatalog: volumeID is required"
 	}
-	return "tapecatalog: tapeID " + strconv.Quote(value) + " must be exactly 8 characters"
+	return "tapecatalog: volumeID " + strconv.Quote(string(id)) +
+		" must be a 26-character uppercase Crockford base32 ULID"
 }
 
-func assertFileUnchanged(t *testing.T, path string, want []byte) {
+func assertExactError(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}
+
+func assertFileEquals(t *testing.T, path string, want []byte) {
 	t.Helper()
 	got, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("ReadFile escaped catalog: %v", err)
+		t.Fatalf("ReadFile %s: %v", path, err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatalf("escaped catalog changed:\ngot:\n%s\nwant:\n%s", got, want)
+		t.Fatalf("file %s changed:\ngot:\n%s\nwant:\n%s", path, got, want)
 	}
 }
 
-func assertDuplicateError(t *testing.T, err error) {
+func fileExists(t *testing.T, path string) bool {
 	t.Helper()
-	if err == nil ||
-		!strings.Contains(err.Error(), "duplicate snapshot pair") ||
-		!strings.Contains(err.Error(), "tvdb:370070") ||
-		!strings.Contains(err.Error(), "7") {
-		t.Fatalf("error = %v, want duplicate pair naming tvdb:370070 generation 7", err)
+	_, err := os.Lstat(path)
+	if err == nil {
+		return true
 	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	t.Fatalf("Lstat %s: %v", path, err)
+	return false
 }

@@ -1,6 +1,7 @@
-// Package tapecatalog owns the observed per-cartridge catalog at
-// <state root>/tapes/<tapeID>.json. Catalogs are rebuildable caches of what
-// an agent last observed on tape; the tape remains authoritative.
+// Package tapecatalog owns the observed per-volume catalogs under
+// <state root>/volumes/{active,detached}/<volumeID>.json. Catalogs are
+// rebuildable caches of what an agent last observed; the volume remains
+// authoritative.
 package tapecatalog
 
 import (
@@ -11,45 +12,38 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/renameio/v2/maybe"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
 )
 
 const schemaVersion = 1
 
-// TapeID is the eight-character LTO Ultrium barcode printed on a cartridge.
-type TapeID string
+// mutationMu closes in-process interleaving between catalog mutation checks
+// and filesystem changes. Cross-process races are deliberately not defended:
+// catalogs are rebuildable caches owned by one server process.
+var mutationMu sync.Mutex
 
-// MediaGeneration reports the cartridge generation encoded in the barcode's
-// media identifier.
-//
-// Like snapshot directories and obsolete ratios, generation is derived rather
-// than stored. Capacity arithmetic uses filesystem-observed capacity and free
-// space rather than values inferred from the generation.
-func (id TapeID) MediaGeneration() string {
-	if validateTapeID(id) != nil {
-		return ""
-	}
-	return mediaGenerationForIdentifier(string(id)[6:])
-}
-
-// Catalog records what the agent last observed on one physical cartridge.
+// Catalog records what the agent last observed in one archive volume.
 type Catalog struct {
-	TapeID         TapeID
-	FormatID       string
+	VolumeID volume.ID
+	// TapeID is the mutable cartridge label last observed for this volume.
+	TapeID         tape.ID
 	CreatedAt      time.Time
 	ObservedAt     time.Time
 	CapacityBytes  int64
 	FreeBytes      int64
 	LastVerifiedAt time.Time
-	// Snapshots may be empty: a blank catalog is a registered cartridge with
-	// full free space, and the catalog itself is the tape registry.
+	// Snapshots may be empty: a blank catalog is a registered volume with
+	// full free space, and the catalog itself is the volume registry.
 	Snapshots []Snapshot
 }
 
-// Snapshot identifies one series generation observed on a tape.
+// Snapshot identifies one series generation observed in a volume.
 type Snapshot struct {
 	MetadataRef        string
 	Generation         int
@@ -61,8 +55,8 @@ type Snapshot struct {
 
 type catalogWire struct {
 	SchemaVersion  int            `json:"schemaVersion"`
+	VolumeID       string         `json:"volumeID"`
 	TapeID         string         `json:"tapeID"`
-	FormatID       string         `json:"formatID"`
 	CreatedAt      string         `json:"createdAt"`
 	ObservedAt     string         `json:"observedAt"`
 	CapacityBytes  int64          `json:"capacityBytes"`
@@ -80,12 +74,23 @@ type snapshotWire struct {
 	Incomplete         bool   `json:"incomplete,omitempty"`
 }
 
-// Load reads and validates one catalog. A missing catalog wraps os.ErrNotExist.
-func Load(stateRoot string, id TapeID) (Catalog, error) {
-	if err := validateTapeID(id); err != nil {
+// LoadActive reads and validates one active catalog. A missing catalog wraps
+// os.ErrNotExist.
+func LoadActive(stateRoot string, id volume.ID) (Catalog, error) {
+	return load(paths.ActiveVolumeCatalog(stateRoot, string(id)), id)
+}
+
+// LoadDetached reads and validates one detached catalog. A missing catalog
+// wraps os.ErrNotExist.
+func LoadDetached(stateRoot string, id volume.ID) (Catalog, error) {
+	return load(paths.DetachedVolumeCatalog(stateRoot, string(id)), id)
+}
+
+func load(path string, id volume.ID) (Catalog, error) {
+	if err := validateVolumeID(id); err != nil {
 		return Catalog{}, err
 	}
-	data, err := os.ReadFile(paths.TapeCatalog(stateRoot, string(id)))
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return Catalog{}, fmt.Errorf("tapecatalog: read %s: %w", id, err)
 	}
@@ -94,7 +99,10 @@ func Load(stateRoot string, id TapeID) (Catalog, error) {
 		return Catalog{}, fmt.Errorf("tapecatalog: decode %s: %w", id, err)
 	}
 	if wire.SchemaVersion != schemaVersion {
-		return Catalog{}, fmt.Errorf("tapecatalog: unsupported schemaVersion %d", wire.SchemaVersion)
+		return Catalog{}, fmt.Errorf(
+			"tapecatalog: unsupported schemaVersion %d",
+			wire.SchemaVersion,
+		)
 	}
 	catalog, err := fromWire(wire)
 	if err != nil {
@@ -103,58 +111,106 @@ func Load(stateRoot string, id TapeID) (Catalog, error) {
 	if err := validateCatalog(catalog); err != nil {
 		return Catalog{}, err
 	}
-	if catalog.TapeID != id {
+	if catalog.VolumeID != id {
 		return Catalog{}, fmt.Errorf(
-			"tapecatalog: tapeID mismatch: filename is %q, file contains %q",
+			"tapecatalog: volumeID mismatch: filename is %q, file contains %q",
 			id,
-			catalog.TapeID,
+			catalog.VolumeID,
 		)
 	}
 	return catalog, nil
 }
 
-// Save validates and atomically rewrites one catalog.
-//
+// SaveActive validates and atomically rewrites one active catalog.
+func SaveActive(stateRoot string, catalog Catalog) error {
+	return save(
+		paths.ActiveVolumeCatalogDir(stateRoot),
+		paths.ActiveVolumeCatalog(stateRoot, string(catalog.VolumeID)),
+		paths.DetachedVolumeCatalog(stateRoot, string(catalog.VolumeID)),
+		catalog,
+	)
+}
+
+// SaveDetached validates and atomically rewrites one detached catalog.
+func SaveDetached(stateRoot string, catalog Catalog) error {
+	return save(
+		paths.DetachedVolumeCatalogDir(stateRoot),
+		paths.DetachedVolumeCatalog(stateRoot, string(catalog.VolumeID)),
+		paths.ActiveVolumeCatalog(stateRoot, string(catalog.VolumeID)),
+		catalog,
+	)
+}
+
 // There is deliberately no compare-and-swap: the server is the sole writer,
 // at most one backup plan is active, and this file is a rebuildable cache.
-func Save(stateRoot string, catalog Catalog) error {
+func save(dir, path, siblingPath string, catalog Catalog) error {
+	mutationMu.Lock()
+	defer mutationMu.Unlock()
+
 	if err := validateCatalog(catalog); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(toWire(catalog), "", "  ")
 	if err != nil {
-		return fmt.Errorf("tapecatalog: encode %s: %w", catalog.TapeID, err)
+		return fmt.Errorf("tapecatalog: encode %s: %w", catalog.VolumeID, err)
 	}
 	data = append(data, '\n')
-	if err := os.MkdirAll(paths.TapeCatalogDir(stateRoot), 0o775); err != nil {
+	if _, err := os.Lstat(siblingPath); err == nil {
+		return fmt.Errorf(
+			"tapecatalog: save %s: catalog already exists at %q; cannot also save at %q",
+			catalog.VolumeID,
+			siblingPath,
+			path,
+		)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf(
+			"tapecatalog: save %s: inspect sibling %q: %w",
+			catalog.VolumeID,
+			siblingPath,
+			err,
+		)
+	}
+	if err := os.MkdirAll(dir, 0o775); err != nil {
 		return fmt.Errorf("tapecatalog: create directory: %w", err)
 	}
-	if err := maybe.WriteFile(
-		paths.TapeCatalog(stateRoot, string(catalog.TapeID)),
-		data,
-		0o664,
-	); err != nil {
-		return fmt.Errorf("tapecatalog: write %s: %w", catalog.TapeID, err)
+	if err := maybe.WriteFile(path, data, 0o664); err != nil {
+		return fmt.Errorf("tapecatalog: write %s: %w", catalog.VolumeID, err)
 	}
 	return nil
 }
 
-// List returns the sorted IDs of registered cartridges.
-func List(stateRoot string) ([]TapeID, error) {
-	entries, err := os.ReadDir(paths.TapeCatalogDir(stateRoot))
+// ListActive returns a point-in-time snapshot of the active directory.
+// Composing it with ListDetached is not atomic; a consistent view of both sets
+// must take mutationMu or use a combined accessor.
+func ListActive(stateRoot string) ([]volume.ID, error) {
+	return list(paths.ActiveVolumeCatalogDir(stateRoot), "active")
+}
+
+// ListDetached returns a point-in-time snapshot of the detached directory.
+// Composing it with ListActive is not atomic; a consistent view of both sets
+// must take mutationMu or use a combined accessor.
+func ListDetached(stateRoot string) ([]volume.ID, error) {
+	return list(paths.DetachedVolumeCatalogDir(stateRoot), "detached")
+}
+
+func list(dir, set string) ([]volume.ID, error) {
+	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return []TapeID{}, nil
+		return []volume.ID{}, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("tapecatalog: list: %w", err)
+		return nil, fmt.Errorf("tapecatalog: list %s: %w", set, err)
 	}
-	ids := make([]TapeID, 0, len(entries))
+	ids := make([]volume.ID, 0, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != paths.TapeCatalogExtension {
+		if entry.IsDir() ||
+			filepath.Ext(entry.Name()) != paths.VolumeCatalogExtension {
 			continue
 		}
-		id := TapeID(strings.TrimSuffix(entry.Name(), paths.TapeCatalogExtension))
-		if validateTapeID(id) != nil {
+		id, err := volume.ParseID(
+			strings.TrimSuffix(entry.Name(), paths.VolumeCatalogExtension),
+		)
+		if err != nil {
 			continue
 		}
 		ids = append(ids, id)
@@ -163,95 +219,111 @@ func List(stateRoot string) ([]TapeID, error) {
 	return ids, nil
 }
 
-// Delete retires a cartridge by removing its catalog from the registry.
-// There is deliberately no lifecycle field: an absent file means the tape
-// is no longer registered. Deleting a catalog that is already absent succeeds.
-func Delete(stateRoot string, id TapeID) error {
-	if err := validateTapeID(id); err != nil {
+// Detach atomically moves a volume catalog from active to detached.
+func Detach(stateRoot string, id volume.ID) error {
+	return move(
+		id,
+		"detach",
+		"active",
+		"detached",
+		paths.ActiveVolumeCatalog(stateRoot, string(id)),
+		paths.DetachedVolumeCatalog(stateRoot, string(id)),
+		paths.DetachedVolumeCatalogDir(stateRoot),
+	)
+}
+
+// Attach atomically moves a volume catalog from detached to active.
+func Attach(stateRoot string, id volume.ID) error {
+	return move(
+		id,
+		"attach",
+		"detached",
+		"active",
+		paths.DetachedVolumeCatalog(stateRoot, string(id)),
+		paths.ActiveVolumeCatalog(stateRoot, string(id)),
+		paths.ActiveVolumeCatalogDir(stateRoot),
+	)
+}
+
+func move(
+	id volume.ID,
+	action, sourceSet, destinationSet, source, destination, destinationDir string,
+) error {
+	mutationMu.Lock()
+	defer mutationMu.Unlock()
+
+	if err := validateVolumeID(id); err != nil {
 		return err
 	}
-	err := os.Remove(paths.TapeCatalog(stateRoot, string(id)))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
+	if _, err := os.Lstat(source); errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf(
+			"tapecatalog: %s %s: %s catalog does not exist",
+			action,
+			id,
+			sourceSet,
+		)
+	} else if err != nil {
+		return fmt.Errorf("tapecatalog: %s %s: inspect source: %w", action, id, err)
 	}
-	if err != nil {
-		return fmt.Errorf("tapecatalog: delete %s: %w", id, err)
+	if err := os.MkdirAll(destinationDir, 0o775); err != nil {
+		return fmt.Errorf(
+			"tapecatalog: %s %s: create destination directory: %w",
+			action,
+			id,
+			err,
+		)
+	}
+	if _, err := os.Lstat(destination); err == nil {
+		return fmt.Errorf(
+			"tapecatalog: %s %s: %s catalog already exists",
+			action,
+			id,
+			destinationSet,
+		)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf(
+			"tapecatalog: %s %s: inspect destination: %w",
+			action,
+			id,
+			err,
+		)
+	}
+	if err := os.Rename(source, destination); err != nil {
+		return fmt.Errorf("tapecatalog: %s %s: rename: %w", action, id, err)
 	}
 	return nil
 }
 
-func validateTapeID(id TapeID) error {
-	value := string(id)
-	if value == "" {
-		return errors.New("tapecatalog: tapeID is required")
+// Purge retires a volume by deleting its catalog from either set. Purging an
+// already-absent volume succeeds.
+func Purge(stateRoot string, id volume.ID) error {
+	mutationMu.Lock()
+	defer mutationMu.Unlock()
+
+	if err := validateVolumeID(id); err != nil {
+		return err
 	}
-	if len(value) != 8 {
-		return fmt.Errorf("tapecatalog: tapeID %q must be exactly 8 characters", value)
-	}
-	for _, char := range value {
-		if char >= 'a' && char <= 'z' {
-			return fmt.Errorf("tapecatalog: tapeID %q must use uppercase letters", value)
+	var purgeErrors []error
+	for _, path := range []string{
+		paths.ActiveVolumeCatalog(stateRoot, string(id)),
+		paths.DetachedVolumeCatalog(stateRoot, string(id)),
+	} {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			purgeErrors = append(
+				purgeErrors,
+				fmt.Errorf("tapecatalog: purge %s: %w", id, err),
+			)
 		}
 	}
-	for _, char := range value[:6] {
-		if char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' {
-			continue
-		}
-		return fmt.Errorf(
-			"tapecatalog: tapeID %q volume serial must contain only A-Z and 0-9",
-			value,
-		)
-	}
-	mediaIdentifier := value[6:]
-	if mediaIdentifier == "CU" {
-		return fmt.Errorf("tapecatalog: tapeID %q identifies a cleaning cartridge", value)
-	}
-	if isWORMMediaIdentifier(mediaIdentifier) {
-		return fmt.Errorf("tapecatalog: tapeID %q identifies WORM media", value)
-	}
-	if mediaGenerationForIdentifier(mediaIdentifier) == "" {
-		return fmt.Errorf(
-			"tapecatalog: tapeID %q has unsupported media identifier %q",
-			value,
-			mediaIdentifier,
-		)
-	}
-	return nil
-}
-
-func isWORMMediaIdentifier(identifier string) bool {
-	return len(identifier) == 2 &&
-		identifier[0] == 'L' &&
-		identifier[1] >= 'T' &&
-		identifier[1] <= 'Z'
-}
-
-// Generation characters continue into letters (A = 10), so future
-// generations require an explicit table entry rather than arithmetic.
-var mediaGenerationByIdentifier = map[string]string{
-	"L1": "LTO-1",
-	"L2": "LTO-2",
-	"L3": "LTO-3",
-	"L4": "LTO-4",
-	"L5": "LTO-5",
-	"L6": "LTO-6",
-	"L7": "LTO-7",
-	"L8": "LTO-8",
-	"L9": "LTO-9",
-	"LA": "LTO-10",
-	"M8": "LTO-7 Type M",
-}
-
-func mediaGenerationForIdentifier(identifier string) string {
-	return mediaGenerationByIdentifier[identifier]
+	return errors.Join(purgeErrors...)
 }
 
 func validateCatalog(catalog Catalog) error {
-	if err := validateTapeID(catalog.TapeID); err != nil {
+	if err := validateVolumeID(catalog.VolumeID); err != nil {
 		return err
 	}
-	if catalog.FormatID == "" {
-		return errors.New("tapecatalog: formatID is required")
+	if _, err := tape.ParseID(string(catalog.TapeID)); err != nil {
+		return fmt.Errorf("tapecatalog: %w", err)
 	}
 	if catalog.CapacityBytes < 0 {
 		return errors.New("tapecatalog: capacityBytes must not be negative")
@@ -273,7 +345,10 @@ func validateCatalog(catalog Catalog) error {
 		if err := validateSnapshot(snapshot); err != nil {
 			return err
 		}
-		key := snapshotKey{metadataRef: snapshot.MetadataRef, generation: snapshot.Generation}
+		key := snapshotKey{
+			metadataRef: snapshot.MetadataRef,
+			generation:  snapshot.Generation,
+		}
 		if _, ok := seen[key]; ok {
 			return fmt.Errorf(
 				"tapecatalog: duplicate snapshot pair (%q, %d)",
@@ -282,6 +357,13 @@ func validateCatalog(catalog Catalog) error {
 			)
 		}
 		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateVolumeID(id volume.ID) error {
+	if _, err := volume.ParseID(string(id)); err != nil {
+		return fmt.Errorf("tapecatalog: %w", err)
 	}
 	return nil
 }
@@ -332,8 +414,8 @@ func toWire(catalog Catalog) catalogWire {
 	}
 	wire := catalogWire{
 		SchemaVersion:  schemaVersion,
+		VolumeID:       string(catalog.VolumeID),
 		TapeID:         string(catalog.TapeID),
-		FormatID:       catalog.FormatID,
 		CreatedAt:      catalog.CreatedAt.UTC().Format(time.RFC3339),
 		ObservedAt:     catalog.ObservedAt.UTC().Format(time.RFC3339),
 		CapacityBytes:  catalog.CapacityBytes,
@@ -377,8 +459,8 @@ func fromWire(wire catalogWire) (Catalog, error) {
 		}
 	}
 	catalog := Catalog{
-		TapeID:         TapeID(wire.TapeID),
-		FormatID:       wire.FormatID,
+		VolumeID:       volume.ID(wire.VolumeID),
+		TapeID:         tape.ID(wire.TapeID),
 		CreatedAt:      createdAt,
 		ObservedAt:     observedAt,
 		CapacityBytes:  wire.CapacityBytes,
@@ -400,6 +482,12 @@ func fromWire(wire catalogWire) (Catalog, error) {
 			Incomplete:         snapshotWire.Incomplete,
 		})
 	}
+	sort.Slice(catalog.Snapshots, func(i, j int) bool {
+		if catalog.Snapshots[i].MetadataRef != catalog.Snapshots[j].MetadataRef {
+			return catalog.Snapshots[i].MetadataRef < catalog.Snapshots[j].MetadataRef
+		}
+		return catalog.Snapshots[i].Generation < catalog.Snapshots[j].Generation
+	})
 	return catalog, nil
 }
 
