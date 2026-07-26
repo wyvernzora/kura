@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
-	"github.com/wyvernzora/kura/services/library-manager/internal/storage/tapecatalog"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
 )
 
 func TestRoundTrip(t *testing.T) {

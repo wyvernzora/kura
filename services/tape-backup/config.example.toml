@@ -1,0 +1,37 @@
+# This table and all its fields are optional.
+[server]
+
+# Optional; control plane only. Default = ":8080".
+addr = ":8080"
+
+# Optional; default = "info". Allowed: debug, info, warn, error.
+log_level = "info"
+
+
+# This table and both fields are required. The library is mounted read-only.
+[library]
+
+# Required; absolute path to the library root.
+root = "/media/anime/series"
+
+# Required; library-manager REST base URL. Its bearer token is supplied through
+# the KURA_TOKEN environment variable.
+url = "http://kura-library-manager:8080"
+
+
+# This table and its field are required.
+[state]
+
+# Required; absolute path for tape-backup-owned catalogs, plans, and status.
+root = "/var/lib/kura/backup"
+
+
+# This table and all its fields are optional.
+[tape]
+
+# Optional; executor only. Default = "/mnt/ltfs".
+ltfs_root = "/mnt/ltfs"
+
+# Optional; executor only. Default = "/dev/nst0". An empty value means this pod
+# has no drive.
+drive_device = "/dev/nst0"

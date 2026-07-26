@@ -31,9 +31,6 @@ func TestLibraryAndSeriesPaths(t *testing.T) {
 		{"TrashMedia", paths.TrashMedia(root, ref, "01H", "old.mkv"), filepath.Join("/library", "Bookworm", ".kura", "trash", "01H", "old.mkv")}, //nolint:gocritic // test fixture root
 		{"PlanDir", paths.PlanDir(root, ref), filepath.Join("/library", "Bookworm", ".kura", "reconcile")},                                       //nolint:gocritic // test fixture root
 		{"PlanFile", paths.PlanFile(root, ref, "01H"), filepath.Join("/library", "Bookworm", ".kura", "reconcile", "01H.jsonl")},                 //nolint:gocritic // test fixture root
-		{"BackupDir", paths.BackupDir(root), filepath.Join("/library", ".kura", "backup")},                                                       //nolint:gocritic // test fixture root
-		{"TapeCatalogDir", paths.TapeCatalogDir(root), filepath.Join("/library", ".kura", "backup", "tapes")},                                    //nolint:gocritic // test fixture root
-		{"TapeCatalog", paths.TapeCatalog(root, "KURA0003"), filepath.Join("/library", ".kura", "backup", "tapes", "KURA0003.json")},             //nolint:gocritic // test fixture root
 		{"SeasonDir/1", paths.SeasonDir(root, ref, 1), filepath.Join("/library", "Bookworm", "Season 1")},                                        //nolint:gocritic // test fixture root
 		{"SeasonDir/0", paths.SeasonDir(root, ref, 0), filepath.Join("/library", "Bookworm")},                                                    //nolint:gocritic // test fixture root
 		{"SeasonExtraDir", paths.SeasonExtraDir(root, ref, 2), filepath.Join("/library", "Bookworm", "Season 2", "Extra")},                       //nolint:gocritic // test fixture root

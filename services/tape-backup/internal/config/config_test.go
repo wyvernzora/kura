@@ -1,0 +1,180 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestLoadDefaults(t *testing.T) {
+	cfg, err := Load(writeConfig(t, `
+[library]
+root = "/media/anime/series"
+url = "http://kura-library-manager:8080"
+
+[state]
+root = "/var/lib/kura/backup"
+`))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	want := Defaults()
+	want.Library.Root = "/media/anime/series"
+	want.Library.URL = "http://kura-library-manager:8080"
+	want.State.Root = "/var/lib/kura/backup"
+	if !reflect.DeepEqual(cfg, want) {
+		t.Fatalf("Config =\n%+v\nwant\n%+v", cfg, want)
+	}
+}
+
+func TestLoadAllFields(t *testing.T) {
+	cfg, err := Load(writeConfig(t, `
+[server]
+addr = "127.0.0.1:9000"
+log_level = "debug"
+
+[library]
+root = "/library"
+url = "https://library.example"
+
+[state]
+root = "/state"
+
+[tape]
+ltfs_root = "/tape"
+drive_device = "/dev/tape/by-id/drive"
+`))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Server.Addr != "127.0.0.1:9000" || cfg.Server.LogLevel != "debug" {
+		t.Fatalf("Server = %+v", cfg.Server)
+	}
+	if cfg.Library.Root != "/library" || cfg.Library.URL != "https://library.example" {
+		t.Fatalf("Library = %+v", cfg.Library)
+	}
+	if cfg.State.Root != "/state" {
+		t.Fatalf("State = %+v", cfg.State)
+	}
+	if cfg.Tape.LTFSRoot != "/tape" || cfg.Tape.DriveDevice != "/dev/tape/by-id/drive" {
+		t.Fatalf("Tape = %+v", cfg.Tape)
+	}
+}
+
+func TestLoadAllowsEmptyDriveDevice(t *testing.T) {
+	cfg, err := Load(writeConfig(t, validConfig()+`
+[tape]
+drive_device = ""
+`))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Tape.DriveDevice != "" {
+		t.Fatalf("Tape.DriveDevice = %q, want empty", cfg.Tape.DriveDevice)
+	}
+}
+
+func TestLoadExample(t *testing.T) {
+	path := filepath.Join("..", "..", "config.example.toml")
+	if _, err := Load(path); err != nil {
+		t.Fatalf("Load(%q) error = %v", path, err)
+	}
+}
+
+func TestLoadRejectsInvalidConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "unknown field",
+			body: validConfig() + "\n[server]\naddress = \":9090\"\n",
+			want: "strict mode",
+		},
+		{
+			name: "empty server address",
+			body: validConfig() + "\n[server]\naddr = \"\"\n",
+			want: "server.addr",
+		},
+		{
+			name: "invalid log level",
+			body: validConfig() + "\n[server]\nlog_level = \"trace\"\n",
+			want: "server.log_level",
+		},
+		{
+			name: "missing library root",
+			body: "[library]\nurl = \"http://library\"\n[state]\nroot = \"/state\"\n",
+			want: "library.root is required",
+		},
+		{
+			name: "relative library root",
+			body: "[library]\nroot = \"library\"\nurl = \"http://library\"\n[state]\nroot = \"/state\"\n",
+			want: "library.root must be absolute",
+		},
+		{
+			name: "missing library URL",
+			body: "[library]\nroot = \"/library\"\n[state]\nroot = \"/state\"\n",
+			want: "library.url is required",
+		},
+		{
+			name: "missing state root",
+			body: "[library]\nroot = \"/library\"\nurl = \"http://library\"\n",
+			want: "state.root is required",
+		},
+		{
+			name: "relative state root",
+			body: "[library]\nroot = \"/library\"\nurl = \"http://library\"\n[state]\nroot = \"state\"\n",
+			want: "state.root must be absolute",
+		},
+		{
+			name: "relative LTFS root",
+			body: validConfig() + "\n[tape]\nltfs_root = \"tape\"\n",
+			want: "tape.ltfs_root must be absolute",
+		},
+		{
+			name: "relative drive device",
+			body: validConfig() + "\n[tape]\ndrive_device = \"dev/nst0\"\n",
+			want: "tape.drive_device must be absolute",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Load(writeConfig(t, tt.body))
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Load() error = %v, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadMissingFile(t *testing.T) {
+	_, err := Load(filepath.Join(t.TempDir(), "missing.toml"))
+	if err == nil || !strings.Contains(err.Error(), "open") {
+		t.Fatalf("Load() error = %v, want open error", err)
+	}
+}
+
+func validConfig() string {
+	return `
+[library]
+root = "/library"
+url = "http://library"
+
+[state]
+root = "/state"
+`
+}
+
+func writeConfig(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "tape-backup.toml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
+}

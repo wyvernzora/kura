@@ -1,6 +1,6 @@
 // Package tapecatalog owns the observed per-cartridge catalog at
-// <library>/.kura/backup/tapes/<tapeID>.json. Catalogs are rebuildable
-// caches of what an agent last observed on tape; the tape remains authoritative.
+// <state root>/tapes/<tapeID>.json. Catalogs are rebuildable caches of what
+// an agent last observed on tape; the tape remains authoritative.
 package tapecatalog
 
 import (
@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/google/renameio/v2/maybe"
-	"github.com/wyvernzora/kura/services/library-manager/internal/storage/paths"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/paths"
 )
 
 const schemaVersion = 1
@@ -81,11 +81,11 @@ type snapshotWire struct {
 }
 
 // Load reads and validates one catalog. A missing catalog wraps os.ErrNotExist.
-func Load(libRoot string, id TapeID) (Catalog, error) {
+func Load(stateRoot string, id TapeID) (Catalog, error) {
 	if err := validateTapeID(id); err != nil {
 		return Catalog{}, err
 	}
-	data, err := os.ReadFile(paths.TapeCatalog(libRoot, string(id)))
+	data, err := os.ReadFile(paths.TapeCatalog(stateRoot, string(id)))
 	if err != nil {
 		return Catalog{}, fmt.Errorf("tapecatalog: read %s: %w", id, err)
 	}
@@ -117,7 +117,7 @@ func Load(libRoot string, id TapeID) (Catalog, error) {
 //
 // There is deliberately no compare-and-swap: the server is the sole writer,
 // at most one backup plan is active, and this file is a rebuildable cache.
-func Save(libRoot string, catalog Catalog) error {
+func Save(stateRoot string, catalog Catalog) error {
 	if err := validateCatalog(catalog); err != nil {
 		return err
 	}
@@ -126,11 +126,11 @@ func Save(libRoot string, catalog Catalog) error {
 		return fmt.Errorf("tapecatalog: encode %s: %w", catalog.TapeID, err)
 	}
 	data = append(data, '\n')
-	if err := os.MkdirAll(paths.TapeCatalogDir(libRoot), 0o775); err != nil {
+	if err := os.MkdirAll(paths.TapeCatalogDir(stateRoot), 0o775); err != nil {
 		return fmt.Errorf("tapecatalog: create directory: %w", err)
 	}
 	if err := maybe.WriteFile(
-		paths.TapeCatalog(libRoot, string(catalog.TapeID)),
+		paths.TapeCatalog(stateRoot, string(catalog.TapeID)),
 		data,
 		0o664,
 	); err != nil {
@@ -140,8 +140,8 @@ func Save(libRoot string, catalog Catalog) error {
 }
 
 // List returns the sorted IDs of registered cartridges.
-func List(libRoot string) ([]TapeID, error) {
-	entries, err := os.ReadDir(paths.TapeCatalogDir(libRoot))
+func List(stateRoot string) ([]TapeID, error) {
+	entries, err := os.ReadDir(paths.TapeCatalogDir(stateRoot))
 	if errors.Is(err, os.ErrNotExist) {
 		return []TapeID{}, nil
 	}
@@ -166,11 +166,11 @@ func List(libRoot string) ([]TapeID, error) {
 // Delete retires a cartridge by removing its catalog from the registry.
 // There is deliberately no lifecycle field: an absent file means the tape
 // is no longer registered. Deleting a catalog that is already absent succeeds.
-func Delete(libRoot string, id TapeID) error {
+func Delete(stateRoot string, id TapeID) error {
 	if err := validateTapeID(id); err != nil {
 		return err
 	}
-	err := os.Remove(paths.TapeCatalog(libRoot, string(id)))
+	err := os.Remove(paths.TapeCatalog(stateRoot, string(id)))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
