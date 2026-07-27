@@ -1,11 +1,56 @@
 # Changelog
 
 > Note: on 2026-07-23 the repo was consolidated into the kura monorepo
-> and all commit subjects were normalized to Conventional Commits. Entries
-> below predate the monorepo and refer to the library service's lineage,
-> which the repo-wide version line continues.
+> and all commit subjects were normalized to Conventional Commits. v0.6.0
+> is the first release cut from the monorepo; v0.5.1 and earlier predate it
+> and refer to the library service's lineage, which the repo-wide version
+> line continues.
 
 Notable release changes for Kura.
+
+## v0.6.0 - 2026-07-26
+
+First release of the kura suite as a monorepo. The library manager, release
+indexer, web UI, `kura` CLI, and n8n nodes now version and publish together
+on a single tag line.
+
+### Highlights
+
+- Added the release indexer to the suite: a durable anime release index with
+  a work queue, REST and MCP query surfaces, Prometheus metrics, and magnet
+  and single-release lookup.
+- Absorbed the DMHY and Nyaa crawlers into the release indexer, which now
+  runs one non-overlapping scheduled loop per enabled source in process.
+  Separate crawler images are no longer published.
+- Extracted the `kura` CLI into its own module as a pure REST client,
+  discovered through `KURA_SERVER_URL` and authenticated with `KURA_TOKEN`.
+- Moved the web UI to a standalone Caddy-served image that proxies `/api/*`
+  to the library manager, and dropped the UI embedded in the library
+  manager.
+- Unified the two n8n packages into a single Kura node with resource and
+  action selection, plus a queue trigger.
+- Gave each series an archive `generation` counter that advances only when
+  archive-relevant content changes — media paths, sizes, mtimes, source,
+  adoption attributes, and companion files — and left it untouched by
+  provider refreshes, tags, and rescans. Exposed on the show response.
+- Published service images under the `ghcr.io/wyvernzora/kura/` namespace:
+  `library-manager`, `release-indexer`, `webui`, and `n8n-nodes`.
+
+### Breaking changes
+
+- `kura-library-manager` is configured by a strict TOML file selected with
+  `-config`, defaulting to `/etc/kura/library-manager.toml`. Serve settings
+  are no longer environment variables; `KURA_TVDB_KEY`, the API token, and
+  `KURA_HOST_ID` remain in the environment. The release indexer reads
+  `/etc/kura/release-indexer.toml` the same way.
+- Binaries renamed to `kura-library-manager` and `kura-release-indexer`.
+  The CLI binary is still `kura`, but it ships from its own module and
+  reaches the library only over REST — it no longer operates on a local
+  library root, apart from the `kura path` command.
+- Images moved to the new namespace above; the previous package names are
+  no longer published or updated.
+- n8n workflows must be rebuilt against the unified Kura node. Credentials
+  are now `KuraLibraryApi` and `KuraReleasesApi`.
 
 ## v0.5.1 - 2026-07-20
 
