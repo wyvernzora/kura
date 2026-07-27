@@ -12,6 +12,9 @@ const testDatabaseURL = "postgres://localhost/releases"
 
 func TestLoadDefaultsAndSources(t *testing.T) {
 	path := writeConfig(t, `
+[database]
+schema = "release_data"
+
 [sources.dmhy]
 interval = "5m"
 
@@ -27,6 +30,9 @@ max_rps = 0
 	}
 	if cfg.Addr != ":8080" || cfg.LogLevel != "info" || cfg.QueueMaxAttempts != 3 {
 		t.Fatalf("server/queue defaults = %+v", cfg)
+	}
+	if cfg.DatabaseSchema != "release_data" {
+		t.Fatalf("database schema = %q, want release_data", cfg.DatabaseSchema)
 	}
 	if !cfg.Sources.DMHY.Enabled || cfg.Sources.DMHY.Interval != 5*time.Minute {
 		t.Fatalf("DMHY = %+v", cfg.Sources.DMHY)
@@ -55,6 +61,9 @@ enabled = false
 	if cfg.Sources.DMHY.Enabled || cfg.Sources.Nyaa.Enabled {
 		t.Fatalf("sources = %+v, want disabled", cfg.Sources)
 	}
+	if cfg.DatabaseSchema != "releases" {
+		t.Fatalf("database schema = %q, want releases", cfg.DatabaseSchema)
+	}
 }
 
 func TestLoadRejectsInvalidConfig(t *testing.T) {
@@ -67,6 +76,16 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 			name: "unknown field",
 			body: "[server]\naddress = \":9090\"\n",
 			want: "strict mode",
+		},
+		{
+			name: "database URL in TOML",
+			body: "[database]\nurl = \"postgres://localhost/releases\"\n",
+			want: "strict mode",
+		},
+		{
+			name: "invalid database schema",
+			body: "[database]\nschema = \"Release-Indexer\"\n",
+			want: "database.schema",
 		},
 		{
 			name: "missing interval",
@@ -109,6 +128,35 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 			_, err := Load(writeConfig(t, tt.body), databaseURL)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Load() error = %v, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateDatabaseSchema(t *testing.T) {
+	tests := []struct {
+		name    string
+		schema  string
+		wantErr bool
+	}{
+		{name: "default", schema: "releases"},
+		{name: "underscore", schema: "release_indexer"},
+		{name: "leading underscore", schema: "_releases2"},
+		{name: "maximum length", schema: "a" + strings.Repeat("0", 62)},
+		{name: "empty", schema: "", wantErr: true},
+		{name: "uppercase", schema: "Releases", wantErr: true},
+		{name: "hyphen", schema: "release-indexer", wantErr: true},
+		{name: "leading digit", schema: "1releases", wantErr: true},
+		{name: "too long", schema: "a" + strings.Repeat("0", 63), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Defaults(testDatabaseURL)
+			cfg.DatabaseSchema = tt.schema
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

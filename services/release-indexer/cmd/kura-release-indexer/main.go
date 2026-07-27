@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -75,15 +76,20 @@ func run() error {
 	// Bring the schema to head BEFORE serving (the embedded goose migrations are
 	// idempotent — a database already at head is a no-op). A migration failure aborts
 	// startup with a non-zero exit; we never serve against an unmigrated database.
-	logger.Info("running migrations")
-	if err := runMigrations(ctx, cfg.DatabaseURL); err != nil {
+	logger.Info("running migrations", "schema", cfg.DatabaseSchema)
+	if err := runMigrations(ctx, cfg.DatabaseURL, cfg.DatabaseSchema); err != nil {
 		logger.Error("migrations failed", "err", err)
 		return fmt.Errorf("run migrations: %w", err)
 	}
 	logger.Info("migrations complete")
 
 	// Construct the Postgres store.
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolConfig, err := runtimePoolConfig(cfg.DatabaseURL, cfg.DatabaseSchema)
+	if err != nil {
+		logger.Error("database configuration failed", "err", err)
+		return fmt.Errorf("configure database: %w", err)
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		logger.Error("database connection failed", "err", err)
 		return fmt.Errorf("connect database: %w", err)
@@ -230,14 +236,54 @@ const drainTimeout = 10 * time.Second
 // handle (the embedded goose runner works over database/sql; the pgx/v5 stdlib driver
 // bridges the pgx connection string). It is idempotent and closes the handle before
 // the service opens its own pool.
-func runMigrations(ctx context.Context, databaseURL string) error {
-	cfg, err := pgx.ParseConfig(databaseURL)
+func runMigrations(ctx context.Context, databaseURL, schema string) error {
+	cfg, err := migrationConfig(databaseURL, schema)
 	if err != nil {
-		return fmt.Errorf("parse database url: %w", err)
+		return err
 	}
 	sqlDB := stdlib.OpenDB(*cfg)
 	defer sqlDB.Close()
+	if err := ensureSchema(ctx, sqlDB, schema); err != nil {
+		return err
+	}
 	return dbmigrations.Run(ctx, sqlDB)
+}
+
+// ensureSchema creates the target schema only when it is missing. Postgres checks
+// database-level CREATE before honouring IF NOT EXISTS, so an unconditional CREATE
+// SCHEMA IF NOT EXISTS would reject a least-privilege role that was granted an
+// already-provisioned schema and nothing else.
+func ensureSchema(ctx context.Context, sqlDB *sql.DB, schema string) error {
+	var exists bool
+	const q = "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = $1)"
+	if err := sqlDB.QueryRowContext(ctx, q, schema).Scan(&exists); err != nil {
+		return fmt.Errorf("look up database schema %q: %w", schema, err)
+	}
+	if exists {
+		return nil
+	}
+	if _, err := sqlDB.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS "+pgx.Identifier{schema}.Sanitize()); err != nil {
+		return fmt.Errorf("create database schema %q: %w", schema, err)
+	}
+	return nil
+}
+
+func migrationConfig(databaseURL, schema string) (*pgx.ConnConfig, error) {
+	cfg, err := pgx.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse migration database url: %w", err)
+	}
+	cfg.RuntimeParams["search_path"] = schema
+	return cfg, nil
+}
+
+func runtimePoolConfig(databaseURL, schema string) (*pgxpool.Config, error) {
+	cfg, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse runtime database url: %w", err)
+	}
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	return cfg, nil
 }
 
 func parseLogLevel(s string) (slog.Level, error) {

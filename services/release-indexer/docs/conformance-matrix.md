@@ -20,6 +20,7 @@ go test -tags=conformance ./...
 | MCP `get_release` maps unknown releases to tool error code `no_such_release` | `TestAPIShape_GetReleaseMCPNoSuchRelease` |
 | A stale `claim_token` cannot submit after a newer claim | `TestAPIShape_StaleClaimTokenRejected` |
 | Repeated `unmatched` submissions exhaust after the configured max attempts | `TestAPIShape_UnmatchedExhaustsAfterMaxAttempts` |
+| Migrations and the runtime pool land every migrated table, the goose version table, and the `match_status` enum in the configured `database.schema` and nothing in `public` | `TestConfiguredSchemaOwnsMigrationObjects` |
 | DMHY fixtures, parser output, newest-200 bound, empty-floor threshold, and transient/parse failures | `sources/dmhy` conformance suite |
 | Nyaa live fixtures, parser output, newest-window bound, empty-floor threshold, and transient failures | `sources/nyaa` conformance suite |
 

@@ -1,3 +1,10 @@
+# This table and all its fields are optional.
+[database]
+
+# Optional; default = "releases". Must match [a-z_][a-z0-9_]{0,62}.
+schema = "releases"
+
+
 # All fields in this table are optional.
 [server]
 

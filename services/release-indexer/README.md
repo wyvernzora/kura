@@ -51,8 +51,9 @@ KURA_RELEASES_DATABASE_URL=postgres://… \
   ./bin/kura-release-indexer --config ./config.example.toml
 ```
 
-The binary runs its migrations on startup. Non-secret settings live in a strict TOML
-file; the database URL remains Secret-backed. See
+The binary runs its migrations on startup. Non-secret settings, including the
+PostgreSQL schema, live in a strict TOML file; the database URL remains
+Secret-backed. See
 [docs/operations.md](docs/operations.md) for deployment and the container build.
 
 ## Documentation

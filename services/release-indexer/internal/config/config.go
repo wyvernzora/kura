@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ const (
 	DefaultPath = "/etc/kura/release-indexer.toml"
 
 	defaultAddr             = ":8080"
+	defaultDatabaseSchema   = "releases"
 	defaultLogLevel         = "info"
 	defaultQueueMaxAttempts = 3
 	defaultTimeout          = 2 * time.Minute
@@ -28,11 +30,15 @@ const (
 	defaultNyaaFilter       = "0"
 )
 
-var validLogLevels = []string{"debug", "info", "warn", "error"}
+var (
+	validDatabaseSchema = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
+	validLogLevels      = []string{"debug", "info", "warn", "error"}
+)
 
 // Config is the validated runtime configuration.
 type Config struct {
 	Addr             string
+	DatabaseSchema   string
 	DatabaseURL      string
 	LogLevel         string
 	QueueMaxAttempts int
@@ -69,6 +75,7 @@ type SourceNyaa struct {
 func Defaults(databaseURL string) Config {
 	return Config{
 		Addr:             defaultAddr,
+		DatabaseSchema:   defaultDatabaseSchema,
 		DatabaseURL:      databaseURL,
 		LogLevel:         defaultLogLevel,
 		QueueMaxAttempts: defaultQueueMaxAttempts,
@@ -117,6 +124,9 @@ func Load(path, databaseURL string) (Config, error) {
 func (c Config) Validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("database URL is required in KURA_RELEASES_DATABASE_URL")
+	}
+	if !validDatabaseSchema.MatchString(c.DatabaseSchema) {
+		return fmt.Errorf("database.schema %q is invalid (must match %s)", c.DatabaseSchema, validDatabaseSchema)
 	}
 	if c.Addr == "" {
 		return fmt.Errorf("server.addr must not be empty")
@@ -177,9 +187,14 @@ func validateSource(name string, interval, timeout time.Duration, url string, ma
 }
 
 type fileConfig struct {
-	Server  *fileServer  `toml:"server"`
-	Queue   *fileQueue   `toml:"queue"`
-	Sources *fileSources `toml:"sources"`
+	Database *fileDatabase `toml:"database"`
+	Server   *fileServer   `toml:"server"`
+	Queue    *fileQueue    `toml:"queue"`
+	Sources  *fileSources  `toml:"sources"`
+}
+
+type fileDatabase struct {
+	Schema *string `toml:"schema"`
 }
 
 type fileServer struct {
@@ -219,6 +234,9 @@ type fileNyaa struct {
 
 func (r fileConfig) resolve(databaseURL string) (Config, error) {
 	cfg := Defaults(databaseURL)
+	if r.Database != nil {
+		setString(&cfg.DatabaseSchema, r.Database.Schema)
+	}
 	if r.Server != nil {
 		setString(&cfg.Addr, r.Server.Addr)
 		setString(&cfg.LogLevel, r.Server.LogLevel)
