@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoadDefaults(t *testing.T) {
@@ -28,6 +29,12 @@ root = "/var/lib/kura/backup"
 	if !reflect.DeepEqual(cfg, want) {
 		t.Fatalf("Config =\n%+v\nwant\n%+v", cfg, want)
 	}
+	if cfg.Tape.FreeSpaceMargin != 1<<30 {
+		t.Fatalf("Tape.FreeSpaceMargin = %d, want %d", cfg.Tape.FreeSpaceMargin, int64(1<<30))
+	}
+	if cfg.Tape.IdleTimeout != 30*time.Minute {
+		t.Fatalf("Tape.IdleTimeout = %s, want %s", cfg.Tape.IdleTimeout, 30*time.Minute)
+	}
 }
 
 func TestLoadAllFields(t *testing.T) {
@@ -46,6 +53,8 @@ root = "/state"
 [tape]
 ltfs_root = "/tape"
 drive_device = "/dev/tape/by-id/drive"
+free_space_margin = 2147483648
+idle_timeout = "45m"
 `))
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
@@ -59,7 +68,10 @@ drive_device = "/dev/tape/by-id/drive"
 	if cfg.State.Root != "/state" {
 		t.Fatalf("State = %+v", cfg.State)
 	}
-	if cfg.Tape.LTFSRoot != "/tape" || cfg.Tape.DriveDevice != "/dev/tape/by-id/drive" {
+	if cfg.Tape.LTFSRoot != "/tape" ||
+		cfg.Tape.DriveDevice != "/dev/tape/by-id/drive" ||
+		cfg.Tape.FreeSpaceMargin != 2<<30 ||
+		cfg.Tape.IdleTimeout != 45*time.Minute {
 		t.Fatalf("Tape = %+v", cfg.Tape)
 	}
 }
@@ -139,6 +151,21 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 			name: "relative drive device",
 			body: validConfig() + "\n[tape]\ndrive_device = \"dev/nst0\"\n",
 			want: "tape.drive_device must be absolute",
+		},
+		{
+			name: "negative free space margin",
+			body: validConfig() + "\n[tape]\nfree_space_margin = -1\n",
+			want: "tape.free_space_margin must not be negative",
+		},
+		{
+			name: "invalid idle timeout",
+			body: validConfig() + "\n[tape]\nidle_timeout = \"soon\"\n",
+			want: `tape.idle_timeout "soon" is invalid`,
+		},
+		{
+			name: "zero idle timeout",
+			body: validConfig() + "\n[tape]\nidle_timeout = \"0s\"\n",
+			want: "tape.idle_timeout must be greater than zero",
 		},
 	}
 

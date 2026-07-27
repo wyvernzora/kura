@@ -1,6 +1,6 @@
-// Package fingerprint computes the stat-level identity of an archived file
-// tree. It currently has no in-tree consumer; the executor slice will use it
-// for inventoryDigest, followed by plan gating.
+// Package fingerprint computes the stat-level identity of archived file trees.
+// Its .kura-excluding entry points define the shared plan/executor payload
+// scope.
 package fingerprint
 
 import (
@@ -33,11 +33,23 @@ type Entry struct {
 
 // Of validates, canonicalizes, and fingerprints entries.
 func Of(entries []Entry) (Fingerprint, error) {
+	return of(entries, false)
+}
+
+// OfExcludingKura fingerprints entries outside the top-level .kura directory.
+func OfExcludingKura(entries []Entry) (Fingerprint, error) {
+	return of(entries, true)
+}
+
+func of(entries []Entry, excludeKura bool) (Fingerprint, error) {
 	canonical := make([]Entry, 0, len(entries))
 	for _, entry := range entries {
 		normalized, err := canonicalEntry(entry)
 		if err != nil {
 			return "", err
+		}
+		if excludeKura && excludedKuraPath(normalized.Path) {
+			continue
 		}
 		canonical = append(canonical, normalized)
 	}
@@ -65,6 +77,15 @@ func Of(entries []Entry) (Fingerprint, error) {
 // Compute fingerprints every regular file under root. Non-regular files are
 // rejected and empty directories do not contribute.
 func Compute(root string) (Fingerprint, error) {
+	return compute(root, false)
+}
+
+// ComputeExcludingKura fingerprints regular files outside root/.kura.
+func ComputeExcludingKura(root string) (Fingerprint, error) {
+	return compute(root, true)
+}
+
+func compute(root string, excludeKura bool) (Fingerprint, error) {
 	entries := make([]Entry, 0)
 	err := filepath.WalkDir(root, func(filePath string, dirEntry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -85,6 +106,12 @@ func Compute(root string) (Fingerprint, error) {
 			return fmt.Errorf("fingerprint: relative path for %q: %w", filePath, err)
 		}
 		relativePath = filepath.ToSlash(relativePath)
+		if excludeKura && excludedKuraPath(relativePath) {
+			if dirEntry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
 		if dirEntry.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("fingerprint: symlink %q is not supported", relativePath)
 		}
@@ -112,7 +139,11 @@ func Compute(root string) (Fingerprint, error) {
 	if err != nil {
 		return "", err
 	}
-	return Of(entries)
+	return of(entries, excludeKura)
+}
+
+func excludedKuraPath(relativePath string) bool {
+	return relativePath == ".kura" || strings.HasPrefix(relativePath, ".kura/")
 }
 
 func canonicalEntry(entry Entry) (Entry, error) {

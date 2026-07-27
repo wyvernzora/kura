@@ -35,3 +35,10 @@ ltfs_root = "/mnt/ltfs"
 # Optional; executor only. Default = "/dev/nst0". An empty value means this pod
 # has no drive.
 drive_device = "/dev/nst0"
+
+# Optional; executor only. Bytes reserved beyond the planned payload.
+# Default = 1073741824 (1 GiB).
+free_space_margin = 1073741824
+
+# Optional; executor only. Go duration. Default = "30m".
+idle_timeout = "30m"

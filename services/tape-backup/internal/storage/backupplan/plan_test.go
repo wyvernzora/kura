@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -22,7 +21,6 @@ const (
 	secondPlanID    = "01JAY8B4N1R6X8Q0Z2C4E6G8J3"
 	testSessionID   = "01JAYC3P5R7T9W1Y3A5C7E9G2K"
 	testVolumeID    = "01J8ZQ7W5TWHA6R6J8X4QZ9Y7V"
-	secondVolumeID  = "01J8ZQ7W5TWHA6R6J8X4QZ9Y7W"
 	testSnapshot    = "OR3GIYR2GM3TAMBXGA.g7"
 	secondSnapshot  = "MFSGIYTONRSGSZDBOI.g2"
 	testFingerprint = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -87,16 +85,11 @@ func TestPlanRoundTripAndLifecycle(t *testing.T) {
 	}
 }
 
-func TestPlanTypesClosedEnum(t *testing.T) {
-	for _, planType := range []PlanType{
-		PlanTypeAdmit,
-		PlanTypeBackup,
-		PlanTypeImport,
-		PlanTypeVerify,
-	} {
-		t.Run(string(planType), func(t *testing.T) {
+func TestActionTypesClosedEnum(t *testing.T) {
+	for _, action := range validActions() {
+		t.Run(string(action.Type), func(t *testing.T) {
 			plan := validPlan()
-			plan.Type = planType
+			plan.Actions = []Action{action}
 			if err := Draft(t.TempDir(), plan); err != nil {
 				t.Fatalf("Draft: %v", err)
 			}
@@ -104,7 +97,23 @@ func TestPlanTypesClosedEnum(t *testing.T) {
 	}
 }
 
-func TestPlanValidationOnEncodeAndDecode(t *testing.T) {
+func TestActionTypeRejectsAbsentAndNull(t *testing.T) {
+	action := validActions()[0]
+	for _, variant := range []string{"absent", "null"} {
+		t.Run(variant, func(t *testing.T) {
+			fields := actionJSONFields(t, action)
+			if variant == "absent" {
+				delete(fields, "type")
+			} else {
+				fields["type"] = json.RawMessage("null")
+			}
+			_, err := decodePlanWithActionFields(t, fields)
+			assertExactError(t, err, "backupplan: action type is required")
+		})
+	}
+}
+
+func TestPlanMetadataValidationOnEncodeAndDecode(t *testing.T) {
 	cases := []struct {
 		name       string
 		mutatePlan func(*Plan)
@@ -131,16 +140,6 @@ func TestPlanValidationOnEncodeAndDecode(t *testing.T) {
 			},
 			want: `backupplan: planID "01jay7m2k8q3v5n0x2w4z6b8d1" must be a ` +
 				"26-character uppercase Crockford base32 ULID",
-		},
-		{
-			name: "type",
-			mutatePlan: func(plan *Plan) {
-				plan.Type = "compact"
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Type = "compact"
-			},
-			want: `backupplan: unsupported plan type "compact"`,
 		},
 		{
 			name: "createdAt required",
@@ -196,17 +195,6 @@ func TestPlanValidationOnEncodeAndDecode(t *testing.T) {
 			want: "backupplan: createdBy.host is required",
 		},
 		{
-			name: "volumeID",
-			mutatePlan: func(plan *Plan) {
-				plan.Target.VolumeID = "not-a-volume"
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Target.VolumeID = "not-a-volume"
-			},
-			want: `backupplan: volumeID "not-a-volume" must be a 26-character ` +
-				"uppercase Crockford base32 ULID",
-		},
-		{
 			name: "tapeID",
 			mutatePlan: func(plan *Plan) {
 				plan.Target.TapeID = "bad"
@@ -217,189 +205,14 @@ func TestPlanValidationOnEncodeAndDecode(t *testing.T) {
 			want: `backupplan: tapeID "bad" must be exactly 8 characters`,
 		},
 		{
-			name: "requiredFreeBytes negative",
+			name: "actions required",
 			mutatePlan: func(plan *Plan) {
-				plan.Target.RequiredFreeBytes = -1
+				plan.Actions = nil
 			},
 			mutateWire: func(wire *planWire) {
-				wire.Target.RequiredFreeBytes = -1
+				wire.Actions = nil
 			},
-			want: "backupplan: requiredFreeBytes must not be negative",
-		},
-		{
-			name: "expected snapshot canonical",
-			mutatePlan: func(plan *Plan) {
-				plan.Target.ExpectedSnapshots[0] = strings.ToLower(testSnapshot)
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Target.ExpectedSnapshots[0] = strings.ToLower(testSnapshot)
-			},
-			want: `backupplan: expected snapshot "or3giyr2gm3tambxga.g7": snapshot name ` +
-				`"or3giyr2gm3tambxga.g7" has invalid base32 metadataRef: ` +
-				"illegal base32 data at input byte 0",
-		},
-		{
-			name: "duplicate expected snapshot",
-			mutatePlan: func(plan *Plan) {
-				plan.Target.ExpectedSnapshots = append(
-					plan.Target.ExpectedSnapshots,
-					plan.Target.ExpectedSnapshots[0],
-				)
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Target.ExpectedSnapshots = append(
-					wire.Target.ExpectedSnapshots,
-					wire.Target.ExpectedSnapshots[0],
-				)
-			},
-			want: `backupplan: duplicate expected snapshot "OR3GIYR2GM3TAMBXGA.g7"`,
-		},
-		{
-			name: "item snapshot already expected",
-			mutatePlan: func(plan *Plan) {
-				plan.Target.ExpectedSnapshots = append(
-					plan.Target.ExpectedSnapshots,
-					"OR3GIYR2GM3TAMBXGA.g8",
-				)
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Target.ExpectedSnapshots = append(
-					wire.Target.ExpectedSnapshots,
-					"OR3GIYR2GM3TAMBXGA.g8",
-				)
-			},
-			want: `backupplan: item ("tvdb:370070", 8) snapshot ` +
-				`"OR3GIYR2GM3TAMBXGA.g8" already exists on target`,
-		},
-		{
-			name: "items required",
-			mutatePlan: func(plan *Plan) {
-				plan.Items = nil
-				plan.Target.RequiredFreeBytes = 0
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items = nil
-				wire.Target.RequiredFreeBytes = 0
-			},
-			want: "backupplan: items must contain at least one item",
-		},
-		{
-			name: "metadataRef required",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].MetadataRef = ""
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].MetadataRef = ""
-			},
-			want: `backupplan: item ("", 8): metadataRef is required`,
-		},
-		{
-			name: "generation positive",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].Generation = 0
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].Generation = 0
-			},
-			want: `backupplan: item ("tvdb:370070", 0): generation must be at least 1`,
-		},
-		{
-			name: "title required",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].Title = ""
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].Title = ""
-			},
-			want: "backupplan: item title is required",
-		},
-		{
-			name: "fingerprint format",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].PayloadFingerprint = "bad"
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].PayloadFingerprint = "bad"
-			},
-			want: "backupplan: payloadFingerprint must use algorithm:digest format",
-		},
-		{
-			name: "fingerprint algorithm",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].PayloadFingerprint = "sha512:" + strings.Repeat("a", 64)
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].PayloadFingerprint = "sha512:" + strings.Repeat("a", 64)
-			},
-			want: `backupplan: unsupported payloadFingerprint algorithm "sha512"`,
-		},
-		{
-			name: "fingerprint length",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].PayloadFingerprint = "sha256:short"
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].PayloadFingerprint = "sha256:short"
-			},
-			want: "backupplan: payloadFingerprint sha256 digest must be 64 " +
-				"lowercase hexadecimal characters",
-		},
-		{
-			name: "fingerprint lowercase",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].PayloadFingerprint = "sha256:" + strings.Repeat("A", 64)
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].PayloadFingerprint = "sha256:" + strings.Repeat("A", 64)
-			},
-			want: "backupplan: payloadFingerprint sha256 digest must be 64 " +
-				"lowercase hexadecimal characters",
-		},
-		{
-			name: "item bytes negative",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].Bytes = -1
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].Bytes = -1
-			},
-			want: `backupplan: bytes for ("tvdb:370070", 8) must not be negative`,
-		},
-		{
-			name: "duplicate item",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[1].MetadataRef = plan.Items[0].MetadataRef
-				plan.Items[1].Generation = plan.Items[0].Generation
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[1].MetadataRef = wire.Items[0].MetadataRef
-				wire.Items[1].Generation = wire.Items[0].Generation
-			},
-			want: `backupplan: duplicate item ("tvdb:370070", 8)`,
-		},
-		{
-			name: "requiredFreeBytes sum",
-			mutatePlan: func(plan *Plan) {
-				plan.Target.RequiredFreeBytes++
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Target.RequiredFreeBytes++
-			},
-			want: "backupplan: requiredFreeBytes is 31, want sum of item bytes 30",
-		},
-		{
-			name: "requiredFreeBytes overflow",
-			mutatePlan: func(plan *Plan) {
-				plan.Items[0].Bytes = math.MaxInt64
-				plan.Items[1].Bytes = 1
-				plan.Target.RequiredFreeBytes = math.MaxInt64
-			},
-			mutateWire: func(wire *planWire) {
-				wire.Items[0].Bytes = math.MaxInt64
-				wire.Items[1].Bytes = 1
-				wire.Target.RequiredFreeBytes = math.MaxInt64
-			},
-			want: "backupplan: requiredFreeBytes overflow",
+			want: "backupplan: actions must contain at least one action",
 		},
 	}
 
@@ -415,20 +228,472 @@ func TestPlanValidationOnEncodeAndDecode(t *testing.T) {
 	}
 }
 
-func TestPlanRoundTripPreservesBlankCartridgeExpectedSnapshots(t *testing.T) {
-	root := t.TempDir()
+func TestBackupActionValidationOnEncodeAndDecode(t *testing.T) {
+	cases := []struct {
+		name       string
+		mutate     func(*Action)
+		mutateWire func(*actionWire)
+		want       string
+	}{
+		{
+			name: "metadataRef required",
+			mutate: func(action *Action) {
+				action.MetadataRef = ""
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.MetadataRef = pointer("")
+			},
+			want: `backupplan: backup action ("", 8): metadataRef is required`,
+		},
+		{
+			name: "generation positive",
+			mutate: func(action *Action) {
+				action.Generation = 0
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.Generation = pointer(0)
+			},
+			want: `backupplan: backup action ("tvdb:370070", 0): generation must be at least 1`,
+		},
+		{
+			name: "rootPath required",
+			mutate: func(action *Action) {
+				action.RootPath = ""
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("")
+			},
+			want: "backupplan: rootPath is required",
+		},
+		{
+			name: "rootPath traversal",
+			mutate: func(action *Action) {
+				action.RootPath = "../other-series"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("../other-series")
+			},
+			want: `backupplan: rootPath "../other-series" must not contain ..`,
+		},
+		{
+			name: "rootPath absolute",
+			mutate: func(action *Action) {
+				action.RootPath = "/etc/passwd"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("/etc/passwd")
+			},
+			want: `backupplan: rootPath "/etc/passwd" must be relative`,
+		},
+		{
+			name: "rootPath root",
+			mutate: func(action *Action) {
+				action.RootPath = "/"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("/")
+			},
+			want: `backupplan: rootPath "/" must be relative`,
+		},
+		{
+			name: "rootPath dot",
+			mutate: func(action *Action) {
+				action.RootPath = "."
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer(".")
+			},
+			want: `backupplan: rootPath "." is not canonical`,
+		},
+		{
+			name: "rootPath dot prefix",
+			mutate: func(action *Action) {
+				action.RootPath = "./Show"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("./Show")
+			},
+			want: `backupplan: rootPath "./Show" is not canonical`,
+		},
+		{
+			name: "rootPath trailing slash",
+			mutate: func(action *Action) {
+				action.RootPath = "Show/"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("Show/")
+			},
+			want: `backupplan: rootPath "Show/" is not canonical`,
+		},
+		{
+			name: "rootPath repeated slash",
+			mutate: func(action *Action) {
+				action.RootPath = "Anime//Show"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("Anime//Show")
+			},
+			want: `backupplan: rootPath "Anime//Show" is not canonical`,
+		},
+		{
+			name: "rootPath dot suffix",
+			mutate: func(action *Action) {
+				action.RootPath = "Show/."
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("Show/.")
+			},
+			want: `backupplan: rootPath "Show/." is not canonical`,
+		},
+		{
+			name: "rootPath NFC",
+			mutate: func(action *Action) {
+				action.RootPath = "Cafe\u0301"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("Cafe\u0301")
+			},
+			want: `backupplan: rootPath "Café" must be NFC-normalized`,
+		},
+		{
+			name: "rootPath NUL",
+			mutate: func(action *Action) {
+				action.RootPath = "Show\x00file"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("Show\x00file")
+			},
+			want: `backupplan: rootPath "Show\x00file" must not contain NUL or newline`,
+		},
+		{
+			name: "rootPath newline",
+			mutate: func(action *Action) {
+				action.RootPath = "Show\nfile"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.RootPath = pointer("Show\nfile")
+			},
+			want: `backupplan: rootPath "Show\nfile" must not contain NUL or newline`,
+		},
+		{
+			name: "fingerprint format",
+			mutate: func(action *Action) {
+				action.PayloadFingerprint = "bad"
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.PayloadFingerprint = pointer("bad")
+			},
+			want: "backupplan: payloadFingerprint must use algorithm:digest format",
+		},
+		{
+			name: "bytes negative",
+			mutate: func(action *Action) {
+				action.Bytes = -1
+			},
+			mutateWire: func(wire *actionWire) {
+				wire.Bytes = pointer(int64(-1))
+			},
+			want: `backupplan: bytes for backup action ("tvdb:370070", 8) must not be negative`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertActionEncodeAndDecodeRejection(t, tc.mutate, tc.mutateWire, tc.want)
+		})
+	}
+}
+
+func TestDuplicateBackupActionRejectedAtPlanScope(t *testing.T) {
 	plan := validPlan()
-	plan.Target.ExpectedSnapshots = nil
-	if err := Draft(root, plan); err != nil {
+	plan.Actions = append(plan.Actions, plan.Actions[0])
+	err := Draft(t.TempDir(), plan)
+	const want = `backupplan: duplicate backup action ("tvdb:370070", 8)`
+	assertExactError(t, err, want)
+
+	wire := toWire(validPlan())
+	wire.Actions = append(wire.Actions, wire.Actions[0])
+	data, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	_, err = decodePlan(data, testPlanID)
+	assertExactError(t, err, want)
+}
+
+func TestPlanAllowsExecutorOwnedInventoryAndCapacityChecks(t *testing.T) {
+	plan := validPlan()
+	plan.Actions = []Action{
+		plan.Actions[0],
+		{
+			Type:      ActionAssertInventory,
+			Snapshots: []string{"OR3GIYR2GM3TAMBXGA.g8"},
+		},
+		{
+			Type:  ActionAssertFreeSpace,
+			Bytes: 999,
+		},
+	}
+	if err := Draft(t.TempDir(), plan); err != nil {
 		t.Fatalf("Draft: %v", err)
 	}
-	got, err := ReadDraft(root, plan.PlanID)
+}
+
+func TestActionValidationOnEncodeAndDecode(t *testing.T) {
+	cases := []struct {
+		name   string
+		action Action
+		want   string
+	}{
+		{
+			name:   "unknown type",
+			action: Action{Type: "unknown"},
+			want:   `backupplan: unsupported action type "unknown"`,
+		},
+		{
+			name:   "assert volume ID",
+			action: Action{Type: ActionAssertVolume, VolumeID: "bad"},
+			want: `backupplan: volumeID "bad" must be a 26-character uppercase ` +
+				"Crockford base32 ULID",
+		},
+		{
+			name: "assert inventory canonical snapshot",
+			action: Action{
+				Type:      ActionAssertInventory,
+				Snapshots: []string{strings.ToLower(testSnapshot)},
+			},
+			want: `backupplan: snapshot "or3giyr2gm3tambxga.g7": snapshot name ` +
+				`"or3giyr2gm3tambxga.g7" has invalid base32 metadataRef: ` +
+				"illegal base32 data at input byte 0",
+		},
+		{
+			name: "assert inventory duplicate",
+			action: Action{
+				Type:      ActionAssertInventory,
+				Snapshots: []string{testSnapshot, testSnapshot},
+			},
+			want: `backupplan: duplicate snapshot "OR3GIYR2GM3TAMBXGA.g7"`,
+		},
+		{
+			name:   "assert free space negative",
+			action: Action{Type: ActionAssertFreeSpace, Bytes: -1},
+			want:   "backupplan: assert_free_space bytes must not be negative",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := validPlan()
+			plan.Actions = []Action{tc.action}
+			err := Draft(t.TempDir(), plan)
+			assertExactError(t, err, tc.want)
+
+			wire := toWire(plan)
+			data, err := json.Marshal(wire)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			_, err = decodePlan(data, testPlanID)
+			assertExactError(t, err, tc.want)
+		})
+	}
+}
+
+func TestActionRequiredFieldsRejectAbsentAndNull(t *testing.T) {
+	for _, action := range validActions() {
+		_, required, err := actionWireRule(action.Type)
+		if err != nil {
+			t.Fatalf("actionWireRule(%s): %v", action.Type, err)
+		}
+		for _, field := range actionWireFields() {
+			if required&field.mask == 0 {
+				continue
+			}
+			for _, variant := range []string{"absent", "null"} {
+				t.Run(string(action.Type)+"/"+field.name+"/"+variant, func(t *testing.T) {
+					fields := actionJSONFields(t, action)
+					if variant == "absent" {
+						delete(fields, field.name)
+					} else {
+						fields[field.name] = json.RawMessage("null")
+					}
+					_, err := decodePlanWithActionFields(t, fields)
+					want := fmt.Sprintf(
+						"backupplan: %s action requires %s",
+						action.Type,
+						field.name,
+					)
+					assertExactError(t, err, want)
+				})
+			}
+		}
+	}
+}
+
+func TestPlanDecodeRejectsDuplicateCaseFoldedFields(t *testing.T) {
+	firstKeyByCase := map[string]string{
+		"nested object in array": "Bytes",
+		"byte-identical keys":    "bytes",
+	}
+	data, err := json.Marshal(toWire(validPlan()))
 	if err != nil {
-		t.Fatalf("ReadDraft: %v", err)
+		t.Fatalf("Marshal plan: %v", err)
 	}
-	if !reflect.DeepEqual(got, plan) {
-		t.Fatalf("ReadDraft = %#v, want %#v", got, plan)
+	for name, first := range firstKeyByCase {
+		t.Run(name, func(t *testing.T) {
+			newFragment := fmt.Sprintf(`"bytes":10,%q:null`, first)
+			mutated := bytes.Replace(
+				data,
+				[]byte(`"bytes":10`),
+				[]byte(newFragment),
+				1,
+			)
+			if bytes.Equal(mutated, data) {
+				t.Fatal(`plan does not contain "bytes":10`)
+			}
+			_, err := decodePlan(mutated, testPlanID)
+			want := fmt.Sprintf(
+				"backupplan: decode plan %s: duplicate case-folded JSON fields "+
+					"at actions[0].bytes: %q and %q",
+				testPlanID,
+				first,
+				"bytes",
+			)
+			assertExactError(t, err, want)
+		})
 	}
+}
+
+// The reported path must name the action that actually holds the duplicate.
+// Every other case injects into the first action, where a dropped or zeroed
+// array index still reads correctly.
+func TestPlanDuplicateFieldPathNamesTheRightAction(t *testing.T) {
+	data, err := json.Marshal(toWire(validPlan()))
+	if err != nil {
+		t.Fatalf("Marshal plan: %v", err)
+	}
+	// "bytes":30 belongs to the fifth action, the trailing assert_free_space.
+	mutated := bytes.Replace(
+		data,
+		[]byte(`"bytes":30`),
+		[]byte(`"bytes":30,"Bytes":null`),
+		1,
+	)
+	if bytes.Equal(mutated, data) {
+		t.Fatal(`plan does not contain "bytes":30`)
+	}
+	_, err = decodePlan(mutated, testPlanID)
+	want := fmt.Sprintf(
+		"backupplan: decode plan %s: duplicate case-folded JSON fields "+
+			"at actions[4].bytes: %q and %q",
+		testPlanID,
+		"Bytes",
+		"bytes",
+	)
+	assertExactError(t, err, want)
+}
+
+func TestActionMixedCaseForbiddenFieldsRejected(t *testing.T) {
+	tested := 0
+	for _, action := range validActions() {
+		allowed, _, err := actionWireRule(action.Type)
+		if err != nil {
+			t.Fatalf("actionWireRule(%s): %v", action.Type, err)
+		}
+		for _, field := range actionTestFields() {
+			if allowed&field.mask != 0 {
+				continue
+			}
+			tested++
+			t.Run(string(action.Type)+"/"+field.name, func(t *testing.T) {
+				fields := actionJSONFields(t, action)
+				mixedCaseName := strings.ToUpper(field.name[:1]) + field.name[1:]
+				fields[mixedCaseName] = field.zero
+
+				_, err := decodePlanWithActionFields(t, fields)
+				want := fmt.Sprintf(
+					"backupplan: %s action must not contain %s",
+					action.Type,
+					field.name,
+				)
+				assertExactError(t, err, want)
+			})
+		}
+	}
+	const wantCases = 47
+	if tested != wantCases {
+		t.Fatalf("mixed-case forbidden action field cases = %d, want %d", tested, wantCases)
+	}
+}
+
+func TestActionForbiddenFieldsRejectNonzeroZeroAndNull(t *testing.T) {
+	fields := actionTestFields()
+	tested := 0
+	for _, action := range validActions() {
+		allowed, _, err := actionWireRule(action.Type)
+		if err != nil {
+			t.Fatalf("actionWireRule(%s): %v", action.Type, err)
+		}
+		for _, field := range fields {
+			if allowed&field.mask != 0 {
+				continue
+			}
+			tested++
+			t.Run(string(action.Type)+"/"+field.name, func(t *testing.T) {
+				invalid := action
+				field.set(&invalid)
+				plan := validPlan()
+				plan.Actions = []Action{invalid}
+				err := Draft(t.TempDir(), plan)
+				want := fmt.Sprintf(
+					"backupplan: %s action must not contain %s",
+					action.Type,
+					field.name,
+				)
+				assertExactError(t, err, want)
+
+				for _, raw := range []json.RawMessage{field.zero, json.RawMessage("null")} {
+					wireFields := actionJSONFields(t, action)
+					wireFields[field.name] = raw
+					_, err = decodePlanWithActionFields(t, wireFields)
+					assertExactError(t, err, want)
+				}
+			})
+		}
+	}
+	const wantCases = 47
+	if tested != wantCases {
+		t.Fatalf("forbidden action field cases = %d, want %d", tested, wantCases)
+	}
+}
+
+func TestAssertInventorySnapshotsNilAndEmptyDistinction(t *testing.T) {
+	t.Run("nil_is_missing", func(t *testing.T) {
+		plan := validPlan()
+		plan.Actions = []Action{{
+			Type:      ActionAssertInventory,
+			Snapshots: nil,
+		}}
+		err := Draft(t.TempDir(), plan)
+		assertExactError(t, err, "backupplan: snapshots is required")
+	})
+
+	t.Run("empty_asserts_blank_cartridge_and_round_trips", func(t *testing.T) {
+		root := t.TempDir()
+		plan := validPlan()
+		plan.Actions = []Action{{
+			Type:      ActionAssertInventory,
+			Snapshots: []string{},
+		}}
+		if err := Draft(root, plan); err != nil {
+			t.Fatalf("Draft: %v", err)
+		}
+		got, err := ReadDraft(root, plan.PlanID)
+		if err != nil {
+			t.Fatalf("ReadDraft: %v", err)
+		}
+		if !reflect.DeepEqual(got.Actions, plan.Actions) {
+			t.Fatalf("ReadDraft Actions = %#v, want %#v", got.Actions, plan.Actions)
+		}
+	})
 }
 
 func TestPlanTextValidationOnEncode(t *testing.T) {
@@ -452,18 +717,18 @@ func TestPlanTextValidationOnEncode(t *testing.T) {
 			want: "backupplan: createdBy.host must be valid UTF-8",
 		},
 		{
-			name: "title valid UTF-8",
-			mutate: func(plan *Plan) {
-				plan.Items[0].Title = "Sh\xffw"
-			},
-			want: "backupplan: item title must be valid UTF-8",
-		},
-		{
 			name: "metadataRef valid UTF-8",
 			mutate: func(plan *Plan) {
-				plan.Items[0].MetadataRef = "tvdb:\xff"
+				plan.Actions[0].MetadataRef = "tvdb:\xff"
 			},
-			want: `backupplan: item ("tvdb:\xff", 8): metadataRef must be valid UTF-8`,
+			want: `backupplan: backup action ("tvdb:\xff", 8): metadataRef must be valid UTF-8`,
+		},
+		{
+			name: "rootPath valid UTF-8",
+			mutate: func(plan *Plan) {
+				plan.Actions[0].RootPath = "Sh\xffw"
+			},
+			want: `backupplan: rootPath "Sh\xffw" is not valid UTF-8`,
 		},
 	}
 
@@ -485,7 +750,7 @@ func TestPlanDecodeRejectsRawInvalidUTF8InEveryTextField(t *testing.T) {
 	}{
 		{name: "createdBy version", old: "v0.6.0", new: []byte("v0.\xff.0")},
 		{name: "createdBy host", old: "kura-control-0", new: []byte("kura-\xffontrol-0")},
-		{name: "title", old: "Show", new: []byte("Sh\xffw")},
+		{name: "rootPath", old: "Show", new: []byte("Sh\xffw")},
 		{name: "metadataRef", old: "tvdb:370070", new: []byte("tvdb:\xff70070")},
 	}
 
@@ -536,7 +801,7 @@ func TestPlanIDMustMatchFilename(t *testing.T) {
 	assertExactError(t, err, want)
 }
 
-func TestOneLivePlanPerVolume(t *testing.T) {
+func TestOneLivePlanPerTape(t *testing.T) {
 	for _, existingState := range []planState{stateDraft, stateReady} {
 		t.Run(string(existingState), func(t *testing.T) {
 			root := t.TempDir()
@@ -554,8 +819,8 @@ func TestOneLivePlanPerVolume(t *testing.T) {
 
 			err := Draft(root, second)
 			want := fmt.Sprintf(
-				"backupplan: volume %s already has live plan %s",
-				testVolumeID,
+				"backupplan: tape %s already has live plan %s",
+				"ABC123L6",
 				testPlanID,
 			)
 			assertExactError(t, err, want)
@@ -564,7 +829,7 @@ func TestOneLivePlanPerVolume(t *testing.T) {
 	}
 }
 
-func TestCompletedPlanDoesNotBlockNewPlanForVolume(t *testing.T) {
+func TestCompletedPlanDoesNotBlockNewPlanForTape(t *testing.T) {
 	root := t.TempDir()
 	first := validPlan()
 	if err := Draft(root, first); err != nil {
@@ -794,6 +1059,158 @@ func assertPlanEncodeAndDecodeRejection(
 	assertExactError(t, err, want)
 }
 
+func assertActionEncodeAndDecodeRejection(
+	t *testing.T,
+	mutateAction func(*Action),
+	mutateWire func(*actionWire),
+	want string,
+) {
+	t.Helper()
+	plan := validPlan()
+	mutateAction(&plan.Actions[0])
+	err := Draft(t.TempDir(), plan)
+	assertExactError(t, err, want)
+
+	wire := toWire(validPlan())
+	mutateWire(&wire.Actions[0])
+	data, err := json.Marshal(wire)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	_, err = decodePlan(data, wire.PlanID)
+	assertExactError(t, err, want)
+}
+
+type actionTestField struct {
+	name string
+	mask actionFields
+	zero json.RawMessage
+	set  func(*Action)
+}
+
+func actionTestFields() []actionTestField {
+	return []actionTestField{
+		{
+			name: "metadataRef", mask: actionFieldMetadataRef,
+			zero: json.RawMessage(`""`),
+			set:  func(action *Action) { action.MetadataRef = "tvdb:370070" },
+		},
+		{
+			name: "rootPath", mask: actionFieldRootPath,
+			zero: json.RawMessage(`""`),
+			set:  func(action *Action) { action.RootPath = "Show" },
+		},
+		{
+			name: "generation", mask: actionFieldGeneration,
+			zero: json.RawMessage(`0`),
+			set:  func(action *Action) { action.Generation = 8 },
+		},
+		{
+			name: "payloadFingerprint", mask: actionFieldPayloadFingerprint,
+			zero: json.RawMessage(`""`),
+			set:  func(action *Action) { action.PayloadFingerprint = testFingerprint },
+		},
+		{
+			name: "bytes", mask: actionFieldBytes,
+			zero: json.RawMessage(`0`),
+			set:  func(action *Action) { action.Bytes = 10 },
+		},
+		{
+			name: "volumeID", mask: actionFieldVolumeID,
+			zero: json.RawMessage(`""`),
+			set:  func(action *Action) { action.VolumeID = volume.ID(testVolumeID) },
+		},
+		{
+			name: "snapshots", mask: actionFieldSnapshots,
+			zero: json.RawMessage(`[]`),
+			set:  func(action *Action) { action.Snapshots = []string{testSnapshot} },
+		},
+	}
+}
+
+func actionJSONFields(t *testing.T, action Action) map[string]json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(toActionWire(action))
+	if err != nil {
+		t.Fatalf("Marshal action: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("Unmarshal action fields: %v", err)
+	}
+	return fields
+}
+
+func decodePlanWithActionFields(
+	t *testing.T,
+	actionFields map[string]json.RawMessage,
+) (Plan, error) {
+	t.Helper()
+	data, err := json.Marshal(toWire(validPlan()))
+	if err != nil {
+		t.Fatalf("Marshal plan: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("Unmarshal plan fields: %v", err)
+	}
+	actionData, err := json.Marshal(actionFields)
+	if err != nil {
+		t.Fatalf("Marshal action fields: %v", err)
+	}
+	return decodePlanWithActionJSON(t, actionData)
+}
+
+func decodePlanWithActionJSON(t *testing.T, actionData []byte) (Plan, error) {
+	t.Helper()
+	data, err := json.Marshal(toWire(validPlan()))
+	if err != nil {
+		t.Fatalf("Marshal plan: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("Unmarshal plan fields: %v", err)
+	}
+	fields["actions"] = json.RawMessage("[" + string(actionData) + "]")
+	data, err = json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("Marshal mutated plan: %v", err)
+	}
+	return decodePlan(data, testPlanID)
+}
+
+func jsonObjectWithDuplicateFoldedField(
+	t *testing.T,
+	fields map[string]json.RawMessage,
+	name string,
+	value json.RawMessage,
+	nullFirst bool,
+) []byte {
+	t.Helper()
+	data, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("Marshal fields: %v", err)
+	}
+	mixedCaseName := strings.ToUpper(name[:1]) + name[1:]
+	firstName, firstValue := name, value
+	secondName, secondValue := mixedCaseName, json.RawMessage("null")
+	if nullFirst {
+		firstName, secondName = secondName, firstName
+		firstValue, secondValue = secondValue, firstValue
+	}
+	duplicate := fmt.Sprintf(
+		`%q:%s,%q:%s`,
+		firstName,
+		firstValue,
+		secondName,
+		secondValue,
+	)
+	if len(fields) == 0 {
+		return []byte("{" + duplicate + "}")
+	}
+	return append(data[:len(data)-1], []byte(","+duplicate+"}")...)
+}
+
 func testMoveRefusesOccupiedDestination(
 	t *testing.T,
 	sourceState, destinationState planState,
@@ -918,33 +1335,63 @@ func assertExactError(t *testing.T, err error, want string) {
 func validPlan() Plan {
 	return Plan{
 		PlanID:    testPlanID,
-		Type:      PlanTypeBackup,
 		CreatedAt: time.Date(2026, 7, 27, 9, 14, 22, 0, time.UTC),
 		CreatedBy: Creator{
 			Version: "v0.6.0",
 			Host:    "kura-control-0",
 		},
 		Target: Target{
-			VolumeID:          volume.ID(testVolumeID),
-			TapeID:            tape.ID("ABC123L6"),
-			RequiredFreeBytes: 30,
-			ExpectedSnapshots: []string{testSnapshot, secondSnapshot},
+			TapeID: tape.ID("ABC123L6"),
 		},
-		Items: []Item{
+		Actions: []Action{
 			{
+				Type:               ActionBackup,
 				MetadataRef:        "tvdb:370070",
-				Title:              "Show",
+				RootPath:           "Show",
 				Generation:         8,
 				PayloadFingerprint: testFingerprint,
 				Bytes:              10,
 			},
 			{
+				Type:               ActionBackup,
 				MetadataRef:        "anidb:42",
-				Title:              "Second Show",
+				RootPath:           "Second Show",
 				Generation:         3,
 				PayloadFingerprint: "sha256:" + strings.Repeat("b", 64),
 				Bytes:              20,
 			},
+			{
+				Type:     ActionAssertVolume,
+				VolumeID: volume.ID(testVolumeID),
+			},
+			{
+				Type:      ActionAssertInventory,
+				Snapshots: []string{testSnapshot, secondSnapshot},
+			},
+			{
+				Type:  ActionAssertFreeSpace,
+				Bytes: 30,
+			},
 		},
+	}
+}
+
+func validActions() []Action {
+	return []Action{
+		{
+			Type:               ActionBackup,
+			MetadataRef:        "tvdb:370070",
+			RootPath:           "Show",
+			Generation:         8,
+			PayloadFingerprint: testFingerprint,
+			Bytes:              10,
+		},
+		{Type: ActionAssertVolume, VolumeID: volume.ID(testVolumeID)},
+		{Type: ActionAssertInventory, Snapshots: []string{}},
+		{Type: ActionAssertFreeSpace, Bytes: 0},
+		{Type: ActionAdmit, VolumeID: volume.ID(testVolumeID)},
+		{Type: ActionReformat},
+		{Type: ActionImport},
+		{Type: ActionVerify},
 	}
 }

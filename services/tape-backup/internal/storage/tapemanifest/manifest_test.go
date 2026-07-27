@@ -93,11 +93,11 @@ func TestCommitValidatesManifestBytes(t *testing.T) {
 		t.Fatalf("Write: %v", err)
 	}
 	wire := readManifestWire(t, snapshotDir)
-	wire["title"] = ""
+	wire["rootPath"] = ""
 	writeManifestWire(t, snapshotDir, wire)
 
 	err := tapemanifest.Commit(snapshotDir)
-	const want = "tapemanifest: title is required"
+	const want = "tapemanifest: rootPath is required"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Commit error = %v, want %q", err, want)
 	}
@@ -544,37 +544,68 @@ func TestManifestSnapshotNameValidation(t *testing.T) {
 	}
 }
 
-func TestManifestTitleValidation(t *testing.T) {
+func TestManifestRootPathValidation(t *testing.T) {
 	cases := []struct {
-		name  string
-		title string
-		want  string
+		name     string
+		rootPath string
+		want     string
 	}{
 		{
 			name: "required",
-			want: "tapemanifest: title is required",
+			want: "tapemanifest: rootPath is required",
 		},
 		{
-			name:  "valid UTF-8",
-			title: string([]byte{0xff}),
-			want:  "tapemanifest: title must be valid UTF-8",
+			name:     "valid UTF-8",
+			rootPath: string([]byte{0xff}),
+			want:     "tapemanifest: rootPath \"\\xff\" is not valid UTF-8",
 		},
 		{
-			name:  "NFC",
-			title: "Cafe\u0301",
-			want:  "tapemanifest: title must be NFC-normalized",
+			name:     "relative",
+			rootPath: "/other-series",
+			want:     `tapemanifest: rootPath "/other-series" must be relative`,
+		},
+		{
+			name:     "traversal",
+			rootPath: "../other-series",
+			want:     `tapemanifest: rootPath "../other-series" must not contain ..`,
+		},
+		{
+			name:     "canonical",
+			rootPath: "Anime//Show",
+			want:     `tapemanifest: rootPath "Anime//Show" is not canonical`,
+		},
+		{
+			name:     "NFC",
+			rootPath: "Cafe\u0301",
+			want:     `tapemanifest: rootPath "Café" must be NFC-normalized`,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			manifest := validManifest(t)
-			manifest.Title = tc.title
+			manifest.RootPath = tc.rootPath
 			err := tapemanifest.Write(filepath.Join(t.TempDir(), snapshotName), manifest)
 			if err == nil || err.Error() != tc.want {
 				t.Fatalf("Write error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestManifestDecodeRejectsRootPathTraversal(t *testing.T) {
+	snapshotDir := filepath.Join(t.TempDir(), snapshotName)
+	if err := tapemanifest.Write(snapshotDir, validManifest(t)); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	wire := readManifestWire(t, snapshotDir)
+	wire["rootPath"] = "../other-series"
+	writeManifestWire(t, snapshotDir, wire)
+
+	_, err := tapemanifest.ReadManifest(snapshotDir)
+	const want = `tapemanifest: rootPath "../other-series" must not contain ..`
+	if err == nil || err.Error() != want {
+		t.Fatalf("ReadManifest error = %v, want %q", err, want)
 	}
 }
 
@@ -866,7 +897,7 @@ func validManifest(t *testing.T) tapemanifest.Manifest {
 	}
 	manifest := tapemanifest.Manifest{
 		MetadataRef: "tvdb:370070",
-		Title:       "Show",
+		RootPath:    "Show",
 		Generation:  7,
 		CapturedAt: time.Date(
 			2026,
@@ -1040,7 +1071,7 @@ func assertWireContracts(t *testing.T, snapshotDir string) {
 	}
 	if manifestWire["schemaVersion"] != float64(1) ||
 		manifestWire["metadataRef"] != "tvdb:370070" ||
-		manifestWire["title"] != "Show" ||
+		manifestWire["rootPath"] != "Show" ||
 		manifestWire["generation"] != float64(7) ||
 		manifestWire["capturedAt"] != "2026-07-26T19:04:11Z" ||
 		manifestWire["totalBytes"] != float64(15) {

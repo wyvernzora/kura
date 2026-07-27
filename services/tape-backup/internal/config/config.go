@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -14,10 +15,12 @@ import (
 const (
 	DefaultPath = "/etc/kura/tape-backup.toml"
 
-	defaultAddr        = ":8080"
-	defaultLogLevel    = "info"
-	defaultLTFSRoot    = "/mnt/ltfs"
-	defaultDriveDevice = "/dev/nst0"
+	defaultAddr                  = ":8080"
+	defaultLogLevel              = "info"
+	defaultLTFSRoot              = "/mnt/ltfs"
+	defaultDriveDevice           = "/dev/nst0"
+	defaultFreeSpaceMargin int64 = 1 << 30
+	defaultIdleTimeout           = 30 * time.Minute
 )
 
 var validLogLevels = []string{"debug", "info", "warn", "error"}
@@ -47,10 +50,12 @@ type State struct {
 	Root string
 }
 
-// Tape configures executor-only LTFS and drive paths.
+// Tape configures executor-only LTFS, drive, and execution policy.
 type Tape struct {
-	LTFSRoot    string
-	DriveDevice string
+	LTFSRoot        string
+	DriveDevice     string
+	FreeSpaceMargin int64
+	IdleTimeout     time.Duration
 }
 
 // Defaults returns all non-required runtime defaults.
@@ -61,8 +66,10 @@ func Defaults() Config {
 			LogLevel: defaultLogLevel,
 		},
 		Tape: Tape{
-			LTFSRoot:    defaultLTFSRoot,
-			DriveDevice: defaultDriveDevice,
+			LTFSRoot:        defaultLTFSRoot,
+			DriveDevice:     defaultDriveDevice,
+			FreeSpaceMargin: defaultFreeSpaceMargin,
+			IdleTimeout:     defaultIdleTimeout,
 		},
 	}
 }
@@ -79,7 +86,10 @@ func Load(path string) (Config, error) {
 	if err := toml.NewDecoder(f).DisallowUnknownFields().Decode(&raw); err != nil {
 		return Config{}, fmt.Errorf("config: decode %s: %w", path, err)
 	}
-	cfg := raw.resolve()
+	cfg, err := raw.resolve()
+	if err != nil {
+		return Config{}, fmt.Errorf("config: %w", err)
+	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, fmt.Errorf("config: %w", err)
 	}
@@ -110,6 +120,12 @@ func (c Config) Validate() error {
 	}
 	if err := requiredAbsolutePath("tape.ltfs_root", c.Tape.LTFSRoot); err != nil {
 		return err
+	}
+	if c.Tape.FreeSpaceMargin < 0 {
+		return fmt.Errorf("tape.free_space_margin must not be negative")
+	}
+	if c.Tape.IdleTimeout <= 0 {
+		return fmt.Errorf("tape.idle_timeout must be greater than zero")
 	}
 	if c.Tape.DriveDevice == "" {
 		return nil
@@ -149,11 +165,13 @@ type fileState struct {
 }
 
 type fileTape struct {
-	LTFSRoot    *string `toml:"ltfs_root"`
-	DriveDevice *string `toml:"drive_device"`
+	LTFSRoot        *string `toml:"ltfs_root"`
+	DriveDevice     *string `toml:"drive_device"`
+	FreeSpaceMargin *int64  `toml:"free_space_margin"`
+	IdleTimeout     *string `toml:"idle_timeout"`
 }
 
-func (r fileConfig) resolve() Config {
+func (r fileConfig) resolve() (Config, error) {
 	cfg := Defaults()
 	if r.Server != nil {
 		setString(&cfg.Server.Addr, r.Server.Addr)
@@ -169,12 +187,39 @@ func (r fileConfig) resolve() Config {
 	if r.Tape != nil {
 		setString(&cfg.Tape.LTFSRoot, r.Tape.LTFSRoot)
 		setString(&cfg.Tape.DriveDevice, r.Tape.DriveDevice)
+		setInt64(&cfg.Tape.FreeSpaceMargin, r.Tape.FreeSpaceMargin)
+		var err error
+		cfg.Tape.IdleTimeout, err = optionalDuration(
+			"tape.idle_timeout",
+			r.Tape.IdleTimeout,
+			cfg.Tape.IdleTimeout,
+		)
+		if err != nil {
+			return Config{}, err
+		}
 	}
-	return cfg
+	return cfg, nil
 }
 
 func setString(dst *string, src *string) {
 	if src != nil {
 		*dst = *src
 	}
+}
+
+func setInt64(dst *int64, src *int64) {
+	if src != nil {
+		*dst = *src
+	}
+}
+
+func optionalDuration(name string, raw *string, def time.Duration) (time.Duration, error) {
+	if raw == nil {
+		return def, nil
+	}
+	value, err := time.ParseDuration(*raw)
+	if err != nil {
+		return 0, fmt.Errorf("%s %q is invalid: %w", name, *raw, err)
+	}
+	return value, nil
 }

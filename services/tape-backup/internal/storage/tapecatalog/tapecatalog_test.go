@@ -1679,7 +1679,7 @@ func snapshotBytes(
 	mustSucceed(t, err)
 	manifest := tapemanifest.Manifest{
 		MetadataRef: metadataRef,
-		Title:       "Show",
+		RootPath:    "Show",
 		Generation:  generation,
 		CapturedAt:  time.Date(2026, 7, 21, 13, 10, 0, 0, time.UTC),
 		WrittenBy: tapemanifest.Writer{

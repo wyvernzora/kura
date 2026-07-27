@@ -28,7 +28,8 @@ var sessionEventFieldsByType = map[EventType][]string{
 	EventPlanFailed:         {"planId", "reason", "detail"},
 	EventPlanCancelled:      {"planId", "reason", "detail"},
 	EventEncryptionVerified: {"planId"},
-	EventDivergenceChecked:  {"planId", "result"},
+	EventSnapshotSwept:      {"entry", "reason"},
+	EventDivergenceChecked:  {"planId", "result", "extraSnapshots"},
 	EventFreshnessChecked:   {"planId", "dropped"},
 	EventItemStarted:        {"planId", "metadataRef", "generation", "bytes", "files"},
 	EventItemCompleted:      {"planId", "metadataRef", "generation", "snapshot"},
@@ -49,12 +50,14 @@ var zeroValueEventFields = []struct {
 	{name: "tapeId", value: json.RawMessage(`""`)},
 	{name: "volumeId", value: json.RawMessage(`""`)},
 	{name: "result", value: json.RawMessage(`""`)},
+	{name: "extraSnapshots", value: json.RawMessage(`[]`)},
 	{name: "dropped", value: json.RawMessage(`[]`)},
 	{name: "metadataRef", value: json.RawMessage(`""`)},
 	{name: "generation", value: json.RawMessage(`0`)},
 	{name: "bytes", value: json.RawMessage(`0`)},
 	{name: "files", value: json.RawMessage(`0`)},
 	{name: "path", value: json.RawMessage(`""`)},
+	{name: "entry", value: json.RawMessage(`""`)},
 	{name: "snapshot", value: json.RawMessage(`""`)},
 	{name: "itemsWritten", value: json.RawMessage(`0`)},
 	{name: "itemsFailed", value: json.RawMessage(`0`)},
@@ -993,6 +996,100 @@ func TestSessionEventPayloadValidationOnEncodeAndDecode(t *testing.T) {
 	}
 }
 
+func TestSessionItemReasonConstantsAcceptedByAllCarriers(t *testing.T) {
+	for _, reason := range validItemReasons() {
+		for _, eventType := range []EventType{EventItemFailed, EventItemSkipped} {
+			t.Run(string(eventType)+"/"+string(reason), func(t *testing.T) {
+				event := validEvent(eventType)
+				event.Reason = string(reason)
+				if err := validateEvent(event); err != nil {
+					t.Fatalf("validateEvent: %v", err)
+				}
+				if _, err := eventFromWire(toEventWire(event)); err != nil {
+					t.Fatalf("eventFromWire: %v", err)
+				}
+			})
+		}
+		t.Run("freshness_checked/"+string(reason), func(t *testing.T) {
+			event := validEvent(EventFreshnessChecked)
+			event.Dropped[0].Reason = string(reason)
+			if err := validateEvent(event); err != nil {
+				t.Fatalf("validateEvent: %v", err)
+			}
+			if _, err := eventFromWire(toEventWire(event)); err != nil {
+				t.Fatalf("eventFromWire: %v", err)
+			}
+		})
+	}
+}
+
+func TestSessionItemReasonCarriersRejectUnknownReason(t *testing.T) {
+	cases := []struct {
+		name   string
+		event  Event
+		mutate func(*Event)
+	}{
+		{
+			name:   "item_failed",
+			event:  validEvent(EventItemFailed),
+			mutate: func(event *Event) { event.Reason = "unknown" },
+		},
+		{
+			name:   "item_skipped",
+			event:  validEvent(EventItemSkipped),
+			mutate: func(event *Event) { event.Reason = "unknown" },
+		},
+		{
+			name:  "freshness_checked",
+			event: validEvent(EventFreshnessChecked),
+			mutate: func(event *Event) {
+				event.Dropped[0].Reason = "unknown"
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSessionEventEncodeAndDecodeRejection(
+				t,
+				tc.event,
+				tc.mutate,
+				`backupplan: unsupported item reason "unknown"`,
+			)
+		})
+	}
+}
+
+func TestSessionDivergenceExtraSnapshotsValidation(t *testing.T) {
+	cases := []struct {
+		name   string
+		extras []string
+		want   string
+	}{
+		{
+			name:   "canonical",
+			extras: []string{strings.ToLower(testSnapshot)},
+			want: `backupplan: snapshot "or3giyr2gm3tambxga.g7": snapshot name ` +
+				`"or3giyr2gm3tambxga.g7" has invalid base32 metadataRef: ` +
+				"illegal base32 data at input byte 0",
+		},
+		{
+			name:   "duplicate",
+			extras: []string{testSnapshot, testSnapshot},
+			want:   `backupplan: duplicate snapshot "OR3GIYR2GM3TAMBXGA.g7"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertSessionEventEncodeAndDecodeRejection(
+				t,
+				validEvent(EventDivergenceChecked),
+				func(event *Event) { event.ExtraSnapshots = tc.extras },
+				tc.want,
+			)
+		})
+	}
+}
+
 func TestSessionEventRequiredFieldsByType(t *testing.T) {
 	cases := []struct {
 		eventType EventType
@@ -1015,6 +1112,8 @@ func TestSessionEventRequiredFieldsByType(t *testing.T) {
 			"backupplan: reason is required"},
 		{EventEncryptionVerified, func(event *Event) { event.PlanID = "" },
 			"backupplan: planID is required"},
+		{EventSnapshotSwept, func(event *Event) { event.Entry = "" },
+			"backupplan: entry is required"},
 		{EventDivergenceChecked, func(event *Event) { event.Result = "" },
 			"backupplan: result is required"},
 		{EventFreshnessChecked, func(event *Event) { event.PlanID = "" },
@@ -1063,6 +1162,7 @@ func TestSessionEventForbiddenFieldsByType(t *testing.T) {
 		{EventPlanFailed, "path", func(event *Event) { event.Path = "file.mkv" }},
 		{EventPlanCancelled, "path", func(event *Event) { event.Path = "file.mkv" }},
 		{EventEncryptionVerified, "path", func(event *Event) { event.Path = "file.mkv" }},
+		{EventSnapshotSwept, "planId", func(event *Event) { event.PlanID = testPlanID }},
 		{EventDivergenceChecked, "path", func(event *Event) { event.Path = "file.mkv" }},
 		{EventFreshnessChecked, "path", func(event *Event) { event.Path = "file.mkv" }},
 		{EventItemStarted, "snapshot", func(event *Event) { event.Snapshot = testSnapshot }},
@@ -1121,6 +1221,52 @@ func TestSessionDecodeRejectsEveryForbiddenFieldAsNull(t *testing.T) {
 	)
 }
 
+func TestSessionDecodeRejectsDuplicateCaseFoldedEventFields(t *testing.T) {
+	for _, event := range allDurableEvents() {
+		data, err := json.Marshal(toEventWire(event))
+		if err != nil {
+			t.Fatalf("Marshal %s event: %v", event.Type, err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(data, &fields); err != nil {
+			t.Fatalf("Unmarshal %s event: %v", event.Type, err)
+		}
+		for name, value := range fields {
+			for _, nullFirst := range []bool{false, true} {
+				order := "null_last"
+				if nullFirst {
+					order = "null_first"
+				}
+				t.Run(string(event.Type)+"/"+name+"/"+order, func(t *testing.T) {
+					eventFields := make(map[string]json.RawMessage, len(fields)-1)
+					for fieldName, fieldValue := range fields {
+						if fieldName != name {
+							eventFields[fieldName] = fieldValue
+						}
+					}
+					eventData := jsonObjectWithDuplicateFoldedField(
+						t,
+						eventFields,
+						name,
+						value,
+						nullFirst,
+					)
+
+					_, err := readSessionEventLines(t, eventData)
+					first := strings.ToUpper(name[:1]) + name[1:]
+					want := fmt.Sprintf(
+						"backupplan: session line 2: duplicate case-folded JSON fields at %s: %q and %q",
+						name,
+						first,
+						name,
+					)
+					assertExactError(t, err, want)
+				})
+			}
+		}
+	}
+}
+
 func testSessionDecodeRejectsEveryForbiddenField(
 	t *testing.T,
 	variant string,
@@ -1164,7 +1310,7 @@ func testSessionDecodeRejectsEveryForbiddenField(
 			})
 		}
 	}
-	const wantCases = 273
+	const wantCases = 326
 	if tested != wantCases {
 		t.Fatalf("forbidden zero-value cases = %d, want %d", tested, wantCases)
 	}
@@ -1669,6 +1815,7 @@ func allDurableEvents() []Event {
 		EventPlanFailed,
 		EventPlanCancelled,
 		EventEncryptionVerified,
+		EventSnapshotSwept,
 		EventDivergenceChecked,
 		EventFreshnessChecked,
 		EventItemStarted,
@@ -1707,9 +1854,13 @@ func allDurableEvents() []Event {
 			event.PlanID = testPlanID
 			event.Reason = "cancelled"
 			event.Detail = "operator requested cancellation"
+		case EventSnapshotSwept:
+			event.Entry = "broken-entry"
+			event.Reason = "unparseable_name"
 		case EventDivergenceChecked:
 			event.PlanID = testPlanID
 			event.Result = "match"
+			event.ExtraSnapshots = []string{testSnapshot}
 		case EventFreshnessChecked:
 			event.PlanID = testPlanID
 			event.Dropped = []DroppedItem{{
@@ -1762,6 +1913,21 @@ func validEvent(eventType EventType) Event {
 		}
 	}
 	panic("missing valid event fixture for " + string(eventType))
+}
+
+func validItemReasons() []ItemReason {
+	return []ItemReason{
+		ReasonPayloadDrift,
+		ReasonClaimStale,
+		ReasonInsufficientSpace,
+		ReasonChecksumMismatch,
+		ReasonAlreadyPresent,
+		ReasonUnsupportedFileType,
+		ReasonSeriesMoved,
+		ReasonSeriesRootMissing,
+		ReasonStagedIntent,
+		ReasonWriteFailed,
+	}
 }
 
 func assertSessionEventEncodeAndDecodeRejection(

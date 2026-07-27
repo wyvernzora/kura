@@ -47,7 +47,7 @@ type Writer struct {
 // Manifest records one archived series generation.
 type Manifest struct {
 	MetadataRef string
-	Title       string
+	RootPath    string
 	Generation  int
 	CapturedAt  time.Time
 	WrittenBy   Writer
@@ -58,7 +58,7 @@ type Manifest struct {
 type manifestWire struct {
 	SchemaVersion int        `json:"schemaVersion"`
 	MetadataRef   string     `json:"metadataRef"`
-	Title         string     `json:"title"`
+	RootPath      string     `json:"rootPath"`
 	Generation    int        `json:"generation"`
 	CapturedAt    string     `json:"capturedAt"`
 	WrittenBy     writerWire `json:"writtenBy"`
@@ -269,14 +269,8 @@ func validateManifest(snapshotDir string, manifest Manifest) error {
 }
 
 func validateManifestMetadata(manifest Manifest) error {
-	if manifest.Title == "" {
-		return errors.New("tapemanifest: title is required")
-	}
-	if !utf8.ValidString(manifest.Title) {
-		return errors.New("tapemanifest: title must be valid UTF-8")
-	}
-	if !norm.NFC.IsNormalString(manifest.Title) {
-		return errors.New("tapemanifest: title must be NFC-normalized")
+	if err := validatePath("rootPath", manifest.RootPath); err != nil {
+		return err
 	}
 	if manifest.CapturedAt.IsZero() {
 		return errors.New("tapemanifest: capturedAt is required")
@@ -323,7 +317,7 @@ func validateSnapshotName(snapshotDir string, manifest Manifest) error {
 func validateFiles(files []File) error {
 	var previous string
 	for i, file := range files {
-		if err := validatePath(file.Path); err != nil {
+		if err := validatePath("file path", file.Path); err != nil {
 			return err
 		}
 		if i > 0 {
@@ -361,32 +355,33 @@ func validateFiles(files []File) error {
 	return nil
 }
 
-func validatePath(filePath string) error {
+func validatePath(field, filePath string) error {
 	if filePath == "" {
-		return errors.New("tapemanifest: file path is required")
+		return fmt.Errorf("tapemanifest: %s is required", field)
 	}
 	if !utf8.ValidString(filePath) {
-		return fmt.Errorf("tapemanifest: file path %q is not valid UTF-8", filePath)
+		return fmt.Errorf("tapemanifest: %s %q is not valid UTF-8", field, filePath)
 	}
 	if strings.ContainsAny(filePath, "\x00\n") {
 		return fmt.Errorf(
-			"tapemanifest: file path %q must not contain NUL or newline",
+			"tapemanifest: %s %q must not contain NUL or newline",
+			field,
 			filePath,
 		)
 	}
 	if path.IsAbs(filePath) {
-		return fmt.Errorf("tapemanifest: file path %q must be relative", filePath)
+		return fmt.Errorf("tapemanifest: %s %q must be relative", field, filePath)
 	}
 	for part := range strings.SplitSeq(filePath, "/") {
 		if part == ".." {
-			return fmt.Errorf("tapemanifest: file path %q must not contain ..", filePath)
+			return fmt.Errorf("tapemanifest: %s %q must not contain ..", field, filePath)
 		}
 	}
 	if path.Clean(filePath) != filePath || filePath == "." {
-		return fmt.Errorf("tapemanifest: file path %q is not canonical", filePath)
+		return fmt.Errorf("tapemanifest: %s %q is not canonical", field, filePath)
 	}
 	if !norm.NFC.IsNormalString(filePath) {
-		return fmt.Errorf("tapemanifest: file path %q must be NFC-normalized", filePath)
+		return fmt.Errorf("tapemanifest: %s %q must be NFC-normalized", field, filePath)
 	}
 	return nil
 }
@@ -432,7 +427,7 @@ func toWire(manifest Manifest) manifestWire {
 	return manifestWire{
 		SchemaVersion: schemaVersion,
 		MetadataRef:   manifest.MetadataRef,
-		Title:         manifest.Title,
+		RootPath:      manifest.RootPath,
 		Generation:    manifest.Generation,
 		CapturedAt:    manifest.CapturedAt.UTC().Format(time.RFC3339),
 		WrittenBy: writerWire{
@@ -472,7 +467,7 @@ func fromWire(wire manifestWire) (Manifest, error) {
 	}
 	return Manifest{
 		MetadataRef: wire.MetadataRef,
-		Title:       wire.Title,
+		RootPath:    wire.RootPath,
 		Generation:  wire.Generation,
 		CapturedAt:  capturedAt,
 		WrittenBy: Writer{

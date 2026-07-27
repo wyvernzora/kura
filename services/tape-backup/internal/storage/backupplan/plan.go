@@ -6,14 +6,16 @@
 package backupplan
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
+	"path"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -23,18 +25,23 @@ import (
 	"github.com/wyvernzora/kura/services/tape-backup/internal/snapshotname"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
+	"golang.org/x/text/unicode/norm"
 )
 
 const schemaVersion = 1
 
-// PlanType is the closed plan operation vocabulary.
-type PlanType string
+// ActionType is the closed plan action vocabulary.
+type ActionType string
 
 const (
-	PlanTypeAdmit  PlanType = "admit"
-	PlanTypeBackup PlanType = "backup"
-	PlanTypeImport PlanType = "import"
-	PlanTypeVerify PlanType = "verify"
+	ActionBackup          ActionType = "backup"
+	ActionAssertVolume    ActionType = "assert_volume"
+	ActionAssertInventory ActionType = "assert_inventory"
+	ActionAssertFreeSpace ActionType = "assert_free_space"
+	ActionAdmit           ActionType = "admit"
+	ActionReformat        ActionType = "reformat"
+	ActionImport          ActionType = "import"
+	ActionVerify          ActionType = "verify"
 )
 
 type planState string
@@ -53,41 +60,39 @@ type Creator struct {
 	Host    string
 }
 
-// Target pins the intended archive volume and its observed inventory.
+// Target identifies the cartridge label the operator should load.
 type Target struct {
-	VolumeID          volume.ID
-	TapeID            tape.ID
-	RequiredFreeBytes int64
-	ExpectedSnapshots []string
+	TapeID tape.ID
 }
 
-// Item pins one series generation for execution.
-type Item struct {
+// Action is one ordered operation or assertion against the loaded cartridge.
+type Action struct {
+	Type               ActionType
 	MetadataRef        string
-	Title              string
+	RootPath           string
 	Generation         int
 	PayloadFingerprint string
 	Bytes              int64
+	VolumeID           volume.ID
+	Snapshots          []string
 }
 
-// Plan is immutable intent for one archive volume.
+// Plan is immutable ordered intent for one cartridge.
 type Plan struct {
 	PlanID    string
-	Type      PlanType
 	CreatedAt time.Time
 	CreatedBy Creator
 	Target    Target
-	Items     []Item
+	Actions   []Action
 }
 
 type planWire struct {
-	SchemaVersion int         `json:"schemaVersion"`
-	PlanID        string      `json:"planID"`
-	Type          PlanType    `json:"type"`
-	CreatedAt     string      `json:"createdAt"`
-	CreatedBy     creatorWire `json:"createdBy"`
-	Target        targetWire  `json:"target"`
-	Items         []itemWire  `json:"items"`
+	SchemaVersion int          `json:"schemaVersion"`
+	PlanID        string       `json:"planID"`
+	CreatedAt     string       `json:"createdAt"`
+	CreatedBy     creatorWire  `json:"createdBy"`
+	Target        targetWire   `json:"target"`
+	Actions       []actionWire `json:"actions"`
 }
 
 type creatorWire struct {
@@ -96,18 +101,34 @@ type creatorWire struct {
 }
 
 type targetWire struct {
-	VolumeID          string   `json:"volumeID"`
-	TapeID            string   `json:"tapeID"`
-	RequiredFreeBytes int64    `json:"requiredFreeBytes"`
-	ExpectedSnapshots []string `json:"expectedSnapshots"`
+	TapeID string `json:"tapeID"`
 }
 
-type itemWire struct {
-	MetadataRef        string `json:"metadataRef"`
-	Title              string `json:"title"`
-	Generation         int    `json:"generation"`
-	PayloadFingerprint string `json:"payloadFingerprint"`
-	Bytes              int64  `json:"bytes"`
+type actionWire struct {
+	Type               ActionType `json:"type"`
+	MetadataRef        *string    `json:"metadataRef,omitempty"`
+	RootPath           *string    `json:"rootPath,omitempty"`
+	Generation         *int       `json:"generation,omitempty"`
+	PayloadFingerprint *string    `json:"payloadFingerprint,omitempty"`
+	Bytes              *int64     `json:"bytes,omitempty"`
+	VolumeID           *string    `json:"volumeID,omitempty"`
+	Snapshots          *[]string  `json:"snapshots,omitempty"`
+	present            map[string]json.RawMessage
+}
+
+func (wire *actionWire) UnmarshalJSON(data []byte) error {
+	type plain actionWire
+	var decoded plain
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var present map[string]json.RawMessage
+	if err := json.Unmarshal(data, &present); err != nil {
+		return err
+	}
+	*wire = actionWire(decoded)
+	wire.present = present
+	return nil
 }
 
 // Draft validates and writes a new immutable draft plan.
@@ -118,14 +139,14 @@ func Draft(stateRoot string, plan Plan) error {
 	if err := validateDraftPreconditions(stateRoot, plan); err != nil {
 		return err
 	}
-	existingPlanID, err := livePlanForVolume(stateRoot, plan.Target.VolumeID)
+	existingPlanID, err := livePlanForTape(stateRoot, plan.Target.TapeID)
 	if err != nil {
 		return fmt.Errorf("backupplan: draft plan %s: %w", plan.PlanID, err)
 	}
 	if existingPlanID != "" {
 		return fmt.Errorf(
-			"backupplan: volume %s already has live plan %s",
-			plan.Target.VolumeID,
+			"backupplan: tape %s already has live plan %s",
+			plan.Target.TapeID,
 			existingPlanID,
 		)
 	}
@@ -385,7 +406,7 @@ func ensureOnlyPlanState(stateRoot, planID string, expected planState) error {
 	return nil
 }
 
-func livePlanForVolume(stateRoot string, volumeID volume.ID) (string, error) {
+func livePlanForTape(stateRoot string, tapeID tape.ID) (string, error) {
 	for _, state := range []planState{stateDraft, stateReady} {
 		entries, err := os.ReadDir(planStateDir(stateRoot, state))
 		if errors.Is(err, os.ErrNotExist) {
@@ -412,7 +433,7 @@ func livePlanForVolume(stateRoot string, volumeID volume.ID) (string, error) {
 					err,
 				)
 			}
-			if plan.Target.VolumeID == volumeID {
+			if plan.Target.TapeID == tapeID {
 				return plan.PlanID, nil
 			}
 		}
@@ -434,6 +455,9 @@ func decodePlan(data []byte, filenamePlanID string) (Plan, error) {
 	}
 	var wire planWire
 	if err := json.Unmarshal(data, &wire); err != nil {
+		return Plan{}, fmt.Errorf("backupplan: decode plan %s: %w", filenamePlanID, err)
+	}
+	if err := rejectDuplicateFoldedJSONFields(data); err != nil {
 		return Plan{}, fmt.Errorf("backupplan: decode plan %s: %w", filenamePlanID, err)
 	}
 	if wire.SchemaVersion != schemaVersion {
@@ -466,21 +490,12 @@ func validatePlan(plan Plan) error {
 	if err := validateTarget(plan.Target); err != nil {
 		return err
 	}
-	return validateItems(
-		plan.Target.RequiredFreeBytes,
-		plan.Target.ExpectedSnapshots,
-		plan.Items,
-	)
+	return validateActions(plan.Actions)
 }
 
 func validatePlanMetadata(plan Plan) error {
 	if err := validateULID("planID", plan.PlanID); err != nil {
 		return fmt.Errorf("backupplan: %w", err)
-	}
-	switch plan.Type {
-	case PlanTypeAdmit, PlanTypeBackup, PlanTypeImport, PlanTypeVerify:
-	default:
-		return fmt.Errorf("backupplan: unsupported plan type %q", plan.Type)
 	}
 	if err := validateTime("createdAt", plan.CreatedAt); err != nil {
 		return err
@@ -495,104 +510,179 @@ func validatePlanMetadata(plan Plan) error {
 }
 
 func validateTarget(target Target) error {
-	if _, err := volume.ParseID(string(target.VolumeID)); err != nil {
-		return fmt.Errorf("backupplan: %w", err)
-	}
 	if _, err := tape.ParseID(string(target.TapeID)); err != nil {
 		return fmt.Errorf("backupplan: %w", err)
 	}
-	if target.RequiredFreeBytes < 0 {
-		return errors.New("backupplan: requiredFreeBytes must not be negative")
-	}
-	names := make(map[string]struct{}, len(target.ExpectedSnapshots))
-	for _, name := range target.ExpectedSnapshots {
-		if _, _, err := snapshotname.Parse(name); err != nil {
-			return fmt.Errorf("backupplan: expected snapshot %q: %w", name, err)
-		}
-		if _, exists := names[name]; exists {
-			return fmt.Errorf("backupplan: duplicate expected snapshot %q", name)
-		}
-		names[name] = struct{}{}
-	}
 	return nil
 }
 
-func validateItems(
-	requiredFreeBytes int64,
-	expectedSnapshots []string,
-	items []Item,
-) error {
-	if len(items) == 0 {
-		return errors.New("backupplan: items must contain at least one item")
+func validateActions(actions []Action) error {
+	if len(actions) == 0 {
+		return errors.New("backupplan: actions must contain at least one action")
 	}
 
-	expected := make(map[string]struct{}, len(expectedSnapshots))
-	for _, name := range expectedSnapshots {
-		expected[name] = struct{}{}
-	}
-	keys := make(map[string]struct{}, len(items))
-	var itemBytes int64
-	for _, item := range items {
-		snapshot, err := validateItem(item)
-		if err != nil {
+	backupKeys := make(map[string]struct{}, len(actions))
+	for _, action := range actions {
+		if err := validateAction(action); err != nil {
 			return err
 		}
-		if _, exists := expected[snapshot]; exists {
+		if action.Type != ActionBackup {
+			continue
+		}
+		key := action.MetadataRef + "\x00" + fmt.Sprint(action.Generation)
+		if _, exists := backupKeys[key]; exists {
 			return fmt.Errorf(
-				"backupplan: item (%q, %d) snapshot %q already exists on target",
-				item.MetadataRef,
-				item.Generation,
-				snapshot,
+				"backupplan: duplicate backup action (%q, %d)",
+				action.MetadataRef,
+				action.Generation,
 			)
 		}
-		if item.Bytes > math.MaxInt64-itemBytes {
-			return errors.New("backupplan: requiredFreeBytes overflow")
-		}
-		itemBytes += item.Bytes
-		key := item.MetadataRef + "\x00" + fmt.Sprint(item.Generation)
-		if _, exists := keys[key]; exists {
-			return fmt.Errorf(
-				"backupplan: duplicate item (%q, %d)",
-				item.MetadataRef,
-				item.Generation,
-			)
-		}
-		keys[key] = struct{}{}
-	}
-	if requiredFreeBytes != itemBytes {
-		return fmt.Errorf(
-			"backupplan: requiredFreeBytes is %d, want sum of item bytes %d",
-			requiredFreeBytes,
-			itemBytes,
-		)
+		backupKeys[key] = struct{}{}
 	}
 	return nil
 }
 
-func validateItem(item Item) (string, error) {
-	snapshot, err := snapshotname.Format(item.MetadataRef, item.Generation)
-	if err != nil {
-		return "", fmt.Errorf(
-			"backupplan: item (%q, %d): %w",
-			item.MetadataRef,
-			item.Generation,
+type actionFields uint16
+
+const (
+	actionFieldMetadataRef actionFields = 1 << iota
+	actionFieldRootPath
+	actionFieldGeneration
+	actionFieldPayloadFingerprint
+	actionFieldBytes
+	actionFieldVolumeID
+	actionFieldSnapshots
+)
+
+func validateAction(action Action) error {
+	var allowed actionFields
+	switch action.Type {
+	case ActionBackup:
+		allowed = actionFieldMetadataRef | actionFieldRootPath |
+			actionFieldGeneration | actionFieldPayloadFingerprint | actionFieldBytes
+		if err := validateBackupAction(action); err != nil {
+			return err
+		}
+	case ActionAssertVolume, ActionAdmit:
+		allowed = actionFieldVolumeID
+		if _, err := volume.ParseID(string(action.VolumeID)); err != nil {
+			return fmt.Errorf("backupplan: %w", err)
+		}
+	case ActionAssertInventory:
+		allowed = actionFieldSnapshots
+		if action.Snapshots == nil {
+			return errors.New("backupplan: snapshots is required")
+		}
+		if err := validateSnapshots(action.Snapshots); err != nil {
+			return err
+		}
+	case ActionAssertFreeSpace:
+		allowed = actionFieldBytes
+		if action.Bytes < 0 {
+			return errors.New("backupplan: assert_free_space bytes must not be negative")
+		}
+	case ActionReformat, ActionImport, ActionVerify:
+	default:
+		if action.Type == "" {
+			return errors.New("backupplan: action type is required")
+		}
+		return fmt.Errorf("backupplan: unsupported action type %q", action.Type)
+	}
+	return validateForbiddenActionFields(action, allowed)
+}
+
+func validateBackupAction(action Action) error {
+	if _, err := snapshotname.Format(action.MetadataRef, action.Generation); err != nil {
+		return fmt.Errorf(
+			"backupplan: backup action (%q, %d): %w",
+			action.MetadataRef,
+			action.Generation,
 			err,
 		)
 	}
-	if err := validateText("item title", item.Title); err != nil {
-		return "", err
+	if err := validateRelativePath("rootPath", action.RootPath); err != nil {
+		return err
 	}
-	if err := validateFingerprint(item.PayloadFingerprint); err != nil {
-		return "", err
+	if err := validateFingerprint(action.PayloadFingerprint); err != nil {
+		return err
 	}
-	if item.Bytes < 0 {
-		return "", fmt.Errorf(
-			"backupplan: bytes for (%q, %d) must not be negative",
-			item.MetadataRef,
-			item.Generation,
+	if action.Bytes < 0 {
+		return fmt.Errorf(
+			"backupplan: bytes for backup action (%q, %d) must not be negative",
+			action.MetadataRef,
+			action.Generation,
 		)
 	}
-	return snapshot, nil
+	return nil
+}
+
+func validateSnapshots(snapshots []string) error {
+	seen := make(map[string]struct{}, len(snapshots))
+	for _, name := range snapshots {
+		if _, _, err := snapshotname.Parse(name); err != nil {
+			return fmt.Errorf("backupplan: snapshot %q: %w", name, err)
+		}
+		if _, exists := seen[name]; exists {
+			return fmt.Errorf("backupplan: duplicate snapshot %q", name)
+		}
+		seen[name] = struct{}{}
+	}
+	return nil
+}
+
+func validateRelativePath(field, value string) error {
+	if value == "" {
+		return fmt.Errorf("backupplan: %s is required", field)
+	}
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("backupplan: %s %q is not valid UTF-8", field, value)
+	}
+	if strings.ContainsAny(value, "\x00\n") {
+		return fmt.Errorf(
+			"backupplan: %s %q must not contain NUL or newline",
+			field,
+			value,
+		)
+	}
+	if path.IsAbs(value) {
+		return fmt.Errorf("backupplan: %s %q must be relative", field, value)
+	}
+	for part := range strings.SplitSeq(value, "/") {
+		if part == ".." {
+			return fmt.Errorf("backupplan: %s %q must not contain ..", field, value)
+		}
+	}
+	if path.Clean(value) != value || value == "." {
+		return fmt.Errorf("backupplan: %s %q is not canonical", field, value)
+	}
+	if !norm.NFC.IsNormalString(value) {
+		return fmt.Errorf("backupplan: %s %q must be NFC-normalized", field, value)
+	}
+	return nil
+}
+
+func validateForbiddenActionFields(action Action, allowed actionFields) error {
+	value := reflect.ValueOf(action)
+	actionType := reflect.TypeFor[Action]()
+	for index := 1; index < actionType.NumField(); index++ {
+		field := actionType.Field(index)
+		if value.Field(index).IsZero() {
+			continue
+		}
+		mask := actionFields(1 << uint(index-1))
+		if allowed&mask == 0 {
+			return fmt.Errorf(
+				"backupplan: %s action must not contain %s",
+				action.Type,
+				actionFieldJSONName(field.Name),
+			)
+		}
+	}
+	return nil
+}
+
+func actionFieldJSONName(name string) string {
+	return strings.ToLower(name[:1]) + name[1:]
 }
 
 func validateULID(field, value string) error {
@@ -659,32 +749,22 @@ func validateFingerprint(value string) error {
 }
 
 func toWire(plan Plan) planWire {
-	items := make([]itemWire, 0, len(plan.Items))
-	for _, item := range plan.Items {
-		items = append(items, itemWire{
-			MetadataRef:        item.MetadataRef,
-			Title:              item.Title,
-			Generation:         item.Generation,
-			PayloadFingerprint: item.PayloadFingerprint,
-			Bytes:              item.Bytes,
-		})
+	actions := make([]actionWire, 0, len(plan.Actions))
+	for _, action := range plan.Actions {
+		actions = append(actions, toActionWire(action))
 	}
 	return planWire{
 		SchemaVersion: schemaVersion,
 		PlanID:        plan.PlanID,
-		Type:          plan.Type,
 		CreatedAt:     plan.CreatedAt.UTC().Format(time.RFC3339),
 		CreatedBy: creatorWire{
 			Version: plan.CreatedBy.Version,
 			Host:    plan.CreatedBy.Host,
 		},
 		Target: targetWire{
-			VolumeID:          string(plan.Target.VolumeID),
-			TapeID:            string(plan.Target.TapeID),
-			RequiredFreeBytes: plan.Target.RequiredFreeBytes,
-			ExpectedSnapshots: copyStrings(plan.Target.ExpectedSnapshots),
+			TapeID: string(plan.Target.TapeID),
 		},
-		Items: items,
+		Actions: actions,
 	}
 }
 
@@ -697,32 +777,231 @@ func fromWire(wire planWire) (Plan, error) {
 			return Plan{}, fmt.Errorf("backupplan: parse createdAt: %w", err)
 		}
 	}
-	items := make([]Item, 0, len(wire.Items))
-	for _, item := range wire.Items {
-		items = append(items, Item{
-			MetadataRef:        item.MetadataRef,
-			Title:              item.Title,
-			Generation:         item.Generation,
-			PayloadFingerprint: item.PayloadFingerprint,
-			Bytes:              item.Bytes,
-		})
+	actions := make([]Action, 0, len(wire.Actions))
+	for _, actionWire := range wire.Actions {
+		action, err := actionFromWire(actionWire)
+		if err != nil {
+			return Plan{}, err
+		}
+		actions = append(actions, action)
 	}
 	return Plan{
 		PlanID:    wire.PlanID,
-		Type:      wire.Type,
 		CreatedAt: createdAt,
 		CreatedBy: Creator{
 			Version: wire.CreatedBy.Version,
 			Host:    wire.CreatedBy.Host,
 		},
 		Target: Target{
-			VolumeID:          volume.ID(wire.Target.VolumeID),
-			TapeID:            tape.ID(wire.Target.TapeID),
-			RequiredFreeBytes: wire.Target.RequiredFreeBytes,
-			ExpectedSnapshots: copyStrings(wire.Target.ExpectedSnapshots),
+			TapeID: tape.ID(wire.Target.TapeID),
 		},
-		Items: items,
+		Actions: actions,
 	}, nil
+}
+
+func toActionWire(action Action) actionWire {
+	wire := actionWire{Type: action.Type}
+	switch action.Type {
+	case ActionBackup:
+		wire.MetadataRef = pointer(action.MetadataRef)
+		wire.RootPath = pointer(action.RootPath)
+		wire.Generation = pointer(action.Generation)
+		wire.PayloadFingerprint = pointer(action.PayloadFingerprint)
+		wire.Bytes = pointer(action.Bytes)
+	case ActionAssertVolume, ActionAdmit:
+		wire.VolumeID = pointer(string(action.VolumeID))
+	case ActionAssertInventory:
+		snapshots := copyStrings(action.Snapshots)
+		if snapshots == nil {
+			snapshots = []string{}
+		}
+		wire.Snapshots = &snapshots
+	case ActionAssertFreeSpace:
+		wire.Bytes = pointer(action.Bytes)
+	}
+	return wire
+}
+
+func actionFromWire(wire actionWire) (Action, error) {
+	allowed, required, err := actionWireRule(wire.Type)
+	if err != nil {
+		return Action{}, err
+	}
+	for _, field := range actionWireFields() {
+		raw, present := actionWireField(wire.present, field.name)
+		if allowed&field.mask == 0 {
+			if present {
+				return Action{}, fmt.Errorf(
+					"backupplan: %s action must not contain %s",
+					wire.Type,
+					field.name,
+				)
+			}
+			continue
+		}
+		if required&field.mask != 0 && (!present || bytes.Equal(raw, []byte("null"))) {
+			return Action{}, fmt.Errorf(
+				"backupplan: %s action requires %s",
+				wire.Type,
+				field.name,
+			)
+		}
+	}
+	return actionFromWireValues(wire), nil
+}
+
+func actionFromWireValues(wire actionWire) Action {
+	action := Action{Type: wire.Type}
+	if wire.MetadataRef != nil {
+		action.MetadataRef = *wire.MetadataRef
+	}
+	if wire.RootPath != nil {
+		action.RootPath = *wire.RootPath
+	}
+	if wire.Generation != nil {
+		action.Generation = *wire.Generation
+	}
+	if wire.PayloadFingerprint != nil {
+		action.PayloadFingerprint = *wire.PayloadFingerprint
+	}
+	if wire.Bytes != nil {
+		action.Bytes = *wire.Bytes
+	}
+	if wire.VolumeID != nil {
+		action.VolumeID = volume.ID(*wire.VolumeID)
+	}
+	if wire.Snapshots != nil {
+		action.Snapshots = copyStrings(*wire.Snapshots)
+		if action.Snapshots == nil {
+			action.Snapshots = []string{}
+		}
+	}
+	return action
+}
+
+type actionWireFieldSpec struct {
+	name string
+	mask actionFields
+}
+
+func actionWireFields() []actionWireFieldSpec {
+	return []actionWireFieldSpec{
+		{name: "metadataRef", mask: actionFieldMetadataRef},
+		{name: "rootPath", mask: actionFieldRootPath},
+		{name: "generation", mask: actionFieldGeneration},
+		{name: "payloadFingerprint", mask: actionFieldPayloadFingerprint},
+		{name: "bytes", mask: actionFieldBytes},
+		{name: "volumeID", mask: actionFieldVolumeID},
+		{name: "snapshots", mask: actionFieldSnapshots},
+	}
+}
+
+func actionWireRule(actionType ActionType) (allowed, required actionFields, err error) {
+	switch actionType {
+	case ActionBackup:
+		allowed = actionFieldMetadataRef | actionFieldRootPath |
+			actionFieldGeneration | actionFieldPayloadFingerprint | actionFieldBytes
+		required = allowed
+	case ActionAssertVolume, ActionAdmit:
+		allowed = actionFieldVolumeID
+		required = allowed
+	case ActionAssertInventory:
+		allowed = actionFieldSnapshots
+		required = allowed
+	case ActionAssertFreeSpace:
+		allowed = actionFieldBytes
+		required = allowed
+	case ActionReformat, ActionImport, ActionVerify:
+	default:
+		if actionType == "" {
+			return 0, 0, errors.New("backupplan: action type is required")
+		}
+		return 0, 0, fmt.Errorf("backupplan: unsupported action type %q", actionType)
+	}
+	return allowed, required, nil
+}
+
+func actionWireField(
+	fields map[string]json.RawMessage,
+	name string,
+) (json.RawMessage, bool) {
+	for key, value := range fields {
+		if strings.EqualFold(key, name) {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func rejectDuplicateFoldedJSONFields(data []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	return rejectDuplicateFoldedJSONValue(decoder, "")
+}
+
+func rejectDuplicateFoldedJSONValue(decoder *json.Decoder, fieldPath string) error {
+	token, _ := decoder.Token()
+	if token == json.Delim('[') {
+		for index := 0; decoder.More(); index++ {
+			arrayPath := fmt.Sprintf("%s[%d]", fieldPath, index)
+			if err := rejectDuplicateFoldedJSONValue(decoder, arrayPath); err != nil {
+				return err
+			}
+		}
+		_, _ = decoder.Token()
+		return nil
+	}
+	if token != json.Delim('{') {
+		return nil
+	}
+
+	keys := make([]string, 0)
+	for decoder.More() {
+		token, _ := decoder.Token()
+		key, isObjectKey := token.(string)
+		if !isObjectKey {
+			// Every caller decodes the document before scanning it, so this is
+			// unreachable today. It reports rather than returning nil because
+			// the scan stops here: the keys after this point go unexamined, and
+			// claiming a document holds no duplicate would be a lie a later
+			// caller could act on.
+			return fmt.Errorf(
+				"malformed JSON object key at %s",
+				jsonFieldPath(fieldPath, "?"),
+			)
+		}
+		for _, previous := range keys {
+			if !strings.EqualFold(previous, key) {
+				continue
+			}
+			first, second := previous, key
+			if second < first {
+				first, second = second, first
+			}
+			return fmt.Errorf(
+				"duplicate case-folded JSON fields at %s: %q and %q",
+				jsonFieldPath(fieldPath, second),
+				first,
+				second,
+			)
+		}
+		keys = append(keys, key)
+		if err := rejectDuplicateFoldedJSONValue(decoder, jsonFieldPath(fieldPath, key)); err != nil {
+			return err
+		}
+	}
+	_, _ = decoder.Token()
+	return nil
+}
+
+func jsonFieldPath(parent, field string) string {
+	if parent == "" {
+		return field
+	}
+	return parent + "." + field
+}
+
+func pointer[T any](value T) *T {
+	return &value
 }
 
 func regularFileExists(path string) (bool, error) {

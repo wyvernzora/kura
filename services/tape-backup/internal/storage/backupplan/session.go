@@ -33,6 +33,7 @@ const (
 	EventPlanFailed         EventType = "plan_failed"
 	EventPlanCancelled      EventType = "plan_cancelled"
 	EventEncryptionVerified EventType = "encryption_verified"
+	EventSnapshotSwept      EventType = "snapshot_swept"
 	EventDivergenceChecked  EventType = "divergence_checked"
 	EventFreshnessChecked   EventType = "freshness_checked"
 	EventItemStarted        EventType = "item_started"
@@ -46,6 +47,23 @@ const (
 )
 
 const eventFileProgress EventType = "file_progress"
+
+// ItemReason is the closed reason vocabulary for item failures, freshness
+// drops, and item skips.
+type ItemReason string
+
+const (
+	ReasonPayloadDrift        ItemReason = "payload_drift"
+	ReasonClaimStale          ItemReason = "claim_stale"
+	ReasonInsufficientSpace   ItemReason = "insufficient_space"
+	ReasonChecksumMismatch    ItemReason = "checksum_mismatch"
+	ReasonAlreadyPresent      ItemReason = "already_present"
+	ReasonUnsupportedFileType ItemReason = "unsupported_file_type"
+	ReasonSeriesMoved         ItemReason = "series_moved"
+	ReasonSeriesRootMissing   ItemReason = "series_root_missing"
+	ReasonStagedIntent        ItemReason = "staged_intent"
+	ReasonWriteFailed         ItemReason = "write_failed"
+)
 
 // ErrSessionTerminal reports an append attempted after the terminal event.
 var ErrSessionTerminal = errors.New("backupplan: append after terminal event")
@@ -75,12 +93,14 @@ type Event struct {
 	TapeID         tape.ID
 	VolumeID       volume.ID
 	Result         string
+	ExtraSnapshots []string
 	Dropped        []DroppedItem
 	MetadataRef    string
 	Generation     int
 	Bytes          int64
 	Files          int
 	Path           string
+	Entry          string
 	Snapshot       string
 	ItemsWritten   int
 	ItemsFailed    int
@@ -122,12 +142,14 @@ type eventWire struct {
 	TapeID         string            `json:"tapeId,omitempty"`
 	VolumeID       string            `json:"volumeId,omitempty"`
 	Result         string            `json:"result,omitempty"`
+	ExtraSnapshots []string          `json:"extraSnapshots,omitempty"`
 	Dropped        []droppedItemWire `json:"dropped,omitempty"`
 	MetadataRef    string            `json:"metadataRef,omitempty"`
 	Generation     int               `json:"generation,omitempty"`
 	Bytes          int64             `json:"bytes,omitempty"`
 	Files          int               `json:"files,omitempty"`
 	Path           string            `json:"path,omitempty"`
+	Entry          string            `json:"entry,omitempty"`
 	Snapshot       string            `json:"snapshot,omitempty"`
 	ItemsWritten   int               `json:"itemsWritten,omitempty"`
 	ItemsFailed    int               `json:"itemsFailed,omitempty"`
@@ -477,6 +499,9 @@ func consumeSessionLine(
 	session *Session,
 	headerSeen *bool,
 ) (*Event, error) {
+	if err := rejectDuplicateFoldedJSONFields(line); err != nil {
+		return nil, fmt.Errorf("backupplan: session line %d: %w", lineNumber, err)
+	}
 	if probe.Type != "header" && probe.SchemaVersion != nil {
 		return nil, errors.New(
 			"backupplan: schemaVersion is only allowed in the session header",
@@ -604,12 +629,14 @@ const (
 	fieldTapeID
 	fieldVolumeID
 	fieldResult
+	fieldExtraSnapshots
 	fieldDropped
 	fieldMetadataRef
 	fieldGeneration
 	fieldBytes
 	fieldFiles
 	fieldPath
+	fieldEntry
 	fieldSnapshot
 	fieldItemsWritten
 	fieldItemsFailed
@@ -659,8 +686,12 @@ var eventRules = map[EventType]eventRule{
 		allowed:  fieldPlanID,
 		validate: validatePlanIDEvent,
 	},
+	EventSnapshotSwept: {
+		allowed:  fieldEntry | fieldReason,
+		validate: validateSnapshotSwept,
+	},
 	EventDivergenceChecked: {
-		allowed:  fieldPlanID | fieldResult,
+		allowed:  fieldPlanID | fieldResult | fieldExtraSnapshots,
 		validate: validateDivergenceChecked,
 	},
 	EventFreshnessChecked: {
@@ -775,7 +806,17 @@ func validateDivergenceChecked(event Event) error {
 	if err := validateEventPlanID(event.PlanID); err != nil {
 		return err
 	}
-	return validateText("result", event.Result)
+	if err := validateText("result", event.Result); err != nil {
+		return err
+	}
+	return validateSnapshots(event.ExtraSnapshots)
+}
+
+func validateSnapshotSwept(event Event) error {
+	if err := validateText("entry", event.Entry); err != nil {
+		return err
+	}
+	return validateText("reason", event.Reason)
 }
 
 func validateFreshnessChecked(event Event) error {
@@ -791,7 +832,7 @@ func validateFreshnessChecked(event Event) error {
 				err,
 			)
 		}
-		if err := validateText("dropped item reason", item.Reason); err != nil {
+		if err := validateItemReason("dropped item reason", item.Reason); err != nil {
 			return err
 		}
 	}
@@ -830,10 +871,31 @@ func validateItemFailure(event Event) error {
 	if err := validateEventItem(event); err != nil {
 		return err
 	}
-	if err := validateText("reason", event.Reason); err != nil {
+	if err := validateItemReason("reason", event.Reason); err != nil {
 		return err
 	}
 	return validateOptionalText("detail", event.Detail)
+}
+
+func validateItemReason(field, reason string) error {
+	if err := validateText(field, reason); err != nil {
+		return err
+	}
+	switch ItemReason(reason) {
+	case ReasonPayloadDrift,
+		ReasonClaimStale,
+		ReasonInsufficientSpace,
+		ReasonChecksumMismatch,
+		ReasonAlreadyPresent,
+		ReasonUnsupportedFileType,
+		ReasonSeriesMoved,
+		ReasonSeriesRootMissing,
+		ReasonStagedIntent,
+		ReasonWriteFailed:
+		return nil
+	default:
+		return fmt.Errorf("backupplan: unsupported item reason %q", reason)
+	}
 }
 
 func validateEventItem(event Event) error {
@@ -1020,12 +1082,14 @@ func toEventWire(event Event) eventWire {
 		TapeID:         string(event.TapeID),
 		VolumeID:       string(event.VolumeID),
 		Result:         event.Result,
+		ExtraSnapshots: copyStrings(event.ExtraSnapshots),
 		Dropped:        dropped,
 		MetadataRef:    event.MetadataRef,
 		Generation:     event.Generation,
 		Bytes:          event.Bytes,
 		Files:          event.Files,
 		Path:           event.Path,
+		Entry:          event.Entry,
 		Snapshot:       event.Snapshot,
 		ItemsWritten:   event.ItemsWritten,
 		ItemsFailed:    event.ItemsFailed,
@@ -1072,12 +1136,14 @@ func eventFromWire(wire eventWire) (Event, error) {
 		TapeID:         tape.ID(wire.TapeID),
 		VolumeID:       volume.ID(wire.VolumeID),
 		Result:         wire.Result,
+		ExtraSnapshots: copyStrings(wire.ExtraSnapshots),
 		Dropped:        dropped,
 		MetadataRef:    wire.MetadataRef,
 		Generation:     wire.Generation,
 		Bytes:          wire.Bytes,
 		Files:          wire.Files,
 		Path:           wire.Path,
+		Entry:          wire.Entry,
 		Snapshot:       wire.Snapshot,
 		ItemsWritten:   wire.ItemsWritten,
 		ItemsFailed:    wire.ItemsFailed,

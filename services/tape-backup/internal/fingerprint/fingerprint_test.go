@@ -233,6 +233,78 @@ func TestCompute(t *testing.T) {
 	}
 }
 
+func TestExcludingKuraScopesMatchForWalkAndEntries(t *testing.T) {
+	root := t.TempDir()
+	files := []struct {
+		path    string
+		content string
+		modTime time.Time
+	}{
+		{
+			path:    filepath.Join(".kura", "series.json"),
+			content: `{"generation":8}`,
+			modTime: time.Unix(10, 0),
+		},
+		{
+			path:    filepath.Join(".kura", "reconcile", "plan.jsonl"),
+			content: "ignored",
+			modTime: time.Unix(20, 0),
+		},
+		{
+			path:    filepath.Join("Season 1", "Show.mkv"),
+			content: "payload",
+			modTime: time.Unix(30, 0),
+		},
+		{
+			path:    filepath.Join("Season 1", ".kura", "kept.txt"),
+			content: "nested name is payload",
+			modTime: time.Unix(40, 0),
+		},
+	}
+	entries := make([]fingerprint.Entry, 0, len(files))
+	for _, file := range files {
+		fullPath := filepath.Join(root, file.path)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+			t.Fatalf("MkdirAll(%q): %v", file.path, err)
+		}
+		if err := os.WriteFile(fullPath, []byte(file.content), 0o644); err != nil {
+			t.Fatalf("WriteFile(%q): %v", file.path, err)
+		}
+		if err := os.Chtimes(fullPath, file.modTime, file.modTime); err != nil {
+			t.Fatalf("Chtimes(%q): %v", file.path, err)
+		}
+		entries = append(entries, fingerprint.Entry{
+			Path:    filepath.ToSlash(file.path),
+			Size:    int64(len(file.content)),
+			ModTime: file.modTime,
+		})
+	}
+
+	fromEntries, err := fingerprint.OfExcludingKura(entries)
+	if err != nil {
+		t.Fatalf("OfExcludingKura: %v", err)
+	}
+	fromWalk, err := fingerprint.ComputeExcludingKura(root)
+	if err != nil {
+		t.Fatalf("ComputeExcludingKura: %v", err)
+	}
+	if fromWalk != fromEntries {
+		t.Fatalf(
+			"ComputeExcludingKura = %q, want entries fingerprint %q",
+			fromWalk,
+			fromEntries,
+		)
+	}
+
+	want, err := fingerprint.Of(entries[2:])
+	if err != nil {
+		t.Fatalf("Of payload entries: %v", err)
+	}
+	if fromWalk != want {
+		t.Fatalf("excluding fingerprint = %q, want payload-only %q", fromWalk, want)
+	}
+}
+
 func TestComputeRejectsRegularFileRoot(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "series.mkv")
 	if err := os.WriteFile(root, []byte("content"), 0o644); err != nil {
