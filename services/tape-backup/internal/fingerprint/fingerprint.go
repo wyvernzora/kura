@@ -1,6 +1,6 @@
 // Package fingerprint computes the stat-level identity of an archived file
-// tree. It currently has no in-tree consumer; slice B will use it for
-// inventoryDigest, followed by slice C's plan gating.
+// tree. It currently has no in-tree consumer; the executor slice will use it
+// for inventoryDigest, followed by plan gating.
 package fingerprint
 
 import (
