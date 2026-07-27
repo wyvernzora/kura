@@ -8,6 +8,24 @@
 
 Notable release changes for Kura.
 
+## v0.6.1 - 2026-07-26
+
+### Highlights
+
+- Fixed the web UI image so Caddy starts under a hardened non-root,
+  no-new-privileges runtime with all Linux capabilities dropped.
+- Added explicit PostgreSQL schema configuration for the release indexer.
+  `database.schema` defaults to `releases` and applies consistently to
+  embedded Goose migrations and runtime queries.
+
+### Upgrade notes
+
+- Existing release-indexer installations using the `public` schema must move
+  their tables, Goose migration history, and `match_status` type into the
+  configured schema before starting v0.6.1. See
+  `services/release-indexer/docs/operations.md` for the migration procedure
+  and required role privileges.
+
 ## v0.6.0 - 2026-07-26
 
 First release of the kura suite as a monorepo. The library manager, release
