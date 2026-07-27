@@ -1,0 +1,7 @@
+{
+  "kind": "invalid_ref",
+  "message": "ref must be namespace:value",
+  "data": {
+    "ref": "not-a-ref"
+  }
+}

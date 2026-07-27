@@ -1,0 +1,8 @@
+{
+  "kind": "stale_lease",
+  "message": "claim token does not match the active lease",
+  "data": {
+    "claimToken": 1723,
+    "infohash": "0123456789abcdef0123456789abcdef01234567"
+  }
+}

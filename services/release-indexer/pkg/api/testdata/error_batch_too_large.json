@@ -1,0 +1,8 @@
+{
+  "kind": "batch_too_large",
+  "message": "too many posts in one batch",
+  "data": {
+    "limit": 1500,
+    "max": 1000
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "infohash": "0123456789abcdef0123456789abcdef01234567",
+      "ref": "tvdb:370070",
+      "title": "[Group] Example - 01",
+      "sizeBytes": null,
+      "publishedAt": "2026-07-27T12:34:56.123456Z",
+      "confidence": null,
+      "sources": []
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "kind": "server_not_ready",
+  "message": "service is still starting",
+  "data": {
+    "reason": "migrations in progress"
+  }
+}

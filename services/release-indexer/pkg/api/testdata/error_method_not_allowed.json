@@ -1,0 +1,9 @@
+{
+  "kind": "method_not_allowed",
+  "message": "method not allowed",
+  "data": {
+    "allowed": [
+      "GET"
+    ]
+  }
+}

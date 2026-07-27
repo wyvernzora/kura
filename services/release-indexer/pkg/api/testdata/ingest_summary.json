@@ -1,0 +1,14 @@
+{
+  "batch": {
+    "new": 3,
+    "updated": 1,
+    "duplicate": 12,
+    "conflict": 0,
+    "skipped": 2
+  },
+  "queue": {
+    "available": 15,
+    "leased": 2,
+    "exhausted": 1
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "infohash": "fedcba9876543210fedcba9876543210fedcba98",
+  "title": "[Group] Unknown - 01",
+  "magnet": null,
+  "sizeBytes": null,
+  "publishedAt": "2026-07-27T12:34:56.123456Z",
+  "sources": [
+    "nyaa"
+  ],
+  "matchStatus": "unmatched",
+  "ref": null,
+  "confidence": null,
+  "firstMatchedAt": null,
+  "attemptCount": 0,
+  "createdAt": "2026-07-27T12:35:00Z",
+  "updatedAt": "2026-07-27T12:35:00Z",
+  "rawItems": [],
+  "matchEvents": []
+}

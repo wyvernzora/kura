@@ -1,0 +1,7 @@
+{
+  "kind": "backend_unavailable",
+  "message": "release index is unreachable",
+  "data": {
+    "component": "releaseIndexer"
+  }
+}

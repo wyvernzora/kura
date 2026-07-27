@@ -1,0 +1,7 @@
+{
+  "kind": "not_found",
+  "message": "no release with that infohash",
+  "data": {
+    "infohash": "0123456789abcdef0123456789abcdef01234567"
+  }
+}

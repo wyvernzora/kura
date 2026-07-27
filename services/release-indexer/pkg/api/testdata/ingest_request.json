@@ -1,0 +1,13 @@
+{
+  "posts": [
+    {
+      "title": "[Group] Example - 01 (WebRip 1080p)",
+      "magnet": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+      "source": "dmhy",
+      "sourceId": "678901",
+      "url": "https://share.dmhy.org/topics/view/678901.html",
+      "publishedAt": "2026-07-27T12:34:56.123456Z",
+      "sizeBytes": 1503238553
+    }
+  ]
+}

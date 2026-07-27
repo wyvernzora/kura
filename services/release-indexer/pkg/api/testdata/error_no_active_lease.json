@@ -1,0 +1,7 @@
+{
+  "kind": "no_active_lease",
+  "message": "release has no active lease",
+  "data": {
+    "infohash": "0123456789abcdef0123456789abcdef01234567"
+  }
+}

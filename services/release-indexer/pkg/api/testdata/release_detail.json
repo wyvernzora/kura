@@ -1,0 +1,39 @@
+{
+  "infohash": "0123456789abcdef0123456789abcdef01234567",
+  "title": "[Group] Example - 01 (WebRip 1080p)",
+  "magnet": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+  "sizeBytes": 1503238553,
+  "publishedAt": "2026-07-27T12:34:56.123456Z",
+  "sources": [
+    "dmhy",
+    "nyaa"
+  ],
+  "matchStatus": "matched",
+  "ref": "tvdb:370070",
+  "confidence": 0.98,
+  "firstMatchedAt": "2026-07-27T13:00:00Z",
+  "attemptCount": 1,
+  "createdAt": "2026-07-27T12:35:00Z",
+  "updatedAt": "2026-07-27T13:00:00Z",
+  "rawItems": [
+    {
+      "id": 42,
+      "source": "dmhy",
+      "sourceId": "678901",
+      "title": "[Group] Example - 01 (WebRip 1080p)",
+      "url": "https://share.dmhy.org/topics/view/678901.html",
+      "publishedAt": "2026-07-27T12:34:56.123456Z",
+      "ingestedAt": "2026-07-27T12:35:00Z"
+    }
+  ],
+  "matchEvents": [
+    {
+      "id": 7,
+      "status": "matched",
+      "ref": "tvdb:370070",
+      "confidence": 0.98,
+      "reason": null,
+      "createdAt": "2026-07-27T13:00:00Z"
+    }
+  ]
+}

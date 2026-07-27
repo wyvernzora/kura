@@ -1,0 +1,7 @@
+{
+  "kind": "invalid_cursor",
+  "message": "cursor does not decode",
+  "data": {
+    "reason": "malformed base64"
+  }
+}

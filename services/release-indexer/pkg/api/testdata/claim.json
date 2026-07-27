@@ -1,0 +1,28 @@
+{
+  "items": [
+    {
+      "infohash": "0123456789abcdef0123456789abcdef01234567",
+      "claimToken": 1723,
+      "attemptCount": 1,
+      "leaseExpiresAt": "2026-07-27T13:05:00Z",
+      "rawItems": [
+        {
+          "id": 42,
+          "source": "dmhy",
+          "sourceId": "678901",
+          "title": "[Group] Example - 01 (WebRip 1080p)",
+          "url": "https://share.dmhy.org/topics/view/678901.html",
+          "publishedAt": "2026-07-27T12:34:56.123456Z"
+        },
+        {
+          "id": 43,
+          "source": "nyaa",
+          "sourceId": "1234567",
+          "title": "[Group] Example - 01",
+          "url": null,
+          "publishedAt": "2026-07-27T12:36:00Z"
+        }
+      ]
+    }
+  ]
+}
