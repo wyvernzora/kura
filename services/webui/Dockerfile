@@ -11,6 +11,9 @@ RUN pnpm build
 FROM caddy:2-alpine
 # VERSION is a no-op arg so every kura image shares the same build-args.
 ARG VERSION=dev
+RUN setcap -r /usr/bin/caddy \
+    && chown -R 65532:65532 /config /data
 COPY Caddyfile /etc/caddy/Caddyfile
-COPY --from=build /src/dist /srv
+COPY --chown=65532:65532 --from=build /src/dist /srv
+USER 65532:65532
 EXPOSE 8080
