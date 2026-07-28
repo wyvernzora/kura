@@ -76,7 +76,7 @@ EXPOSE 8080
 USER ${KURA_UID}:${KURA_GID}
 
 # No HEALTHCHECK directive: kubelet's httpGet probe against
-# /api/v1/health is the canonical liveness/readiness check across
+# /healthz is the canonical liveness/readiness check across
 # Docker and Kubernetes. Avoids embedding a probe binary that would
 # duplicate kubelet's behavior.
 

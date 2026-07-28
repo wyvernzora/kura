@@ -300,13 +300,13 @@ func waitForPortFile(path string, timeout time.Duration) (int, error) {
 	return 0, fmt.Errorf("timeout waiting for %s", path)
 }
 
-// waitForHealth polls /api/v1/health until 200 OK or timeout. Confirms
+// waitForHealth polls /healthz until 200 OK or timeout. Confirms
 // the daemon is fully ready beyond just bound to the port.
 func waitForHealth(baseURL string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: 500 * time.Millisecond}
 	for time.Now().Before(deadline) {
-		resp, err := client.Get(baseURL + "/api/v1/health")
+		resp, err := client.Get(baseURL + "/healthz")
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -315,5 +315,5 @@ func waitForHealth(baseURL string, timeout time.Duration) error {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return fmt.Errorf("timeout waiting for %s/api/v1/health", baseURL)
+	return fmt.Errorf("timeout waiting for %s/healthz", baseURL)
 }

@@ -20,7 +20,7 @@ func TestE2EBinary_Smoke(t *testing.T) {
 	inboxRoot := t.TempDir()
 	b := startDaemon(t, libRoot, inboxRoot, "")
 
-	resp, err := http.Get(b.url + "/api/v1/health")
+	resp, err := http.Get(b.url + "/healthz")
 	if err != nil {
 		t.Fatalf("GET /health: %v", err)
 	}

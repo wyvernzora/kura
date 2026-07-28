@@ -5,9 +5,8 @@ import (
 	"time"
 )
 
-// healthResponse is the GET /api/v1/health body. Liveness probe that
-// also surfaces server identity for clients (CLI, WebUI) deciding
-// whether to talk to this instance.
+// healthResponse is the GET /healthz body. The gateway probes this route
+// directly; it is not part of the proxied /api/v1 surface.
 type healthResponse struct {
 	Ok          bool      `json:"ok"`
 	Version     string    `json:"version"`

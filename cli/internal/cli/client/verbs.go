@@ -10,7 +10,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
-// HealthResponse mirrors the /api/v1/health body.
+// HealthResponse mirrors the library-manager /healthz body.
 type HealthResponse struct {
 	Ok          bool      `json:"ok"`
 	Version     string    `json:"version"`
@@ -36,10 +36,10 @@ type JobAck struct {
 	SubmittedAt time.Time `json:"submittedAt"`
 }
 
-// Health calls GET /api/v1/health.
+// Health calls GET /healthz.
 func (c *Client) Health(ctx context.Context) (HealthResponse, error) {
 	var out HealthResponse
-	err := c.Do(ctx, http.MethodGet, "/api/v1/health", nil, nil, &out)
+	err := c.Do(ctx, http.MethodGet, "/healthz", nil, nil, &out)
 	return out, err
 }
 

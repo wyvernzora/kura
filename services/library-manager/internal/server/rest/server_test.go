@@ -37,7 +37,7 @@ func newTestServer(t *testing.T) *Server {
 
 func TestHandleHealth_Returns200(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/healthz", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
@@ -131,10 +131,20 @@ func TestHandleList_BadLimit(t *testing.T) {
 
 func TestHandleHealth_OptionsPreflightAnswered(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodOptions, "/api/v1/health", http.NoBody)
+	req := httptest.NewRequest(http.MethodOptions, "/healthz", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
 		t.Errorf("OPTIONS status: got %d want 204", rec.Code)
+	}
+}
+
+func TestHandleHealth_OldAPIPathIsAbsent(t *testing.T) {
+	srv := newTestServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/health", http.NoBody)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status: got %d want 404", rec.Code)
 	}
 }

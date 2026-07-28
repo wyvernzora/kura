@@ -51,7 +51,7 @@ SeriesRef in the request body as `directory`.
 
 | Method | Path | Body | Response | Headers |
 |--------|------|------|----------|---------|
-| GET    | `/api/v1/health` | — | `{ok, version, libraryRoot, uptimeMs, startedAt}` | — |
+| GET    | `/healthz` | — | `{ok, version, libraryRoot, uptimeMs, startedAt}` | — |
 | GET    | `/api/v1/library` | — | Library summary | ETag |
 | GET    | `/api/v1/series` | — | Paginated `ListResult` | ETag, query: `status`, `airing`, `tags`, `cursor`, `limit` |
 | GET    | `/api/v1/series/{ref}` | — | `Show` (series + episodes) | ETag, query: `episodes`, `status`, `source`, `resolution` |
@@ -133,7 +133,7 @@ Per-job forensic logs are written to
 ## Version surfacing
 
 The binary's version (stamped at build time via `-ldflags`) is
-returned on `/api/v1/health` and on every response as the
+returned on `/healthz` and on every response as the
 `X-Kura-Version` header. Build a versioned image with
 `docker build --build-arg VERSION=v0.5.1 ...`; without the arg the
 binary reports `dev`.

@@ -11,7 +11,7 @@ import (
 // Two muxes compose into the final handler:
 //
 //   - apiMux owns every /api/v1/... route.
-//   - rootMux dispatches /api/* to it; there are no other routes.
+//   - rootMux owns /healthz and dispatches /api/* to apiMux.
 //
 // There is no authentication here. The deployment fronts this service with
 // Pomerium and confines it with a NetworkPolicy; nothing downstream of that
@@ -35,8 +35,7 @@ import (
 func (s *Server) buildRouter() http.Handler {
 	apiMux := http.NewServeMux()
 
-	// health + library
-	apiMux.HandleFunc("GET /api/v1/health", s.handleHealth)
+	// library
 	apiMux.HandleFunc("GET /api/v1/library", s.handleLibrary)
 
 	// series
@@ -82,6 +81,7 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("GET /api/v1/jobs/{job}/stream", s.handleJobStream)
 
 	rootMux := http.NewServeMux()
+	rootMux.HandleFunc("GET /healthz", s.handleHealth)
 	rootMux.Handle("/api/", apiMux)
 
 	return s.applyMiddleware(rootMux)

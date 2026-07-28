@@ -77,7 +77,7 @@ Three knobs flow through `--build-arg`:
 |---|---|---|
 | `KURA_UID` | `10001` | UID baked into the `USER` directive. Match your NFS export's enforced UID. |
 | `KURA_GID` | `10001` | GID counterpart. Match your NFS export's enforced GID (or use k8s `securityContext.fsGroup` to chown the mounted volume to runtime GID). |
-| `VERSION` | `dev` | Stamped into the binary via `-ldflags`. Surfaces on `/api/v1/health` and the `X-Kura-Version` response header. |
+| `VERSION` | `dev` | Stamped into the binary via `-ldflags`. Surfaces on `/healthz` and the `X-Kura-Version` response header. |
 
 Mount your library and inbox roots writable by that UID. Point the required
 `library.root` and `library.inbox` settings at those container paths. The full,
@@ -115,20 +115,20 @@ prior claim as cross-host.
 ### Health probe
 
 No Docker `HEALTHCHECK` directive — kubelet's `httpGet` probe against
-`/api/v1/health` is the canonical liveness/readiness check across
+`/healthz` is the canonical liveness/readiness check across
 both Docker and Kubernetes; embedding a probe binary would just
 duplicate kubelet's behavior. For k8s:
 
 ```yaml
 livenessProbe:
   httpGet:
-    path: /api/v1/health
+    path: /healthz
     port: 8080
   initialDelaySeconds: 20
   periodSeconds: 30
 readinessProbe:
   httpGet:
-    path: /api/v1/health
+    path: /healthz
     port: 8080
   initialDelaySeconds: 5
   periodSeconds: 5
@@ -150,6 +150,6 @@ the container starts.
 docker build --build-arg VERSION=v0.5.1 -t kura:v0.5.1 .
 ```
 
-Produces an image that reports `v0.5.1` on `/api/v1/health` and the
+Produces an image that reports `v0.5.1` on `/healthz` and the
 `X-Kura-Version` response header. Without the arg the binary reports
 `dev`.

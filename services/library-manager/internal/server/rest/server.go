@@ -27,7 +27,7 @@ const (
 	// defaultServerVersion is the fallback advertised when Deps.Version
 	// is empty. Production callers (cmd/kura-library-manager) inject the build-time
 	// main.Version; this default keeps tests and direct library use
-	// from emitting an empty version on /api/v1/health and the
+	// from emitting an empty version on /healthz and the
 	// X-Kura-Version response header.
 	defaultServerVersion = "dev"
 
@@ -57,7 +57,7 @@ type Deps struct {
 	AllowedOrigins []string
 	BearerToken    string
 
-	// Version surfaces on /api/v1/health and the X-Kura-Version response
+	// Version surfaces on /healthz and the X-Kura-Version response
 	// header. Empty falls back to defaultServerVersion. cmd/kura-library-manager sets
 	// this to the build-time main.Version.
 	Version string
