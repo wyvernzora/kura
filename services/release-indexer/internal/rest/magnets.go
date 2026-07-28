@@ -3,7 +3,6 @@ package rest
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/infohash"
@@ -22,8 +21,8 @@ func (h *Handler) handleGetMagnet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	raw := strings.TrimPrefix(r.URL.Path, "/magnets/")
-	if raw == "" || strings.Contains(raw, "/") {
+	raw := r.PathValue("infohash")
+	if raw == "" {
 		h.log(r, slog.LevelDebug, "magnet lookup rejected", "reason", "invalid_infohash")
 		writeBadInput(w, "invalid infohash")
 		return

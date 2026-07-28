@@ -11,8 +11,8 @@ KURA_RELEASES_DATABASE_URL=postgres://… \
   ./bin/kura-release-indexer --config ./config.example.toml
 ```
 
-One process serves `/ingest`, `/magnets/{infohash}`, `/releases/{infohash}`,
-`/queue/claim`, `/queue/stats`, `/submit`, `/mcp`, `/healthz`, and `/metrics`, and
+One process serves `/api/v1/releases/ingest`, `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`,
+`/api/v1/releases/queue/claim`, `/api/v1/releases/queue/stats`, `/api/v1/releases/queue/submit`, `/mcp`, `/healthz`, and `/metrics`, and
 runs every enabled source crawler.
 
 ## Configuration
@@ -37,7 +37,7 @@ source never overlap; `timeout` cancels the crawl and ingest together.
 Each normal run starts at the newest listing and reads at most 200 posts. There is
 no cursor, bootstrap, or overlap state. Replayed posts are harmless because
 ingestion is idempotent. A gap larger than the recent window is an explicit
-backfill; an external producer can still post batches to `/ingest`.
+backfill; an external producer can still post batches to `/api/v1/releases/ingest`.
 
 The container includes a safe example file with sources disabled. Deployments
 mount their environment-specific file at `/etc/kura/release-indexer.toml`, normally
@@ -76,14 +76,14 @@ ALTER TYPE public.match_status SET SCHEMA releases;
 ```text
 release-indexer scheduler -> DMHY / Nyaa
 release-indexer crawler   -> direct ingest -> Postgres
-external producer        -> POST /ingest (escape hatch)
-n8n                       -> POST /queue/claim
+external producer        -> POST /api/v1/releases/ingest (escape hatch)
+n8n                       -> POST /api/v1/releases/queue/claim
 n8n                       -> matcher agent
-n8n                       -> POST /submit
+n8n                       -> POST /api/v1/releases/queue/submit
 consumer agent            -> MCP list_releases / get_release / resolve_magnets
 ```
 
-`/queue/stats.exhausted` is the operator intervention signal for matcher work.
+`/api/v1/releases/queue/stats.exhausted` is the operator intervention signal for matcher work.
 
 ## Security
 

@@ -256,10 +256,12 @@ Read design.md before any sizable change.
   matching policy.
 - **Crawling is in-process.** One scheduled loop per enabled source crawls the newest
   bounded window and ingests it directly. There is no durable cursor, bootstrap, or
-  overlap state. `POST /ingest` remains an external-producer escape hatch.
+  overlap state. `POST /api/v1/releases/ingest` remains an external-producer
+  escape hatch.
 - **Surfaces:**
-  - REST (n8n-driven): `POST /ingest`, `POST /queue/claim`, `GET /queue/stats`,
-    `POST /submit`, `GET /magnets/{infohash}`, and `GET /releases/{infohash}`.
+  - REST (n8n-driven), all under `/api/v1/releases`: `POST /ingest`,
+    `POST /queue/claim`, `GET /queue/stats`, `POST /queue/submit`,
+    `GET /{infohash}`, and `GET /{infohash}/magnet`.
   - MCP (consumer-only): `list_releases`, `get_release`, `resolve_magnets`, over streamable HTTP at `/mcp`.
   - `/healthz` — a live DB ping.
 - **Transport:** HTTP (configured by TOML).
@@ -306,7 +308,7 @@ internal/ingest/     transport-neutral RawPost normalization + persistence
 internal/infohash/   NormalizeInfohash + ErrSkipInfohash — the dedup key
 internal/cursor/     list_releases cursor encode/decode + ref/path binding + ref validation
 internal/dispatch/   transport-neutral worker/consumer dispatch + sentinel→code helper
-internal/rest/       REST /ingest, /queue/*, and /submit handlers
+internal/rest/       REST handlers under /api/v1/releases
 internal/store/      Store interface + param/result types + sentinel errors
 internal/store/postgres/  pgx implementation (only backend in v1)
 internal/mcp/        MCP server: consumer tools only; HTTP /mcp; calls dispatch

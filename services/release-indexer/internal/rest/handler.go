@@ -45,12 +45,15 @@ func NewWithMetricsAndLogger(s store.Store, m *metrics.Takuhai, logger *slog.Log
 		logger:   logger,
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ingest", h.handleIngest)
-	mux.HandleFunc("/magnets/", h.handleGetMagnet)
-	mux.HandleFunc("/releases/", h.handleGetRelease)
-	mux.HandleFunc("/queue/claim", h.handleClaim)
-	mux.HandleFunc("/queue/stats", h.handleQueueStats)
-	mux.HandleFunc("/submit", h.handleSubmit)
+	// Literal segments outrank the {infohash} wildcard, so the queue
+	// routes are unreachable-by-accident even though they sit at the
+	// same depth as the per-release ones.
+	mux.HandleFunc("/api/v1/releases/ingest", h.handleIngest)
+	mux.HandleFunc("/api/v1/releases/queue/claim", h.handleClaim)
+	mux.HandleFunc("/api/v1/releases/queue/stats", h.handleQueueStats)
+	mux.HandleFunc("/api/v1/releases/queue/submit", h.handleSubmit)
+	mux.HandleFunc("/api/v1/releases/{infohash}/magnet", h.handleGetMagnet)
+	mux.HandleFunc("/api/v1/releases/{infohash}", h.handleGetRelease)
 	h.mux = mux
 	return h
 }

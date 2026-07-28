@@ -55,9 +55,24 @@ func (m *HTTP) Wrap(next http.Handler) http.Handler {
 	})
 }
 
+// releasePrefix is the one route family whose identifier sits mid-path,
+// so neither an exact nor a prefix map entry can label it.
+const releasePrefix = "/api/v1/releases/"
+
 func (m *HTTP) route(path string) string {
 	if route, ok := m.routes[path]; ok {
 		return route
+	}
+	// Collapse the infohash so the label stays low-cardinality, but keep
+	// the magnet sub-resource distinct from release detail — they are
+	// different traffic and merging them hides one behind the other.
+	if rest, ok := strings.CutPrefix(path, releasePrefix); ok && rest != "" {
+		if hash, found := strings.CutSuffix(rest, "/magnet"); found && !strings.Contains(hash, "/") {
+			return releasePrefix + "{infohash}/magnet"
+		}
+		if !strings.Contains(rest, "/") {
+			return releasePrefix + "{infohash}"
+		}
 	}
 	for prefix, route := range m.routes {
 		if strings.HasSuffix(prefix, "/") && strings.HasPrefix(path, prefix) {
@@ -97,15 +112,14 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 	m := &Takuhai{
 		handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}),
 		HTTP: newHTTP(reg, "takuhai", map[string]string{
-			"/healthz":     "/healthz",
-			"/ingest":      "/ingest",
-			"/magnets/":    "/magnets/{infohash}",
-			"/releases/":   "/releases/{infohash}",
-			"/mcp":         "/mcp",
-			"/metrics":     "/metrics",
-			"/queue/claim": "/queue/claim",
-			"/queue/stats": "/queue/stats",
-			"/submit":      "/submit",
+			"/healthz":                      "/healthz",
+			"/mcp":                          "/mcp",
+			"/metrics":                      "/metrics",
+			"/api/v1/releases":              "/api/v1/releases",
+			"/api/v1/releases/ingest":       "/api/v1/releases/ingest",
+			"/api/v1/releases/queue/claim":  "/api/v1/releases/queue/claim",
+			"/api/v1/releases/queue/stats":  "/api/v1/releases/queue/stats",
+			"/api/v1/releases/queue/submit": "/api/v1/releases/queue/submit",
 		}),
 		ingestBatches: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "takuhai",

@@ -220,7 +220,7 @@ func waitForAvailable(t *testing.T, takuhaiURL string, want int) {
 func claimOne(t *testing.T, takuhaiURL, wantInfohash string, leaseSeconds int) int64 {
 	t.Helper()
 	var claim claimResponse
-	postJSON(t, takuhaiURL+"/queue/claim", map[string]any{
+	postJSON(t, takuhaiURL+"/api/v1/releases/queue/claim", map[string]any{
 		"limit":         1,
 		"lease_seconds": leaseSeconds,
 	}, http.StatusOK, &claim)
@@ -243,7 +243,7 @@ func claimOne(t *testing.T, takuhaiURL, wantInfohash string, leaseSeconds int) i
 func assertNoClaim(t *testing.T, takuhaiURL, note string) {
 	t.Helper()
 	var claim claimResponse
-	postJSON(t, takuhaiURL+"/queue/claim", map[string]any{
+	postJSON(t, takuhaiURL+"/api/v1/releases/queue/claim", map[string]any{
 		"limit":         1,
 		"lease_seconds": 1,
 	}, http.StatusOK, &claim)
@@ -260,12 +260,12 @@ func submitOK(t *testing.T, takuhaiURL string, body map[string]any) {
 func assertSubmitStatus(t *testing.T, takuhaiURL string, wantStatus int, body map[string]any) {
 	t.Helper()
 	var out map[string]any
-	postJSON(t, takuhaiURL+"/submit", body, wantStatus, &out)
+	postJSON(t, takuhaiURL+"/api/v1/releases/queue/submit", body, wantStatus, &out)
 }
 
 func queueStats(t *testing.T, takuhaiURL string) queueStatsResponse {
 	t.Helper()
-	resp, err := http.Get(takuhaiURL + "/queue/stats")
+	resp, err := http.Get(takuhaiURL + "/api/v1/releases/queue/stats")
 	if err != nil {
 		t.Fatalf("GET /queue/stats: %v", err)
 	}

@@ -3,7 +3,6 @@ package rest
 import (
 	"log/slog"
 	"net/http"
-	"strings"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/infohash"
@@ -16,8 +15,8 @@ func (h *Handler) handleGetRelease(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	raw := strings.TrimPrefix(r.URL.Path, "/releases/")
-	if raw == "" || strings.Contains(raw, "/") {
+	raw := r.PathValue("infohash")
+	if raw == "" {
 		h.log(r, slog.LevelDebug, "release lookup rejected", "reason", "invalid_infohash")
 		writeBadInput(w, "invalid infohash")
 		return

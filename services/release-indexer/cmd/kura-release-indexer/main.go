@@ -142,11 +142,8 @@ func runHTTP(
 	mux.Handle("/metrics", metricsSrv.Handler())
 	// The REST push-ingestion and match-loop surfaces.
 	restAPI := rest.NewWithMetricsAndLogger(st, metricsSrv, logger.With("component", "rest"))
-	mux.Handle("/ingest", restAPI)
-	mux.Handle("/magnets/", restAPI)
-	mux.Handle("/releases/", restAPI)
-	mux.Handle("/queue/", restAPI)
-	mux.Handle("/submit", restAPI)
+	mux.Handle("/api/v1/releases", restAPI)
+	mux.Handle("/api/v1/releases/", restAPI)
 
 	srv := &http.Server{Addr: addr, Handler: logHTTP(logger, metricsSrv.HTTP, metricsSrv.HTTP.Wrap(mux))}
 

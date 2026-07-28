@@ -16,7 +16,7 @@ consumer agent list matched releases with optional canonical-ref filtering.
   scheduled loop, starts at the newest listing, and emits at most 200 posts per run.
 - Normal crawling has no durable cursor, bootstrap window, or overlap setting.
   Idempotent ingestion makes repeated recent-window reads safe.
-- `POST /ingest` remains an external-producer escape hatch; sources still emit the
+- `POST /api/v1/releases/ingest` remains an external-producer escape hatch; sources still emit the
   same `RawPost` contract and do not import indexer storage.
 - Queue claims are fenced by `claim_token`; stale submits must not overwrite newer
   claims.
@@ -48,12 +48,12 @@ or matcher attributes exist in this pass.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/ingest` | Accept a batch of crawler posts. |
-| `GET` | `/magnets/{infohash}` | Get the stored magnet URI for one release. |
-| `GET` | `/releases/{infohash}` | Get one release detail, raw source evidence, and match history. |
-| `POST` | `/queue/claim` | Lease claimable unmatched releases. |
-| `GET` | `/queue/stats` | Return queue/status counts, including exhausted. |
-| `POST` | `/submit` | Submit `matched`, `unmatched`, or `suppressed` for a claim. |
+| `POST` | `/api/v1/releases/ingest` | Accept a batch of crawler posts. |
+| `GET` | `/api/v1/releases/{infohash}/magnet` | Get the stored magnet URI for one release. |
+| `GET` | `/api/v1/releases/{infohash}` | Get one release detail, raw source evidence, and match history. |
+| `POST` | `/api/v1/releases/queue/claim` | Lease claimable unmatched releases. |
+| `GET` | `/api/v1/releases/queue/stats` | Return queue/status counts, including exhausted. |
+| `POST` | `/api/v1/releases/queue/submit` | Submit `matched`, `unmatched`, or `suppressed` for a claim. |
 | `GET` | `/healthz` | DB ping. |
 | `GET` | `/metrics` | Prometheus metrics. |
 
@@ -71,8 +71,8 @@ Crawler posts and ingest posts use the same shape:
 }
 ```
 
-`/queue/claim` returns `claim_token`, `attempt_count`, `lease_expires_at`, and linked
-`raw_items`. `/submit` accepts:
+`/api/v1/releases/queue/claim` returns `claim_token`, `attempt_count`, `lease_expires_at`, and linked
+`raw_items`. `/api/v1/releases/queue/submit` accepts:
 
 ```json
 {
@@ -98,7 +98,7 @@ counted, then the loop waits for its next interval; they do not affect `/healthz
 Every run requests the newest 200 posts. Crawlers have no cursor or lookback
 protocol. This is a steady-state polling window, not a backfill engine. If the service is offline long
 enough to miss more than that window, an external producer can perform the exceptional
-backfill and use `POST /ingest`.
+backfill and use `POST /api/v1/releases/ingest`.
 
 ## Queue Semantics
 
@@ -112,7 +112,7 @@ unmatched result becomes `exhausted`. Expired unmatched rows at or above the cap
 marked exhausted before new claims are offered. Claim crashes do not increment
 `attempt_count`.
 
-`GET /releases/{infohash}` returns the single-release full context view:
+`GET /api/v1/releases/{infohash}` returns the single-release full context view:
 representative release fields, `match_status`, nullable derived fields (`magnet`,
 `size_bytes`, `ref`, `confidence`, `first_matched_at`), `attempt_count`,
 timestamps, `raw_items`, and `match_events`. The response deliberately excludes
@@ -131,9 +131,9 @@ The MCP surface is read-only:
   `infohash`, `ref`, `title`, `size_bytes`, `published_at`, `confidence`, `sources`, and
   `next_cursor`.
 - `get_release({infohash})` returns the same single-release detail object as
-  `GET /releases/{infohash}`.
+  `GET /api/v1/releases/{infohash}`.
 - `resolve_magnets({infohashes})` returns `{ "magnets": { "<infohash>": "<magnet>" } }`.
   Unknown infohashes and known releases without magnets are omitted.
   Returned magnets are the stored full magnet strings.
 
-The REST `/magnets/{infohash}` endpoint returns `{ "infohash": "...", "magnet": "..." }`.
+The REST `/api/v1/releases/{infohash}/magnet` endpoint returns `{ "infohash": "...", "magnet": "..." }`.
