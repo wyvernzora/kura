@@ -55,9 +55,11 @@ func TestSmoke(t *testing.T) {
 	}
 
 	addr := "127.0.0.1:" + freePort(t)
+	metricsAddr := "127.0.0.1:" + freePort(t)
 	baseURL := "http://" + addr
 	configPath := filepath.Join(t.TempDir(), "release-indexer.toml")
-	if err := os.WriteFile(configPath, []byte("[server]\naddr = \""+addr+"\"\n"), 0o600); err != nil {
+	cfg := "[server]\naddr = \"" + addr + "\"\nmetrics_addr = \"" + metricsAddr + "\"\n"
+	if err := os.WriteFile(configPath, []byte(cfg), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	_ = startBinary(t, ctx, binPath, configPath, dsn)
@@ -194,6 +196,40 @@ func TestSmoke(t *testing.T) {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusNotFound {
 			t.Fatalf("POST /worker/claim = %d, want 404", resp.StatusCode)
+		}
+	})
+
+	// The listener split is a deploy-shape property: both halves are
+	// wired in main, so only a booted binary can show that a scrape of
+	// /metrics does not also reach ingest, claim, and submit.
+	t.Run("metrics-served-off-the-api-listener", func(t *testing.T) {
+		resp, err := http.Get(baseURL + "/metrics")
+		if err != nil {
+			t.Fatalf("GET /metrics on API listener: %v", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Fatalf("GET /metrics on API listener = %d, want 404", resp.StatusCode)
+		}
+
+		mResp, err := http.Get("http://" + metricsAddr + "/metrics")
+		if err != nil {
+			t.Fatalf("GET /metrics on metrics listener: %v", err)
+		}
+		defer mResp.Body.Close()
+		if mResp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /metrics on metrics listener = %d, want 200", mResp.StatusCode)
+		}
+
+		// And the write API is not reachable from the metrics listener.
+		iResp, err := http.Post("http://"+metricsAddr+"/api/v1/releases/ingest",
+			"application/json", bytes.NewReader([]byte(`{"posts":[]}`)))
+		if err != nil {
+			t.Fatalf("POST ingest on metrics listener: %v", err)
+		}
+		defer iResp.Body.Close()
+		if iResp.StatusCode != http.StatusNotFound {
+			t.Fatalf("POST ingest on metrics listener = %d, want 404", iResp.StatusCode)
 		}
 	})
 

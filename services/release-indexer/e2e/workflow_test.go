@@ -157,6 +157,7 @@ func startTakuhai(t *testing.T, ctx context.Context, nw *testcontainers.DockerNe
 	t.Helper()
 	config := `[server]
 addr = ":8080"
+metrics_addr = ":9090"
 log_level = "debug"
 
 [queue]

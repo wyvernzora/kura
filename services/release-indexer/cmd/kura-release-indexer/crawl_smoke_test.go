@@ -68,10 +68,12 @@ func TestSmokeScheduledCrawl(t *testing.T) {
 	}
 
 	addr := "127.0.0.1:" + freePort(t)
+	metricsAddr := "127.0.0.1:" + freePort(t)
 	configPath := filepath.Join(t.TempDir(), "release-indexer.toml")
 	configBody := fmt.Sprintf(`
 [server]
 addr = %q
+metrics_addr = %q
 
 [sources.nyaa]
 interval = "1h"
@@ -79,7 +81,7 @@ timeout = "30s"
 url = %q
 category = "1_4"
 max_rps = 0
-`, addr, source.URL)
+`, addr, metricsAddr, source.URL)
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}

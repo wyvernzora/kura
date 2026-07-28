@@ -101,7 +101,7 @@ func run() error {
 
 	// The single mountable /healthz handler (DB ping only — design §10). Both the HTTP
 	// listener and the MCP server mount the SAME handler.
-	healthz := health.NewHandlerWithLogger(st, logger.With("component", "health"))
+	healthz := health.NewHandlerWithLogger(st, logger.With("component", "health"), version)
 	metricsSrv := metrics.NewTakuhai(version, commit, st)
 	ingester := ingest.New(st, metricsSrv)
 	crawls, err := newCrawlRunner(cfg, ingester, metricsSrv, logger.With("component", "crawler"))
@@ -120,7 +120,7 @@ func run() error {
 		"nyaa_enabled", cfg.Sources.Nyaa.Enabled,
 	)
 
-	return runHTTP(ctx, logger, cfg.Addr, st, mcpSrv, healthz, metricsSrv, crawls)
+	return runHTTP(ctx, logger, cfg.Addr, cfg.MetricsAddr, st, mcpSrv, healthz, metricsSrv, crawls)
 }
 
 // runHTTP mounts every HTTP route — /ingest (push), /queue/* + /submit (match loop), /mcp +
@@ -129,6 +129,7 @@ func runHTTP(
 	ctx context.Context,
 	logger *slog.Logger,
 	addr string,
+	metricsAddr string,
 	st *postgres.Store,
 	mcpSrv *mcp.Server,
 	healthz http.Handler,
@@ -139,13 +140,31 @@ func runHTTP(
 	// The consumer /mcp endpoint + /healthz (the MCP server owns this mux).
 	mux.Handle("/mcp", mcpSrv.Handler())
 	mux.Handle("/healthz", healthz)
-	mux.Handle("/metrics", metricsSrv.Handler())
 	// The REST push-ingestion and match-loop surfaces.
 	restAPI := rest.NewWithMetricsAndLogger(st, metricsSrv, logger.With("component", "rest"))
 	mux.Handle("/api/v1/releases", restAPI)
 	mux.Handle("/api/v1/releases/", restAPI)
 
 	srv := &http.Server{Addr: addr, Handler: logHTTP(logger, metricsSrv.HTTP, metricsSrv.HTTP.Wrap(mux))}
+
+	// /metrics gets its own listener. Sharing one with the API would mean a
+	// NetworkPolicy permitting a Prometheus scrape also permits ingest,
+	// claim, and submit — and with no auth in the service, that policy is
+	// the only boundary.
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("/metrics", metricsSrv.Handler())
+	metricsSrvHTTP := &http.Server{Addr: metricsAddr, Handler: metricsMux}
+	metricsLn, err := net.Listen("tcp", metricsAddr)
+	if err != nil {
+		return fmt.Errorf("bind metrics %s: %w", metricsAddr, err)
+	}
+	logger.Info("takuhai metrics listening", "addr", metricsLn.Addr().String())
+	go func() { _ = metricsSrvHTTP.Serve(metricsLn) }()
+	defer func() {
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), drainTimeout)
+		defer cancel()
+		_ = metricsSrvHTTP.Shutdown(shutCtx)
+	}()
 
 	// Bind SYNCHRONOUSLY so a failed bind (e.g. the port is already in use) fails fast:
 	// run() returns the error promptly with a non-zero exit instead of leaving a process

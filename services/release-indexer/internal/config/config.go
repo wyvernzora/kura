@@ -17,6 +17,7 @@ const (
 	DefaultPath = "/etc/kura/release-indexer.toml"
 
 	defaultAddr             = ":8080"
+	defaultMetricsAddr      = ":9090"
 	defaultDatabaseSchema   = "releases"
 	defaultLogLevel         = "info"
 	defaultQueueMaxAttempts = 3
@@ -37,7 +38,11 @@ var (
 
 // Config is the validated runtime configuration.
 type Config struct {
-	Addr             string
+	Addr string
+	// MetricsAddr is a separate listener for /metrics only. It must never
+	// equal Addr: a NetworkPolicy that lets Prometheus scrape metrics would
+	// otherwise also hand it the unauthenticated write API.
+	MetricsAddr      string
 	DatabaseSchema   string
 	DatabaseURL      string
 	LogLevel         string
@@ -75,6 +80,7 @@ type SourceNyaa struct {
 func Defaults(databaseURL string) Config {
 	return Config{
 		Addr:             defaultAddr,
+		MetricsAddr:      defaultMetricsAddr,
 		DatabaseSchema:   defaultDatabaseSchema,
 		DatabaseURL:      databaseURL,
 		LogLevel:         defaultLogLevel,
@@ -130,6 +136,15 @@ func (c Config) Validate() error {
 	}
 	if c.Addr == "" {
 		return fmt.Errorf("server.addr must not be empty")
+	}
+	// Required rather than optional on purpose: an empty value that fell
+	// back to Addr would silently reintroduce the exposure this split
+	// exists to prevent.
+	if c.MetricsAddr == "" {
+		return fmt.Errorf("server.metrics_addr must not be empty")
+	}
+	if c.MetricsAddr == c.Addr {
+		return fmt.Errorf("server.metrics_addr must differ from server.addr (%q)", c.Addr)
 	}
 	if !slices.Contains(validLogLevels, c.LogLevel) {
 		return fmt.Errorf("server.log_level %q is invalid (want one of %v)", c.LogLevel, validLogLevels)
@@ -198,8 +213,9 @@ type fileDatabase struct {
 }
 
 type fileServer struct {
-	Addr     *string `toml:"addr"`
-	LogLevel *string `toml:"log_level"`
+	Addr        *string `toml:"addr"`
+	MetricsAddr *string `toml:"metrics_addr"`
+	LogLevel    *string `toml:"log_level"`
 }
 
 type fileQueue struct {
@@ -239,6 +255,7 @@ func (r fileConfig) resolve(databaseURL string) (Config, error) {
 	}
 	if r.Server != nil {
 		setString(&cfg.Addr, r.Server.Addr)
+		setString(&cfg.MetricsAddr, r.Server.MetricsAddr)
 		setString(&cfg.LogLevel, r.Server.LogLevel)
 	}
 	if r.Queue != nil && r.Queue.MaxAttempts != nil {

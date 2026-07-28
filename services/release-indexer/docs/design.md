@@ -55,8 +55,8 @@ or matcher attributes exist in this pass.
 | `POST` | `/api/v1/releases/queue/claim` | Lease claimable unmatched releases. |
 | `GET` | `/api/v1/releases/queue/stats` | Return queue/status counts, including exhausted. |
 | `POST` | `/api/v1/releases/queue/submit` | Submit `matched`, `unmatched`, or `suppressed` for a claim. |
-| `GET` | `/healthz` | DB ping. |
-| `GET` | `/metrics` | Prometheus metrics. |
+| `GET` | `/healthz` | DB ping; returns `{ok, version}`. |
+| `GET` | `/metrics` | Prometheus metrics. Served on `server.metrics_addr`, not the API listener. |
 
 Crawler posts and ingest posts use the same shape:
 

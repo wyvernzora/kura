@@ -12,8 +12,9 @@ KURA_RELEASES_DATABASE_URL=postgres://… \
 ```
 
 One process serves `/api/v1/releases/ingest`, `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`,
-`/api/v1/releases/queue/claim`, `/api/v1/releases/queue/stats`, `/api/v1/releases/queue/submit`, `/mcp`, `/healthz`, and `/metrics`, and
-runs every enabled source crawler.
+`/api/v1/releases/queue/claim`, `/api/v1/releases/queue/stats`, `/api/v1/releases/queue/submit`, `/mcp`, and `/healthz` on
+`server.addr`, and runs every enabled source crawler. `/metrics` is served on a
+second listener, `server.metrics_addr`, and is the only thing on it.
 
 ## Configuration
 
@@ -104,6 +105,10 @@ Separate crawler images are no longer built or published.
 
 - `/healthz` remains a DB ping; source-site failures do not make the pod unhealthy.
 - `/metrics` exports HTTP, queue, ingest, matcher, and scheduled-source metrics.
+  It listens on `server.metrics_addr`, separate from the API. Point the scrape
+  at that port and allow only it: the service does not authenticate, so a
+  network policy permitting a scrape of a shared port would also permit
+  ingest, claim, and submit.
 - Startup fails fast if migrations or the HTTP bind fail.
 - SIGTERM cancels source crawls, drains HTTP/MCP requests, then closes PostgreSQL.
 - Logs are JSON `slog` on stderr.

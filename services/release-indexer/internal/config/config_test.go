@@ -177,3 +177,22 @@ func writeConfig(t *testing.T, body string) string {
 	}
 	return path
 }
+
+// metrics_addr is required rather than optional: an empty value falling back
+// to addr would silently put /metrics back on the API listener, which is the
+// exposure the separate listener exists to prevent.
+func TestValidateRejectsMetricsAddrSharingTheAPIListener(t *testing.T) {
+	base := Defaults("postgres://localhost/kura")
+
+	cfg := base
+	cfg.MetricsAddr = ""
+	if err := cfg.Validate(); err == nil {
+		t.Error("empty metrics_addr accepted, want error")
+	}
+
+	cfg = base
+	cfg.MetricsAddr = cfg.Addr
+	if err := cfg.Validate(); err == nil {
+		t.Errorf("metrics_addr == addr (%q) accepted, want error", cfg.Addr)
+	}
+}

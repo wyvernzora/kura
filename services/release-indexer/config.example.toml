@@ -11,6 +11,12 @@ schema = "releases"
 # Optional; default = ":8080"
 addr = ":8080"
 
+# Optional; default = ":9090". Serves /metrics and nothing else, and must
+# differ from `addr`: with no authentication in the service, a network policy
+# that permits a Prometheus scrape of a shared port would also permit the
+# ingest, claim, and submit routes.
+metrics_addr = ":9090"
+
 # Optional; default = "info". Allowed: debug, info, warn, error.
 log_level = "info"
 
