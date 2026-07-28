@@ -31,7 +31,9 @@
 
 	@mcp path /mcp/v1 /mcp/v1/*
 	handle @mcp {
-		header Cache-Control "no-store"
+		# `>` replaces: the MCP SDK sets its own Cache-Control, and a plain
+		# directive would emit both.
+		header >Cache-Control "no-store"
 		reverse_proxy 127.0.0.1:8081
 	}
 

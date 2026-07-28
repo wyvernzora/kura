@@ -23,6 +23,7 @@ import (
 	"github.com/wyvernzora/kura/services/gateway/internal/client"
 	"github.com/wyvernzora/kura/services/gateway/internal/config"
 	"github.com/wyvernzora/kura/services/gateway/internal/health"
+	gwmcp "github.com/wyvernzora/kura/services/gateway/internal/mcp"
 )
 
 // version is overridden at link time via -ldflags, as both leaves do. It is
@@ -67,9 +68,14 @@ func run() error {
 		{Name: "releaseIndexer", URL: releases.HealthURL()},
 	}, cfg.ComponentTimeout)
 
+	bridge := gwmcp.New(version, library, releases, logger.With("component", "mcp"))
+	mcpHandler := bridge.Handler(cfg.SessionTimeout)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz.Local)
 	mux.HandleFunc("GET /api/v1/health", healthz.System)
+	mux.Handle(gwmcp.Endpoint, mcpHandler)
+	mux.Handle(gwmcp.Endpoint+"/", mcpHandler)
 
 	srv := &http.Server{Addr: cfg.Address, Handler: mux}
 
