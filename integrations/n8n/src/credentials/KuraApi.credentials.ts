@@ -5,9 +5,9 @@ import type {
 	INodeProperties,
 } from 'n8n-workflow';
 
-export class KuraLibraryApi implements ICredentialType {
-	name = 'kuraLibraryApi';
-	displayName = 'Kura Library API';
+export class KuraApi implements ICredentialType {
+	name = 'kuraApi';
+	displayName = 'Kura API';
 	documentationUrl = 'https://github.com/wyvernzora/kura';
 	icon: Icon = 'file:kura.svg';
 
@@ -19,7 +19,7 @@ export class KuraLibraryApi implements ICredentialType {
 			default: 'http://kura:8080',
 			placeholder: 'http://kura:8080',
 			required: true,
-			description: 'Base URL of the Kura library-manager REST service',
+			description: 'Base URL of the unified Kura gateway',
 		},
 		{
 			displayName: 'Bearer Token',
@@ -27,7 +27,7 @@ export class KuraLibraryApi implements ICredentialType {
 			type: 'string',
 			typeOptions: { password: true },
 			default: '',
-			description: 'Optional KURA_TOKEN value sent as an Authorization bearer token',
+			description: 'Optional bearer token for a gateway protected by Pomerium',
 		},
 	];
 

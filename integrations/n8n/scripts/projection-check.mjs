@@ -13,7 +13,7 @@ const {
 
 assert.deepEqual(
 	projectRow({
-		metadataRef: 'tvdb:370070',
+		ref: 'tvdb:370070',
 		title: 'Bookworm',
 		canonicalTitle: 'Ascendance of a Bookworm',
 		status: 'incomplete',
@@ -27,7 +27,7 @@ assert.deepEqual(
 		tags: ['priority'],
 	}),
 	{
-		metadataRef: 'tvdb:370070',
+		ref: 'tvdb:370070',
 		title: 'Bookworm',
 		canonicalTitle: 'Ascendance of a Bookworm',
 		status: 'incomplete',
@@ -44,7 +44,7 @@ assert.deepEqual(splitTagExpressions(' priority   !maintenance-disabled '), [
 assert.deepEqual(splitTagExpressions('  '), []);
 
 const fullRow = {
-	metadataRef: 'tvdb:370070',
+	ref: 'tvdb:370070',
 	title: 'Bookworm',
 	status: 'incomplete',
 	episodesAvailable: 12,
@@ -56,8 +56,8 @@ assert.equal(projectRow(fullRow, false), fullRow);
 
 assert.deepEqual(
 	projectShow({
-		metadataRef: 'tvdb:370070',
-		ref: 'Bookworm',
+		ref: 'tvdb:370070',
+		directory: 'Bookworm',
 		root: 'library:Bookworm',
 		lastScanned: '2026-04-20T03:00:00Z',
 		preferredTitle: 'Bookworm',
@@ -122,7 +122,7 @@ assert.deepEqual(
 		stagedExtras: [{ id: 'extra' }],
 	}),
 	{
-		metadataRef: 'tvdb:370070',
+		ref: 'tvdb:370070',
 		preferredTitle: 'Bookworm',
 		canonicalTitle: 'Ascendance of a Bookworm',
 		status: 'incomplete',
@@ -165,8 +165,8 @@ assert.deepEqual(
 assert.deepEqual(
 	projectShow(
 		{
-			metadataRef: 'tvdb:370070',
-			ref: 'Bookworm',
+			ref: 'tvdb:370070',
+			directory: 'Bookworm',
 			root: 'library:Bookworm',
 			artwork: { poster: { url: 'https://example.invalid/poster.jpg' } },
 			seasons: [
@@ -179,8 +179,8 @@ assert.deepEqual(
 		false,
 	),
 	{
-		metadataRef: 'tvdb:370070',
-		ref: 'Bookworm',
+		ref: 'tvdb:370070',
+		directory: 'Bookworm',
 		root: 'library:Bookworm',
 		artwork: { poster: { url: 'https://example.invalid/poster.jpg' } },
 		tags: [],
@@ -192,7 +192,7 @@ assert.deepEqual(
 assert.deepEqual(
 	projectShow(
 		{
-			metadataRef: 'tvdb:370070',
+			ref: 'tvdb:370070',
 			preferredTitle: 'Bookworm',
 			status: 'complete',
 			seasons: [
@@ -205,7 +205,7 @@ assert.deepEqual(
 		true,
 	),
 	{
-		metadataRef: 'tvdb:370070',
+		ref: 'tvdb:370070',
 		preferredTitle: 'Bookworm',
 		status: 'complete',
 		isAiring: false,
@@ -248,7 +248,7 @@ assert.deepEqual(
 );
 assert.throws(
 	() => singleResolveCandidate({ candidates: [] }, 'tvdb:404'),
-	/resolve returned 0 candidates for metadata ref tvdb:404/,
+	/resolve returned 0 candidates for ref tvdb:404/,
 );
 
 console.log('projection-check ok');

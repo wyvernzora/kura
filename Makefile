@@ -1,7 +1,7 @@
 # Kura monorepo — root orchestration. Each module owns its Makefile;
 # these targets fan out.
 
-MODULES := services/library-manager services/release-indexer services/gateway services/gateway/web cli
+MODULES := services/library-manager services/release-indexer services/gateway services/gateway/web cli integrations/n8n
 
 .PHONY: check build test service-e2e product-e2e e2e
 
@@ -31,7 +31,7 @@ service-e2e:
 	$(MAKE) -C services/release-indexer smoke
 
 # Product journeys always cross the production gateway and run the complete
-# non-n8n stack, including PostgreSQL.
+# stack, including PostgreSQL and the production n8n nodes image.
 product-e2e:
 	$(MAKE) -C e2e e2e
 

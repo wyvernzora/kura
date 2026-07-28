@@ -7,7 +7,7 @@ import type {
 } from 'n8n-workflow';
 import { LoggerProxy as Logger } from 'n8n-workflow';
 
-const CRED = 'kuraReleasesApi';
+const CRED = 'kuraApi';
 
 /**
  * Kura Queue Trigger — polls by claiming release-indexer queue work. It stays
@@ -20,7 +20,7 @@ export class KuraQueueTrigger implements INodeType {
 		name: 'kuraQueueTrigger',
 		icon: 'file:kura.svg',
 		group: ['trigger'],
-		version: 1,
+		version: 2,
 		subtitle: '={{"claim: " + $parameter["limit"]}}',
 		description: 'Claims Kura release-indexer queue work when releases are available',
 		codex: {
@@ -45,7 +45,7 @@ export class KuraQueueTrigger implements INodeType {
 			},
 			{
 				displayName: 'Lease Seconds',
-				name: 'lease_seconds',
+				name: 'leaseSeconds',
 				type: 'number',
 				default: 300,
 				description: 'Lease length; honored if supplied, else a server default',
@@ -56,15 +56,18 @@ export class KuraQueueTrigger implements INodeType {
 	async poll(this: IPollFunctions): Promise<INodeExecutionData[][] | null> {
 		const credentials = await this.getCredentials(CRED);
 		const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');
+		const bearerToken = String(credentials.bearerToken ?? '');
+		const headers = bearerToken === '' ? undefined : { Authorization: `Bearer ${bearerToken}` };
 
 		let res: IDataObject;
 		try {
 			res = (await this.helpers.httpRequest({
 				method: 'POST',
-				url: `${baseUrl}/queue/claim`,
+				url: `${baseUrl}/api/v1/releases/queue/claim`,
+				headers,
 				body: {
-					limit: this.getNodeParameter('limit', 10),
-					lease_seconds: this.getNodeParameter('lease_seconds', 300),
+					limit: Number(this.getNodeParameter('limit', 10)),
+					leaseSeconds: Number(this.getNodeParameter('leaseSeconds', 300)),
 				},
 				json: true,
 			})) as IDataObject;

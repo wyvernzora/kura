@@ -9,8 +9,7 @@ import type {
 } from 'n8n-workflow';
 import { LoggerProxy as Logger } from 'n8n-workflow';
 
-const LIBRARY_CRED = 'kuraLibraryApi';
-const RELEASES_CRED = 'kuraReleasesApi';
+const CRED = 'kuraApi';
 const PAGE_LIMIT = 1000;
 const ACTIONABLE_STATUSES = new Set(['complete', 'incomplete']);
 
@@ -19,7 +18,7 @@ export class Kura implements INodeType {
 		displayName: 'Kura',
 		name: 'kura',
 		group: ['transform'],
-		version: 1,
+		version: 2,
 		icon: 'file:kura.svg',
 		subtitle: '={{$parameter["operation"] + " (" + $parameter["resource"] + ")"}}',
 		description:
@@ -41,18 +40,7 @@ export class Kura implements INodeType {
 		outputs:
 			'={{$parameter["operation"] === "show" && $parameter["errorOnNotFound"] === false ? ["main", "main"] : ["main"]}}',
 		outputNames: ['tracked', 'untracked'],
-		credentials: [
-			{
-				name: LIBRARY_CRED,
-				required: true,
-				displayOptions: { show: { resource: ['series'] } },
-			},
-			{
-				name: RELEASES_CRED,
-				required: true,
-				displayOptions: { show: { resource: ['release', 'queue'] } },
-			},
-		],
+		credentials: [{ name: CRED, required: true }],
 		properties: [
 			{
 				displayName: 'Resource',
@@ -154,12 +142,12 @@ export class Kura implements INodeType {
 				displayOptions: { show: { resource: ['series'], operation: ['list'] } },
 			},
 			{
-				displayName: 'Metadata Ref',
-				name: 'metadataRef',
+				displayName: 'Ref',
+				name: 'ref',
 				type: 'string',
-				default: '={{$json.metadataRef}}',
+				default: '={{$json.ref}}',
 				required: true,
-				description: 'Kura metadata ref, for example tvdb:370070',
+				description: 'Kura canonical ref, for example tvdb:370070',
 				displayOptions: { show: { resource: ['series'], operation: ['show', 'updateTags'] } },
 			},
 			{
@@ -238,7 +226,7 @@ export class Kura implements INodeType {
 				type: 'json',
 				default: '={{ $json.posts }}',
 				required: true,
-				description: 'The raw posts payload, forwarded as-is to /ingest',
+				description: 'The raw posts payload, forwarded as-is to /api/v1/releases/ingest',
 				displayOptions: { show: { resource: ['release'], operation: ['ingest'] } },
 			},
 			{
@@ -262,7 +250,7 @@ export class Kura implements INodeType {
 			},
 			{
 				displayName: 'Lease Seconds',
-				name: 'lease_seconds',
+				name: 'leaseSeconds',
 				type: 'number',
 				default: 300,
 				description: 'Lease length; honored if supplied, else a server default',
@@ -275,7 +263,7 @@ export class Kura implements INodeType {
 				default: '={{ $json }}',
 				required: true,
 				description:
-					'A single /submit body, an array of /submit bodies, an object with items, or a structured-output object with output.items',
+					'A single queue submission, an array of submissions, an object with items, or a structured-output object with output.items',
 				displayOptions: { show: { resource: ['queue'], operation: ['submit'] } },
 			},
 		],
@@ -294,7 +282,7 @@ export class Kura implements INodeType {
 
 async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
 	const operation = this.getNodeParameter('operation', 0) as string;
-	const credentials = await this.getCredentials(LIBRARY_CRED);
+	const credentials = await this.getCredentials(CRED);
 	const call = callFactory(this, credentials);
 
 	if (operation === 'list') {
@@ -306,7 +294,7 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 		return [
 			rows
 				.filter((row) => ACTIONABLE_STATUSES.has(stringField(row, 'status')))
-				.filter((row) => stringField(row, 'metadataRef') !== '')
+				.filter((row) => stringField(row, 'ref') !== '')
 				.map((row) => ({ json: projectRow(row, simplifyOutput) })),
 		];
 	}
@@ -315,13 +303,13 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 		const items = this.getInputData();
 		const out: INodeExecutionData[] = [];
 		for (let i = 0; i < items.length; i++) {
-			const metadataRef = this.getNodeParameter('metadataRef', i) as string;
+			const ref = this.getNodeParameter('ref', i) as string;
 			const tags = splitTagExpressions(this.getNodeParameter('tagChanges', i) as string);
 			try {
 				if (tags.length === 0) throw new Error('at least one tag expression is required');
 				const result = await call(
 					'PATCH',
-					`/api/v1/series/${encodeURIComponent(metadataRef)}/tags`,
+					`/api/v1/series/${encodeURIComponent(ref)}/tags`,
 					{ tags },
 				);
 				out.push({ json: result, pairedItem: { item: i } });
@@ -343,17 +331,17 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 	for (let i = 0; i < items.length; i++) {
 		const errorOnNotFound = shouldErrorOnNotFound(this, i);
 		if (!errorOnNotFound) emitUntrackedOutput = true;
-		const metadataRef = this.getNodeParameter('metadataRef', i) as string;
+		const ref = this.getNodeParameter('ref', i) as string;
 		try {
 			const includeSpecials = this.getNodeParameter('includeSpecials', i) as boolean;
 			const simplifyOutput = this.getNodeParameter('simplifyOutput', i) as boolean;
-			const result = await call('GET', showPath(metadataRef, queryFor(this, i)));
+			const result = await call('GET', showPath(ref, queryFor(this, i)));
 			out.push({ json: projectShow(result, includeSpecials, simplifyOutput), pairedItem: { item: i } });
 		} catch (error) {
 			if (shouldResolveNotFound(errorOnNotFound, error)) {
-				const result = await call('POST', '/api/v1/resolve', { terms: [metadataRef] });
+				const result = await call('POST', '/api/v1/series/resolve', { terms: [ref] });
 				resolvedNotFound.push({
-					json: singleResolveCandidate(result, metadataRef),
+					json: singleResolveCandidate(result, ref),
 					pairedItem: { item: i },
 				});
 				continue;
@@ -377,20 +365,12 @@ async function executeIndexer(
 	const items = this.getInputData();
 	const operation = this.getNodeParameter('operation', 0) as string;
 
-	const credentials = await this.getCredentials(RELEASES_CRED);
-	const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');
+	const credentials = await this.getCredentials(CRED);
+	const call = callFactory(this, credentials);
 	Logger.info('Kura indexer execution started', { resource, operation, item_count: items.length });
 
-	const call = (method: IHttpRequestMethods, path: string, body?: IDataObject) =>
-		this.helpers.httpRequest({
-			method,
-			url: `${baseUrl}${path}`,
-			body,
-			json: true,
-		}) as Promise<IDataObject>;
-
 	if (operation === 'queueStats') {
-		const stats = await call('GET', '/queue/stats');
+		const stats = await call('GET', '/api/v1/releases/queue/stats');
 		Logger.info('Kura queue stats fetched', {
 			available: stats.available,
 			leased: stats.leased,
@@ -400,9 +380,9 @@ async function executeIndexer(
 	}
 
 	if (operation === 'claim') {
-		const res = await call('POST', '/queue/claim', {
-			limit: this.getNodeParameter('limit', 0),
-			lease_seconds: this.getNodeParameter('lease_seconds', 0),
+		const res = await call('POST', '/api/v1/releases/queue/claim', {
+			limit: Number(this.getNodeParameter('limit', 0)),
+			leaseSeconds: Number(this.getNodeParameter('leaseSeconds', 0)),
 		});
 		const claimed = (res.items as IDataObject[]) ?? [];
 		Logger.info('Kura queue claim completed', { claimed_count: claimed.length });
@@ -413,8 +393,8 @@ async function executeIndexer(
 	for (let i = 0; i < items.length; i++) {
 		try {
 			if (operation === 'ingest') {
-				const posts = this.getNodeParameter('posts', i);
-				const res = await call('POST', '/ingest', { posts });
+				const posts = this.getNodeParameter('posts', i) as IDataObject[];
+				const res = await call('POST', '/api/v1/releases/ingest', { posts });
 				Logger.info('Kura ingest completed', {
 					item_index: i,
 					post_count: Array.isArray(posts) ? posts.length : undefined,
@@ -428,7 +408,7 @@ async function executeIndexer(
 
 			if (operation === 'getMagnetLink') {
 				const infohash = String(this.getNodeParameter('infohash', i));
-				const res = await call('GET', `/magnets/${encodeURIComponent(infohash)}`);
+				const res = await call('GET', `/api/v1/releases/${encodeURIComponent(infohash)}/magnet`);
 				Logger.info('Kura magnet lookup completed', { item_index: i, infohash });
 				out.push({ json: res, pairedItem: { item: i } });
 				continue;
@@ -436,7 +416,7 @@ async function executeIndexer(
 
 			if (operation === 'get') {
 				const infohash = String(this.getNodeParameter('infohash', i));
-				const res = await call('GET', `/releases/${encodeURIComponent(infohash)}`);
+				const res = await call('GET', `/api/v1/releases/${encodeURIComponent(infohash)}`);
 				Logger.info('Kura release lookup completed', { item_index: i, infohash });
 				out.push({ json: res, pairedItem: { item: i } });
 				continue;
@@ -495,17 +475,15 @@ export function isNotFoundError(error: unknown): boolean {
 	);
 }
 
-export function singleResolveCandidate(result: IDataObject, metadataRef: string): IDataObject {
+export function singleResolveCandidate(result: IDataObject, ref: string): IDataObject {
 	const candidates = arrayField(result, 'candidates');
 	if (candidates.length !== 1) {
-		throw new Error(`resolve returned ${candidates.length} candidates for metadata ref ${metadataRef}`);
+		throw new Error(`resolve returned ${candidates.length} candidates for ref ${ref}`);
 	}
 	return candidates[0];
 }
 
-type HTTPCall = (method: IHttpRequestMethods, path: string, body?: JsonObject) => Promise<IDataObject>;
-
-type IndexerCall = (method: IHttpRequestMethods, path: string, body?: IDataObject) => Promise<IDataObject>;
+type HTTPCall = (method: IHttpRequestMethods, path: string, body?: IDataObject) => Promise<IDataObject>;
 
 function callFactory(ctx: IExecuteFunctions, credentials: IDataObject): HTTPCall {
 	const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');
@@ -516,7 +494,7 @@ function callFactory(ctx: IExecuteFunctions, credentials: IDataObject): HTTPCall
 			method,
 			url: `${baseUrl}${path}`,
 			headers,
-			body,
+			body: body as JsonObject | undefined,
 			json: true,
 		}) as Promise<IDataObject>;
 }
@@ -535,7 +513,7 @@ async function listAll(call: HTTPCall, statuses: string[], airing: string, tags:
 		if (cursor !== '') query.set('cursor', cursor);
 
 		const result = await call('GET', `/api/v1/series?${query.toString()}`);
-		rows.push(...arrayField(result, 'rows'));
+		rows.push(...arrayField(result, 'items'));
 		cursor = stringField(result, 'nextCursor');
 	} while (cursor !== '');
 	return rows;
@@ -543,15 +521,16 @@ async function listAll(call: HTTPCall, statuses: string[], airing: string, tags:
 
 export function projectRow(row: IDataObject, simplifyOutput = true): IDataObject {
 	if (!simplifyOutput) return row;
-	return dropEmpty({
-		metadataRef: row.metadataRef,
+	const out = dropEmpty({
+		ref: row.ref,
 		title: row.title,
 		canonicalTitle: row.canonicalTitle,
 		status: row.status,
 		isAiring: Boolean(row.isAiring),
 		staged: Boolean(row.staged),
-		tags: stringArrayField(row, 'tags'),
 	});
+	out.tags = stringArrayField(row, 'tags');
+	return out;
 }
 
 function queryFor(ctx: IExecuteFunctions, itemIndex: number): URLSearchParams {
@@ -570,9 +549,9 @@ function queryFor(ctx: IExecuteFunctions, itemIndex: number): URLSearchParams {
 	return query;
 }
 
-function showPath(metadataRef: string, query: URLSearchParams): string {
+function showPath(ref: string, query: URLSearchParams): string {
 	const suffix = query.toString();
-	const path = `/api/v1/series/${encodeURIComponent(metadataRef)}`;
+	const path = `/api/v1/series/${encodeURIComponent(ref)}`;
 	return suffix === '' ? path : `${path}?${suffix}`;
 }
 
@@ -595,7 +574,7 @@ export function projectShow(
 	if (!simplifyOutput) return withSpecialsFilter(show, includeSpecials);
 
 	const out = dropEmpty({
-		metadataRef: show.metadataRef,
+		ref: show.ref,
 		preferredTitle: show.preferredTitle,
 		canonicalTitle: show.canonicalTitle,
 		status: show.status,
@@ -661,13 +640,13 @@ function hasSubtitles(media: IDataObject): boolean {
 	});
 }
 
-async function submitOne(call: IndexerCall, body: IDataObject): Promise<IDataObject> {
+async function submitOne(call: HTTPCall, body: IDataObject): Promise<IDataObject> {
 	try {
-		await call('POST', '/submit', body);
-		return { infohash: submitInfohash(body), metadataRef: submitMetadataRef(body), ok: true };
+		await call('POST', '/api/v1/releases/queue/submit', body);
+		return { infohash: submitInfohash(body), ref: submitRef(body), ok: true };
 	} catch (error) {
 		if (statusCode(error) === 409) {
-			return { infohash: submitInfohash(body), metadataRef: submitMetadataRef(body), ok: false, error: 'conflict' };
+			return { infohash: submitInfohash(body), ref: submitRef(body), ok: false, error: 'conflict' };
 		}
 		throw error;
 	}
@@ -708,7 +687,7 @@ function submitInfohash(body: IDataObject): string {
 	return typeof infohash === 'string' ? infohash : '';
 }
 
-function submitMetadataRef(body: IDataObject): string {
+function submitRef(body: IDataObject): string {
 	const ref = body.ref;
 	return typeof ref === 'string' ? ref : '';
 }
