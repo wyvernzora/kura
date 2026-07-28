@@ -142,8 +142,8 @@ func TestExecutePreparedPlanClassifiesAlreadyPresentBeforePreflight(t *testing.T
 	if copyCalls != 0 {
 		t.Fatalf("backup seam calls = %d, want 0", copyCalls)
 	}
-	if drive.capacityCalls != 0 {
-		t.Fatalf("Capacity calls = %d, want 0", drive.capacityCalls)
+	if drive.capacityCalls != 1 {
+		t.Fatalf("Capacity calls = %d, want 1", drive.capacityCalls)
 	}
 	if len(execution.AlreadyPresent) != 1 {
 		t.Fatalf(
@@ -230,7 +230,7 @@ func TestExecutePreparedPlanExcludesAlreadyPresentFromCumulativeBudget(t *testin
 	)
 }
 
-func TestExecutePreparedPlanReturnsHealingBytesOnCapacityFailure(t *testing.T) {
+func TestExecutePreparedPlanReleasesNoHealingBytesOnCapacityFailure(t *testing.T) {
 	cartridgeRoot := t.TempDir()
 	libraryRoot := t.TempDir()
 	writeVolume(t, cartridgeRoot, "ABC123L6", firstVolume)
@@ -242,7 +242,7 @@ func TestExecutePreparedPlanReturnsHealingBytesOnCapacityFailure(t *testing.T) {
 		1,
 		nil,
 	)
-	existingName, manifestBytes, completeBytes := writeCommittedSnapshot(
+	existingName, _, _ := writeCommittedSnapshot(
 		t,
 		cartridgeRoot,
 		existing,
@@ -280,18 +280,8 @@ func TestExecutePreparedPlanReturnsHealingBytesOnCapacityFailure(t *testing.T) {
 	}
 	closeOutbox(t, outbox)
 
-	if len(execution.AlreadyPresent) != 1 {
-		t.Fatalf(
-			"already-present results = %d, want 1",
-			len(execution.AlreadyPresent),
-		)
-	}
-	got := execution.AlreadyPresent[0]
-	if !bytes.Equal(got.Manifest, manifestBytes) {
-		t.Fatalf("returned manifest bytes changed:\n%s", got.Manifest)
-	}
-	if !bytes.Equal(got.Complete, completeBytes) {
-		t.Fatalf("returned completion bytes changed:\n%s", got.Complete)
+	if !reflect.DeepEqual(execution, executor.PreparedExecution{}) {
+		t.Fatalf("execution = %#v, want zero result", execution)
 	}
 }
 
@@ -394,8 +384,8 @@ func TestExecutePreparedPlanRejectsMarkedUnreadableTargetWithoutWriting(t *testi
 	if copyCalls != 0 {
 		t.Fatalf("backup seam calls = %d, want 0", copyCalls)
 	}
-	if drive.capacityCalls != 0 {
-		t.Fatalf("Capacity calls = %d, want 0", drive.capacityCalls)
+	if drive.capacityCalls != 1 {
+		t.Fatalf("Capacity calls = %d, want 1", drive.capacityCalls)
 	}
 	gotMarker, err := os.ReadFile(markerPath)
 	if err != nil {
@@ -1403,6 +1393,8 @@ type fixedCapacityDrive struct {
 	free          int64
 	capacityErr   error
 	capacityCalls int
+	syncErr       error
+	syncCalls     int
 }
 
 func (d *fixedCapacityDrive) Loaded() (executor.Cartridge, error) {
@@ -1422,7 +1414,8 @@ func (d *fixedCapacityDrive) Capacity() (total, free int64, err error) {
 }
 
 func (d *fixedCapacityDrive) Sync() error {
-	return errors.New("Sync must not be called")
+	d.syncCalls++
+	return d.syncErr
 }
 
 type seriesMetadata struct {

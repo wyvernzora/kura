@@ -71,7 +71,10 @@ type directoryCartridge struct {
 	synced           bool
 }
 
-var _ Drive = (*DirectoryDrive)(nil)
+var (
+	_ Drive            = (*DirectoryDrive)(nil)
+	_ CapacityRecorder = (*DirectoryDrive)(nil)
+)
 
 // NewDirectoryDrive creates a fake containing the supplied cartridge
 // directories.
@@ -172,8 +175,8 @@ func (d *DirectoryDrive) SetFaults(faults DriveFaults) {
 	d.faults = faults
 }
 
-// RecordWrite adds bytes written to a cartridge. Future copy fakes call this
-// even when a failed copy removes its destination.
+// RecordWrite adds bytes written to a cartridge even when a failed copy removes
+// its destination.
 func (d *DirectoryDrive) RecordWrite(tapeID tape.ID, bytes int64) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()

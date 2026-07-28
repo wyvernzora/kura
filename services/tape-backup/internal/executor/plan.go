@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/wyvernzora/kura/services/tape-backup/internal/fingerprint"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/seriesmeta"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapemanifest"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
 )
 
 var (
@@ -21,31 +23,41 @@ var (
 	ErrPlanFailed = errors.New("executor: plan failed")
 )
 
-// ExistingSnapshot carries the exact manifest and completion-marker bytes for
-// a snapshot that classification found already committed on the cartridge.
-type ExistingSnapshot struct {
+// SnapshotResult carries exact committed manifest and completion-marker bytes.
+type SnapshotResult struct {
 	MetadataRef string
 	Generation  int
 	Manifest    []byte
 	Complete    []byte
 }
 
-// PreparedExecution contains phase-2 data that the later result hand-back
-// slice needs. It does not publish or persist results.
+// ExistingSnapshot is retained as the classification name for an already
+// committed SnapshotResult.
+type ExistingSnapshot = SnapshotResult
+
+// PreparedExecution contains results released after the cartridge index is
+// durable.
 type PreparedExecution struct {
 	AlreadyPresent []ExistingSnapshot
+	Written        []SnapshotResult
+	TapeID         tape.ID
+	ObservedAt     time.Time
+	CapacityBytes  int64
+	FreeBytes      int64
 }
 
 // BackupActionRequest is the narrow hand-off to the byte-copy slice.
 type BackupActionRequest struct {
 	PlanID      string
 	Cartridge   Cartridge
+	Events      *EventOutbox
 	LibraryRoot string
+	WrittenBy   backupplan.Creator
 	Action      backupplan.Action
+	result      *SnapshotResult
 }
 
 // BackupActionHandler executes one backup action after phase 2 accepts it.
-// Byte copy, file progress, and committed-result collection belong to D2c-2.
 type BackupActionHandler func(context.Context, BackupActionRequest) error
 
 type actionDisposition uint8
@@ -87,17 +99,33 @@ func ExecutePreparedPlan(
 
 	execution, err := classifyTargets(prepared, actions)
 	if err != nil {
-		return execution, planFailure(err)
+		return PreparedExecution{}, planFailure(err)
 	}
 	if err := preflightBackups(prepared, actions, freeSpaceMargin); err != nil {
-		return execution, planFailure(err)
+		return PreparedExecution{}, planFailure(err)
 	}
 	if err := reportFreshness(prepared, actions); err != nil {
-		return execution, planFailure(err)
+		return PreparedExecution{}, planFailure(err)
 	}
-	if err := executeActions(ctx, prepared, actions, backup); err != nil {
-		return execution, planFailure(err)
+	written, err := executeActions(ctx, prepared, actions, backup)
+	if err != nil {
+		return PreparedExecution{}, planFailure(err)
 	}
+	if err := prepared.Drive.Sync(); err != nil {
+		return PreparedExecution{}, fmt.Errorf("executor: sync cartridge index: %w", err)
+	}
+	total, free, err := prepared.Drive.Capacity()
+	if err != nil {
+		return PreparedExecution{}, fmt.Errorf(
+			"executor: observe capacity after sync: %w",
+			err,
+		)
+	}
+	execution.Written = written
+	execution.TapeID = prepared.Cartridge.TapeID
+	execution.ObservedAt = time.Now().UTC().Truncate(time.Second)
+	execution.CapacityBytes = total
+	execution.FreeBytes = free
 	return execution, nil
 }
 
@@ -389,50 +417,55 @@ func executeActions(
 	prepared PreparedPlan,
 	actions []preparedAction,
 	backup BackupActionHandler,
-) error {
+) ([]SnapshotResult, error) {
 	itemsWritten := 0
 	itemsFailed := 0
+	writtenResults := make([]SnapshotResult, 0)
 	for _, item := range actions {
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, err
 		}
 		switch item.action.Type {
 		case backupplan.ActionAssertVolume:
 			if err := assertVolume(prepared, item.action); err != nil {
-				return err
+				return nil, err
 			}
 		case backupplan.ActionAssertInventory:
 			if err := assertInventory(prepared, actions, item.action); err != nil {
-				return err
+				return nil, err
 			}
 		case backupplan.ActionAssertFreeSpace:
 			if err := assertFreeSpace(prepared, item.action); err != nil {
-				return err
+				return nil, err
 			}
 		case backupplan.ActionBackup:
-			written, failed, err := executeBackup(ctx, prepared, item, backup)
+			result, written, failed, err := executeBackup(ctx, prepared, item, backup)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if written {
 				itemsWritten++
+				writtenResults = append(writtenResults, result)
 			}
 			if failed {
 				itemsFailed++
 			}
 		default:
-			return fmt.Errorf(
+			return nil, fmt.Errorf(
 				"executor: execute unsupported action %q",
 				item.action.Type,
 			)
 		}
 	}
-	return prepared.Events.Emit(backupplan.Event{
+	if err := prepared.Events.Emit(backupplan.Event{
 		Type:         backupplan.EventPlanCompleted,
 		PlanID:       prepared.Plan.PlanID,
 		ItemsWritten: itemsWritten,
 		ItemsFailed:  itemsFailed,
-	})
+	}); err != nil {
+		return nil, err
+	}
+	return writtenResults, nil
 }
 
 func executeBackup(
@@ -440,29 +473,50 @@ func executeBackup(
 	prepared PreparedPlan,
 	item preparedAction,
 	backup BackupActionHandler,
-) (written, failed bool, err error) {
+) (result SnapshotResult, written, failed bool, err error) {
 	switch item.disposition {
 	case actionReady:
-		if err := backup(ctx, BackupActionRequest{
+		result := SnapshotResult{}
+		err := backup(ctx, BackupActionRequest{
 			PlanID:      prepared.Plan.PlanID,
 			Cartridge:   prepared.Cartridge,
+			Events:      prepared.Events,
 			LibraryRoot: prepared.LibraryRoot,
+			WrittenBy:   prepared.Plan.CreatedBy,
 			Action:      item.action,
-		}); err != nil {
-			return false, false, fmt.Errorf(
+			result:      &result,
+		})
+		if err != nil {
+			failure, ok := errors.AsType[*itemFailure](err)
+			if ok {
+				failedItem := item
+				failedItem.reason = failure.reason
+				failedItem.detail = failure.Error()
+				if emitErr := emitItemEvent(
+					prepared,
+					backupplan.EventItemFailed,
+					failedItem,
+				); emitErr != nil {
+					return SnapshotResult{}, false, false, errors.Join(err, emitErr)
+				}
+				return SnapshotResult{}, false, true, nil
+			}
+			return SnapshotResult{}, false, false, fmt.Errorf(
 				"executor: execute backup action (%q, %d): %w",
 				item.action.MetadataRef,
 				item.action.Generation,
 				err,
 			)
 		}
-		return true, false, nil
+		return result, true, false, nil
 	case actionDropped:
-		return false, true, nil
+		return SnapshotResult{}, false, true, nil
 	case actionSkipped:
-		return false, false, nil
+		return SnapshotResult{}, false, false, nil
 	default:
-		return false, false, errors.New("executor: backup action was not classified")
+		return SnapshotResult{}, false, false, errors.New(
+			"executor: backup action was not classified",
+		)
 	}
 }
 
