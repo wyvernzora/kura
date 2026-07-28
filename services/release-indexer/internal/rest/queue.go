@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 func (h *Handler) handleClaim(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +16,7 @@ func (h *Handler) handleClaim(w http.ResponseWriter, r *http.Request) {
 		h.log(r, slog.LevelDebug, "queue claim rejected", "reason", "method_or_body")
 		return
 	}
-	var req dispatch.ClaimRequest
+	var req api.ClaimRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		h.metrics.QueueClaim(0, "error")
 		h.log(r, slog.LevelInfo, "queue claim rejected", "reason", "invalid_body", "err", err)

@@ -136,11 +136,11 @@ func TestGetReleaseErrorOmitsStructuredContentAndSuccessKeepsIt(t *testing.T) {
 	if got := content["infohash"]; got != known {
 		t.Fatalf("infohash = %v, want %s", got, known)
 	}
-	if _, ok := content["raw_items"].([]any); !ok {
-		t.Fatalf("raw_items = %#v, want array", content["raw_items"])
+	if _, ok := content["rawItems"].([]any); !ok {
+		t.Fatalf("rawItems = %#v, want array", content["rawItems"])
 	}
-	if _, ok := content["match_events"].([]any); !ok {
-		t.Fatalf("match_events = %#v, want array", content["match_events"])
+	if _, ok := content["matchEvents"].([]any); !ok {
+		t.Fatalf("matchEvents = %#v, want array", content["matchEvents"])
 	}
 }
 

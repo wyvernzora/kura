@@ -9,17 +9,18 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 //go:embed tool_get_release.md
 var toolGetReleaseDoc string
 
 func addGetReleaseTool(srv *mcpsdk.Server, s *Server) {
-	addStructuredTool[dispatch.GetReleaseRequest, dispatch.GetReleaseResult](srv, &mcpsdk.Tool{
+	addStructuredTool[dispatch.GetReleaseRequest, api.ReleaseDetail](srv, &mcpsdk.Tool{
 		Name:        "get_release",
 		Description: forLLM(toolGetReleaseDoc),
 		Annotations: readOnlyToolAnnotations(),
-	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, input dispatch.GetReleaseRequest) (*mcpsdk.CallToolResult, dispatch.GetReleaseResult, error) {
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, input dispatch.GetReleaseRequest) (*mcpsdk.CallToolResult, api.ReleaseDetail, error) {
 		start := time.Now()
 		out, err := s.dispatch.GetReleaseTyped(ctx, input)
 		if err != nil {
@@ -32,7 +33,7 @@ func addGetReleaseTool(srv *mcpsdk.Server, s *Server) {
 				"duration_ms", dur.Milliseconds(),
 				"err", err,
 			)
-			return errorResult(err), dispatch.GetReleaseResult{}, nil
+			return errorResult(err), api.ReleaseDetail{}, nil
 		}
 		dur := time.Since(start)
 		s.metrics.MCPTool("get_release", "ok", dur)

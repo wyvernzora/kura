@@ -110,7 +110,7 @@ func TestSmoke(t *testing.T) {
 		}
 
 		claimResp, err := http.Post(baseURL+"/api/v1/releases/queue/claim", "application/json", bytes.NewReader(mustJSON(t, map[string]any{
-			"limit": 5, "lease_seconds": 60,
+			"limit": 5, "leaseSeconds": 60,
 		})))
 		if err != nil {
 			t.Fatalf("POST /queue/claim: %v", err)
@@ -122,7 +122,7 @@ func TestSmoke(t *testing.T) {
 		var claim struct {
 			Items []struct {
 				Infohash   string `json:"infohash"`
-				ClaimToken int64  `json:"claim_token"`
+				ClaimToken int64  `json:"claimToken"`
 			} `json:"items"`
 		}
 		if err := json.NewDecoder(claimResp.Body).Decode(&claim); err != nil {
@@ -133,11 +133,11 @@ func TestSmoke(t *testing.T) {
 		}
 
 		submitResp, err := http.Post(baseURL+"/api/v1/releases/queue/submit", "application/json", bytes.NewReader(mustJSON(t, map[string]any{
-			"infohash":    claim.Items[0].Infohash,
-			"claim_token": claim.Items[0].ClaimToken,
-			"status":      "matched",
-			"ref":         "tvdb:12345",
-			"confidence":  0.99,
+			"infohash":   claim.Items[0].Infohash,
+			"claimToken": claim.Items[0].ClaimToken,
+			"status":     "matched",
+			"ref":        "tvdb:12345",
+			"confidence": 0.99,
 		})))
 		if err != nil {
 			t.Fatalf("POST /submit: %v", err)
@@ -157,13 +157,13 @@ func TestSmoke(t *testing.T) {
 		}
 		var release struct {
 			Infohash    string `json:"infohash"`
-			MatchStatus string `json:"match_status"`
+			MatchStatus string `json:"matchStatus"`
 			RawItems    []struct {
-				SourceID string `json:"source_id"`
-			} `json:"raw_items"`
+				SourceID string `json:"sourceId"`
+			} `json:"rawItems"`
 			MatchEvents []struct {
 				Status string `json:"status"`
-			} `json:"match_events"`
+			} `json:"matchEvents"`
 		}
 		if err := json.NewDecoder(releaseResp.Body).Decode(&release); err != nil {
 			t.Fatalf("decode /releases/{infohash}: %v", err)
@@ -238,7 +238,7 @@ func TestSmoke(t *testing.T) {
 			Releases []struct {
 				Infohash string `json:"infohash"`
 				Ref      string `json:"ref"`
-			} `json:"releases"`
+			} `json:"items"`
 		}
 		if err := json.Unmarshal([]byte(firstText(res)), &env); err != nil {
 			t.Fatalf("decode list_releases: %v", err)
@@ -262,7 +262,7 @@ func TestSmoke(t *testing.T) {
 		}
 		var releaseDetail struct {
 			Infohash    string `json:"infohash"`
-			MatchStatus string `json:"match_status"`
+			MatchStatus string `json:"matchStatus"`
 		}
 		if err := json.Unmarshal([]byte(firstText(detail)), &releaseDetail); err != nil {
 			t.Fatalf("decode get_release: %v", err)

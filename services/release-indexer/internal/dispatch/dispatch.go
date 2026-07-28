@@ -10,6 +10,7 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/internal/cursor"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/infohash"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 var ErrInvalidInput = errors.New("takuhai/dispatch: invalid input")
@@ -20,51 +21,6 @@ type Dispatcher struct {
 
 func New(s store.Store) *Dispatcher { return &Dispatcher{store: s} }
 
-type ClaimRequest struct {
-	Limit        int `json:"limit"`
-	LeaseSeconds int `json:"lease_seconds"`
-}
-
-type ClaimItemResult struct {
-	Infohash       string          `json:"infohash"`
-	ClaimToken     int64           `json:"claim_token"`
-	AttemptCount   int             `json:"attempt_count"`
-	LeaseExpiresAt string          `json:"lease_expires_at"`
-	RawItems       []RawItemResult `json:"raw_items"`
-}
-
-type RawItemResult struct {
-	ID       int64  `json:"id"`
-	Source   string `json:"source"`
-	SourceID string `json:"source_id"`
-	Title    string `json:"title"`
-	// Claim wire compatibility: store.RawItemDetail.URL is shared with detail output; nil becomes "" so omitempty drops the key.
-	URL         string `json:"url,omitempty"`
-	PublishedAt string `json:"published_at"`
-}
-
-type ClaimResult struct {
-	Items []ClaimItemResult `json:"items"`
-}
-
-type SubmitRequest struct {
-	Infohash   string   `json:"infohash"`
-	ClaimToken int64    `json:"claim_token"`
-	Status     string   `json:"status"`
-	Ref        string   `json:"ref,omitempty"`
-	Confidence *float64 `json:"confidence,omitempty"`
-	Reason     string   `json:"reason,omitempty"`
-}
-
-type QueueStatsResult struct {
-	Available  int `json:"available"`
-	Leased     int `json:"leased"`
-	Unmatched  int `json:"unmatched"`
-	Matched    int `json:"matched"`
-	Suppressed int `json:"suppressed"`
-	Exhausted  int `json:"exhausted"`
-}
-
 type ListReleasesRequest struct {
 	Ref    string     `json:"ref,omitempty" jsonschema:"optional opaque metadata ref in namespace:value form; omit to list recent matched releases across all refs"`
 	Since  *time.Time `json:"since,omitempty" jsonschema:"RFC3339 timestamp; when present, page by first matched time"`
@@ -72,60 +28,8 @@ type ListReleasesRequest struct {
 	Cursor string     `json:"cursor,omitempty" jsonschema:"opaque next_cursor from the previous response"`
 }
 
-type ReleaseItemResult struct {
-	Infohash    string   `json:"infohash"`
-	Ref         string   `json:"ref"`
-	Title       string   `json:"title"`
-	SizeBytes   int64    `json:"size_bytes"`
-	PublishedAt string   `json:"published_at"`
-	Confidence  float64  `json:"confidence"`
-	Sources     []string `json:"sources"`
-}
-
-type ListReleasesResult struct {
-	Releases   []ReleaseItemResult `json:"releases"`
-	NextCursor *string             `json:"next_cursor,omitempty"`
-}
-
 type GetReleaseRequest struct {
 	Infohash string `json:"infohash" jsonschema:"canonical v1 btih infohash for the release to fetch"`
-}
-
-type GetReleaseResult struct {
-	Infohash       string                 `json:"infohash"`
-	Title          string                 `json:"title"`
-	Magnet         *string                `json:"magnet"`
-	SizeBytes      *int64                 `json:"size_bytes"`
-	PublishedAt    string                 `json:"published_at"`
-	Sources        []string               `json:"sources"`
-	MatchStatus    string                 `json:"match_status"`
-	Ref            *string                `json:"ref"`
-	Confidence     *float64               `json:"confidence"`
-	FirstMatchedAt *string                `json:"first_matched_at"`
-	AttemptCount   int                    `json:"attempt_count"`
-	CreatedAt      string                 `json:"created_at"`
-	UpdatedAt      string                 `json:"updated_at"`
-	RawItems       []RawItemDetailResult  `json:"raw_items"`
-	MatchEvents    []MatchEventItemResult `json:"match_events"`
-}
-
-type RawItemDetailResult struct {
-	ID          int64   `json:"id"`
-	Source      string  `json:"source"`
-	SourceID    string  `json:"source_id"`
-	Title       string  `json:"title"`
-	URL         *string `json:"url"`
-	PublishedAt string  `json:"published_at"`
-	IngestedAt  string  `json:"ingested_at"`
-}
-
-type MatchEventItemResult struct {
-	ID         int64    `json:"id"`
-	Status     string   `json:"status"`
-	Ref        *string  `json:"ref"`
-	Confidence *float64 `json:"confidence"`
-	Reason     *string  `json:"reason"`
-	CreatedAt  string   `json:"created_at"`
 }
 
 type ResolveMagnetsRequest struct {
@@ -137,7 +41,7 @@ type ResolveMagnetsResult struct {
 }
 
 func (d *Dispatcher) Claim(ctx context.Context, input []byte) ([]byte, error) {
-	var req ClaimRequest
+	var req api.ClaimRequest
 	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, err
 	}
@@ -148,36 +52,32 @@ func (d *Dispatcher) Claim(ctx context.Context, input []byte) ([]byte, error) {
 	return json.Marshal(out)
 }
 
-func (d *Dispatcher) ClaimTyped(ctx context.Context, req ClaimRequest) (ClaimResult, error) {
+func (d *Dispatcher) ClaimTyped(ctx context.Context, req api.ClaimRequest) (api.ClaimResponse, error) {
 	res, err := d.store.Claim(ctx, store.ClaimParams{
 		Limit:        req.Limit,
 		LeaseSeconds: req.LeaseSeconds,
 	})
 	if err != nil {
-		return ClaimResult{}, err
+		return api.ClaimResponse{}, err
 	}
-	out := ClaimResult{Items: make([]ClaimItemResult, 0, len(res.Items))}
+	out := api.ClaimResponse{Items: make([]api.ClaimItem, 0, len(res.Items))}
 	for _, it := range res.Items {
-		raw := make([]RawItemResult, 0, len(it.RawItems))
+		raw := make([]api.ClaimRawItem, 0, len(it.RawItems))
 		for _, ri := range it.RawItems {
-			url := ""
-			if ri.URL != nil {
-				url = *ri.URL
-			}
-			raw = append(raw, RawItemResult{
+			raw = append(raw, api.ClaimRawItem{
 				ID:          ri.ID,
 				Source:      ri.Source,
 				SourceID:    ri.SourceID,
 				Title:       ri.Title,
-				URL:         url,
-				PublishedAt: ri.PublishedAt.Format(time.RFC3339Nano),
+				URL:         ri.URL,
+				PublishedAt: ri.PublishedAt,
 			})
 		}
-		out.Items = append(out.Items, ClaimItemResult{
+		out.Items = append(out.Items, api.ClaimItem{
 			Infohash:       it.Infohash,
 			ClaimToken:     it.ClaimToken,
 			AttemptCount:   it.AttemptCount,
-			LeaseExpiresAt: it.LeaseExpires.Format(time.RFC3339Nano),
+			LeaseExpiresAt: it.LeaseExpires,
 			RawItems:       raw,
 		})
 	}
@@ -185,7 +85,7 @@ func (d *Dispatcher) ClaimTyped(ctx context.Context, req ClaimRequest) (ClaimRes
 }
 
 func (d *Dispatcher) Submit(ctx context.Context, input []byte) ([]byte, error) {
-	var req SubmitRequest
+	var req api.SubmitRequest
 	if err := json.Unmarshal(input, &req); err != nil {
 		return nil, err
 	}
@@ -195,16 +95,16 @@ func (d *Dispatcher) Submit(ctx context.Context, input []byte) ([]byte, error) {
 	return []byte(`{"ok":true}`), nil
 }
 
-func (d *Dispatcher) SubmitTyped(ctx context.Context, req SubmitRequest) error {
+func (d *Dispatcher) SubmitTyped(ctx context.Context, req api.SubmitRequest) error {
 	switch req.Status {
-	case "matched", "unmatched", "suppressed":
+	case api.SubmitStatusMatched, api.SubmitStatusUnmatched, api.SubmitStatusSuppressed:
 	default:
 		return fmt.Errorf("%w: invalid status %q", ErrInvalidInput, req.Status)
 	}
 	if err := d.store.Submit(ctx, store.SubmitParams{
 		Infohash:   req.Infohash,
 		ClaimToken: req.ClaimToken,
-		Status:     req.Status,
+		Status:     string(req.Status),
 		Ref:        req.Ref,
 		Confidence: req.Confidence,
 		Reason:     req.Reason,
@@ -222,12 +122,12 @@ func (d *Dispatcher) QueueStats(ctx context.Context, input []byte) ([]byte, erro
 	return json.Marshal(out)
 }
 
-func (d *Dispatcher) QueueStatsTyped(ctx context.Context) (QueueStatsResult, error) {
+func (d *Dispatcher) QueueStatsTyped(ctx context.Context) (api.QueueStats, error) {
 	qs, err := d.store.QueueStats(ctx)
 	if err != nil {
-		return QueueStatsResult{}, err
+		return api.QueueStats{}, err
 	}
-	return QueueStatsResult{
+	return api.QueueStats{
 		Available:  qs.Available,
 		Leased:     qs.Leased,
 		Unmatched:  qs.Unmatched,
@@ -249,7 +149,7 @@ func (d *Dispatcher) ListReleases(ctx context.Context, input []byte) ([]byte, er
 	return json.Marshal(out)
 }
 
-func (d *Dispatcher) ListReleasesTyped(ctx context.Context, req ListReleasesRequest) (ListReleasesResult, error) {
+func (d *Dispatcher) ListReleasesTyped(ctx context.Context, req ListReleasesRequest) (api.ReleaseList, error) {
 	page, err := d.store.ListReleases(ctx, store.ReleaseQuery{
 		Ref:    req.Ref,
 		Since:  req.Since,
@@ -257,16 +157,16 @@ func (d *Dispatcher) ListReleasesTyped(ctx context.Context, req ListReleasesRequ
 		Cursor: req.Cursor,
 	})
 	if err != nil {
-		return ListReleasesResult{}, err
+		return api.ReleaseList{}, err
 	}
-	out := ListReleasesResult{Releases: make([]ReleaseItemResult, 0, len(page.Releases))}
+	out := api.ReleaseList{Items: make([]api.ReleaseItem, 0, len(page.Releases))}
 	for _, r := range page.Releases {
-		out.Releases = append(out.Releases, ReleaseItemResult{
+		out.Items = append(out.Items, api.ReleaseItem{
 			Infohash:    r.Infohash,
 			Ref:         r.Ref,
 			Title:       r.Title,
 			SizeBytes:   r.SizeBytes,
-			PublishedAt: r.PublishedAt.Format(time.RFC3339Nano),
+			PublishedAt: r.PublishedAt,
 			Confidence:  r.Confidence,
 			Sources:     r.Sources,
 		})
@@ -290,55 +190,55 @@ func (d *Dispatcher) GetRelease(ctx context.Context, input []byte) ([]byte, erro
 	return json.Marshal(out)
 }
 
-func (d *Dispatcher) GetReleaseTyped(ctx context.Context, req GetReleaseRequest) (GetReleaseResult, error) {
+func (d *Dispatcher) GetReleaseTyped(ctx context.Context, req GetReleaseRequest) (api.ReleaseDetail, error) {
 	ih, err := infohash.NormalizeInfohash(req.Infohash)
 	if err != nil {
-		return GetReleaseResult{}, fmt.Errorf("%w: invalid infohash %q: %v", ErrInvalidInput, req.Infohash, err)
+		return api.ReleaseDetail{}, fmt.Errorf("%w: invalid infohash %q: %v", ErrInvalidInput, req.Infohash, err)
 	}
 	detail, err := d.store.GetRelease(ctx, ih)
 	if err != nil {
-		return GetReleaseResult{}, err
+		return api.ReleaseDetail{}, err
 	}
 	sources := detail.Sources
 	if sources == nil {
 		sources = []string{}
 	}
-	out := GetReleaseResult{
+	out := api.ReleaseDetail{
 		Infohash:       detail.Infohash,
 		Title:          detail.Title,
 		Magnet:         detail.Magnet,
 		SizeBytes:      detail.SizeBytes,
-		PublishedAt:    detail.PublishedAt.Format(time.RFC3339Nano),
+		PublishedAt:    detail.PublishedAt,
 		Sources:        sources,
-		MatchStatus:    detail.MatchStatus,
+		MatchStatus:    api.MatchStatus(detail.MatchStatus),
 		Ref:            detail.Ref,
 		Confidence:     detail.Confidence,
-		FirstMatchedAt: timeStringPtr(detail.FirstMatchedAt),
+		FirstMatchedAt: detail.FirstMatchedAt,
 		AttemptCount:   detail.AttemptCount,
-		CreatedAt:      detail.CreatedAt.Format(time.RFC3339Nano),
-		UpdatedAt:      detail.UpdatedAt.Format(time.RFC3339Nano),
-		RawItems:       make([]RawItemDetailResult, 0, len(detail.RawItems)),
-		MatchEvents:    make([]MatchEventItemResult, 0, len(detail.MatchEvents)),
+		CreatedAt:      detail.CreatedAt,
+		UpdatedAt:      detail.UpdatedAt,
+		RawItems:       make([]api.RawItem, 0, len(detail.RawItems)),
+		MatchEvents:    make([]api.MatchEvent, 0, len(detail.MatchEvents)),
 	}
 	for _, item := range detail.RawItems {
-		out.RawItems = append(out.RawItems, RawItemDetailResult{
+		out.RawItems = append(out.RawItems, api.RawItem{
 			ID:          item.ID,
 			Source:      item.Source,
 			SourceID:    item.SourceID,
 			Title:       item.Title,
 			URL:         item.URL,
-			PublishedAt: item.PublishedAt.Format(time.RFC3339Nano),
-			IngestedAt:  item.IngestedAt.Format(time.RFC3339Nano),
+			PublishedAt: item.PublishedAt,
+			IngestedAt:  item.IngestedAt,
 		})
 	}
 	for _, ev := range detail.MatchEvents {
-		out.MatchEvents = append(out.MatchEvents, MatchEventItemResult{
+		out.MatchEvents = append(out.MatchEvents, api.MatchEvent{
 			ID:         ev.ID,
-			Status:     ev.Status,
+			Status:     api.MatchStatus(ev.Status),
 			Ref:        ev.Ref,
 			Confidence: ev.Confidence,
 			Reason:     ev.Reason,
-			CreatedAt:  ev.CreatedAt.Format(time.RFC3339Nano),
+			CreatedAt:  ev.CreatedAt,
 		})
 	}
 	return out, nil

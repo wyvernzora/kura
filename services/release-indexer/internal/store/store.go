@@ -105,12 +105,15 @@ type ReleasePage struct {
 }
 
 type ReleaseItem struct {
-	Infohash    string
-	Ref         string
-	Title       string
-	SizeBytes   int64
+	Infohash string
+	Ref      string
+	Title    string
+	// SizeBytes and Confidence are nullable columns and stay pointers all
+	// the way out: a release with no recorded size is not a release of
+	// size zero, and an unscored match is not a match scored 0.0.
+	SizeBytes   *int64
 	PublishedAt time.Time
-	Confidence  float64
+	Confidence  *float64
 	Sources     []string
 }
 

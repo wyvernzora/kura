@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +16,7 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		h.log(r, slog.LevelDebug, "submit rejected", "reason", "method_or_body")
 		return
 	}
-	var req dispatch.SubmitRequest
+	var req api.SubmitRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		h.metrics.Submit("invalid", "error", nil)
 		h.log(r, slog.LevelInfo, "submit rejected", "reason", "invalid_body", "err", err)
@@ -27,7 +28,7 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		if code := dispatch.WireCode(err); code == "no_active_lease" || code == "stale_lease" {
 			result = "conflict"
 		}
-		h.metrics.Submit(req.Status, result, nil)
+		h.metrics.Submit(string(req.Status), result, nil)
 		h.log(r, dispatchLogLevel(err), "submit failed",
 			"infohash", req.Infohash,
 			"claim_token", req.ClaimToken,
@@ -42,7 +43,7 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		h.writeDispatchError(w, req.Infohash, err)
 		return
 	}
-	h.metrics.Submit(req.Status, "ok", req.Confidence)
+	h.metrics.Submit(string(req.Status), "ok", req.Confidence)
 	h.log(r, slog.LevelInfo, "submit completed",
 		"infohash", req.Infohash,
 		"claim_token", req.ClaimToken,

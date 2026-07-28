@@ -84,7 +84,7 @@ func TestAPIShape_MatchListsReleaseAndResolvesMagnet(t *testing.T) {
 			Infohash   string  `json:"infohash"`
 			Ref        string  `json:"ref"`
 			Confidence float64 `json:"confidence"`
-		} `json:"releases"`
+		} `json:"items"`
 	}
 	if err := json.Unmarshal(res, &listed); err != nil {
 		t.Fatalf("decode list_releases: %v", err)
@@ -215,20 +215,20 @@ func TestAPIShape_GetReleaseExplicitNullsAndNoLeaseInternals(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode release detail as raw JSON: %v", err)
 	}
-	for _, key := range []string{"magnet", "size_bytes", "ref", "confidence", "first_matched_at"} {
+	for _, key := range []string{"magnet", "sizeBytes", "ref", "confidence", "firstMatchedAt"} {
 		assertJSONNull(t, body, key)
 	}
-	for _, key := range []string{"raw_items", "match_events"} {
+	for _, key := range []string{"rawItems", "matchEvents"} {
 		assertJSONArray(t, body, key)
 	}
-	for _, key := range []string{"claim_token", "claimed_at", "lease_expires_at"} {
+	for _, key := range []string{"claimToken", "claimedAt", "leaseExpiresAt"} {
 		if _, ok := body[key]; ok {
 			t.Fatalf("response included lease-internal key %q", key)
 		}
 	}
 
 	var rawItems []map[string]json.RawMessage
-	if err := json.Unmarshal(body["raw_items"], &rawItems); err != nil {
+	if err := json.Unmarshal(body["rawItems"], &rawItems); err != nil {
 		t.Fatalf("decode raw_items: %v", err)
 	}
 	if len(rawItems) != 1 {
@@ -237,7 +237,7 @@ func TestAPIShape_GetReleaseExplicitNullsAndNoLeaseInternals(t *testing.T) {
 	assertJSONNull(t, rawItems[0], "url")
 
 	var events []map[string]json.RawMessage
-	if err := json.Unmarshal(body["match_events"], &events); err != nil {
+	if err := json.Unmarshal(body["matchEvents"], &events); err != nil {
 		t.Fatalf("decode match_events: %v", err)
 	}
 	if len(events) != 1 {
@@ -394,22 +394,22 @@ func seedReleaseFrom(t *testing.T, ctx context.Context, st store.Store, ih, sour
 type releaseDetailBody struct {
 	Infohash       string   `json:"infohash"`
 	Magnet         *string  `json:"magnet"`
-	MatchStatus    string   `json:"match_status"`
+	MatchStatus    string   `json:"matchStatus"`
 	Ref            *string  `json:"ref"`
 	Confidence     *float64 `json:"confidence"`
-	FirstMatchedAt *string  `json:"first_matched_at"`
+	FirstMatchedAt *string  `json:"firstMatchedAt"`
 	RawItems       []struct {
 		ID       int64  `json:"id"`
 		Source   string `json:"source"`
-		SourceID string `json:"source_id"`
-	} `json:"raw_items"`
+		SourceID string `json:"sourceId"`
+	} `json:"rawItems"`
 	MatchEvents []struct {
 		ID        int64   `json:"id"`
 		Status    string  `json:"status"`
 		Ref       *string `json:"ref"`
 		Reason    *string `json:"reason"`
-		CreatedAt string  `json:"created_at"`
-	} `json:"match_events"`
+		CreatedAt string  `json:"createdAt"`
+	} `json:"matchEvents"`
 }
 
 func decodeReleaseDetail(t *testing.T, b []byte) releaseDetailBody {
@@ -519,3 +519,55 @@ func mustJSON(t *testing.T, v any) []byte {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// The list projection used to COALESCE size_bytes and confidence to 0, which
+// made "no recorded size" indistinguishable from a real zero and "unscored
+// match" indistinguishable from a 0.0 score. Both are nullable columns and
+// must reach the wire as explicit null.
+func TestAPIShape_ListReleasesKeepsNullableFactsNull(t *testing.T) {
+	ctx := context.Background()
+	clock := &fakeClock{now: time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)}
+	st := newConformanceStoreWithClock(t, clock)
+
+	// SizeBytes 0 is the "unset" sentinel the store maps to SQL NULL.
+	if _, err := st.IngestN(ctx, store.IngestParams{
+		Infohash:    apiIH1,
+		Source:      "dmhy",
+		SourceID:    "null-facts",
+		Title:       "raw release null-facts",
+		Magnet:      "magnet:?xt=urn:btih:" + apiIH1,
+		SizeBytes:   0,
+		PublishedAt: clock.now,
+	}); err != nil {
+		t.Fatalf("IngestN: %v", err)
+	}
+	claim := claimOne(t, ctx, st, 60)
+	// Matched with no Confidence: an external matcher that does not score
+	// its own output is valid input.
+	if err := st.Submit(ctx, store.SubmitParams{
+		Infohash:   apiIH1,
+		ClaimToken: claim.ClaimToken,
+		Status:     "matched",
+		Ref:        "tvdb:123",
+		Confidence: nil,
+	}); err != nil {
+		t.Fatalf("Submit matched: %v", err)
+	}
+
+	res, err := dispatch.New(st).ListReleases(ctx, mustJSON(t, map[string]any{"ref": "tvdb:123"}))
+	if err != nil {
+		t.Fatalf("ListReleases: %v", err)
+	}
+	var listed struct {
+		Items []map[string]json.RawMessage `json:"items"`
+	}
+	if err := json.Unmarshal(res, &listed); err != nil {
+		t.Fatalf("decode list_releases: %v", err)
+	}
+	if len(listed.Items) != 1 {
+		t.Fatalf("list_releases returned %d items, want 1", len(listed.Items))
+	}
+	for _, key := range []string{"sizeBytes", "confidence"} {
+		assertJSONNull(t, listed.Items[0], key)
+	}
+}

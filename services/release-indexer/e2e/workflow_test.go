@@ -54,49 +54,49 @@ func TestEndToEndWorkflow(t *testing.T) {
 
 	matchToken := claimOne(t, takuhaiURL, matchInfohash, 30)
 	assertSubmitStatus(t, takuhaiURL, http.StatusConflict, map[string]any{
-		"infohash":    matchInfohash,
-		"claim_token": matchToken - 1,
-		"status":      "matched",
-		"ref":         "tvdb:12345",
-		"confidence":  0.5,
+		"infohash":   matchInfohash,
+		"claimToken": matchToken - 1,
+		"status":     "matched",
+		"ref":        "tvdb:12345",
+		"confidence": 0.5,
 	})
 	assertSubmitStatus(t, takuhaiURL, http.StatusBadRequest, map[string]any{
-		"infohash":    matchInfohash,
-		"claim_token": matchToken,
-		"status":      "defer",
+		"infohash":   matchInfohash,
+		"claimToken": matchToken,
+		"status":     "defer",
 	})
 	submitOK(t, takuhaiURL, map[string]any{
-		"infohash":    matchInfohash,
-		"claim_token": matchToken,
-		"status":      "matched",
-		"ref":         "tvdb:12345",
-		"confidence":  0,
-		"reason":      "e2e exact fixture match",
+		"infohash":   matchInfohash,
+		"claimToken": matchToken,
+		"status":     "matched",
+		"ref":        "tvdb:12345",
+		"confidence": 0,
+		"reason":     "e2e exact fixture match",
 	})
 
 	suppressToken := claimOne(t, takuhaiURL, suppressInfohash, 30)
 	submitOK(t, takuhaiURL, map[string]any{
-		"infohash":    suppressInfohash,
-		"claim_token": suppressToken,
-		"status":      "suppressed",
-		"reason":      "e2e not wanted",
+		"infohash":   suppressInfohash,
+		"claimToken": suppressToken,
+		"status":     "suppressed",
+		"reason":     "e2e not wanted",
 	})
 
 	exhaustToken := claimOne(t, takuhaiURL, exhaustInfohash, 1)
 	submitOK(t, takuhaiURL, map[string]any{
-		"infohash":    exhaustInfohash,
-		"claim_token": exhaustToken,
-		"status":      "unmatched",
-		"reason":      "e2e first miss",
+		"infohash":   exhaustInfohash,
+		"claimToken": exhaustToken,
+		"status":     "unmatched",
+		"reason":     "e2e first miss",
 	})
 	assertNoClaim(t, takuhaiURL, "unmatched submit keeps the lease until timeout")
 	time.Sleep(1500 * time.Millisecond)
 	exhaustToken = claimOne(t, takuhaiURL, exhaustInfohash, 1)
 	submitOK(t, takuhaiURL, map[string]any{
-		"infohash":    exhaustInfohash,
-		"claim_token": exhaustToken,
-		"status":      "unmatched",
-		"reason":      "e2e second miss exhausts",
+		"infohash":   exhaustInfohash,
+		"claimToken": exhaustToken,
+		"status":     "unmatched",
+		"reason":     "e2e second miss exhausts",
 	})
 
 	stats := queueStats(t, takuhaiURL)
@@ -221,8 +221,8 @@ func claimOne(t *testing.T, takuhaiURL, wantInfohash string, leaseSeconds int) i
 	t.Helper()
 	var claim claimResponse
 	postJSON(t, takuhaiURL+"/api/v1/releases/queue/claim", map[string]any{
-		"limit":         1,
-		"lease_seconds": leaseSeconds,
+		"limit":        1,
+		"leaseSeconds": leaseSeconds,
 	}, http.StatusOK, &claim)
 	if len(claim.Items) != 1 {
 		t.Fatalf("claim items = %+v, want one item %s", claim.Items, wantInfohash)
@@ -244,8 +244,8 @@ func assertNoClaim(t *testing.T, takuhaiURL, note string) {
 	t.Helper()
 	var claim claimResponse
 	postJSON(t, takuhaiURL+"/api/v1/releases/queue/claim", map[string]any{
-		"limit":         1,
-		"lease_seconds": 1,
+		"limit":        1,
+		"leaseSeconds": 1,
 	}, http.StatusOK, &claim)
 	if len(claim.Items) != 0 {
 		t.Fatalf("claim during %s = %+v, want no items", note, claim.Items)
@@ -430,9 +430,9 @@ type claimResponse struct {
 
 type claimItem struct {
 	Infohash     string    `json:"infohash"`
-	ClaimToken   int64     `json:"claim_token"`
-	AttemptCount int       `json:"attempt_count"`
-	RawItems     []rawItem `json:"raw_items"`
+	ClaimToken   int64     `json:"claimToken"`
+	AttemptCount int       `json:"attemptCount"`
+	RawItems     []rawItem `json:"rawItems"`
 }
 
 type rawItem struct {
@@ -450,7 +450,7 @@ type queueStatsResponse struct {
 }
 
 type listReleasesResponse struct {
-	Releases []releaseItem `json:"releases"`
+	Releases []releaseItem `json:"items"`
 }
 
 type releaseItem struct {

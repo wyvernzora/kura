@@ -156,7 +156,7 @@ func TestGetRelease(t *testing.T) {
 	var body struct {
 		Infohash    string `json:"infohash"`
 		Title       string `json:"title"`
-		MatchStatus string `json:"match_status"`
+		MatchStatus string `json:"matchStatus"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)

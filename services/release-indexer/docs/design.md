@@ -62,22 +62,22 @@ Crawler posts and ingest posts use the same shape:
 ```json
 {
   "source": "dmhy",
-  "source_id": "721238",
+  "sourceId": "721238",
   "title": "raw release title",
   "magnet": "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
   "url": "https://share.dmhy.org/topics/view/721238_example.html",
-  "published_at": "2026-06-24T12:00:00Z",
-  "size_bytes": 3600000000
+  "publishedAt": "2026-06-24T12:00:00Z",
+  "sizeBytes": 3600000000
 }
 ```
 
-`/api/v1/releases/queue/claim` returns `claim_token`, `attempt_count`, `lease_expires_at`, and linked
-`raw_items`. `/api/v1/releases/queue/submit` accepts:
+`/api/v1/releases/queue/claim` returns `claimToken`, `attemptCount`, `leaseExpiresAt`, and linked
+`rawItems`. `/api/v1/releases/queue/submit` accepts:
 
 ```json
 {
   "infohash": "0123456789abcdef0123456789abcdef01234567",
-  "claim_token": 12,
+  "claimToken": 12,
   "status": "matched",
   "ref": "tvdb:123",
   "confidence": 0.94,
@@ -113,11 +113,11 @@ marked exhausted before new claims are offered. Claim crashes do not increment
 `attempt_count`.
 
 `GET /api/v1/releases/{infohash}` returns the single-release full context view:
-representative release fields, `match_status`, nullable derived fields (`magnet`,
-`size_bytes`, `ref`, `confidence`, `first_matched_at`), `attempt_count`,
-timestamps, `raw_items`, and `match_events`. The response deliberately excludes
-lease internals (`claim_token`, `claimed_at`, `lease_expires_at`). `raw_items` are
-ordered by `id ASC`. `match_events` are ordered chronologically by `created_at ASC,
+representative release fields, `matchStatus`, nullable derived fields (`magnet`,
+`sizeBytes`, `ref`, `confidence`, `firstMatchedAt`), `attemptCount`,
+timestamps, `rawItems`, and `matchEvents`. The response deliberately excludes
+lease internals (`claimToken`, `claimedAt`, `leaseExpiresAt`). `rawItems` are
+ordered by `id ASC`. `matchEvents` are ordered chronologically by `created_at ASC,
 id ASC`. Match events are intentionally unpaginated in v1; revisit pagination only
 if event counts grow enough to make responses large. Lists stay magnet-free, but
 release detail includes `magnet` because it is a single-row full-context lookup
@@ -128,8 +128,9 @@ rather than a paged listing.
 The MCP surface is read-only:
 
 - `list_releases({ref?, since?, limit?, cursor?})` returns matched releases, optionally filtered by ref, with
-  `infohash`, `ref`, `title`, `size_bytes`, `published_at`, `confidence`, `sources`, and
-  `next_cursor`.
+  `infohash`, `ref`, `title`, `sizeBytes`, `publishedAt`, `confidence`, `sources`, and
+  `nextCursor`. `sizeBytes` and `confidence` are explicit null when unrecorded,
+  never coerced to zero.
 - `get_release({infohash})` returns the same single-release detail object as
   `GET /api/v1/releases/{infohash}`.
 - `resolve_magnets({infohashes})` returns `{ "magnets": { "<infohash>": "<magnet>" } }`.

@@ -542,8 +542,8 @@ func (s *Store) listReleaseRows(ctx context.Context, q store.ReleaseQuery, path 
 	if path == cursor.PathCatalog {
 		if q.Ref == "" {
 			return s.pool.Query(ctx, `
-				SELECT infohash, COALESCE(ref, ''), title, COALESCE(size_bytes, 0), published_at,
-					COALESCE(confidence, 0), sources, published_at
+				SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
+					confidence, sources, published_at
 				FROM releases
 				WHERE match_status = 'matched'
 					AND (NOT $3 OR (published_at, infohash) < ($1, $2))
@@ -552,8 +552,8 @@ func (s *Store) listReleaseRows(ctx context.Context, q store.ReleaseQuery, path 
 			`, seekKey, seekHash, hasSeek, fetch)
 		}
 		return s.pool.Query(ctx, `
-			SELECT infohash, COALESCE(ref, ''), title, COALESCE(size_bytes, 0), published_at,
-				COALESCE(confidence, 0), sources, published_at
+			SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
+				confidence, sources, published_at
 			FROM releases
 			WHERE match_status = 'matched' AND ref = $1
 				AND (NOT $4 OR (published_at, infohash) < ($2, $3))
@@ -563,8 +563,8 @@ func (s *Store) listReleaseRows(ctx context.Context, q store.ReleaseQuery, path 
 	}
 	if q.Ref == "" {
 		return s.pool.Query(ctx, `
-			SELECT infohash, COALESCE(ref, ''), title, COALESCE(size_bytes, 0), published_at,
-				COALESCE(confidence, 0), sources, first_matched_at
+			SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
+				confidence, sources, first_matched_at
 			FROM releases
 			WHERE match_status = 'matched'
 				AND first_matched_at > $1
@@ -574,8 +574,8 @@ func (s *Store) listReleaseRows(ctx context.Context, q store.ReleaseQuery, path 
 		`, *q.Since, seekKey, seekHash, hasSeek, fetch)
 	}
 	return s.pool.Query(ctx, `
-		SELECT infohash, COALESCE(ref, ''), title, COALESCE(size_bytes, 0), published_at,
-			COALESCE(confidence, 0), sources, first_matched_at
+		SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
+			confidence, sources, first_matched_at
 		FROM releases
 		WHERE match_status = 'matched' AND ref = $1
 			AND first_matched_at > $2

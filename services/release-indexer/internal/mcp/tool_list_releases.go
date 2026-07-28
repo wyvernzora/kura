@@ -10,17 +10,18 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 //go:embed tool_list_releases.md
 var toolListReleasesDoc string
 
 func addListReleasesTool(srv *mcpsdk.Server, s *Server) {
-	addStructuredTool[dispatch.ListReleasesRequest, dispatch.ListReleasesResult](srv, &mcpsdk.Tool{
+	addStructuredTool[dispatch.ListReleasesRequest, api.ReleaseList](srv, &mcpsdk.Tool{
 		Name:        "list_releases",
 		Description: forLLM(toolListReleasesDoc),
 		Annotations: readOnlyToolAnnotations(),
-	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, input dispatch.ListReleasesRequest) (*mcpsdk.CallToolResult, dispatch.ListReleasesResult, error) {
+	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, input dispatch.ListReleasesRequest) (*mcpsdk.CallToolResult, api.ReleaseList, error) {
 		start := time.Now()
 		out, err := s.dispatch.ListReleasesTyped(ctx, input)
 		if err != nil {
@@ -37,7 +38,7 @@ func addListReleasesTool(srv *mcpsdk.Server, s *Server) {
 				"duration_ms", dur.Milliseconds(),
 				"err", err,
 			)
-			return errorResult(err), dispatch.ListReleasesResult{}, nil
+			return errorResult(err), api.ReleaseList{}, nil
 		}
 		dur := time.Since(start)
 		s.metrics.MCPTool("list_releases", "ok", dur)
@@ -47,7 +48,7 @@ func addListReleasesTool(srv *mcpsdk.Server, s *Server) {
 			"limit", input.Limit,
 			"has_cursor", input.Cursor != "",
 			"has_since", input.Since != nil,
-			"release_count", len(out.Releases),
+			"release_count", len(out.Items),
 			"has_next_cursor", out.NextCursor != nil,
 			"duration_ms", dur.Milliseconds(),
 		)
