@@ -1,6 +1,7 @@
 package fingerprint_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -332,6 +333,9 @@ func TestComputeRejectsSymlink(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Fatalf("Compute error = %v, want %q", err, want)
 	}
+	if !errors.Is(err, fingerprint.ErrSymlink) {
+		t.Fatalf("Compute error = %v, want ErrSymlink", err)
+	}
 }
 
 func TestComputeRejectsNonRegularFile(t *testing.T) {
@@ -344,6 +348,9 @@ func TestComputeRejectsNonRegularFile(t *testing.T) {
 	const want = `fingerprint: non-regular file "fifo" is not supported`
 	if err == nil || err.Error() != want {
 		t.Fatalf("Compute error = %v, want %q", err, want)
+	}
+	if !errors.Is(err, fingerprint.ErrNonRegularFile) {
+		t.Fatalf("Compute error = %v, want ErrNonRegularFile", err)
 	}
 }
 

@@ -209,9 +209,13 @@ func (o *EventOutbox) front() (backupplan.Event, bool) {
 // The cartridge is mounted, encryption is active, identity is confirmed, and
 // load-time normalization has completed.
 type PreparedPlan struct {
-	Cartridge Cartridge
-	Volume    tapevolume.Volume
-	Plan      backupplan.Plan
+	Drive              Drive
+	Events             *EventOutbox
+	Cartridge          Cartridge
+	Volume             tapevolume.Volume
+	Plan               backupplan.Plan
+	LibraryRoot        string
+	CommittedSnapshots map[string]struct{}
 }
 
 // PreparedPlanHandler owns phase 2 classification and phase 3 execution.
@@ -221,6 +225,7 @@ type PreparedPlanHandler func(context.Context, PreparedPlan) error
 type SessionOptions struct {
 	PollInterval time.Duration
 	IdleTimeout  time.Duration
+	LibraryRoot  string
 }
 
 type admittedPlan struct {
@@ -282,7 +287,13 @@ func RunSession(
 			return err
 		}
 
-		prepared, err := prepareCartridge(drive, cartridge, pending[index], events)
+		prepared, err := prepareCartridge(
+			drive,
+			cartridge,
+			pending[index],
+			events,
+			options.LibraryRoot,
+		)
 		if errors.Is(err, errCartridgeRejected) {
 			if emitErr := events.Emit(backupplan.Event{
 				Type:   backupplan.EventPlanFailed,
@@ -299,7 +310,11 @@ func RunSession(
 		if err != nil {
 			return err
 		}
-		if err := handle(ctx, prepared); err != nil {
+		if err := handle(ctx, prepared); errors.Is(err, ErrPlanFailed) {
+			pending = append(pending[:index], pending[index+1:]...)
+			idleDeadline = time.Now().Add(options.IdleTimeout)
+			continue
+		} else if err != nil {
 			return fmt.Errorf("executor: handle prepared plan %s: %w", prepared.Plan.PlanID, err)
 		}
 		pending = append(pending[:index], pending[index+1:]...)
@@ -338,6 +353,9 @@ func validateRunSession(
 	}
 	if options.IdleTimeout <= 0 {
 		return errors.New("executor: idle timeout must be greater than zero")
+	}
+	if options.LibraryRoot == "" {
+		return errors.New("executor: library root is required")
 	}
 	return nil
 }
@@ -392,6 +410,7 @@ func prepareCartridge(
 	cartridge Cartridge,
 	plan admittedPlan,
 	events *EventOutbox,
+	libraryRoot string,
 ) (PreparedPlan, error) {
 	if err := events.Emit(backupplan.Event{
 		Type:   backupplan.EventPlanStarted,
@@ -463,7 +482,8 @@ func prepareCartridge(
 	}); err != nil {
 		return PreparedPlan{}, err
 	}
-	if err := sweepSnapshots(cartridge.Root, events); err != nil {
+	committed, err := sweepSnapshots(cartridge.Root, events)
+	if err != nil {
 		if emitErr := events.Emit(backupplan.Event{
 			Type:   backupplan.EventTapeRejected,
 			TapeID: cartridge.TapeID,
@@ -475,9 +495,13 @@ func prepareCartridge(
 		return PreparedPlan{}, errors.Join(errCartridgeRejected, err)
 	}
 	return PreparedPlan{
-		Cartridge: cartridge,
-		Volume:    loadedVolume,
-		Plan:      plan.plan,
+		Drive:              drive,
+		Events:             events,
+		Cartridge:          cartridge,
+		Volume:             loadedVolume,
+		Plan:               plan.plan,
+		LibraryRoot:        libraryRoot,
+		CommittedSnapshots: committed,
 	}, nil
 }
 

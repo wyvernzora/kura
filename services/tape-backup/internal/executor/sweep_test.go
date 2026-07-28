@@ -18,7 +18,7 @@ func TestSweepSnapshotsKeepsEntryWhenEventRecordingFails(t *testing.T) {
 	}
 	recordErr := errors.New("journal failed")
 
-	err := sweepSnapshots(root, eventEmitterFunc(func(backupplan.Event) error {
+	_, err := sweepSnapshots(root, eventEmitterFunc(func(backupplan.Event) error {
 		return recordErr
 	}))
 	if !errors.Is(err, recordErr) {

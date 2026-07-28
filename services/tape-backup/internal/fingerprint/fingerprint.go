@@ -24,6 +24,14 @@ import (
 // Fingerprint is a SHA-256 digest of canonical file metadata.
 type Fingerprint string
 
+var (
+	// ErrSymlink reports that a fingerprint walk found a symlink.
+	ErrSymlink = errors.New("fingerprint: symlink")
+	// ErrNonRegularFile reports that a fingerprint walk found another
+	// unsupported non-regular file.
+	ErrNonRegularFile = errors.New("fingerprint: non-regular file")
+)
+
 // Entry is one file's stat-level identity.
 type Entry struct {
 	Path    string
@@ -113,7 +121,7 @@ func compute(root string, excludeKura bool) (Fingerprint, error) {
 			return nil
 		}
 		if dirEntry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("fingerprint: symlink %q is not supported", relativePath)
+			return fmt.Errorf("%w %q is not supported", ErrSymlink, relativePath)
 		}
 		if dirEntry.IsDir() {
 			return nil
@@ -125,7 +133,8 @@ func compute(root string, excludeKura bool) (Fingerprint, error) {
 		}
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf(
-				"fingerprint: non-regular file %q is not supported",
+				"%w %q is not supported",
+				ErrNonRegularFile,
 				relativePath,
 			)
 		}

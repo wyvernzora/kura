@@ -32,6 +32,7 @@ const (
 var fastSessionOptions = executor.SessionOptions{
 	PollInterval: time.Millisecond,
 	IdleTimeout:  50 * time.Millisecond,
+	LibraryRoot:  "/library",
 }
 
 func TestRunSessionEncryptionInactiveFailsPlanAndSession(t *testing.T) {
@@ -493,6 +494,7 @@ func TestRunSessionRejectRefreshesIdleDeadline(t *testing.T) {
 	options := executor.SessionOptions{
 		PollInterval: 5 * time.Millisecond,
 		IdleTimeout:  500 * time.Millisecond,
+		LibraryRoot:  "/library",
 	}
 	var handled []string
 

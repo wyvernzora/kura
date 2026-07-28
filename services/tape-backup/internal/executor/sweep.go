@@ -22,35 +22,46 @@ type eventEmitter interface {
 	Emit(backupplan.Event) error
 }
 
-func sweepSnapshots(ltfsRoot string, events eventEmitter) error {
+func sweepSnapshots(
+	ltfsRoot string,
+	events eventEmitter,
+) (map[string]struct{}, error) {
+	committed := make(map[string]struct{})
 	snapshotsDir := tapevolume.SnapshotsDir(ltfsRoot)
 	info, err := os.Lstat(snapshotsDir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return committed, nil
 	}
 	if err != nil {
-		return fmt.Errorf("executor: inspect snapshots directory: %w", err)
+		return nil, fmt.Errorf("executor: inspect snapshots directory: %w", err)
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("executor: snapshots directory must be a real directory")
+		return nil, errors.New("executor: snapshots directory must be a real directory")
 	}
 	entries, err := os.ReadDir(snapshotsDir)
 	if err != nil {
-		return fmt.Errorf("executor: read snapshots directory: %w", err)
+		return nil, fmt.Errorf("executor: read snapshots directory: %w", err)
 	}
 	for _, entry := range entries {
-		if err := sweepEntry(snapshotsDir, entry.Name(), events); err != nil {
-			return err
+		swept, err := sweepEntry(snapshotsDir, entry.Name(), events)
+		if err != nil {
+			return nil, err
+		}
+		if !swept {
+			committed[entry.Name()] = struct{}{}
 		}
 	}
-	return nil
+	return committed, nil
 }
 
-func sweepEntry(snapshotsDir, name string, events eventEmitter) error {
+func sweepEntry(
+	snapshotsDir, name string,
+	events eventEmitter,
+) (bool, error) {
 	entryPath := filepath.Join(snapshotsDir, name)
 	info, err := os.Lstat(entryPath)
 	if err != nil {
-		return fmt.Errorf("executor: inspect snapshot entry %q: %w", name, err)
+		return false, fmt.Errorf("executor: inspect snapshot entry %q: %w", name, err)
 	}
 
 	reason := ""
@@ -67,7 +78,7 @@ func sweepEntry(snapshotsDir, name string, events eventEmitter) error {
 		case errors.Is(err, os.ErrNotExist):
 			reason = sweepReasonMissingCompletionMarker
 		case err != nil:
-			return fmt.Errorf(
+			return false, fmt.Errorf(
 				"executor: inspect snapshot %q completion marker: %w",
 				name,
 				err,
@@ -78,17 +89,17 @@ func sweepEntry(snapshotsDir, name string, events eventEmitter) error {
 		}
 	}
 	if reason == "" {
-		return nil
+		return false, nil
 	}
 	if err := events.Emit(backupplan.Event{
 		Type:   backupplan.EventSnapshotSwept,
 		Entry:  name,
 		Reason: reason,
 	}); err != nil {
-		return fmt.Errorf("executor: report swept snapshot %q: %w", name, err)
+		return false, fmt.Errorf("executor: report swept snapshot %q: %w", name, err)
 	}
 	if err := os.RemoveAll(entryPath); err != nil {
-		return fmt.Errorf("executor: sweep snapshot entry %q: %w", name, err)
+		return false, fmt.Errorf("executor: sweep snapshot entry %q: %w", name, err)
 	}
-	return nil
+	return true, nil
 }
