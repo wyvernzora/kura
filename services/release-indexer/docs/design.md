@@ -48,6 +48,7 @@ or matcher attributes exist in this pass.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| `GET` | `/api/v1/releases` | List matched releases, newest first; optionally narrowed to one ref. |
 | `POST` | `/api/v1/releases/ingest` | Accept a batch of crawler posts. |
 | `GET` | `/api/v1/releases/{infohash}/magnet` | Get the stored magnet URI for one release. |
 | `GET` | `/api/v1/releases/{infohash}` | Get one release detail, raw source evidence, and match history. |

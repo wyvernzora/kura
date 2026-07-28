@@ -48,6 +48,7 @@ func NewWithMetricsAndLogger(s store.Store, m *metrics.Takuhai, logger *slog.Log
 	// Literal segments outrank the {infohash} wildcard, so the queue
 	// routes are unreachable-by-accident even though they sit at the
 	// same depth as the per-release ones.
+	mux.HandleFunc("/api/v1/releases", h.handleListReleases)
 	mux.HandleFunc("/api/v1/releases/ingest", h.handleIngest)
 	mux.HandleFunc("/api/v1/releases/queue/claim", h.handleClaim)
 	mux.HandleFunc("/api/v1/releases/queue/stats", h.handleQueueStats)

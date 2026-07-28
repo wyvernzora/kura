@@ -259,9 +259,9 @@ Read design.md before any sizable change.
   overlap state. `POST /api/v1/releases/ingest` remains an external-producer
   escape hatch.
 - **Surfaces:**
-  - REST (n8n-driven), all under `/api/v1/releases`: `POST /ingest`,
-    `POST /queue/claim`, `GET /queue/stats`, `POST /queue/submit`,
-    `GET /{infohash}`, and `GET /{infohash}/magnet`.
+  - REST (n8n-driven), all under `/api/v1/releases`: `GET /` (list),
+    `POST /ingest`, `POST /queue/claim`, `GET /queue/stats`,
+    `POST /queue/submit`, `GET /{infohash}`, and `GET /{infohash}/magnet`.
   - MCP (consumer-only): `list_releases`, `get_release`, `resolve_magnets`, over streamable HTTP at `/mcp`.
   - `/healthz` — a live DB ping.
 - **Transport:** HTTP (configured by TOML).

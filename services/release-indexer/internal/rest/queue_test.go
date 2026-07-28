@@ -17,6 +17,7 @@ type fakeStore struct {
 	submit          store.SubmitParams
 	infohashes      []string
 	releaseInfohash string
+	releaseQuery    store.ReleaseQuery
 }
 
 func (f *fakeStore) Ping(context.Context) error { return nil }
@@ -44,7 +45,8 @@ func (f *fakeStore) QueueStats(context.Context) (store.QueueStats, error) {
 func (f *fakeStore) CatalogStats(context.Context) (store.CatalogStats, error) {
 	return store.CatalogStats{}, nil
 }
-func (f *fakeStore) ListReleases(context.Context, store.ReleaseQuery) (store.ReleasePage, error) {
+func (f *fakeStore) ListReleases(_ context.Context, q store.ReleaseQuery) (store.ReleasePage, error) {
+	f.releaseQuery = q
 	return store.ReleasePage{}, nil
 }
 func (f *fakeStore) GetRelease(_ context.Context, infohash string) (store.ReleaseDetail, error) {
