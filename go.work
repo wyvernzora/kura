@@ -2,6 +2,7 @@ go 1.26.3
 
 use (
 	./cli
+	./e2e
 	./services/gateway
 	./services/library-manager
 	./services/release-indexer

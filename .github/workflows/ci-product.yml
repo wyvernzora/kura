@@ -1,0 +1,39 @@
+name: ci-product
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ci-product-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: full stack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: e2e/go.mod
+          cache: true
+
+      - name: product end-to-end
+        run: make product-e2e
+
+      - name: upload failure artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: product-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/product-e2e
+          if-no-files-found: ignore
+          retention-days: 7

@@ -45,8 +45,8 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # Path-filtered service CI runs may legitimately not exist for a
-      # given commit, so the release gate checks (a) the tag is on main
-      # and (b) ci-lint.yml — which runs for every push — succeeded.
+      # given commit. The always-running lint and full-product workflows
+      # are therefore the release gate after proving the tag is on main.
       - name: Verify release commit is on main with passing CI
         id: verify
         env:
@@ -65,22 +65,25 @@ jobs:
             exit 1
           fi
 
-          ci_run_url="$(
-            gh api "repos/$REPOSITORY/actions/workflows/ci-lint.yml/runs" \
-              --method GET \
-              -f branch=main \
-              -f event=push \
-              -f head_sha="$tagged_sha" \
-              -f status=completed \
-              --jq '.workflow_runs[] | select(.conclusion == "success") | .html_url' |
-              head -n 1
-          )"
-          if [ -z "$ci_run_url" ]; then
-            echo "::error::Release commit $tagged_sha does not have a successful ci-lint.yml push run on main."
-            exit 1
-          fi
+          for workflow in ci-lint.yml ci-product.yml; do
+            ci_run_url="$(
+              gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs" \
+                --method GET \
+                -f branch=main \
+                -f event=push \
+                -f head_sha="$tagged_sha" \
+                -f status=completed \
+                --jq '.workflow_runs[] | select(.conclusion == "success") | .html_url' |
+                head -n 1
+            )"
+            if [ -z "$ci_run_url" ]; then
+              echo "::error::Release commit $tagged_sha does not have a successful $workflow push run on main."
+              exit 1
+            fi
+            echo "$workflow passed: $ci_run_url"
+          done
 
-          echo "Release commit $tagged_sha is on main and passed CI: $ci_run_url"
+          echo "Release commit $tagged_sha is on main and passed required CI."
 
   publish-library:
     needs: verify
