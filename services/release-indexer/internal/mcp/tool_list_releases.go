@@ -34,7 +34,7 @@ func addListReleasesTool(srv *mcpsdk.Server, s *Server) {
 				"limit", input.Limit,
 				"has_cursor", input.Cursor != "",
 				"has_since", input.Since != nil,
-				"code", dispatch.WireCode(err),
+				"code", dispatch.ErrorKind(err),
 				"duration_ms", dur.Milliseconds(),
 				"err", err,
 			)

@@ -7,6 +7,7 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/infohash"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 type magnetResponse struct {
@@ -17,28 +18,28 @@ type magnetResponse struct {
 func (h *Handler) handleGetMagnet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.log(r, slog.LevelDebug, "magnet lookup rejected", "reason", "method_not_allowed", "method", r.Method)
-		writeError(w, http.StatusMethodNotAllowed, "", "", "method not allowed")
+		writeMethodNotAllowed(w)
 		return
 	}
 
 	raw := r.PathValue("infohash")
 	if raw == "" {
 		h.log(r, slog.LevelDebug, "magnet lookup rejected", "reason", "invalid_infohash")
-		writeBadInput(w, "invalid infohash")
+		writeInvalidRequest(w, "invalid infohash", nil)
 		return
 	}
 
 	ih, err := infohash.NormalizeInfohash(raw)
 	if err != nil {
 		h.log(r, slog.LevelDebug, "magnet lookup rejected", "reason", "invalid_infohash")
-		writeBadInput(w, "invalid infohash")
+		writeInvalidRequest(w, "invalid infohash", nil)
 		return
 	}
 	out, err := h.dispatch.ResolveMagnetsTyped(r.Context(), dispatch.ResolveMagnetsRequest{Infohashes: []string{ih}})
 	if err != nil {
 		h.log(r, dispatchLogLevel(err), "magnet lookup failed",
 			"infohash", ih,
-			"code", dispatch.WireCode(err),
+			"code", dispatch.ErrorKind(err),
 			"err", err,
 		)
 		h.writeDispatchError(w, ih, err)
@@ -47,7 +48,8 @@ func (h *Handler) handleGetMagnet(w http.ResponseWriter, r *http.Request) {
 	magnet, ok := out.Magnets[ih]
 	if !ok {
 		h.log(r, slog.LevelInfo, "magnet lookup missed", "infohash", ih)
-		writeError(w, http.StatusNotFound, "no_such_release", ih, store.ErrNoSuchRelease.Error())
+		writeError(w, http.StatusNotFound, api.KindNotFound, store.ErrNoSuchRelease.Error(),
+			map[string]any{"infohash": ih})
 		return
 	}
 	h.log(r, slog.LevelInfo, "magnet lookup completed", "infohash", ih)

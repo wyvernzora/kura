@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -17,10 +16,10 @@ func (h *Handler) handleClaim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req api.ClaimRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeJSON(body, &req); err != nil {
 		h.metrics.QueueClaim(0, "error")
 		h.log(r, slog.LevelInfo, "queue claim rejected", "reason", "invalid_body", "err", err)
-		writeBadInput(w, "invalid request body")
+		writeInvalidRequest(w, "invalid request body", nil)
 		return
 	}
 	out, err := h.dispatch.ClaimTyped(r.Context(), req)
@@ -29,7 +28,7 @@ func (h *Handler) handleClaim(w http.ResponseWriter, r *http.Request) {
 		h.log(r, dispatchLogLevel(err), "queue claim failed",
 			"limit", req.Limit,
 			"lease_seconds", req.LeaseSeconds,
-			"code", dispatch.WireCode(err),
+			"code", dispatch.ErrorKind(err),
 			"err", err,
 		)
 		h.writeDispatchError(w, "", err)
@@ -51,12 +50,12 @@ func (h *Handler) handleClaim(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleQueueStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.log(r, slog.LevelDebug, "queue stats rejected", "reason", "method_not_allowed", "method", r.Method)
-		writeError(w, http.StatusMethodNotAllowed, "", "", "method not allowed")
+		writeMethodNotAllowed(w)
 		return
 	}
 	out, err := h.dispatch.QueueStatsTyped(r.Context())
 	if err != nil {
-		h.log(r, dispatchLogLevel(err), "queue stats failed", "code", dispatch.WireCode(err), "err", err)
+		h.log(r, dispatchLogLevel(err), "queue stats failed", "code", dispatch.ErrorKind(err), "err", err)
 		h.writeDispatchError(w, "", err)
 		return
 	}

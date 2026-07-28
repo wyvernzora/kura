@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
@@ -17,15 +16,15 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req api.SubmitRequest
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := decodeJSON(body, &req); err != nil {
 		h.metrics.Submit("invalid", "error", nil)
 		h.log(r, slog.LevelInfo, "submit rejected", "reason", "invalid_body", "err", err)
-		writeBadInput(w, "invalid request body")
+		writeInvalidRequest(w, "invalid request body", nil)
 		return
 	}
 	if err := h.dispatch.SubmitTyped(r.Context(), req); err != nil {
 		result := "error"
-		if code := dispatch.WireCode(err); code == "no_active_lease" || code == "stale_lease" {
+		if code := dispatch.ErrorKind(err); code == "no_active_lease" || code == "stale_lease" {
 			result = "conflict"
 		}
 		h.metrics.Submit(string(req.Status), result, nil)
@@ -37,7 +36,7 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 			"has_confidence", req.Confidence != nil,
 			"reason_len", len(req.Reason),
 			"result", result,
-			"code", dispatch.WireCode(err),
+			"code", dispatch.ErrorKind(err),
 			"err", err,
 		)
 		h.writeDispatchError(w, req.Infohash, err)

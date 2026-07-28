@@ -19,7 +19,7 @@ import (
 func (h *Handler) handleListReleases(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.log(r, slog.LevelDebug, "list releases rejected", "reason", "method_not_allowed", "method", r.Method)
-		writeError(w, http.StatusMethodNotAllowed, "", "", "method not allowed")
+		writeMethodNotAllowed(w)
 		return
 	}
 
@@ -32,7 +32,7 @@ func (h *Handler) handleListReleases(w http.ResponseWriter, r *http.Request) {
 		limit, err := strconv.Atoi(raw)
 		if err != nil || limit < 0 {
 			h.log(r, slog.LevelDebug, "list releases rejected", "reason", "invalid_limit", "limit", raw)
-			writeBadInput(w, "limit must be a non-negative integer")
+			writeInvalidRequest(w, "limit must be a non-negative integer", nil)
 			return
 		}
 		req.Limit = limit
@@ -41,7 +41,7 @@ func (h *Handler) handleListReleases(w http.ResponseWriter, r *http.Request) {
 		since, err := time.Parse(time.RFC3339, raw)
 		if err != nil {
 			h.log(r, slog.LevelDebug, "list releases rejected", "reason", "invalid_since", "since", raw)
-			writeBadInput(w, "since must be an RFC3339 timestamp")
+			writeInvalidRequest(w, "since must be an RFC3339 timestamp", nil)
 			return
 		}
 		req.Since = &since
@@ -51,7 +51,7 @@ func (h *Handler) handleListReleases(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.log(r, dispatchLogLevel(err), "list releases failed",
 			"ref", req.Ref,
-			"code", dispatch.WireCode(err),
+			"code", dispatch.ErrorKind(err),
 			"err", err,
 		)
 		h.writeDispatchError(w, "", err)

@@ -29,7 +29,7 @@ func addGetReleaseTool(srv *mcpsdk.Server, s *Server) {
 			s.log(ctx, slog.LevelWarn, "mcp tool failed",
 				"tool", "get_release",
 				"infohash", input.Infohash,
-				"code", dispatch.WireCode(err),
+				"code", dispatch.ErrorKind(err),
 				"duration_ms", dur.Milliseconds(),
 				"err", err,
 			)

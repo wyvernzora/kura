@@ -93,8 +93,8 @@ func TestListReleasesPreservesTaxonomyErrors(t *testing.T) {
 	if !res.IsError {
 		t.Fatalf("IsError = false, content = %v", res.Content)
 	}
-	if got := firstText(res); !strings.Contains(got, `"code":"invalid_ref"`) {
-		t.Fatalf("error content = %s, want invalid_ref code", got)
+	if got := firstText(res); !strings.Contains(got, `"kind":"invalid_ref"`) {
+		t.Fatalf("error content = %s, want invalid_ref kind", got)
 	}
 }
 
@@ -114,8 +114,8 @@ func TestGetReleaseErrorOmitsStructuredContentAndSuccessKeepsIt(t *testing.T) {
 	if res.StructuredContent != nil {
 		t.Fatalf("StructuredContent = %#v, want nil on tool error", res.StructuredContent)
 	}
-	if got := firstText(res); !strings.Contains(got, `"code":"no_such_release"`) {
-		t.Fatalf("error content = %s, want no_such_release code", got)
+	if got := firstText(res); !strings.Contains(got, `"kind":"not_found"`) {
+		t.Fatalf("error content = %s, want not_found kind", got)
 	}
 
 	known := strings.Repeat("1", 40)

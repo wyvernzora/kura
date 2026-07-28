@@ -11,27 +11,27 @@ import (
 func (h *Handler) handleGetRelease(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.log(r, slog.LevelDebug, "release lookup rejected", "reason", "method_not_allowed", "method", r.Method)
-		writeError(w, http.StatusMethodNotAllowed, "", "", "method not allowed")
+		writeMethodNotAllowed(w)
 		return
 	}
 
 	raw := r.PathValue("infohash")
 	if raw == "" {
 		h.log(r, slog.LevelDebug, "release lookup rejected", "reason", "invalid_infohash")
-		writeBadInput(w, "invalid infohash")
+		writeInvalidRequest(w, "invalid infohash", nil)
 		return
 	}
 	ih, err := infohash.NormalizeInfohash(raw)
 	if err != nil {
 		h.log(r, slog.LevelDebug, "release lookup rejected", "reason", "invalid_infohash")
-		writeBadInput(w, "invalid infohash")
+		writeInvalidRequest(w, "invalid infohash", nil)
 		return
 	}
 	out, err := h.dispatch.GetReleaseTyped(r.Context(), dispatch.GetReleaseRequest{Infohash: ih})
 	if err != nil {
 		h.log(r, dispatchLogLevel(err), "release lookup failed",
 			"infohash", ih,
-			"code", dispatch.WireCode(err),
+			"code", dispatch.ErrorKind(err),
 			"err", err,
 		)
 		h.writeDispatchError(w, ih, err)

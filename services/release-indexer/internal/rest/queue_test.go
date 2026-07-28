@@ -85,7 +85,7 @@ func TestClaimRejectsInvalidJSON(t *testing.T) {
 func TestSubmitRejectsInvalidStatus(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/queue/submit", strings.NewReader(`{
 		"infohash":"0123456789abcdef0123456789abcdef01234567",
-		"claim_token":1,
+		"claimToken":1,
 		"status":"defer"
 	}`))
 	rec := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestSubmitPreservesSuppressedConfidence(t *testing.T) {
 	st := &fakeStore{}
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/queue/submit", strings.NewReader(`{
 		"infohash":"0123456789abcdef0123456789abcdef01234567",
-		"claim_token":1,
+		"claimToken":1,
 		"status":"suppressed",
 		"confidence":0.73
 	}`))
@@ -178,13 +178,13 @@ func TestGetReleaseRejectsInvalidInfohash(t *testing.T) {
 		t.Fatalf("status = %d, want %d; response %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
 	var body struct {
-		Code    string `json:"code"`
+		Kind    string `json:"kind"`
 		Message string `json:"message"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.Code != "invalid_input" || body.Message != "invalid infohash" {
+	if body.Kind != "invalid_request" || body.Message != "invalid infohash" {
 		t.Fatalf("response = %+v", body)
 	}
 }

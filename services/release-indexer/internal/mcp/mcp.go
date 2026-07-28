@@ -14,6 +14,7 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/metrics"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 const (
@@ -152,15 +153,13 @@ func addStructuredTool[In, Out any](srv *mcpsdk.Server, tool *mcpsdk.Tool, h str
 // errorResult shapes a dispatch error into an MCP tool error (IsError true) carrying
 // the closed-taxonomy code (design §6). The body is a small JSON object {"code","error"}
 // so an agent can branch on the machine-readable code; a non-taxonomy error has an empty
-// code (WireCode returns "") and surfaces only the human message.
+// code (ErrorKind returns "") and surfaces only the human message.
 func errorResult(err error) *mcpsdk.CallToolResult {
-	body, _ := json.Marshal(struct {
-		Code  string `json:"code,omitempty"`
-		Error string `json:"error"`
-	}{
-		Code:  dispatch.WireCode(err),
-		Error: err.Error(),
-	})
+	kind := dispatch.ErrorKind(err)
+	if kind == "" {
+		kind = api.KindInternal
+	}
+	body, _ := json.Marshal(api.Error{Kind: kind, Message: err.Error()})
 	return &mcpsdk.CallToolResult{
 		IsError: true,
 		Content: []mcpsdk.Content{&mcpsdk.TextContent{Text: string(body)}},

@@ -26,17 +26,20 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	if r.Method != http.MethodPost {
 		h.log(r, slog.LevelDebug, "ingest rejected", "reason", "method_not_allowed", "method", r.Method)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeMethodNotAllowed(w)
 		return
 	}
 
+	body, ok := h.requirePost(w, r)
+	if !ok {
+		h.metrics.IngestBatch(0, "error")
+		return
+	}
 	var req ingestRequest
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
+	if err := decodeJSON(body, &req); err != nil {
 		h.metrics.IngestBatch(0, "error")
 		h.log(r, slog.LevelInfo, "ingest rejected", "reason", "invalid_body", "err", err)
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeInvalidRequest(w, "invalid request body", nil)
 		return
 	}
 	if len(req.Posts) > maxBatchPosts {
@@ -47,7 +50,8 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 			"source_counts", sourceCounts(req.Posts),
 			"max_post_count", maxBatchPosts,
 		)
-		http.Error(w, "batch too large", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, api.KindBatchTooLarge, "batch too large",
+			map[string]any{"postCount": len(req.Posts), "maxPostCount": maxBatchPosts})
 		return
 	}
 
@@ -61,7 +65,8 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 				"post_count", len(req.Posts),
 				"post_index", i,
 			)
-			http.Error(w, "post missing source or source_id", http.StatusBadRequest)
+			writeInvalidRequest(w, "post missing source or sourceId",
+				map[string]any{"index": i})
 			return
 		}
 	}
@@ -83,7 +88,7 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 			"duration_ms", time.Since(start).Milliseconds(),
 			"err", err,
 		)
-		http.Error(w, "ingest failed", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, api.KindInternal, "ingest failed", nil)
 		return
 	}
 
@@ -95,7 +100,7 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 			"duration_ms", time.Since(start).Milliseconds(),
 			"err", err,
 		)
-		http.Error(w, "queue stats failed", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, api.KindInternal, "queue stats failed", nil)
 		return
 	}
 	h.metrics.IngestBatch(len(req.Posts), "ok")

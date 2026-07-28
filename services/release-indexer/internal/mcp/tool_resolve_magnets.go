@@ -28,7 +28,7 @@ func addResolveMagnetsTool(srv *mcpsdk.Server, s *Server) {
 			s.log(ctx, slog.LevelWarn, "mcp tool failed",
 				"tool", "resolve_magnets",
 				"input_count", len(input.Infohashes),
-				"code", dispatch.WireCode(err),
+				"code", dispatch.ErrorKind(err),
 				"duration_ms", dur.Milliseconds(),
 				"err", err,
 			)

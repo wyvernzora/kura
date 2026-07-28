@@ -257,10 +257,10 @@ func TestAPIShape_GetReleaseRESTErrors(t *testing.T) {
 		name       string
 		path       string
 		wantStatus int
-		wantCode   string
+		wantKind   string
 	}{
-		{name: "invalid infohash", path: "/api/v1/releases/not-an-infohash", wantStatus: http.StatusBadRequest, wantCode: "invalid_input"},
-		{name: "unknown release", path: "/api/v1/releases/" + apiIH3, wantStatus: http.StatusNotFound, wantCode: "no_such_release"},
+		{name: "invalid infohash", path: "/api/v1/releases/not-an-infohash", wantStatus: http.StatusBadRequest, wantKind: "invalid_request"},
+		{name: "unknown release", path: "/api/v1/releases/" + apiIH3, wantStatus: http.StatusNotFound, wantKind: "not_found"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, http.NoBody).WithContext(ctx)
@@ -272,13 +272,13 @@ func TestAPIShape_GetReleaseRESTErrors(t *testing.T) {
 				t.Fatalf("%s = %d, want %d; response %s", tt.path, rec.Code, tt.wantStatus, rec.Body.String())
 			}
 			var body struct {
-				Code string `json:"code"`
+				Kind string `json:"kind"`
 			}
 			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 				t.Fatalf("decode error response: %v", err)
 			}
-			if body.Code != tt.wantCode {
-				t.Fatalf("code = %q, want %q", body.Code, tt.wantCode)
+			if body.Kind != tt.wantKind {
+				t.Fatalf("kind = %q, want %q", body.Kind, tt.wantKind)
 			}
 		})
 	}
@@ -307,8 +307,8 @@ func TestAPIShape_GetReleaseMCPNoSuchRelease(t *testing.T) {
 	if !res.IsError {
 		t.Fatalf("IsError = false, content = %v", res.Content)
 	}
-	if got := firstMCPText(res); !strings.Contains(got, `"code":"no_such_release"`) {
-		t.Fatalf("error content = %s, want no_such_release code", got)
+	if got := firstMCPText(res); !strings.Contains(got, `"kind":"not_found"`) {
+		t.Fatalf("error content = %s, want not_found kind", got)
 	}
 }
 

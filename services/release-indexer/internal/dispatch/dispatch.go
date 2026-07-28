@@ -267,20 +267,26 @@ func (d *Dispatcher) ResolveMagnetsTyped(ctx context.Context, req ResolveMagnets
 	return ResolveMagnetsResult{Magnets: magnets}, nil
 }
 
-func WireCode(err error) string {
+// ErrorKind maps a sentinel to its wire kind. An empty result means the error
+// is not one this service models — the caller reports it as internal and does
+// not echo its message.
+//
+// The pre-migration codes `no_such_release` and `invalid_input` are retired in
+// favour of the suite-wide `not_found` and `invalid_request` (plan §3.2).
+func ErrorKind(err error) string {
 	switch {
 	case errors.Is(err, store.ErrNoSuchRelease):
-		return "no_such_release"
+		return api.KindNotFound
 	case errors.Is(err, store.ErrNoActiveLease):
-		return "no_active_lease"
+		return api.KindNoActiveLease
 	case errors.Is(err, store.ErrStaleLease):
-		return "stale_lease"
+		return api.KindStaleLease
 	case errors.Is(err, cursor.ErrInvalidRef):
-		return "invalid_ref"
+		return api.KindInvalidRef
 	case errors.Is(err, cursor.ErrInvalidCursor):
-		return "invalid_cursor"
+		return api.KindInvalidCursor
 	case errors.Is(err, ErrInvalidInput):
-		return "invalid_input"
+		return api.KindInvalidRequest
 	default:
 		return ""
 	}
