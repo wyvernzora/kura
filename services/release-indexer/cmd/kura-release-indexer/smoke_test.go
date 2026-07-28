@@ -233,6 +233,20 @@ func TestSmoke(t *testing.T) {
 		}
 	})
 
+	t.Run("suite-headers", func(t *testing.T) {
+		resp, err := http.Get(baseURL + "/api/v1/releases")
+		if err != nil {
+			t.Fatalf("GET /api/v1/releases: %v", err)
+		}
+		defer resp.Body.Close()
+		if got := resp.Header.Get("X-Kura-Version"); got == "" {
+			t.Error("X-Kura-Version is empty, want the build version")
+		}
+		if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+			t.Errorf("Cache-Control = %q, want no-store", got)
+		}
+	})
+
 	t.Run("mcp-list-and-call", func(t *testing.T) {
 		client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "smoke-client", Version: "0.0.0"}, nil)
 		session, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: baseURL + "/mcp"}, nil)

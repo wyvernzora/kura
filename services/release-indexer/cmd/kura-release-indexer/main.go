@@ -145,7 +145,7 @@ func runHTTP(
 	mux.Handle("/api/v1/releases", restAPI)
 	mux.Handle("/api/v1/releases/", restAPI)
 
-	srv := &http.Server{Addr: addr, Handler: logHTTP(logger, metricsSrv.HTTP, metricsSrv.HTTP.Wrap(mux))}
+	srv := &http.Server{Addr: addr, Handler: logHTTP(logger, metricsSrv.HTTP, suiteHeaders(version, metricsSrv.HTTP.Wrap(mux)))}
 
 	// /metrics gets its own listener. Sharing one with the API would mean a
 	// NetworkPolicy permitting a Prometheus scrape also permits ingest,
@@ -220,6 +220,18 @@ func runHTTP(
 		}
 		return nil
 	}
+}
+
+// suiteHeaders stamps every response on the API listener. The release surface
+// has no cacheable read — list and detail both reflect a queue that a matcher
+// is actively mutating — so no-store is the whole cache policy here, and there
+// are no ETags to go with it (plan §3.4).
+func suiteHeaders(version string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Kura-Version", version)
+		w.Header().Set("Cache-Control", "no-store")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func logHTTP(logger *slog.Logger, routes interface{ Route(string) string }, next http.Handler) http.Handler {
