@@ -22,8 +22,7 @@ const ERROR_LINGER_MS = 5000;
  * the server, which the kickoff branch surfaces as a transient
  * `lastError`.
  *
- * Polling, not SSE — same reason as scanJob: browser EventSource
- * cannot attach the Authorization header.
+ * Polling, not SSE — same reason as scanJob.
  */
 export interface LibraryJobState {
   phase: 'idle' | 'running';

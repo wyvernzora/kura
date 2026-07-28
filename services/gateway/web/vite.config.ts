@@ -19,9 +19,8 @@ const usePolling =
   (inDocker || process.env.CHOKIDAR_USEPOLLING === '1' || process.env.VITE_USE_POLLING === '1');
 
 // Vite proxy keeps browser requests same-origin in dev (browser hits :5173,
-// Vite forwards /api to :8080). No CORS dance, no token rewrite — bearer
-// auth flows through unchanged when token mode is enabled, and works
-// transparently when auth is disabled in the library-manager config.
+// Vite forwards /api to :8080). No CORS dance and nothing to rewrite —
+// kura does not authenticate, so the proxy is a plain pass-through.
 export default defineConfig({
   plugins: [
     TanStackRouterVite({

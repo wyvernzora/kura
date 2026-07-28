@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
 
-import { useAuth } from '@/state/auth';
+import { useSession } from '@/state/session';
 
 /**
  * Stories that exercise hooks built on top of TanStack Query (`useShow`,
@@ -27,8 +27,8 @@ function makeQueryClient(): QueryClient {
 export function StoryProviders({ children }: { children: ReactNode }) {
   // Pin the auth store the first time a provider tree mounts. Storybook
   // remounts decorators; idempotent setMode is fine.
-  if (useAuth.getState().mode !== 'authenticated-anon') {
-    useAuth.getState().setMode('authenticated-anon');
+  if (useSession.getState().mode !== 'ready') {
+    useSession.getState().setMode('ready');
   }
   return <QueryClientProvider client={makeQueryClient()}>{children}</QueryClientProvider>;
 }

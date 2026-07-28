@@ -1,18 +1,18 @@
-name: ci-webui
+name: ci-gateway
 
 on:
   push:
     branches: [main]
     paths:
-      - "services/webui/**"
-      - ".github/workflows/ci-webui.yml"
+      - "services/gateway/**"
+      - ".github/workflows/ci-gateway.yml"
   pull_request:
     paths:
-      - "services/webui/**"
-      - ".github/workflows/ci-webui.yml"
+      - "services/gateway/**"
+      - ".github/workflows/ci-gateway.yml"
 
 concurrency:
-  group: ci-webui-${{ github.ref }}
+  group: ci-gateway-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -24,19 +24,19 @@ jobs:
     runs-on: ubuntu-24.04
     defaults:
       run:
-        working-directory: services/webui
+        working-directory: services/gateway/web
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
         with:
-          package_json_file: services/webui/package.json
+          package_json_file: services/gateway/web/package.json
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: services/webui/pnpm-lock.yaml
+          cache-dependency-path: services/gateway/web/pnpm-lock.yaml
 
       - name: pnpm install
         run: pnpm install --frozen-lockfile
@@ -85,11 +85,11 @@ jobs:
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
         with:
-          images: ghcr.io/wyvernzora/kura/webui
+          images: ghcr.io/wyvernzora/kura/gateway
           tags: |
             type=raw,value=dev
           labels: |
-            org.opencontainers.image.title=kura-webui
+            org.opencontainers.image.title=kura-gateway
             org.opencontainers.image.description=Kura suite web UI (SPA + Caddy proxy)
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.value }}
@@ -99,13 +99,13 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
-          context: services/webui
+          context: services/gateway
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ steps.version.outputs.value }}
-          cache-from: type=gha,scope=webui
-          cache-to: type=gha,mode=max,scope=webui
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
           provenance: false

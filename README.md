@@ -19,7 +19,7 @@ One repo, several services, one version line:
 | [`services/release-indexer`](services/release-indexer/) | Release indexer: durable store + match work queue over raw releases (DMHY, Nyaa crawlers) |
 | [`integrations/n8n`](integrations/n8n/) | Custom n8n nodes for the suite — n8n drives the acquisition pipeline |
 | `kura-backup-agent` *(planned)* | LTO tape archival: a bounded context of the library manager plus an agent binary on the tape VM |
-| [`services/webui`](services/webui/) | Suite web UI: static SPA + Caddy proxy, one origin over every service API |
+| [`services/gateway`](services/gateway/) | Suite gateway: Caddy + MCP bridge + SPA, one origin over every service API |
 
 Every service ships as a container image under `ghcr.io/wyvernzora/kura/`,
 all versioned together (`vX.Y.Z` tags). Development: `make check` fans out

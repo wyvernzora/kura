@@ -1,0 +1,75 @@
+# kura-gateway: one origin for the whole suite — SPA, REST, and MCP.
+#
+# Reached only from Pomerium, which terminates TLS and owns identity. Nothing
+# behind this listener authenticates, so the deployment's NetworkPolicy is what
+# keeps anything else from reaching it directly.
+#
+# Leaf addresses are declared once, as environment variables on the Pod. The
+# MCP bridge reads the same two, so the Caddyfile and the bridge cannot desync.
+{
+	auto_https off
+	admin off
+	grace_period 10s
+}
+
+:8080 {
+	# Pomerium's upstream Authorization header is its business, not the
+	# leaves'. Strip it rather than forwarding a credential no backend reads.
+	request_header -Authorization
+
+	# The suite version is the gateway's, baked from the same ARG that
+	# stamps the bridge. `>` replaces rather than appends: the leaves set
+	# their own X-Kura-Version and a plain directive would emit both.
+	header >X-Kura-Version {$KURA_VERSION}
+
+	# Synthesized health and the MCP surface are served by the in-Pod
+	# bridge on loopback, never by a leaf.
+	@local path /healthz /api/v1/health
+	handle @local {
+		reverse_proxy 127.0.0.1:8081
+	}
+
+	@mcp path /mcp/v1 /mcp/v1/*
+	handle @mcp {
+		header Cache-Control "no-store"
+		reverse_proxy 127.0.0.1:8081
+	}
+
+	# Releases must match before the general /api rule, and both the
+	# collection root and its subpaths need explicit matchers. handle_path
+	# is deliberately not used anywhere here — it would strip the prefix
+	# the leaves route on.
+	@releases path /api/v1/releases /api/v1/releases/*
+	handle @releases {
+		reverse_proxy {$KURA_RELEASES_UPSTREAM}
+	}
+
+	@api path /api /api/*
+	handle @api {
+		reverse_proxy {$KURA_LIBRARY_UPSTREAM}
+	}
+
+	# SPA last: hashed assets as files, everything else to index.html for
+	# client-side routing. gzip is scoped to this block — compressing MCP
+	# or an event stream would break it.
+	handle {
+		encode gzip
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	# A backend that cannot be reached is the gateway's own failure, so it
+	# answers in the suite envelope rather than Caddy's HTML.
+	handle_errors {
+		@unreachable expression {err.status_code} in [502, 503, 504]
+		handle @unreachable {
+			header Content-Type application/json
+			respond `{"kind":"backend_unavailable","message":"upstream service is unreachable"}` {err.status_code}
+		}
+		handle {
+			header Content-Type application/json
+			respond `{"kind":"internal","message":"gateway error"}` {err.status_code}
+		}
+	}
+}

@@ -1,6 +1,6 @@
 packages:
   - path: "github.com/wyvernzora/kura/services/library-manager/pkg/api"
-    output_path: "../../../webui/src/api/types.gen.ts"
+    output_path: "../../../gateway/web/src/api/types.gen.ts"
     exclude_files:
       - "vocab.go"
     type_mappings:

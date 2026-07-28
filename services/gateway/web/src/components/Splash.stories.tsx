@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Splash } from './Splash';
 
 const meta: Meta<typeof Splash> = {
-  title: 'Auth/Splash',
+  title: 'Boot/Splash',
   component: Splash,
   parameters: {
     layout: 'fullscreen',
@@ -17,5 +17,5 @@ type Story = StoryObj<typeof Splash>;
 export const Default: Story = {};
 
 export const Custom: Story = {
-  args: { message: 'Validating token…' },
+  args: { message: 'Reconnecting…' },
 };

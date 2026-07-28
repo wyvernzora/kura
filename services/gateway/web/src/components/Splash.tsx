@@ -3,8 +3,8 @@ interface SplashProps {
 }
 
 /**
- * Quiet boot screen shown during init / probe-anon /
- * validating-with-token. The pulsing dot is intentional — it tells
+ * Quiet boot screen shown while the boot probe is in flight. The
+ * pulsing dot is intentional — it tells
  * the user something is happening without claiming progress we can't
  * actually report.
  */

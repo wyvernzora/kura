@@ -19,10 +19,9 @@ const POLL_INTERVAL_MS = 500;
  * and persists running + terminal state in localStorage so a navigation
  * away or a reload doesn't lose the user's scan.
  *
- * Polling, not SSE: browser EventSource cannot attach the Authorization
- * header in token-auth mode, and the server already polls the registry
- * at 250 ms internally — a 500 ms client poll adds negligible latency
- * and sidesteps the EventSource auth + named-error footguns.
+ * Polling, not SSE: the server already polls the registry at 250 ms
+ * internally, so a 500 ms client poll adds negligible latency and
+ * sidesteps EventSource's named-error footguns.
  */
 export interface ScanJobState {
   phase: 'idle' | 'running' | 'warning' | 'error';

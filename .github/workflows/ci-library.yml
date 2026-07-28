@@ -5,13 +5,13 @@ on:
     branches: [main]
     paths:
       - "services/library-manager/**"
-      - "services/webui/src/api/types.gen.ts"
+      - "services/gateway/web/src/api/types.gen.ts"
       - ".github/workflows/ci-library.yml"
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - "services/library-manager/**"
-      - "services/webui/src/api/types.gen.ts"
+      - "services/gateway/web/src/api/types.gen.ts"
       - ".github/workflows/ci-library.yml"
 
 concurrency:
@@ -81,16 +81,16 @@ jobs:
 
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
         with:
-          package_json_file: services/webui/package.json
+          package_json_file: services/gateway/web/package.json
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: services/webui/pnpm-lock.yaml
+          cache-dependency-path: services/gateway/web/pnpm-lock.yaml
 
       - name: pnpm install (for biome)
-        working-directory: services/webui
+        working-directory: services/gateway/web
         run: pnpm install --frozen-lockfile
 
       - name: regenerate types
@@ -98,7 +98,7 @@ jobs:
 
       - name: assert no drift
         run: |
-          if ! git diff --exit-code -- services/webui/src/api/types.gen.ts; then
+          if ! git diff --exit-code -- services/gateway/web/src/api/types.gen.ts; then
             echo "::error::types.gen.ts is stale; run 'make -C services/library-manager gen-ts' and commit" >&2
             exit 1
           fi

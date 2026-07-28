@@ -36,20 +36,20 @@ INSPECTOR_PROXY_PORT ?= 6277
 build:
 	go build -trimpath -ldflags='$(GO_LDFLAGS)' -o bin/kura-library-manager ./cmd/kura-library-manager
 
-# gen-ts regenerates ../webui/src/api/types.gen.ts from pkg/api.
+# gen-ts regenerates ../gateway/web/src/api/types.gen.ts from pkg/api.
 # The wrapper at tools/tygo runs tygo and post-processes the closed
 # string-enum aliases (Status, ListStatus, ScanStatus) into TS literal
 # unions — tygo emits them as `= string` otherwise.
 gen-ts:
 	cd tools/tygo && go run .
-	cd ../webui && pnpm exec biome check --write src/api/types.gen.ts >/dev/null
+	cd ../gateway/web && pnpm exec biome check --write src/api/types.gen.ts >/dev/null
 
 # check-gen regenerates and fails if the committed file drifted. Wired
 # into `check` so PRs that change response types without running gen-ts
-# fail in CI. Assumes ../webui/src/api/types.gen.ts is tracked — the first
+# fail in CI. Assumes ../gateway/web/src/api/types.gen.ts is tracked — the first
 # commit that lands tygo must include it.
 check-gen: gen-ts
-	@git diff --exit-code -- ../webui/src/api/types.gen.ts \
+	@git diff --exit-code -- ../gateway/web/src/api/types.gen.ts \
 	  || (echo "types.gen.ts is stale; run 'make gen-ts' and commit the result" && exit 1)
 
 install: build

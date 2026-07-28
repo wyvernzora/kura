@@ -1,8 +1,0 @@
-node_modules
-dist
-storybook-static
-.vite
-*.log
-*.tsbuildinfo
-Dockerfile
-.dockerignore

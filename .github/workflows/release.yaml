@@ -177,7 +177,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=release-n8n-nodes
           provenance: false
 
-  publish-webui:
+  publish-gateway:
     needs: verify
     runs-on: ubuntu-24.04
     steps:
@@ -198,13 +198,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6
         with:
-          images: ghcr.io/wyvernzora/kura/webui
+          images: ghcr.io/wyvernzora/kura/gateway
           tags: |
             type=raw,value=${{ needs.verify.outputs.version }}
             type=raw,value=latest
           labels: |
-            org.opencontainers.image.title=kura-webui
-            org.opencontainers.image.description=Kura suite web UI (SPA + Caddy proxy)
+            org.opencontainers.image.title=kura-gateway
+            org.opencontainers.image.description=Kura suite gateway (Caddy + MCP bridge + SPA)
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.version=${{ needs.verify.outputs.version }}
             org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
@@ -213,15 +213,15 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7
         with:
-          context: services/webui
+          context: services/gateway
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ needs.verify.outputs.version }}
-          cache-from: type=gha,scope=release-webui
-          cache-to: type=gha,mode=max,scope=release-webui
+          cache-from: type=gha,scope=release-gateway
+          cache-to: type=gha,mode=max,scope=release-gateway
           provenance: false
 
   publish-releases:
@@ -285,7 +285,7 @@ jobs:
           provenance: false
 
   github-release:
-    needs: [verify, publish-library, publish-n8n, publish-webui, publish-releases]
+    needs: [verify, publish-library, publish-n8n, publish-gateway, publish-releases]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

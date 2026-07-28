@@ -1,4 +1,4 @@
-import { useAuth } from '@/state/auth';
+import { useSession } from '@/state/session';
 
 import type { ApiErrorEnvelope } from './types';
 
@@ -22,25 +22,17 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 /**
- * Mode-aware fetch wrapper used by every data hook.
- *
- *   - In `authenticated-token` mode it attaches `Authorization: Bearer ...`.
- *   - In `authenticated-anon` mode it sends no Authorization, relying
- *     on `credentials: 'include'` for proxy-injected session cookies.
- *   - All other modes (init / probe / unauthenticated / error) should
- *     not be calling api() — a runtime check guards against early use.
- *
- * 401 handling is centralized: in token mode we drop the stale token
- * and route the user back to the login screen via the auth store; in
- * anon mode we reload the page so the proxy can run its redirect
- * dance.
+ * Fetch wrapper used by every data hook. Sends no Authorization —
+ * kura does not authenticate, and `credentials: 'include'` carries
+ * whatever session cookie the fronting proxy injected. Calls fired
+ * before the boot probe settles are refused rather than raced.
  */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const auth = useAuth.getState();
-  if (!isCallableMode(auth.mode)) {
+  const mode = useSession.getState().mode;
+  if (mode !== 'ready') {
     throw new KuraApiError(0, {
       kind: 'precondition',
-      message: `api() called before authentication completed (mode=${auth.mode})`,
+      message: `api() called before the boot probe settled (mode=${mode})`,
     });
   }
 
@@ -48,18 +40,18 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     'Content-Type': 'application/json',
     ...(init?.headers ?? {}),
   };
-  if (auth.mode === 'authenticated-token' && auth.token) {
-    (headers as Record<string, string>).Authorization = `Bearer ${auth.token}`;
-  }
-
   const res = await fetch(path, {
     ...init,
     credentials: 'include',
     headers,
   });
 
+  // Kura never answers 401, so one can only come from the fronting
+  // proxy with an expired session. Reload to let it redirect.
   if (res.status === 401) {
-    handleUnauthorized();
+    if (typeof window !== 'undefined') {
+      window.location.reload();
+    }
     throw new KuraApiError(401, await readEnvelope(res));
   }
   if (!res.ok) {
@@ -71,26 +63,10 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-function isCallableMode(mode: ReturnType<typeof useAuth.getState>['mode']): boolean {
-  return mode === 'authenticated-token' || mode === 'authenticated-anon';
-}
-
 async function readEnvelope(res: Response): Promise<ApiErrorEnvelope | undefined> {
   try {
     return (await res.json()) as ApiErrorEnvelope;
   } catch {
     return undefined;
-  }
-}
-
-function handleUnauthorized(): void {
-  const auth = useAuth.getState();
-  if (auth.mode === 'authenticated-token') {
-    auth.setToken(null);
-    auth.setMode('unauthenticated');
-    return;
-  }
-  if (auth.mode === 'authenticated-anon' && typeof window !== 'undefined') {
-    window.location.reload();
   }
 }

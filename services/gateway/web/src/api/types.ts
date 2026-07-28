@@ -55,20 +55,18 @@ export interface ApiErrorEnvelope {
 }
 
 /**
- * Stable kind values the UI dispatches on. Add entries as the auth
- * flow + future error UX needs them.
+ * Stable kind values the UI dispatches on. Add entries as the error
+ * UX needs them.
  */
 export const ApiErrorKinds = {
-  Unauthorized: 'unauthorized',
-  Forbidden: 'forbidden',
   Internal: 'internal',
   Validation: 'validation',
 } as const;
 
 /**
- * `GET /api/v1/health` — bearer-exempt by design. Returned for
- * liveness probes; the auth handshake does NOT use it (a 200 here is
- * uninformative about token state).
+ * `GET /api/v1/health` — returned for liveness probes. The boot probe
+ * deliberately hits `/api/v1/library` instead, so that a proxy
+ * interstitial is distinguishable from a real response.
  *
  * Hand-written: the Go side is `handler_health.go:healthResponse`,
  * a handler-local type that has not been hoisted into
@@ -83,10 +81,9 @@ export interface HealthResponse {
 }
 
 /**
- * `GET /api/v1/library` — protected. The auth probe targets this
- * endpoint: a 200 with valid JSON means the bearer is good (or anon
- * mode is in effect); a 401 with the kura error envelope means the
- * bearer is required and we should show the login screen.
+ * `GET /api/v1/library` — the boot probe targets this endpoint: a 200
+ * with valid JSON means kura answered, while HTML, a redirect, or a
+ * 401 means the fronting proxy answered instead.
  *
  * Hand-written: the Go side is `handler_library.go:libraryResponse`,
  * a handler-local type that has not been hoisted into
