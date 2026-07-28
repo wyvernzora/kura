@@ -110,7 +110,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 func startPostgres(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork) *tcpostgres.PostgresContainer {
 	t.Helper()
 	pg, err := tcpostgres.Run(ctx,
-		"postgres:17-alpine",
+		"postgres:18-alpine",
 		tcpostgres.WithDatabase("takuhai"),
 		tcpostgres.WithUsername("takuhai"),
 		tcpostgres.WithPassword("takuhai"),

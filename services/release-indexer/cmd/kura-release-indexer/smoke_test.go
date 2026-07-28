@@ -26,7 +26,7 @@ func TestSmoke(t *testing.T) {
 	defer cancel()
 
 	container, err := tcpostgres.Run(ctx,
-		"postgres:17-alpine",
+		"postgres:18-alpine",
 		tcpostgres.WithDatabase("takuhai"),
 		tcpostgres.WithUsername("takuhai"),
 		tcpostgres.WithPassword("takuhai"),

@@ -40,7 +40,7 @@ func startSharedPG() {
 		defer cancel()
 
 		container, err := tcpostgres.Run(ctx,
-			"postgres:17-alpine",
+			"postgres:18-alpine",
 			tcpostgres.WithDatabase("takuhai_admin"),
 			tcpostgres.WithUsername("takuhai"),
 			tcpostgres.WithPassword("takuhai"),
