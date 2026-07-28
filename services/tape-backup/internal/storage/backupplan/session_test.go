@@ -29,6 +29,7 @@ var sessionEventFieldsByType = map[EventType][]string{
 	EventPlanCancelled:      {"planId", "reason", "detail"},
 	EventEncryptionVerified: {"planId"},
 	EventSnapshotSwept:      {"entry", "reason"},
+	EventOutboxOverflow:     {},
 	EventDivergenceChecked:  {"planId", "result", "extraSnapshots"},
 	EventFreshnessChecked:   {"planId", "dropped"},
 	EventItemStarted:        {"planId", "metadataRef", "generation", "bytes", "files"},
@@ -1310,7 +1311,7 @@ func testSessionDecodeRejectsEveryForbiddenField(
 			})
 		}
 	}
-	const wantCases = 326
+	const wantCases = 346
 	if tested != wantCases {
 		t.Fatalf("forbidden zero-value cases = %d, want %d", tested, wantCases)
 	}
@@ -1816,6 +1817,7 @@ func allDurableEvents() []Event {
 		EventPlanCancelled,
 		EventEncryptionVerified,
 		EventSnapshotSwept,
+		EventOutboxOverflow,
 		EventDivergenceChecked,
 		EventFreshnessChecked,
 		EventItemStarted,

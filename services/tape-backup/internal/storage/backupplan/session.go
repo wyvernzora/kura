@@ -34,6 +34,7 @@ const (
 	EventPlanCancelled      EventType = "plan_cancelled"
 	EventEncryptionVerified EventType = "encryption_verified"
 	EventSnapshotSwept      EventType = "snapshot_swept"
+	EventOutboxOverflow     EventType = "outbox_overflow"
 	EventDivergenceChecked  EventType = "divergence_checked"
 	EventFreshnessChecked   EventType = "freshness_checked"
 	EventItemStarted        EventType = "item_started"
@@ -299,6 +300,13 @@ func (w *Writer) Append(event Event) error {
 	}
 	w.syncedSeq = w.highestSeq
 	return nil
+}
+
+// HighestSeq reports the highest event sequence already recorded.
+func (w *Writer) HighestSeq() uint64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.highestSeq
 }
 
 // Close releases the session file. It is idempotent.
@@ -689,6 +697,9 @@ var eventRules = map[EventType]eventRule{
 	EventSnapshotSwept: {
 		allowed:  fieldEntry | fieldReason,
 		validate: validateSnapshotSwept,
+	},
+	EventOutboxOverflow: {
+		validate: func(Event) error { return nil },
 	},
 	EventDivergenceChecked: {
 		allowed:  fieldPlanID | fieldResult | fieldExtraSnapshots,
