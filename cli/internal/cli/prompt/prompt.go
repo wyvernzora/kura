@@ -95,7 +95,7 @@ func WriteHint(w io.Writer, candidates []api.Candidate) {
 	for _, c := range candidates {
 		fmt.Fprintln(w, FormatCandidate(c))
 	}
-	fmt.Fprintf(w, "retry with one of: kura <cmd> <metadataRef>\n")
+	fmt.Fprintln(w, "retry with one of: kura <cmd> <ref>")
 }
 
 // FormatCandidate produces "<title> | <year> | <ref>" with empty fields
