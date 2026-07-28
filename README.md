@@ -21,6 +21,9 @@ One repo, several services, one version line:
 | `kura-backup-agent` *(planned)* | LTO tape archival: a bounded context of the library manager plus an agent binary on the tape VM |
 | [`services/gateway`](services/gateway/) | Suite gateway: Caddy + MCP bridge + SPA, one origin over every service API |
 
+The unified API cutover is operator-driven; its ordered procedure is
+[docs/unified-api-cutover.md](docs/unified-api-cutover.md).
+
 Every service ships as a container image under `ghcr.io/wyvernzora/kura/`,
 all versioned together (`vX.Y.Z` tags). Development: `make check` fans out
 to every service; per-service

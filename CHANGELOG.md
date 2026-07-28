@@ -8,6 +8,82 @@
 
 Notable release changes for Kura.
 
+## Unreleased
+
+Unified API: the suite now presents one hostname, one `/api/v1` REST surface,
+and one `/mcp/v1` MCP surface behind a new gateway. This release is **breaking
+on every surface** — REST field names, MCP tool names, and the deployment shape
+all change, and there is no compatibility layer. Forward-only by design.
+
+### Highlights
+
+- Added `kura-gateway`: Caddy plus an in-Pod MCP bridge plus the SPA in one
+  image, serving the whole suite from a single origin. It replaces the
+  `kura-webui` image, which is retired.
+- Consolidated the MCP surface into one server named `kura` with 16 tools
+  spanning both services, replacing the two per-service servers.
+- Added `GET /api/v1/releases` and moved the release indexer's REST surface
+  under `/api/v1/releases`.
+- Added a synthesized `GET /api/v1/health` reporting the gateway and both
+  services, and a gateway `/healthz` with no backend dependency.
+- Added a root product E2E suite that boots PostgreSQL 18 and every shipping
+  service, then exercises cross-service workflows through the gateway.
+
+### Breaking changes
+
+- **Authentication is removed from the services entirely.** There is no bearer
+  token, no `[auth]` config table, and no operator tier. A request that reaches
+  a service is served. Access control is now solely the authenticating proxy in
+  front of the deployment plus a network policy confining the pods — see the
+  upgrade notes, because deploying without that boundary exposes destructive
+  routes anonymously.
+- REST field renames across the library service: `metadataRef` becomes `ref`,
+  the former `ref` (the on-disk directory) becomes `directory`, `rows` becomes
+  `items`, `dirname` becomes `directory`, `size` becomes `sizeBytes`, and
+  `mtime` becomes `modifiedAt`. `POST /api/v1/resolve` moves to
+  `POST /api/v1/series/resolve`.
+- The release indexer's JSON moves from snake_case to camelCase throughout, and
+  its routes move under `/api/v1/releases`: `/ingest`, `/queue/claim`,
+  `/queue/stats`, `/submit` (now `/queue/submit`), `/releases/{infohash}`, and
+  `/magnets/{infohash}` (now `/{infohash}/magnet`).
+- Removed `DELETE /api/v1/series/{ref}` and the three
+  `/api/v1/series/{ref}/aliases` routes. Untracking a series is now a
+  filesystem operation; alias *storage* is retained and still feeds search.
+- Removed the `kura remove` and `kura alias` CLI commands with their endpoints.
+- Every MCP tool is renamed: `kura_show` becomes `get_series`, `kura_stage`
+  becomes `stage_series_media`, and so on. `resolve_magnets` becomes
+  `get_magnet` and now takes a single infohash. `kura_aliases` is removed. No
+  compatibility aliases are registered.
+- The error envelope is now `{kind, message, data}` on both services. The
+  release indexer's `code` field is gone, and its `invalid_input` and
+  `no_such_release` kinds become `invalid_request` and `not_found`.
+- `list_releases` no longer coerces null `sizeBytes` and `confidence` to zero.
+  A release with no recorded size is now distinguishable from one of size zero.
+- The release indexer requires a new `server.metrics_addr`, and serves
+  `/metrics` only there.
+- The library-manager health endpoint moves from `/api/v1/health` to
+  `/healthz`; `/api/v1/health` is now the gateway's aggregate suite health.
+- n8n workflows must migrate to the type-version 2 nodes, one `Kura API`
+  gateway credential, `ref` fields, and camelCase release fields. The package
+  does not retain its pre-gateway transports.
+
+### Upgrade notes
+
+- **Put an authenticating proxy in front of the suite before deploying it, and
+  confine the pods with a network policy.** The images no longer contain any
+  authentication to fall back on, so this is a precondition rather than a
+  hardening step.
+- Remove any `[auth]` table from `library-manager.toml`. Configuration is
+  decoded strictly, so a leftover table now fails startup.
+- Set `server.metrics_addr` in `release-indexer.toml`. It is required, must
+  differ from `server.addr`, and scrape configuration must point at it — a
+  policy allowing a scrape of the shared port previously also allowed the
+  unauthenticated write API.
+- Point clients at the gateway hostname. The per-service hostnames and the
+  separate MCP endpoints are retired.
+- Recreate or update n8n workflows against the type-version 2 nodes and replace
+  the separate library and release credentials with one `Kura API` credential.
+
 ## v0.6.1 - 2026-07-26
 
 ### Highlights
