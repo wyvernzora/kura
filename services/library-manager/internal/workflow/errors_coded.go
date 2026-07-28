@@ -108,19 +108,6 @@ func (e *TrashRestoreTargetExistsError) Data() map[string]any {
 	}
 }
 
-func (e *RemoveStagedRecordsExistError) Kind() string     { return errkind.KindConflict }
-func (e *RemoveStagedRecordsExistError) Category() string { return errkind.CategoryInvalidParams }
-func (e *RemoveStagedRecordsExistError) Data() map[string]any {
-	episodes := make([]string, len(e.Episodes))
-	for i, ep := range e.Episodes {
-		episodes[i] = ep.String()
-	}
-	return map[string]any{
-		"directory": e.Ref.String(),
-		"episodes":  episodes,
-	}
-}
-
 // --- episode-level invalid params --------------------------------------
 
 func (e *MetadataMissingEpisodeError) Kind() string     { return errkind.KindInvalidEpisode }

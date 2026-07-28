@@ -65,8 +65,9 @@ type Series struct {
 	// non-nil (decode initializes empty).
 	StagedExtras []StagedExtraItem
 	Artwork      Artwork
-	// UserAliases are hand-coined shorthands managed via the alias
-	// REST endpoints / `kura alias` CLI. Preserved across rescans;
+	// UserAliases are hand-coined shorthands. The alias REST endpoints
+	// and `kura alias` CLI that wrote them are retired, but the field is
+	// retained and still feeds SearchKey. Preserved across rescans;
 	// rescan-time TVDB aliases + translated titles land separately
 	// (transient, folded straight into SearchKey and discarded).
 	UserAliases []textnorm.NFCString

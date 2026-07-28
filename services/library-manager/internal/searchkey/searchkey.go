@@ -37,8 +37,8 @@ type TranslatedTitle struct {
 
 // Inputs bundles every candidate string the fold considers. Aliases
 // is transient per-call data — typically the latest provider response;
-// callers may pass nil when only persisted state is in scope (e.g. a
-// CLI alias mutation). UserAliases is persisted user shorthands.
+// callers may pass nil when only persisted state is in scope.
+// UserAliases is persisted user shorthands.
 // PreferredLangs filters TranslatedTitles via BCP-47 base form
 // (e.g. "ja", "en"); empty list disables the translation channel.
 type Inputs struct {

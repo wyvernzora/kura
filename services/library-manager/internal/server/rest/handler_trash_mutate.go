@@ -10,7 +10,6 @@ import (
 )
 
 // handleTrashRestore serves POST /api/v1/series/{ref}/trash/{ulid}/restore.
-// Operator-only; gated in router.go.
 func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) {
 	ref, err := s.resolveRefPath(r.PathValue("ref"))
 	if err != nil {
@@ -34,7 +33,7 @@ func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTrashEmptySeries serves DELETE /api/v1/series/{ref}/trash.
-// Operator-only + X-Confirm: 1 required.
+// Destructive; the CLI gates it behind --confirm.
 func (s *Server) handleTrashEmptySeries(w http.ResponseWriter, r *http.Request) {
 	ref, err := s.resolveRefPath(r.PathValue("ref"))
 	if err != nil {
@@ -58,7 +57,7 @@ func (s *Server) handleTrashEmptySeries(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleTrashEmptyAll serves DELETE /api/v1/trash. Library-wide
-// destructive; operator-only + X-Confirm: 1 required.
+// destructive; the CLI gates it behind --all --confirm.
 func (s *Server) handleTrashEmptyAll(w http.ResponseWriter, r *http.Request) {
 	older, err := parseOlderThan(r.URL.Query().Get("olderThan"))
 	if err != nil {

@@ -97,7 +97,7 @@ func TestKuraShow_RejectsMalformedEpisodesAtBoundary(t *testing.T) {
 	}
 }
 
-func TestProjectShow_DropsOperatorFields(t *testing.T) {
+func TestProjectShow_DropsHostSideFields(t *testing.T) {
 	in := api.Show{
 		Ref:            refs.Metadata("tvdb:1"),
 		Directory:      mustSeries(t, "Bookworm"),

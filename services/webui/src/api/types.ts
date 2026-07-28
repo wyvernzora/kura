@@ -39,18 +39,14 @@ export type {
   Show,
   Status as EpisodeStatus,
   TrashItemShow,
-  // Aliases
-  UserAliasList,
-  UserAliasMutation,
 } from './types.gen';
 
 /**
- * `internal/server/auth.writeUnauthorized`-shaped 401 envelope. Also
- * matches the broader REST error envelope used by writeError elsewhere
- * (kind drives the union; message is always populated).
+ * The REST error envelope written by writeError (kind drives the
+ * union; message is always populated).
  *
- * Hand-written: the Go side lives in `internal/server/auth` and
- * `internal/server/rest/errors.go`, not in `pkg/api/`.
+ * Hand-written: the Go side lives in `internal/server/rest/errors.go`,
+ * not in `pkg/api/`.
  */
 export interface ApiErrorEnvelope {
   kind: string;

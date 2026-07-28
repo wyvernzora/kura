@@ -326,8 +326,9 @@ func compressDroppedRanges(dropped map[int][]int, seasons []mcpSeason) []string 
 	return out
 }
 
-// projectShow strips the operator-only fields and collapses
-// staged_replacement into staged.
+// projectShow strips the host-side fields an agent has no use for
+// (directory, root, generation) and collapses staged_replacement
+// into staged.
 func projectShow(in api.Show) mcpShow {
 	out := mcpShow{
 		Ref:            in.Ref.String(),

@@ -33,9 +33,9 @@ func writeError(w http.ResponseWriter, err error) {
 }
 
 // encodeError walks the error chain. errkind.Coded errors map by Kind
-// + Category. REST-local sentinel types (validationError, forbiddenError,
-// internalError) map directly. Anything else collapses to a 500
-// internal envelope with truncated message.
+// + Category. REST-local sentinel types (validationError, internalError)
+// map directly. Anything else collapses to a 500 internal envelope with
+// truncated message.
 func encodeError(err error) (int, errorEnvelope) {
 	if coded, ok := errors.AsType[errkind.Coded](err); ok {
 		return statusForKind(coded.Kind(), coded.Category()), errorEnvelope{
@@ -50,20 +50,6 @@ func encodeError(err error) (int, errorEnvelope) {
 			Kind:     errkind.KindInvalidRef,
 			Category: errkind.CategoryInvalidParams,
 			Message:  ve.Error(),
-		}
-	}
-	if fe, ok := errors.AsType[*forbiddenError](err); ok {
-		return http.StatusForbidden, errorEnvelope{
-			Kind:     "forbidden",
-			Category: errkind.CategoryInvalidParams,
-			Message:  fe.Error(),
-		}
-	}
-	if ue, ok := errors.AsType[*unauthorizedError](err); ok {
-		return http.StatusUnauthorized, errorEnvelope{
-			Kind:     "unauthorized",
-			Category: errkind.CategoryInvalidParams,
-			Message:  ue.Error(),
 		}
 	}
 	// Common storage-layer errors that should surface as not-found.
@@ -132,13 +118,6 @@ type internalError struct {
 
 func (e *internalError) Error() string { return e.msg }
 
-// forbiddenError is the operator-gate failure error.
-type forbiddenError struct {
-	msg string
-}
-
-func (e *forbiddenError) Error() string { return e.msg }
-
 // validationError is for request-shape errors raised inside REST
 // handlers (bad JSON, missing required field, malformed query param).
 // Maps to 400 with kind=invalid_ref.
@@ -147,11 +126,3 @@ type validationError struct {
 }
 
 func (e *validationError) Error() string { return e.msg }
-
-// unauthorizedError is the missing-or-invalid-bearer-token error.
-// Maps to 401. Used by bearerAuthMiddleware.
-type unauthorizedError struct {
-	msg string
-}
-
-func (e *unauthorizedError) Error() string { return e.msg }

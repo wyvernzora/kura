@@ -7,7 +7,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// handleReindex serves POST /api/v1/library/reindex. Operator-only.
+// handleReindex serves POST /api/v1/library/reindex.
 // Job-shaped: returns a JobAck the caller can stream via
 // /jobs/{id}/stream. The walk + index write happen inside the job
 // goroutine; progress events flow through the registry's reporter.

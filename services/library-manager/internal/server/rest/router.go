@@ -61,7 +61,7 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/stage", s.handleStage)
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/apply", s.handleApply)
 
-	// trash mutations (operator-only)
+	// trash mutations
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/trash/{ulid}/restore", s.handleTrashRestore)
 	apiMux.HandleFunc("DELETE /api/v1/series/{ref}/trash", s.handleTrashEmptySeries)
 	apiMux.HandleFunc("DELETE /api/v1/trash", s.handleTrashEmptyAll)

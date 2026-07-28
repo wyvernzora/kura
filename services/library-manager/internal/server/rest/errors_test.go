@@ -71,16 +71,6 @@ func TestEncodeError_ValidationError(t *testing.T) {
 	}
 }
 
-func TestEncodeError_ForbiddenError(t *testing.T) {
-	status, env := encodeError(&forbiddenError{msg: "no operator header"})
-	if status != http.StatusForbidden {
-		t.Errorf("status: got %d want 403", status)
-	}
-	if env.Kind != "forbidden" {
-		t.Errorf("kind: got %q want forbidden", env.Kind)
-	}
-}
-
 func TestEncodeError_FallbackInternal(t *testing.T) {
 	status, env := encodeError(errors.New("untyped"))
 	if status != http.StatusInternalServerError {
