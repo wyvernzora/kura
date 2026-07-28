@@ -25,15 +25,15 @@ type jobStatusInput struct {
 }
 
 type mcpJobStatus struct {
-	JobID       string          `json:"jobId"`
-	Kind        string          `json:"kind"`
-	MetadataRef string          `json:"metadataRef,omitempty"`
-	State       string          `json:"state"`
-	StartedAt   string          `json:"startedAt"`
-	EndedAt     string          `json:"endedAt,omitempty"`
-	Progress    *mcpJobProgress `json:"progress,omitempty"`
-	Result      json.RawMessage `json:"result,omitempty"`
-	Error       *mcpJobError    `json:"error,omitempty"`
+	JobID     string          `json:"jobId"`
+	Kind      string          `json:"kind"`
+	Ref       string          `json:"ref,omitempty"`
+	State     string          `json:"state"`
+	StartedAt string          `json:"startedAt"`
+	EndedAt   string          `json:"endedAt,omitempty"`
+	Progress  *mcpJobProgress `json:"progress,omitempty"`
+	Result    json.RawMessage `json:"result,omitempty"`
+	Error     *mcpJobError    `json:"error,omitempty"`
 }
 
 type mcpJobProgress struct {
@@ -89,11 +89,11 @@ func addJobStatusTool(s *sdkmcp.Server, deps Deps) {
 // facing MetadataRef via index reverse-lookup.
 func projectJobStatus(view jobs.UntypedJob, idx *indexfile.Index, includeResult bool) (mcpJobStatus, error) {
 	out := mcpJobStatus{
-		JobID:       view.ID(),
-		Kind:        view.Kind(),
-		MetadataRef: lookupMetadataRef(idx, view.Series()),
-		State:       view.State().String(),
-		StartedAt:   view.StartedAt().UTC().Format("2006-01-02T15:04:05Z07:00"),
+		JobID:     view.ID(),
+		Kind:      view.Kind(),
+		Ref:       lookupMetadataRef(idx, view.Series()),
+		State:     view.State().String(),
+		StartedAt: view.StartedAt().UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 	if endedAt, ok := view.EndedAt(); ok {
 		out.EndedAt = endedAt.UTC().Format("2006-01-02T15:04:05Z07:00")

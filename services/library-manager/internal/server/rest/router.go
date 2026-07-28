@@ -47,7 +47,7 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("PATCH /api/v1/series/{ref}/tags", s.handleTagsUpdate)
 
 	// resolve
-	apiMux.HandleFunc("POST /api/v1/resolve", s.handleResolve)
+	apiMux.HandleFunc("POST /api/v1/series/resolve", s.handleResolve)
 
 	// reset
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/reset", s.handleReset)

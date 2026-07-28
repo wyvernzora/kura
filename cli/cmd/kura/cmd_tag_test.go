@@ -49,8 +49,8 @@ func TestListTagFlagsAreRepeatable(t *testing.T) {
 func TestPrintTags(t *testing.T) {
 	var out bytes.Buffer
 	err := printTags(&out, api.SeriesTags{
-		MetadataRef: refs.Metadata("tvdb:42"),
-		Tags:        []string{"maintenance-requested", "priority"},
+		Ref:  refs.Metadata("tvdb:42"),
+		Tags: []string{"maintenance-requested", "priority"},
 	}, false)
 	if err != nil {
 		t.Fatalf("printTags: %v", err)

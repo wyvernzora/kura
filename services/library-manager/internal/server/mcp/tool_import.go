@@ -14,9 +14,9 @@ import (
 )
 
 type importInput struct {
-	Ref      string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
-	Dirname  string `json:"dirname" jsonschema:"Existing directory basename under the library root to adopt."`
-	Ordering string `json:"ordering,omitempty" jsonschema:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`
+	Ref       string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
+	Directory string `json:"directory" jsonschema:"Existing directory basename under the library root to adopt."`
+	Ordering  string `json:"ordering,omitempty" jsonschema:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`
 }
 
 //go:embed tool_import.md
@@ -41,17 +41,17 @@ func addImportTool(s *sdkmcp.Server, deps Deps) {
 				message: fmt.Sprintf("kura_import: %v", err),
 			}), nil, nil
 		}
-		if in.Dirname == "" {
+		if in.Directory == "" {
 			return toolErrorResult(&invalidInputError{
 				kind:    errkind.KindInvalidRef,
-				message: "kura_import: dirname is required",
+				message: "kura_import: directory is required",
 			}), nil, nil
 		}
-		seriesRef, err := refs.ParseSeries(in.Dirname)
+		seriesRef, err := refs.ParseSeries(in.Directory)
 		if err != nil {
 			return toolErrorResult(&invalidInputError{
 				kind:    errkind.KindInvalidRef,
-				message: fmt.Sprintf("kura_import: dirname: %v", err),
+				message: fmt.Sprintf("kura_import: directory: %v", err),
 			}), nil, nil
 		}
 		ordering, err := tvdb.ParseOrdering(in.Ordering)

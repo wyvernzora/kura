@@ -2,12 +2,12 @@ import type { ListRow } from '@/api/types';
 
 /**
  * Hand-crafted ListRow fixtures for the library-grid stories. Mix of
- * statuses + airing/non-airing + with/without metadataRef so a single
+ * statuses + airing/non-airing + with/without ref so a single
  * page demos the visual variants the live grid will render.
  */
 
 function row(opts: {
-  metadataRef?: string;
+  ref?: string;
   title: string;
   status: ListRow['status'];
   isAiring?: boolean;
@@ -17,7 +17,7 @@ function row(opts: {
   tags?: string[];
 }): ListRow {
   return {
-    metadataRef: opts.metadataRef,
+    ref: opts.ref,
     title: opts.title,
     status: opts.status,
     isAiring: opts.isAiring,
@@ -32,7 +32,7 @@ function row(opts: {
 
 export const FIXTURE_LIST_ROWS: ListRow[] = [
   row({
-    metadataRef: 'tvdb:424536',
+    ref: 'tvdb:424536',
     title: 'Frieren: Beyond Journey’s End',
     status: 'incomplete',
     isAiring: true,
@@ -41,27 +41,27 @@ export const FIXTURE_LIST_ROWS: ListRow[] = [
     tags: ['priority:high'],
   }),
   row({
-    metadataRef: 'tvdb:81189',
+    ref: 'tvdb:81189',
     title: 'Cowboy Bebop',
     status: 'complete',
     episodeCount: 26,
     tags: ['maintenance:disabled'],
   }),
   row({
-    metadataRef: 'tvdb:79474',
+    ref: 'tvdb:79474',
     title: 'Mushishi',
     status: 'complete',
     episodeCount: 26,
   }),
   row({
-    metadataRef: 'tvdb:143471',
+    ref: 'tvdb:143471',
     title: 'YAWARA! A Fashionable Judo Girl!',
     status: 'incomplete',
     episodeCount: 124,
     episodesAvailable: 60,
   }),
   row({
-    metadataRef: 'tvdb:305074',
+    ref: 'tvdb:305074',
     title: 'Re:Zero — Starting Life in Another World',
     status: 'incomplete',
     isAiring: true,
@@ -69,14 +69,14 @@ export const FIXTURE_LIST_ROWS: ListRow[] = [
     episodesAvailable: 50,
   }),
   row({
-    metadataRef: 'tvdb:359274',
+    ref: 'tvdb:359274',
     title: 'Vinland Saga',
     status: 'incomplete',
     episodeCount: 48,
     episodesAvailable: 24,
   }),
   row({
-    metadataRef: 'tvdb:333495',
+    ref: 'tvdb:333495',
     title: 'Houseki no Kuni',
     status: 'complete',
     episodeCount: 12,
@@ -88,14 +88,14 @@ export const FIXTURE_LIST_ROWS: ListRow[] = [
     episodesAvailable: 0,
   }),
   row({
-    metadataRef: 'tvdb:99999999',
+    ref: 'tvdb:99999999',
     title: 'A series whose provider blew up',
     status: 'error',
     episodeCount: 12,
     episodesAvailable: 0,
   }),
   row({
-    metadataRef: 'tvdb:73752',
+    ref: 'tvdb:73752',
     title: 'Berserk (1997)',
     status: 'complete',
     episodeCount: 25,

@@ -79,7 +79,7 @@ func walkListPages(rt *runContext, c *client.Client, statuses []string, airing *
 		if page.DataChanged {
 			drifted = true
 		}
-		all.Rows = append(all.Rows, page.Rows...)
+		all.Items = append(all.Items, page.Items...)
 		if page.NextCursor == "" {
 			return all, drifted, nil
 		}

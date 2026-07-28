@@ -32,8 +32,8 @@ type mcpReconcilePlan struct {
 // stagedTrash entry. The file at `from` will disappear at apply time.
 // Bucket structure (where it lands inside .kura/trash/) is
 // intentionally not exposed. Source / Resolution / Codec are empty
-// for standalone trash (no mediainfo probe at stage time); Size and
-// MTime come from the file stat.
+// for standalone trash (no mediainfo probe at stage time); SizeBytes
+// and ModifiedAt come from the file stat.
 type mcpReconcileTrash struct {
 	ID         string   `json:"id"`
 	From       string   `json:"from"`
@@ -41,8 +41,8 @@ type mcpReconcileTrash struct {
 	Source     string   `json:"source,omitempty"`
 	Resolution string   `json:"resolution,omitempty"`
 	Codec      string   `json:"codec,omitempty"`
-	Size       int64    `json:"size,omitempty"`
-	MTime      string   `json:"mtime,omitempty"`
+	SizeBytes  int64    `json:"sizeBytes,omitempty"`
+	ModifiedAt string   `json:"modifiedAt,omitempty"`
 }
 
 type mcpReconcileExtra struct {
@@ -62,8 +62,8 @@ type mcpReconcileChange struct {
 	Source     string             `json:"source,omitempty"`
 	Resolution string             `json:"resolution,omitempty"`
 	Codec      string             `json:"codec,omitempty"`
-	Size       int64              `json:"size,omitempty"`
-	MTime      string             `json:"mtime,omitempty"`
+	SizeBytes  int64              `json:"sizeBytes,omitempty"`
+	ModifiedAt string             `json:"modifiedAt,omitempty"`
 	Companions []mcpReconcileMove `json:"companions,omitempty"`
 	Replaced   *mcpReplaced       `json:"replaced,omitempty"`
 }
@@ -78,8 +78,8 @@ type mcpReplaced struct {
 	Source     string             `json:"source,omitempty"`
 	Resolution string             `json:"resolution,omitempty"`
 	Codec      string             `json:"codec,omitempty"`
-	Size       int64              `json:"size,omitempty"`
-	MTime      string             `json:"mtime,omitempty"`
+	SizeBytes  int64              `json:"sizeBytes,omitempty"`
+	ModifiedAt string             `json:"modifiedAt,omitempty"`
 	Companions []mcpReconcileMove `json:"companions,omitempty"`
 }
 
@@ -141,8 +141,8 @@ func projectReconcilePlan(in api.ReconcilePlan, seriesRoot, inboxRoot string) mc
 			Source:     change.Source,
 			Resolution: change.Resolution,
 			Codec:      change.Codec,
-			Size:       change.Size,
-			MTime:      formatMTime(change.MTime),
+			SizeBytes:  change.SizeBytes,
+			ModifiedAt: formatMTime(change.ModifiedAt),
 		}
 		if len(change.Companions) > 0 {
 			mc.Companions = make([]mcpReconcileMove, 0, len(change.Companions))
@@ -159,8 +159,8 @@ func projectReconcilePlan(in api.ReconcilePlan, seriesRoot, inboxRoot string) mc
 				Source:     change.Replaced.Source,
 				Resolution: change.Replaced.Resolution,
 				Codec:      change.Replaced.Codec,
-				Size:       change.Replaced.Size,
-				MTime:      formatMTime(change.Replaced.MTime),
+				SizeBytes:  change.Replaced.SizeBytes,
+				ModifiedAt: formatMTime(change.Replaced.ModifiedAt),
 			}
 			if len(change.Replaced.Companions) > 0 {
 				rep.Companions = make([]mcpReconcileMove, 0, len(change.Replaced.Companions))
@@ -189,8 +189,8 @@ func projectReconcilePlan(in api.ReconcilePlan, seriesRoot, inboxRoot string) mc
 				Source:     item.Source,
 				Resolution: item.Resolution,
 				Codec:      item.Codec,
-				Size:       item.Size,
-				MTime:      formatMTime(item.MTime),
+				SizeBytes:  item.SizeBytes,
+				ModifiedAt: formatMTime(item.ModifiedAt),
 			})
 		}
 	}

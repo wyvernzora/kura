@@ -34,7 +34,7 @@ function LibraryHome() {
   const navigate = useNavigate();
   const onSelect = useCallback(
     (row: ListRow) => {
-      if (!row.metadataRef) {
+      if (!row.ref) {
         return;
       }
       // Picking a result is an explicit destination commit — the
@@ -44,10 +44,10 @@ function LibraryHome() {
       // user back to where they started searching from).
       clearSearch();
       // Series detail addresses by metadata ref (provider:id) — same
-      // identifier the list emits as `metadataRef`. Untracked rows
-      // (no metadataRef) never reach this handler because the grid
+      // identifier the list emits as `ref`. Untracked rows
+      // (no ref) never reach this handler because the grid
       // only forwards onClick when the ref is present.
-      void navigate({ to: '/series/$ref', params: { ref: row.metadataRef } });
+      void navigate({ to: '/series/$ref', params: { ref: row.ref } });
     },
     [navigate, clearSearch],
   );
@@ -77,7 +77,7 @@ function LibraryHome() {
   // Metadata refs already in the library — used by AddCandidates to
   // drop provider matches the user already owns.
   const libraryRefs = useMemo(
-    () => new Set(allRows.map((r) => r.metadataRef).filter((ref): ref is string => !!ref)),
+    () => new Set(allRows.map((r) => r.ref).filter((ref): ref is string => !!ref)),
     [allRows],
   );
 

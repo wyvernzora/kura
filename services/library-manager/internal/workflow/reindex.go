@@ -23,6 +23,6 @@ func Reindex(ctx context.Context, deps Deps) *jobs.Job[api.ReindexResult] {
 		if err := deps.Index.RebuildNow(jobCtx, "reindex"); err != nil {
 			return api.ReindexResult{}, err
 		}
-		return api.ReindexResult{Rows: deps.Index.Len()}, nil
+		return api.ReindexResult{Items: deps.Index.Len()}, nil
 	})
 }

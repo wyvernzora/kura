@@ -31,8 +31,8 @@ type ReconcilePlanDetail struct {
 // .kura/trash/<id>/ on apply. StepIDs lists the step IDs that produced
 // this trash bucket so callers can deterministically map the entry
 // back to plan steps. Source / Resolution / Codec are empty for
-// standalone stagedTrash (no mediainfo probe at stage time); Size and
-// MTime are populated from the on-disk file.
+// standalone stagedTrash (no mediainfo probe at stage time); SizeBytes
+// and ModifiedAt are populated from the on-disk file.
 type ReconcileTrashChange struct {
 	ID         string          `json:"id"`
 	From       string          `json:"from"`
@@ -40,8 +40,8 @@ type ReconcileTrashChange struct {
 	Source     string          `json:"source,omitempty"`
 	Resolution string          `json:"resolution,omitempty"`
 	Codec      string          `json:"codec,omitempty"`
-	Size       int64           `json:"size,omitempty"`
-	MTime      *time.Time      `json:"mtime,omitempty"`
+	SizeBytes  int64           `json:"sizeBytes,omitempty"`
+	ModifiedAt *time.Time      `json:"modifiedAt,omitempty"`
 	Companions []ReconcileMove `json:"companions,omitempty"`
 	StepIDs    []string        `json:"stepIds,omitempty"`
 }
@@ -66,8 +66,8 @@ type ReconcileChange struct {
 	Source     string             `json:"source,omitempty"`
 	Resolution string             `json:"resolution,omitempty"`
 	Codec      string             `json:"codec,omitempty"`
-	Size       int64              `json:"size,omitempty"`
-	MTime      *time.Time         `json:"mtime,omitempty"`
+	SizeBytes  int64              `json:"sizeBytes,omitempty"`
+	ModifiedAt *time.Time         `json:"modifiedAt,omitempty"`
 	Companions []ReconcileMove    `json:"companions,omitempty"`
 	Replaced   *ReconcileReplaced `json:"replaced,omitempty"`
 	StepIDs    []string           `json:"stepIds,omitempty"`
@@ -84,8 +84,8 @@ type ReconcileReplaced struct {
 	Source     string          `json:"source,omitempty"`
 	Resolution string          `json:"resolution,omitempty"`
 	Codec      string          `json:"codec,omitempty"`
-	Size       int64           `json:"size,omitempty"`
-	MTime      *time.Time      `json:"mtime,omitempty"`
+	SizeBytes  int64           `json:"sizeBytes,omitempty"`
+	ModifiedAt *time.Time      `json:"modifiedAt,omitempty"`
 	Companions []ReconcileMove `json:"companions,omitempty"`
 	StepIDs    []string        `json:"stepIds,omitempty"`
 }
@@ -126,7 +126,7 @@ type FailedReconcileStep struct {
 // true when an in_progress claim was actually removed; PriorHolder
 // identifies who was holding it.
 type RecoverReconcile struct {
-	Ref         refs.Series   `json:"ref"`
+	Directory   refs.Series   `json:"directory"`
 	Cleared     bool          `json:"cleared"`
 	PriorHolder *coord.Holder `json:"priorHolder,omitempty"`
 }

@@ -40,7 +40,7 @@ interface SeriesPosterCardProps {
  */
 export function SeriesPosterCard({ show, preview = false, className }: SeriesPosterCardProps) {
   const status = primaryStatus(withAiring(show.status, !!show.isAiring));
-  const title = show.preferredTitle || show.canonicalTitle || show.ref;
+  const title = show.preferredTitle || show.canonicalTitle || show.directory;
   const posterUrl = show.artwork?.poster?.thumbnailUrl ?? show.artwork?.poster?.url;
   const [modalOpen, setModalOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -79,18 +79,18 @@ export function SeriesPosterCard({ show, preview = false, className }: SeriesPos
       )}
     >
       <PosterFrame title={title} posterUrl={posterUrl} status={status} tags={show.tags} />
-      <div className="font-mono text-[10px] tracking-[0.4px] text-muted">{show.metadataRef}</div>
+      <div className="font-mono text-[10px] tracking-[0.4px] text-muted">{show.ref}</div>
       <h1 className="m-0 font-sans text-[26px] leading-tight font-semibold text-ink tracking-[-0.4px] [word-break:break-word]">
         {title}
       </h1>
       {preview ? (
-        <AddToLibraryButton metadataRef={show.metadataRef} />
+        <AddToLibraryButton metadataRef={show.ref} />
       ) : (
         <>
           <div className="flex w-full items-start gap-2">
             <div className="min-w-0 flex-1">
               <ScanButton
-                metadataRef={show.metadataRef}
+                metadataRef={show.ref}
                 lastScanned={show.lastScanned}
                 onShowDetails={handleShowDetails}
               />
@@ -105,7 +105,7 @@ export function SeriesPosterCard({ show, preview = false, className }: SeriesPos
           </div>
           <ScanDetailsModal open={modalOpen} onOpenChange={setModalOpen} view={view} />
           <SeriesSettingsModal
-            metadataRef={show.metadataRef}
+            metadataRef={show.ref}
             tags={show.tags ?? []}
             open={settingsOpen}
             onOpenChange={setSettingsOpen}

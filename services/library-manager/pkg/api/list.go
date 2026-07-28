@@ -56,7 +56,7 @@ type ListRow struct {
 	SeasonCount       int           `json:"seasonCount"`
 	EpisodesAvailable int           `json:"episodesAvailable"`
 	EpisodeCount      int           `json:"episodeCount"`
-	MetadataRef       refs.Metadata `json:"metadataRef,omitempty"`
+	Ref               refs.Metadata `json:"ref,omitempty"`
 	Resolutions       []string      `json:"resolutions,omitempty"`
 	Sources           []string      `json:"sources,omitempty"`
 	Tags              []string      `json:"tags,omitempty"`
@@ -77,7 +77,7 @@ type ListRow struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// ListResult is the full library-list response. Rows are sorted by
+// ListResult is the full library-list response. Items are sorted by
 // title (lower-cased) and tie-broken on series ref.
 //
 // NextCursor is non-empty when MaxResults capped the page; pass it back
@@ -85,7 +85,7 @@ type ListRow struct {
 // is true when the index changed between pages — clients should re-render
 // from the start of the current page if they care about strict ordering.
 type ListResult struct {
-	Rows        []ListRow `json:"rows"`
+	Items       []ListRow `json:"items"`
 	NextCursor  string    `json:"nextCursor,omitempty"`
 	DataChanged bool      `json:"dataChanged,omitempty"`
 }

@@ -114,25 +114,25 @@ func (c *Client) ShowSeries(ctx context.Context, ref string, opts ShowOptions) (
 	return out, err
 }
 
-// ResolveRequest is the POST /api/v1/resolve body.
+// ResolveRequest is the POST /api/v1/series/resolve body.
 type ResolveRequest struct {
 	Terms []string `json:"terms"`
 }
 
-// Resolve calls POST /api/v1/resolve.
+// Resolve calls POST /api/v1/series/resolve.
 func (c *Client) Resolve(ctx context.Context, terms []string) (api.Resolution, error) {
 	var out api.Resolution
-	err := c.Do(ctx, http.MethodPost, "/api/v1/resolve", nil, ResolveRequest{Terms: terms}, &out)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/resolve", nil, ResolveRequest{Terms: terms}, &out)
 	return out, err
 }
 
 // AddRequest is the POST /api/v1/series body. `Ref` is the metadata
-// ref (provider:id); `Dirname` overrides the new directory name.
+// ref (provider:id); `Directory` overrides the new directory name.
 // Field naming mirrors the MCP kura_add tool input shape.
 type AddRequest struct {
-	Ref      string `json:"ref"`
-	Dirname  string `json:"dirname,omitempty"`
-	Ordering string `json:"ordering,omitempty"`
+	Ref       string `json:"ref"`
+	Directory string `json:"directory,omitempty"`
+	Ordering  string `json:"ordering,omitempty"`
 }
 
 // AddSeries calls POST /api/v1/series.
@@ -143,13 +143,13 @@ func (c *Client) AddSeries(ctx context.Context, req AddRequest) (api.AddResult, 
 }
 
 // ImportRequest is the POST /api/v1/series/import body. `Ref` is the
-// metadata ref; `Dirname` is the existing directory under the
+// metadata ref; `Directory` is the existing directory under the
 // library root to adopt. Field naming mirrors MCP kura_import.
 type ImportRequest struct {
-	Ref      string `json:"ref"`
-	Dirname  string `json:"dirname"`
-	Force    bool   `json:"force,omitempty"`
-	Ordering string `json:"ordering,omitempty"`
+	Ref       string `json:"ref"`
+	Directory string `json:"directory"`
+	Force     bool   `json:"force,omitempty"`
+	Ordering  string `json:"ordering,omitempty"`
 }
 
 // ImportSeries calls POST /api/v1/series/import.

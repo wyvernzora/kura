@@ -116,13 +116,13 @@ func TestKuraAdd_InvalidRefRejected(t *testing.T) {
 	}
 }
 
-func TestKuraAdd_InvalidDirnameRejected(t *testing.T) {
+func TestKuraAdd_InvalidDirectoryRejected(t *testing.T) {
 	cs := connectInMemoryWithAdd(t)
 	res, err := cs.CallTool(context.Background(), &sdkmcp.CallToolParams{
 		Name: "kura_add",
 		Arguments: map[string]any{
-			"ref":     "tvdb:1",
-			"dirname": "bad/with/slashes",
+			"ref":       "tvdb:1",
+			"directory": "bad/with/slashes",
 		},
 	})
 	if err != nil {
@@ -146,8 +146,8 @@ func TestKuraAdd_ReturnsAddResult(t *testing.T) {
 	res, err := cs.CallTool(context.Background(), &sdkmcp.CallToolParams{
 		Name: "kura_add",
 		Arguments: map[string]any{
-			"ref":     "tvdb:370070",
-			"dirname": "Bookworm",
+			"ref":       "tvdb:370070",
+			"directory": "Bookworm",
 		},
 	})
 	if err != nil {
@@ -160,11 +160,11 @@ func TestKuraAdd_ReturnsAddResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if body["metadataRef"] != "tvdb:370070" {
-		t.Fatalf("metadataRef = %v, want tvdb:370070", body["metadataRef"])
+	if body["ref"] != "tvdb:370070" {
+		t.Fatalf("ref = %v, want tvdb:370070", body["ref"])
 	}
-	if body["ref"] != "Bookworm" {
-		t.Fatalf("ref = %v, want Bookworm", body["ref"])
+	if body["directory"] != "Bookworm" {
+		t.Fatalf("directory = %v, want Bookworm", body["directory"])
 	}
 	if body["preferredTitle"] != "Fake Show" {
 		t.Fatalf("preferredTitle = %v, want Fake Show", body["preferredTitle"])

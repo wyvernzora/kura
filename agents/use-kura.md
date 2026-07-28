@@ -169,9 +169,9 @@ Use `isAiring` as informational context inside those groups.
 ### 4.b Adopt an untracked directory
 
 ```
-kura_resolve(terms=[<dirname or title>])
+kura_resolve(terms=[<directory or title>])
 # pick the right candidate — see §5
-kura_import(ref=<chosen>, dirname=<existing dirname>)
+kura_import(ref=<chosen>, directory=<existing directory>)
 kura_scan(ref=<chosen>) → jobId
 kura_job_status(jobId)
 ```

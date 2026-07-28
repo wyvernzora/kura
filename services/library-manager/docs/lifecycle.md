@@ -44,7 +44,7 @@ hole-filling target.
    this from `add <terms...>`; MCP/REST receive the resolved ref.
 2. Caller may supply a directory-name override. Otherwise Kura uses
    the provider preferred title.
-3. **Resolved:** Kura creates `<library-root>/<dirname>/`, fetches
+3. **Resolved:** Kura creates `<library-root>/<directory>/`, fetches
    the full spine from the provider, writes initial `series.json`
    containing the resolved MetadataRef and spine, sets `lastScanned`
    to the time of the spine fetch, and updates the index. The series
@@ -63,7 +63,7 @@ hole-filling target.
   error. The series exists somewhere else in this library.
 
 `add` is a constructive operation: it resolves metadata first, then
-creates the directory selected by `--dirname` or the provider title. See
+creates the directory selected by `--directory` or the provider title. See
 [concepts.md §Selectors, not paths](concepts.md#design-model-internal-invariants).
 
 ### 2. Import an existing directory
@@ -76,9 +76,9 @@ one.
 
 1. Series directory exists under library root with files but no
    `.kura/` content.
-2. User or agent calls `import <dirname> [terms...]`. The CLI uses the
-   dirname as a text resolution term unless the supplied terms already
-   include a MetadataRef; MCP/REST receive `{ref, dirname}` directly.
+2. User or agent calls `import <directory> [terms...]`. The CLI uses the
+   directory as a text resolution term unless the supplied terms already
+   include a MetadataRef; MCP/REST receive `{ref, directory}` directly.
 3. Kura runs series resolution.
 4. **Resolved:** Kura fetches the full spine from the provider,
    writes initial `series.json` with the resolved MetadataRef and
@@ -360,7 +360,7 @@ performing a full filesystem audit.
    - If metadata is valid, Kura reads persisted series title, spine,
      active records, and staged records.
 4. Kura returns one row per listed directory with `status`, `title`,
-   `metadataRef`, season counts (`seasonsAvailable` / `seasonCount`),
+   `ref`, season counts (`seasonsAvailable` / `seasonCount`),
    episode counts (`episodesAvailable` / `episodeCount`), distinct
    resolutions and sources rolled up across active episodes, and
    `lastScanned`. All counts and quality rollups exclude specials.
@@ -415,7 +415,7 @@ time per library; not an agent steady-state operation.
    1. Resolve a MetadataRef. Either operator picks one, or agent
       calls `kura_resolve` with the directory name and inspects
       candidates.
-   2. Call `import <dirname> <metadataRef>` to adopt the directory
+   2. Call `import <directory> <ref>` to adopt the directory
       at the chosen identity.
    3. Call `scan <selector>` to adopt existing files into metadata.
 3. After adoption, normal workflows resume.
@@ -572,9 +572,9 @@ is designed assuming this escape hatch exists.
 
 | Situation | Recovery |
 |---|---|
-| `.kura/` totally gone or `series.json` missing/corrupt | Operator removes any partial `.kura/series.json` content. Then `import <dirname> [terms...]` to re-establish identity and spine. Then `scan <selector>` to adopt files. Trash and logs are preserved through this flow. |
+| `.kura/` totally gone or `series.json` missing/corrupt | Operator removes any partial `.kura/series.json` content. Then `import <directory> [terms...]` to re-establish identity and spine. Then `scan <selector>` to adopt files. Trash and logs are preserved through this flow. |
 | Staged records reference stale or unreachable files but `series.json` is parseable | `reset <selector> --all`, then `scan <selector>`. |
-| `series.json` is parseable but logically wedged in some other way | Operator removes `series.json`. Then `import <dirname> [terms...]` and `scan <selector>` to rebuild from filesystem + provider. |
+| `series.json` is parseable but logically wedged in some other way | Operator removes `series.json`. Then `import <directory> [terms...]` and `scan <selector>` to rebuild from filesystem + provider. |
 | Wedged plan log files | Operator removes the offending JSONL files in `<series>/.kura/reconcile/`. They are append-only forensic; no verb consults them outside `reconcile apply`'s own token lookup. |
 | Spine is significantly out of date relative to current TVDB state | `scan <selector>` to refresh. |
 | A reconcile failed mid-execution and the series is in an inconsistent state | Standard verbs (`stage`, `reconcile`, `scan`) plus targeted surgery resolve it. Inspect the plan JSONL or trash `meta.json` for what already happened. |

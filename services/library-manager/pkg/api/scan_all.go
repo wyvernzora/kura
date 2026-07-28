@@ -18,7 +18,7 @@ type ScanAllResult struct {
 // category from internal/errkind so consumers can branch without
 // parsing free-form messages.
 type ScanAllFailure struct {
-	Ref     string `json:"ref"`
-	Kind    string `json:"kind"`
-	Message string `json:"message"`
+	Directory string `json:"directory"`
+	Kind      string `json:"kind"`
+	Message   string `json:"message"`
 }

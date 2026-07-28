@@ -10,11 +10,11 @@ import (
 )
 
 type importCmd struct {
-	Dirname  string   `arg:"" required:"" help:"Existing directory below the configured library root."`
-	JSON     bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
-	Force    bool     `name:"force" help:"Replace existing .kura/series.json while preserving other .kura contents."`
-	Ordering string   `name:"ordering" help:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`
-	Terms    []string `arg:"" optional:"" help:"Additional resolver terms. Plain text or metadata refs such as tvdb:370070."`
+	Directory string   `arg:"" required:"" help:"Existing directory below the configured library root."`
+	JSON      bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
+	Force     bool     `name:"force" help:"Replace existing .kura/series.json while preserving other .kura contents."`
+	Ordering  string   `name:"ordering" help:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`
+	Terms     []string `arg:"" optional:"" help:"Additional resolver terms. Plain text or metadata refs such as tvdb:370070."`
 }
 
 func (cmd *importCmd) Run(rt *runContext) error {
@@ -23,7 +23,7 @@ func (cmd *importCmd) Run(rt *runContext) error {
 		return err
 	}
 	terms := cmd.resolveTerms()
-	if _, err := refs.ParseSeries(cmd.Dirname); err != nil {
+	if _, err := refs.ParseSeries(cmd.Directory); err != nil {
 		return err
 	}
 	c := clientFromRT(rt)
@@ -33,10 +33,10 @@ func (cmd *importCmd) Run(rt *runContext) error {
 		return err
 	}
 	result, err := c.ImportSeries(rt.Context, client.ImportRequest{
-		Ref:      metaRef,
-		Dirname:  cmd.Dirname,
-		Force:    cmd.Force,
-		Ordering: ordering,
+		Ref:       metaRef,
+		Directory: cmd.Directory,
+		Force:     cmd.Force,
+		Ordering:  ordering,
 	})
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ func (cmd *importCmd) resolveTerms() []string {
 	}
 
 	terms := make([]string, 0, len(cmd.Terms)+1)
-	terms = append(terms, cmd.Dirname)
+	terms = append(terms, cmd.Directory)
 	terms = append(terms, cmd.Terms...)
 	return terms
 }

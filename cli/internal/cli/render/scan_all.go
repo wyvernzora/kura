@@ -35,7 +35,7 @@ func ScanAll(w io.Writer, result api.ScanAllResult, asJSON bool) error {
 		{Number: 3},
 	})
 	for _, f := range result.Failures {
-		tw.AppendRow(table.Row{f.Ref, f.Kind, f.Message})
+		tw.AppendRow(table.Row{f.Directory, f.Kind, f.Message})
 	}
 	return style.WriteStyledTable(w, tw, nil)
 }

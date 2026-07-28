@@ -134,7 +134,7 @@ func buildReplacedIndex(steps []reconcile.Step) map[string]*api.ReconcileReplace
 		rep, ok := out[key]
 		if !ok {
 			rep = &api.ReconcileReplaced{From: step.From, To: step.To}
-			applyMediaFacts(step.Owner.Record, &rep.Source, &rep.Resolution, &rep.Codec, &rep.Size, &rep.MTime)
+			applyMediaFacts(step.Owner.Record, &rep.Source, &rep.Resolution, &rep.Codec, &rep.SizeBytes, &rep.ModifiedAt)
 			out[key] = rep
 		} else if step.Kind == reconcile.StepFileMove {
 			rep.Companions = append(rep.Companions, api.ReconcileMove{From: step.From, To: step.To})
@@ -186,7 +186,7 @@ func groupEpisodeStep(
 			To:       step.To,
 			Replaced: replaced[key],
 		}
-		applyMediaFacts(step.Owner.StagedRecord, &entry.Source, &entry.Resolution, &entry.Codec, &entry.Size, &entry.MTime)
+		applyMediaFacts(step.Owner.StagedRecord, &entry.Source, &entry.Resolution, &entry.Codec, &entry.SizeBytes, &entry.ModifiedAt)
 		episodes[key] = entry
 	} else if step.Kind == reconcile.StepFileMove {
 		entry.Companions = append(entry.Companions, api.ReconcileMove{From: step.From, To: step.To})
@@ -206,7 +206,7 @@ func groupTrashStep(
 	entry, ok := trash[key]
 	if !ok {
 		entry = &api.ReconcileTrashChange{ID: key, From: step.From, To: step.To}
-		applyMediaFacts(step.Owner.Record, &entry.Source, &entry.Resolution, &entry.Codec, &entry.Size, &entry.MTime)
+		applyMediaFacts(step.Owner.Record, &entry.Source, &entry.Resolution, &entry.Codec, &entry.SizeBytes, &entry.ModifiedAt)
 		trash[key] = entry
 	} else if step.Kind == reconcile.StepFileMove {
 		entry.Companions = append(entry.Companions, api.ReconcileMove{From: step.From, To: step.To})

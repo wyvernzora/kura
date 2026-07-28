@@ -135,8 +135,8 @@ func TestProjectJobStatus_ReversesSeriesToMetadataRef(t *testing.T) {
 	close(finish)
 	j.Wait(context.Background())
 
-	if out.MetadataRef != "tvdb:370070" {
-		t.Fatalf("MetadataRef = %q, want tvdb:370070", out.MetadataRef)
+	if out.Ref != "tvdb:370070" {
+		t.Fatalf("Ref = %q, want tvdb:370070", out.Ref)
 	}
 	if out.Kind != "scan" {
 		t.Fatalf("Kind = %q, want scan", out.Kind)

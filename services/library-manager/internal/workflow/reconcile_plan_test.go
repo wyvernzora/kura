@@ -30,11 +30,11 @@ func TestPlanToResponseProjectsStagedRecord(t *testing.T) {
 		t.Fatalf("changes = %d, want 1", len(out.Changes))
 	}
 	c := out.Changes[0]
-	if c.Source != "bluray" || c.Resolution != "3840x2160" || c.Codec != "hevc" || c.Size != 8_000_000_000 {
+	if c.Source != "bluray" || c.Resolution != "3840x2160" || c.Codec != "hevc" || c.SizeBytes != 8_000_000_000 {
 		t.Fatalf("change facts mismatch: %+v", c)
 	}
-	if c.MTime == nil || !c.MTime.Equal(mtime) {
-		t.Fatalf("MTime mismatch: %v", c.MTime)
+	if c.ModifiedAt == nil || !c.ModifiedAt.Equal(mtime) {
+		t.Fatalf("MTime mismatch: %v", c.ModifiedAt)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestPlanToResponseStandaloneTrashKeepsFacts(t *testing.T) {
 		t.Fatalf("TrashItems = %d, want 1", len(out.TrashItems))
 	}
 	ti := out.TrashItems[0]
-	if ti.Size != 5e8 || ti.MTime == nil || !ti.MTime.Equal(mtime) {
+	if ti.SizeBytes != 5e8 || ti.ModifiedAt == nil || !ti.ModifiedAt.Equal(mtime) {
 		t.Fatalf("trash facts mismatch: %+v", ti)
 	}
 	if ti.Source != "" || ti.Resolution != "" || ti.Codec != "" {

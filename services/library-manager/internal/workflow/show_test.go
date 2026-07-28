@@ -97,8 +97,8 @@ func TestShow_UsesConfiguredAiringTail(t *testing.T) {
 	if active.Dimensions != "1920x1080" {
 		t.Errorf("Dimensions = %q, want 1920x1080", active.Dimensions)
 	}
-	if active.MTime != mtime.UTC().Format(time.RFC3339) {
-		t.Errorf("MTime = %q, want %q", active.MTime, mtime.UTC().Format(time.RFC3339))
+	if active.ModifiedAt != mtime.UTC().Format(time.RFC3339) {
+		t.Errorf("MTime = %q, want %q", active.ModifiedAt, mtime.UTC().Format(time.RFC3339))
 	}
 }
 
@@ -139,8 +139,8 @@ func TestShow_UnknownResolutionAndZeroMTimeAreEmpty(t *testing.T) {
 	if active.Dimensions != "" {
 		t.Errorf("Dimensions = %q, want empty", active.Dimensions)
 	}
-	if active.MTime != "" {
-		t.Errorf("MTime = %q, want empty", active.MTime)
+	if active.ModifiedAt != "" {
+		t.Errorf("MTime = %q, want empty", active.ModifiedAt)
 	}
 }
 
@@ -157,8 +157,8 @@ func TestShow_EpisodeSelectorNoneReturnsEmptySeasons(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Show: %v", err)
 	}
-	if out.MetadataRef.String() != "tvdb:1" {
-		t.Fatalf("MetadataRef = %s, want tvdb:1", out.MetadataRef)
+	if out.Ref.String() != "tvdb:1" {
+		t.Fatalf("MetadataRef = %s, want tvdb:1", out.Ref)
 	}
 	if len(out.Seasons) != 0 {
 		t.Fatalf("Seasons = %+v, want empty", out.Seasons)

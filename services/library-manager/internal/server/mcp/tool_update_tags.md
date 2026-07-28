@@ -13,4 +13,4 @@ Parameter schema is defined in tool_update_tags.go. That Go definition is author
 
 ## Response
 
-Returns `metadataRef` and the complete resulting stored `tags` array.
+Returns `ref` and the complete resulting stored `tags` array.

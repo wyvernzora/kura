@@ -54,7 +54,7 @@ if (typeof window !== 'undefined') {
         } catch {
           // keep empty tag set on unparsable body
         }
-        return jsonResponse({ metadataRef: ref, tags });
+        return jsonResponse({ ref, tags });
       }
 
       // POST /api/v1/series/{ref}/scan → return a job handle ack.

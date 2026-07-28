@@ -29,9 +29,9 @@ func InboxList(r api.InboxList) string {
 		kind := kindGlyph(e.Kind)
 		size := "-"
 		if e.Kind == "file" {
-			size = HumanByteSize(e.Size)
+			size = HumanByteSize(e.SizeBytes)
 		}
-		mtime := e.MTime
+		mtime := e.ModifiedAt
 		if mtime == "" {
 			mtime = "-"
 		} else {

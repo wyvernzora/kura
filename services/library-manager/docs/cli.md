@@ -19,8 +19,8 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 
 | Operation | Surface | Reason for exclusions | Purpose |
 |---|---|---|---|
-| `add <selector> [--dirname NAME]` | CLI + MCP + REST | — | Register a new series in the library: resolve metadata, create a directory, and initialize metadata. `--dirname` overrides the directory name. |
-| `import <dirname> [terms...]` | CLI + MCP + REST | — | Register identity on an existing untracked directory under library root. CLI and REST expose `force` to overwrite a corrupted `.kura/series.json`; MCP does not. |
+| `add <selector> [--directory NAME]` | CLI + MCP + REST | — | Register a new series in the library: resolve metadata, create a directory, and initialize metadata. `--directory` overrides the directory name. |
+| `import <directory> [terms...]` | CLI + MCP + REST | — | Register identity on an existing untracked directory under library root. CLI and REST expose `force` to overwrite a corrupted `.kura/series.json`; MCP does not. |
 | `scan <selector>` | CLI + MCP + REST | — | Re-sync local metadata with current reality. Hard-fails if the provider is unreachable. Job-shaped. |
 | `stage episode|trash|extra ...` | CLI + MCP + REST | — | Record staged intent for episode media, queued trash, or extras. Files are not moved. |
 | `reset <selector> [--episode S01E03 \| --trash ULID \| --extra ULID \| --all]` | CLI + MCP + REST | — | Remove staged record(s). Does not touch staged files on disk. |
@@ -75,8 +75,8 @@ combinations or transport failures).
 
 | Verb | Purpose |
 |------|---------|
-| `kura add <selector> [--dirname NAME]` | Register a new series; create its directory and write the persisted spine. |
-| `kura import <dirname> [terms...]` | Adopt an existing untracked directory under the library root. |
+| `kura add <selector> [--directory NAME]` | Register a new series; create its directory and write the persisted spine. |
+| `kura import <directory> [terms...]` | Adopt an existing untracked directory under the library root. |
 | `kura remove <selector> [--purge --confirm]` | Untrack a series (default: drop `.kura/`, leave media). `--purge --confirm` wholesale deletes the directory. |
 
 ## Inspection

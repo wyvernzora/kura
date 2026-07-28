@@ -2,15 +2,16 @@ package api
 
 import "github.com/wyvernzora/kura/services/library-manager/internal/domain/refs"
 
-// AddResult is workflow.Add's response. MetadataRef is echoed because
-// the surface caller (CLI / script) often resolved it from text terms
-// rather than passing it directly — the resolved ref is genuinely new
-// info to them. The on-disk Ref is the sanitized directory basename
-// (non-trivial to derive from arbitrary titles); PreferredTitle is the
-// provider's display string. Library root is implicit and dropped.
+// AddResult is workflow.Add's response. Ref (the metadata ref) is
+// echoed because the surface caller (CLI / script) often resolved it
+// from text terms rather than passing it directly — the resolved ref
+// is genuinely new info to them. Directory is the sanitized on-disk
+// basename (non-trivial to derive from arbitrary titles);
+// PreferredTitle is the provider's display string. Library root is
+// implicit and dropped.
 type AddResult struct {
-	MetadataRef    refs.Metadata `json:"metadataRef"`
-	Ref            refs.Series   `json:"ref"`
+	Ref            refs.Metadata `json:"ref"`
+	Directory      refs.Series   `json:"directory"`
 	PreferredTitle string        `json:"preferredTitle"`
 }
 

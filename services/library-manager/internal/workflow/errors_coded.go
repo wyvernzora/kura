@@ -28,15 +28,15 @@ func (e *InvalidTagError) Data() map[string]any {
 func (e *NotFoundError) Kind() string     { return errkind.KindNotFound }
 func (e *NotFoundError) Category() string { return errkind.CategoryInvalidParams }
 func (e *NotFoundError) Data() map[string]any {
-	return map[string]any{"ref": e.Ref.String()}
+	return map[string]any{"directory": e.Ref.String()}
 }
 
 func (e *ReconcilePlanNotFoundError) Kind() string     { return errkind.KindNotFound }
 func (e *ReconcilePlanNotFoundError) Category() string { return errkind.CategoryInvalidParams }
 func (e *ReconcilePlanNotFoundError) Data() map[string]any {
 	return map[string]any{
-		"ref":   e.Ref.String(),
-		"token": e.Token,
+		"directory": e.Ref.String(),
+		"token":     e.Token,
 	}
 }
 
@@ -49,16 +49,16 @@ func (e *MetadataRefNotIndexedError) Data() map[string]any {
 func (e *SeriesNotFoundError) Kind() string     { return errkind.KindNotFound }
 func (e *SeriesNotFoundError) Category() string { return errkind.CategoryInvalidParams }
 func (e *SeriesNotFoundError) Data() map[string]any {
-	return map[string]any{"ref": e.Ref.String()}
+	return map[string]any{"directory": e.Ref.String()}
 }
 
 func (e *EpisodeSelectorSeasonMissingError) Kind() string     { return errkind.KindNotFound }
 func (e *EpisodeSelectorSeasonMissingError) Category() string { return errkind.CategoryInvalidParams }
 func (e *EpisodeSelectorSeasonMissingError) Data() map[string]any {
 	return map[string]any{
-		"ref":      e.Ref.String(),
-		"selector": e.Selector,
-		"season":   e.Season,
+		"directory": e.Ref.String(),
+		"selector":  e.Selector,
+		"season":    e.Season,
 	}
 }
 
@@ -77,13 +77,13 @@ func (e *MetadataRefConflictError) Data() map[string]any {
 func (e *SeriesAlreadyExistsError) Kind() string     { return errkind.KindConflict }
 func (e *SeriesAlreadyExistsError) Category() string { return errkind.CategoryInvalidParams }
 func (e *SeriesAlreadyExistsError) Data() map[string]any {
-	return map[string]any{"ref": e.Ref.String()}
+	return map[string]any{"directory": e.Ref.String()}
 }
 
 func (e *SeriesAlreadyTrackedError) Kind() string     { return errkind.KindConflict }
 func (e *SeriesAlreadyTrackedError) Category() string { return errkind.CategoryInvalidParams }
 func (e *SeriesAlreadyTrackedError) Data() map[string]any {
-	return map[string]any{"ref": e.Ref.String()}
+	return map[string]any{"directory": e.Ref.String()}
 }
 
 func (e *EpisodeAlreadyExistsError) Kind() string     { return errkind.KindConflict }
@@ -102,9 +102,9 @@ func (e *TrashRestoreTargetExistsError) Kind() string     { return errkind.KindC
 func (e *TrashRestoreTargetExistsError) Category() string { return errkind.CategoryInvalidParams }
 func (e *TrashRestoreTargetExistsError) Data() map[string]any {
 	return map[string]any{
-		"ref":     e.Ref.String(),
-		"id":      e.ID,
-		"targets": e.Targets,
+		"directory": e.Ref.String(),
+		"id":        e.ID,
+		"targets":   e.Targets,
 	}
 }
 
@@ -116,8 +116,8 @@ func (e *RemoveStagedRecordsExistError) Data() map[string]any {
 		episodes[i] = ep.String()
 	}
 	return map[string]any{
-		"ref":      e.Ref.String(),
-		"episodes": episodes,
+		"directory": e.Ref.String(),
+		"episodes":  episodes,
 	}
 }
 

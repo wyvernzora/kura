@@ -13,8 +13,8 @@ import "github.com/wyvernzora/kura/services/library-manager/internal/domain/refs
 // `inbox:<rel>` for files under the inbox root. There are no raw
 // filesystem paths.
 type Show struct {
-	MetadataRef    refs.Metadata `json:"metadataRef"`
-	Ref            refs.Series   `json:"ref"`
+	Ref            refs.Metadata `json:"ref"`
+	Directory      refs.Series   `json:"directory"`
 	Root           string        `json:"root"`
 	Generation     int           `json:"generation,omitempty"`
 	LastScanned    string        `json:"lastScanned,omitempty"`
@@ -42,8 +42,8 @@ type Show struct {
 type TrashItemShow struct {
 	ID         string          `json:"id"`
 	Path       string          `json:"path"`
-	Size       int64           `json:"size"`
-	MTime      string          `json:"mtime"`
+	SizeBytes  int64           `json:"sizeBytes"`
+	ModifiedAt string          `json:"modifiedAt"`
 	AddedAt    string          `json:"addedAt,omitempty"`
 	Companions []CompanionShow `json:"companions,omitempty"`
 }
@@ -120,18 +120,18 @@ type MediaShow struct {
 	Resolution string            `json:"resolution,omitempty"`
 	Dimensions string            `json:"dimensions,omitempty"`
 	Codec      string            `json:"codec,omitempty"`
-	Size       int64             `json:"size"`
-	MTime      string            `json:"mtime,omitempty"`
+	SizeBytes  int64             `json:"sizeBytes"`
+	ModifiedAt string            `json:"modifiedAt,omitempty"`
 	File       string            `json:"file"`
 	Companions []CompanionShow   `json:"companions"`
 	Attrs      map[string]string `json:"attrs,omitempty"`
 }
 
 type CompanionShow struct {
-	Path     string `json:"path"`
-	Role     string `json:"role,omitempty"`
-	Language string `json:"language,omitempty"`
-	Label    string `json:"label,omitempty"`
-	Size     int64  `json:"size"`
-	MTime    string `json:"mtime"`
+	Path       string `json:"path"`
+	Role       string `json:"role,omitempty"`
+	Language   string `json:"language,omitempty"`
+	Label      string `json:"label,omitempty"`
+	SizeBytes  int64  `json:"sizeBytes"`
+	ModifiedAt string `json:"modifiedAt"`
 }

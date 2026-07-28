@@ -68,7 +68,7 @@ Per the "selectors, not paths" invariant
 resource-path `{ref}` is always a **MetadataRef** (provider:id, e.g.
 `tvdb:370070`); the server resolves it to a SeriesRef via the index.
 A SeriesRef in a path is rejected. `Add` and `Import` accept the
-SeriesRef in the request body as `dirname`.
+SeriesRef in the request body as `directory`.
 
 ## Endpoints
 
@@ -78,9 +78,9 @@ SeriesRef in the request body as `dirname`.
 | GET    | `/api/v1/library` | — | Library summary | ETag |
 | GET    | `/api/v1/series` | — | Paginated `ListResult` | ETag, query: `status`, `airing`, `tags`, `cursor`, `limit` |
 | GET    | `/api/v1/series/{ref}` | — | `Show` (series + episodes) | ETag, query: `episodes`, `status`, `source`, `resolution` |
-| PATCH  | `/api/v1/series/{ref}/tags` | `{tags[]}` | `{metadataRef, tags[]}` | — |
-| POST   | `/api/v1/series` | `{ref, dirname?, ordering?}` | Series spine | — |
-| POST   | `/api/v1/series/import` | `{ref, dirname, force?, ordering?}` | Series spine | — |
+| PATCH  | `/api/v1/series/{ref}/tags` | `{tags[]}` | `{ref, tags[]}` | — |
+| POST   | `/api/v1/series` | `{ref, directory?, ordering?}` | Series spine | — |
+| POST   | `/api/v1/series/import` | `{ref, directory, force?, ordering?}` | Series spine | — |
 | DELETE | `/api/v1/series/{ref}` | — | — | `X-Kura-Operator + X-Confirm` if `?purge=1`; no operator header for untrack-only removal |
 | POST   | `/api/v1/series/{ref}/reset` | `{episode?, trash?, extras?, all?}` | Reset summary | — |
 | POST   | `/api/v1/series/{ref}/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 {jobId, kind, statusUrl, streamUrl, submittedAt}` | async |
@@ -91,7 +91,7 @@ SeriesRef in the request body as `dirname`.
 | GET    | `/api/v1/series/{ref}/aliases` | — | `{aliases[]}` | ETag |
 | POST   | `/api/v1/series/{ref}/aliases` | `{alias}` | — | — |
 | DELETE | `/api/v1/series/{ref}/aliases` | `{alias}` | — | — |
-| POST   | `/api/v1/resolve` | `{terms[]}` | Resolve candidates | — |
+| POST   | `/api/v1/series/resolve` | `{terms[]}` | Resolve candidates | — |
 | GET    | `/api/v1/series/{ref}/trash` | — | Trash listing | ETag |
 | GET    | `/api/v1/trash` | — | Library-wide trash | ETag |
 | POST   | `/api/v1/series/{ref}/trash/{ulid}/restore` | — | Trash restore result | `X-Kura-Operator` |
@@ -107,7 +107,7 @@ Episode stage entries accept optional `attrs`, a flat string map stored on
 the staged media record. `GET /api/v1/series/{ref}` returns `attrs` on active
 and staged media records when present; attrs are not queryable or indexed.
 Active and staged media records also expose optional `dimensions` (the raw
-`WIDTHxHEIGHT` value) and `mtime` (the persisted file modification time in
+`WIDTHxHEIGHT` value) and `modifiedAt` (the persisted file modification time in
 RFC 3339 format) alongside the folded `resolution` label.
 `GET /api/v1/series/{ref}?episodes=...` accepts `ALL`, `NONE`,
 `AIRING_SEASON`, `S<N>`, `S<N>E<E>`, or `S<N>E<A>-<B>`. Empty means `ALL`.

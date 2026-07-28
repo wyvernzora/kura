@@ -60,7 +60,7 @@ func UpdateTags(ctx context.Context, deps Deps, in UpdateTagsInput) (api.SeriesT
 			if tags == nil {
 				tags = []string{}
 			}
-			out = api.SeriesTags{MetadataRef: model.Metadata, Tags: tags}
+			out = api.SeriesTags{Ref: model.Metadata, Tags: tags}
 			if !changed {
 				return nil
 			}

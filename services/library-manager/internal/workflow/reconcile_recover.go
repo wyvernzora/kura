@@ -20,10 +20,10 @@ type RecoverReconcileInput = reconcile.RecoverInput
 func RecoverReconcile(ctx context.Context, deps Deps, in RecoverReconcileInput) (api.RecoverReconcile, error) {
 	out, err := reconcile.Recover(ctx, reconcileDeps(deps), in)
 	if err != nil {
-		return api.RecoverReconcile{Ref: in.Ref}, err
+		return api.RecoverReconcile{Directory: in.Ref}, err
 	}
 	return api.RecoverReconcile{
-		Ref:         out.Ref,
+		Directory:   out.Ref,
 		Cleared:     out.Cleared,
 		PriorHolder: out.PriorHolder,
 	}, nil

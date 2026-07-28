@@ -43,7 +43,7 @@ func writeShowHeader(w io.Writer, result api.Show, styled bool) error {
 		title += " / " + result.CanonicalTitle
 	}
 	rows := []struct{ label, value string }{
-		{"ID", styleShowValue(result.MetadataRef.String(), styled)},
+		{"ID", styleShowValue(result.Ref.String(), styled)},
 		{"Title", styleShowValue(title, styled)},
 		{"Root", styleShowValue(stripPathScheme(result.Root), styled)},
 	}
@@ -128,7 +128,7 @@ func writeStagedTrashTable(w io.Writer, items []api.TrashItemShow) error {
 		} else if n > 1 {
 			companions = fmt.Sprintf("+%d companions", n)
 		}
-		tw.AppendRow(table.Row{item.ID, stripPathScheme(item.Path), formatSkipSize(item.Size), companions})
+		tw.AppendRow(table.Row{item.ID, stripPathScheme(item.Path), formatSkipSize(item.SizeBytes), companions})
 	}
 	return style.WriteStyledTable(w, tw, nil)
 }

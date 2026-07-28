@@ -16,8 +16,12 @@ export function diffMedia(from: MediaShow, to: MediaShow): ChangeRow[] {
   if (from.codec !== to.codec) {
     rows.push({ label: 'Codec', from: from.codec || '—', to: to.codec || '—' });
   }
-  if (from.size !== to.size) {
-    rows.push({ label: 'File size', from: formatSize(from.size), to: formatSize(to.size) });
+  if (from.sizeBytes !== to.sizeBytes) {
+    rows.push({
+      label: 'File size',
+      from: formatSize(from.sizeBytes),
+      to: formatSize(to.sizeBytes),
+    });
   }
   if (from.source !== to.source) {
     rows.push({ label: 'Source', from: from.source, to: to.source });
@@ -46,8 +50,8 @@ function stableCompanions(media: MediaShow): string {
           companion.role,
           companion.language,
           companion.label,
-          companion.size,
-          companion.mtime,
+          companion.sizeBytes,
+          companion.modifiedAt,
         ]),
       )
       .sort(),

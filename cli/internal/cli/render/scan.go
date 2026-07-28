@@ -79,7 +79,7 @@ func Scan(w io.Writer, result api.ScanResult, asJSON bool) error {
 			skip.Code,
 			style.MediaSource(skip.Source, tty),
 			style.MediaResolution(skip.Resolution, tty),
-			formatSkipSize(skip.Size),
+			formatSkipSize(skip.SizeBytes),
 			skip.Reason,
 		})
 	}

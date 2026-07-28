@@ -39,8 +39,8 @@ func InboxList(w io.Writer, result api.InboxList, asJSON bool) error {
 		}
 		tw.AppendRow(table.Row{
 			renderInboxKind(e.Kind, styled),
-			renderInboxSize(e.Size, e.Kind),
-			renderInboxMTime(e.MTime, now),
+			renderInboxSize(e.SizeBytes, e.Kind),
+			renderInboxMTime(e.ModifiedAt, now),
 			path,
 		})
 	}

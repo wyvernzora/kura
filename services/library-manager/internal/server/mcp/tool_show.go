@@ -34,7 +34,7 @@ var toolShowDoc string
 // selectors (`series:<rel>` / `inbox:<rel>` / `library:<rel>`) the
 // agent can pass straight back to compatible Kura tools.
 type mcpShow struct {
-	MetadataRef     string           `json:"metadataRef"`
+	Ref             string           `json:"ref"`
 	PreferredTitle  string           `json:"preferredTitle"`
 	CanonicalTitle  string           `json:"canonicalTitle,omitempty"`
 	LastScanned     string           `json:"lastScanned,omitempty"`
@@ -62,9 +62,9 @@ type mcpPoster struct {
 // backstage. From the agent's POV the path will simply disappear at
 // the next reconcile_apply.
 type mcpStagedTrash struct {
-	ID   string `json:"id"`
-	Path string `json:"path"`
-	Size int64  `json:"size"`
+	ID        string `json:"id"`
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
 }
 
 type mcpStagedExtra struct {
@@ -103,7 +103,7 @@ type mcpActiveMedia struct {
 	Source     string            `json:"source"`
 	Resolution string            `json:"resolution,omitempty"`
 	Codec      string            `json:"codec,omitempty"`
-	Size       int64             `json:"size"`
+	SizeBytes  int64             `json:"sizeBytes"`
 	File       string            `json:"file"`
 	Companions []string          `json:"companions"`
 	Attrs      map[string]string `json:"attrs,omitempty"`
@@ -113,7 +113,7 @@ type mcpStagedMedia struct {
 	Source     string            `json:"source"`
 	Resolution string            `json:"resolution,omitempty"`
 	Codec      string            `json:"codec,omitempty"`
-	Size       int64             `json:"size"`
+	SizeBytes  int64             `json:"sizeBytes"`
 	File       string            `json:"file"`
 	Companions []string          `json:"companions"`
 	Attrs      map[string]string `json:"attrs,omitempty"`
@@ -330,7 +330,7 @@ func compressDroppedRanges(dropped map[int][]int, seasons []mcpSeason) []string 
 // staged_replacement into staged.
 func projectShow(in api.Show) mcpShow {
 	out := mcpShow{
-		MetadataRef:    in.MetadataRef.String(),
+		Ref:            in.Ref.String(),
 		PreferredTitle: in.PreferredTitle,
 		CanonicalTitle: in.CanonicalTitle,
 		LastScanned:    in.LastScanned,
@@ -368,9 +368,9 @@ func projectShow(in api.Show) mcpShow {
 		out.StagedTrash = make([]mcpStagedTrash, 0, len(in.StagedTrash))
 		for _, item := range in.StagedTrash {
 			out.StagedTrash = append(out.StagedTrash, mcpStagedTrash{
-				ID:   item.ID,
-				Path: item.Path,
-				Size: item.Size,
+				ID:        item.ID,
+				Path:      item.Path,
+				SizeBytes: item.SizeBytes,
 			})
 		}
 	}
@@ -402,7 +402,7 @@ func projectEpisode(ep api.EpisodeShow) mcpEpisode {
 			Source:     ep.Active.Source,
 			Resolution: ep.Active.Resolution,
 			Codec:      ep.Active.Codec,
-			Size:       ep.Active.Size,
+			SizeBytes:  ep.Active.SizeBytes,
 			File:       ep.Active.File,
 			Companions: companionPaths(ep.Active.Companions),
 			Attrs:      media.CloneAttrs(ep.Active.Attrs),
@@ -413,7 +413,7 @@ func projectEpisode(ep api.EpisodeShow) mcpEpisode {
 			Source:     ep.Staged.Source,
 			Resolution: ep.Staged.Resolution,
 			Codec:      ep.Staged.Codec,
-			Size:       ep.Staged.Size,
+			SizeBytes:  ep.Staged.SizeBytes,
 			File:       ep.Staged.File,
 			Companions: companionPaths(ep.Staged.Companions),
 			Attrs:      media.CloneAttrs(ep.Staged.Attrs),

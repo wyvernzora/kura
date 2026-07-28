@@ -17,9 +17,9 @@ type TrashList struct {
 
 // TrashSeriesEntry rolls up trash for one series.
 type TrashSeriesEntry struct {
-	Ref     refs.Series  `json:"ref"`
-	Entries []TrashEntry `json:"entries"`
-	Bytes   int64        `json:"bytes"`
+	Directory refs.Series  `json:"directory"`
+	Entries   []TrashEntry `json:"entries"`
+	Bytes     int64        `json:"bytes"`
 }
 
 // TrashEntry mirrors trashfile.Meta in surface-friendly shape.
@@ -32,13 +32,13 @@ type TrashEntry struct {
 	MediaPath  string           `json:"mediaPath"`
 	Source     string           `json:"source,omitempty"`
 	Resolution string           `json:"resolution,omitempty"`
-	Size       int64            `json:"size"`
+	SizeBytes  int64            `json:"sizeBytes"`
 	Companions []TrashCompanion `json:"companions,omitempty"`
 }
 
 type TrashCompanion struct {
-	Path string `json:"path"`
-	Size int64  `json:"size"`
+	Path      string `json:"path"`
+	SizeBytes int64  `json:"sizeBytes"`
 }
 
 // TrashEmpty is workflow.TrashEmpty's response. Attempts is the total
@@ -60,7 +60,7 @@ type TrashEmpty struct {
 }
 
 type TrashSeriesEmpty struct {
-	Ref            refs.Series `json:"ref"`
+	Directory      refs.Series `json:"directory"`
 	Removed        []string    `json:"removed"`
 	ReclaimedBytes int64       `json:"reclaimedBytes"`
 }
@@ -69,8 +69,8 @@ type TrashSeriesEmpty struct {
 // Error carries the wrapped cause's Error() string; structured payload
 // stays in the server log via deps.Logger.Warn.
 type TrashEmptyFailure struct {
-	Ref   refs.Series `json:"ref"`
-	Error string      `json:"error"`
+	Directory refs.Series `json:"directory"`
+	Error     string      `json:"error"`
 }
 
 // TrashRestore is workflow.TrashRestore's response. Caller passed ref

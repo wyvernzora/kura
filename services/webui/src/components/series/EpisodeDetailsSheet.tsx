@@ -291,8 +291,8 @@ function MediaCard({
 }) {
   const path = parseMediaPath(media.file, seriesDir);
   const companions = media.companions ?? [];
-  const companionSize = companions.reduce((total, companion) => total + companion.size, 0);
-  const footprint = media.size + companionSize;
+  const companionSize = companions.reduce((total, companion) => total + companion.sizeBytes, 0);
+  const footprint = media.sizeBytes + companionSize;
 
   return (
     <section className="overflow-hidden rounded-[12px] bg-surface shadow-card">
@@ -309,8 +309,8 @@ function MediaCard({
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 pb-3.5">
         <Fact label="Dimensions">{media.dimensions || '—'}</Fact>
         <Fact label="Video codec">{media.codec || '—'}</Fact>
-        <Fact label="File size">{formatSize(media.size)}</Fact>
-        <Fact label="Modified">{formatDateTime(media.mtime) || '—'}</Fact>
+        <Fact label="File size">{formatSize(media.sizeBytes)}</Fact>
+        <Fact label="Modified">{formatDateTime(media.modifiedAt) || '—'}</Fact>
         <Fact label="Container">{path.ext ? `.${path.ext}` : '—'}</Fact>
       </div>
       <div className="flex items-start gap-2 border-line-soft border-t px-4 py-3">
@@ -342,7 +342,7 @@ function MediaCard({
             <MaterialIcon name="functions" size={12} className="text-muted" />
             Footprint
           </span>
-          <span>{formatSize(media.size)} file</span>
+          <span>{formatSize(media.sizeBytes)} file</span>
           <span className="text-muted">+</span>
           <span>
             {companions.length} companion{companions.length > 1 ? 's' : ''}{' '}
@@ -420,10 +420,12 @@ function CompanionRow({
               {item.value}
             </span>
           ))}
-          <span className="font-mono text-[10px] text-muted">{formatSize(companion.size)}</span>
-          {companion.mtime && (
+          <span className="font-mono text-[10px] text-muted">
+            {formatSize(companion.sizeBytes)}
+          </span>
+          {companion.modifiedAt && (
             <span className="font-mono text-[10px] text-muted">
-              · {formatDateTime(companion.mtime)}
+              · {formatDateTime(companion.modifiedAt)}
             </span>
           )}
         </div>

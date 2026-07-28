@@ -24,7 +24,7 @@ func TrashList(w io.Writer, result api.TrashList, asJSON bool) error {
 	}
 	for _, series := range result.Series {
 		if _, err := fmt.Fprintf(w, "\n==== %s (%s, %s) ====\n",
-			series.Ref, entriesLabel(len(series.Entries)), formatBytes(series.Bytes)); err != nil {
+			series.Directory, entriesLabel(len(series.Entries)), formatBytes(series.Bytes)); err != nil {
 			return err
 		}
 		tw := table.NewWriter()
@@ -39,7 +39,7 @@ func TrashList(w io.Writer, result api.TrashList, asJSON bool) error {
 				entry.Episode.Marker(),
 				entry.TrashedAt.Format("2006-01-02 15:04Z"),
 				path.Base(entry.MediaPath),
-				formatBytes(entry.Size),
+				formatBytes(entry.SizeBytes),
 			})
 		}
 		if err := style.WriteStyledTable(w, tw, nil); err != nil {
@@ -81,7 +81,7 @@ func TrashEmpty(w io.Writer, result api.TrashEmpty, asJSON bool) error {
 			return err
 		}
 		for _, f := range result.Failures {
-			if _, err := fmt.Fprintf(w, "  - %s: %s\n", f.Ref, f.Error); err != nil {
+			if _, err := fmt.Fprintf(w, "  - %s: %s\n", f.Directory, f.Error); err != nil {
 				return err
 			}
 		}

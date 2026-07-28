@@ -58,8 +58,8 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 			// /resolve like a real CLI user would. The series ref
 			// (directory name) goes into KURA_LAST_SERIES_REF for
 			// the fixture commands that touch on-disk paths.
-			metadataRef, _ := result["metadataRef"].(string)
-			seriesRef, _ := result["ref"].(string)
+			metadataRef, _ := result["ref"].(string)
+			seriesRef, _ := result["directory"].(string)
 			return func(s *script.State) (stdout, stderr string, err error) {
 				if metadataRef != "" {
 					if setErr := s.Setenv("KURA_LAST_REF", metadataRef); setErr != nil {
@@ -990,7 +990,7 @@ func statGID(path string) (uint64, error) {
 // resolveSeriesRefForFixture maps either a metadata ref
 // (provider:id) or a literal series ref to the underlying SeriesRef
 // the harness needs to compute on-disk paths. Metadata refs trigger
-// a /api/v1/series/{ref} round-trip and read `.ref` from the
+// a /api/v1/series/{ref} round-trip and read `.directory` from the
 // response. Literal series refs pass through unchanged. Used by the
 // fixture commands kura_series_dir and kura_write_series_file so
 // scenarios can keep passing $KURA_LAST_REF after the metadata-ref
@@ -1012,15 +1012,15 @@ func resolveSeriesRefForFixture(b *e2eBinary, raw string) (string, error) {
 		return "", fmt.Errorf("fixture lookup %q: read: %w", raw, err)
 	}
 	var doc struct {
-		Ref string `json:"ref"`
+		Directory string `json:"directory"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return "", fmt.Errorf("fixture lookup %q: decode: %w", raw, err)
 	}
-	if doc.Ref == "" {
-		return "", fmt.Errorf("fixture lookup %q: response missing ref", raw)
+	if doc.Directory == "" {
+		return "", fmt.Errorf("fixture lookup %q: response missing directory", raw)
 	}
-	return doc.Ref, nil
+	return doc.Directory, nil
 }
 
 func seriesRootForFixture(b *e2eBinary, raw string) (string, error) {

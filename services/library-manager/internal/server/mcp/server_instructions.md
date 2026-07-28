@@ -41,7 +41,7 @@ Library-list row status values:
   - `inbox:<rel>` identifies media visible through Kura's inbox.
   - `series:<rel>` identifies media inside the selected series.
   - `library:<rel>` identifies a library-scoped item.
-- Tool-specific fields such as `kura_inbox_list.path` and add/import `dirname` use their documented relative or basename forms.
+- Tool-specific fields such as `kura_inbox_list.path` and add/import `directory` use their documented relative or basename forms.
 - `kura_reconcile_plan` preview paths are descriptive output, not selectors to pass back into tools.
 
 ## Lifecycle

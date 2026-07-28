@@ -104,7 +104,7 @@ export interface LibraryResponse {
 }
 
 /**
- * `POST /api/v1/resolve` request body. Hand-written: request shapes
+ * `POST /api/v1/series/resolve` request body. Hand-written: request shapes
  * have not been hoisted into a shared Go package yet.
  */
 export interface ResolveRequest {
@@ -114,10 +114,10 @@ export interface ResolveRequest {
 /**
  * `POST /api/v1/series` request body. Hand-written: request shapes have
  * not been hoisted into a shared Go package yet. `ref` is a metadata ref
- * (provider:id); `dirname` / `ordering` are optional overrides.
+ * (provider:id); `directory` / `ordering` are optional overrides.
  */
 export interface AddRequest {
   ref: string;
-  dirname?: string;
+  directory?: string;
   ordering?: string;
 }

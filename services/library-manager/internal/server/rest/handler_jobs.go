@@ -32,18 +32,18 @@ var jobIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-]{1,128}$`)
 // jobStatus is the GET /api/v1/jobs/{job} response shape. Mirrors the
 // MCP tool_job_status projection so REST and MCP describe jobs the
 // same way. Per Product.md "Selectors, not paths," the response
-// surfaces metadataRef (looked up via index) rather than the
+// surfaces the metadata ref (looked up via index) rather than the
 // internal SeriesRef.
 type jobStatus struct {
-	JobID       string          `json:"jobId"`
-	Kind        string          `json:"kind"`
-	MetadataRef string          `json:"metadataRef,omitempty"`
-	State       string          `json:"state"`
-	StartedAt   string          `json:"startedAt"`
-	EndedAt     string          `json:"endedAt,omitempty"`
-	Progress    *jobProgress    `json:"progress,omitempty"`
-	Result      json.RawMessage `json:"result,omitempty"`
-	Error       *jobError       `json:"error,omitempty"`
+	JobID     string          `json:"jobId"`
+	Kind      string          `json:"kind"`
+	Ref       string          `json:"ref,omitempty"`
+	State     string          `json:"state"`
+	StartedAt string          `json:"startedAt"`
+	EndedAt   string          `json:"endedAt,omitempty"`
+	Progress  *jobProgress    `json:"progress,omitempty"`
+	Result    json.RawMessage `json:"result,omitempty"`
+	Error     *jobError       `json:"error,omitempty"`
 }
 
 type jobProgress struct {
@@ -84,11 +84,11 @@ func (s *Server) projectJobStatus(view jobs.UntypedJob) jobStatus {
 		metaRef = row.Metadata.String()
 	}
 	out := jobStatus{
-		JobID:       view.ID(),
-		Kind:        view.Kind(),
-		MetadataRef: metaRef,
-		State:       view.State().String(),
-		StartedAt:   view.StartedAt().UTC().Format(rfc3339Millis),
+		JobID:     view.ID(),
+		Kind:      view.Kind(),
+		Ref:       metaRef,
+		State:     view.State().String(),
+		StartedAt: view.StartedAt().UTC().Format(rfc3339Millis),
 	}
 	if endedAt, ok := view.EndedAt(); ok {
 		out.EndedAt = endedAt.UTC().Format(rfc3339Millis)

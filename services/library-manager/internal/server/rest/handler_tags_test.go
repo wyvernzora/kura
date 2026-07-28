@@ -49,7 +49,7 @@ func TestHandleTagsUpdateMutatesAtomically(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if got.MetadataRef.String() != "tvdb:42" || len(got.Tags) != 1 || got.Tags[0] != "priority" {
+	if got.Ref.String() != "tvdb:42" || len(got.Tags) != 1 || got.Tags[0] != "priority" {
 		t.Fatalf("response = %+v", got)
 	}
 }
@@ -78,7 +78,7 @@ func TestHandleListFiltersSpaceDelimitedTags(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if len(got.Rows) != 1 || got.Rows[0].MetadataRef.String() != "tvdb:42" {
-		t.Fatalf("rows = %+v", got.Rows)
+	if len(got.Items) != 1 || got.Items[0].Ref.String() != "tvdb:42" {
+		t.Fatalf("rows = %+v", got.Items)
 	}
 }

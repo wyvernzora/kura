@@ -10,6 +10,6 @@ type TagUpdate struct {
 
 // SeriesTags is the resulting stored tag set after an update.
 type SeriesTags struct {
-	MetadataRef refs.Metadata `json:"metadataRef"`
-	Tags        []string      `json:"tags"`
+	Ref  refs.Metadata `json:"ref"`
+	Tags []string      `json:"tags"`
 }

@@ -105,7 +105,7 @@ func TestHandleLibrary_Returns200(t *testing.T) {
 
 func TestHandleResolve_RejectsEmptyTerms(t *testing.T) {
 	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/resolve", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/resolve", http.NoBody)
 	req.Body = http.NoBody
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)

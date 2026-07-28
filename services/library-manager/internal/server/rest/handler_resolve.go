@@ -6,7 +6,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// resolveRequest is the POST /api/v1/resolve body.
+// resolveRequest is the POST /api/v1/series/resolve body.
 type resolveRequest struct {
 	Terms []string `json:"terms"`
 }

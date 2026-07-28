@@ -39,14 +39,14 @@ fi
 export KURA_TOKEN
 [ -n "${KURA_SERVER_URL:-}" ] && export KURA_SERVER_URL
 
-# Pull the metadataRef of every tracked (non-untracked, non-error) row
+# Pull the ref of every tracked (non-untracked, non-error) row
 # so each scan invocation hits an unambiguous selector. Stick to the
 # while-read pattern (rather than mapfile) so the script runs on
 # macOS's bundled bash 3.2.
 refs=()
 while IFS= read -r line; do
   refs+=("$line")
-done < <(kura list --json | jq -r '.[] | select(.status != "untracked" and .status != "error") | .metadataRef')
+done < <(kura list --json | jq -r '.[] | select(.status != "untracked" and .status != "error") | .ref')
 
 total=${#refs[@]}
 if [ "$total" -eq 0 ]; then

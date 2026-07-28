@@ -75,8 +75,7 @@ function SeriesDetailBody({ data, orderedSeasons, preview }: SeriesDetailBodyPro
         {data.truncated && <TruncatedNotice />}
         {orderedSeasons.length === 0 ? (
           <Card className="p-6 text-sm text-muted">
-            No seasons indexed. Run <code>kura scan {data.metadataRef}</code> from the CLI to
-            populate.
+            No seasons indexed. Run <code>kura scan {data.ref}</code> from the CLI to populate.
           </Card>
         ) : (
           orderedSeasons.map((season) => (

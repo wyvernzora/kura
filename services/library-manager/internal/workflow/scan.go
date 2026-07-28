@@ -122,7 +122,7 @@ func toScanResponse(seriesRoot string, in scan.Result) api.ScanResult {
 			Reason:     skip.Reason,
 			Source:     skip.Source,
 			Resolution: skip.Resolution,
-			Size:       skip.Size,
+			SizeBytes:  skip.Size,
 		})
 	}
 	return out

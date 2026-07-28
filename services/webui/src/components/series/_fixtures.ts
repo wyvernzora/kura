@@ -12,21 +12,21 @@ function media(opts: {
   source: string;
   resolution: string;
   codec: string;
-  size: number;
+  sizeBytes: number;
   companions?: number;
 }): EpisodeShow['active'] {
   return {
     source: opts.source,
     resolution: opts.resolution,
     codec: opts.codec,
-    size: opts.size,
+    sizeBytes: opts.sizeBytes,
     file: 'series:Season 1/Frieren - S01E01.mkv',
     companions: Array.from({ length: opts.companions ?? 0 }).map((_, i) => ({
       path: `series:Season 1/Frieren - S01E01.${['en', 'jp', 'fr'][i] ?? 'en'}.srt`,
       role: 'subtitle',
       language: ['en', 'jp', 'fr'][i] ?? 'en',
-      size: 30_000,
-      mtime: '2024-08-01T10:00:00Z',
+      sizeBytes: 30_000,
+      modifiedAt: '2024-08-01T10:00:00Z',
     })),
   };
 }
@@ -37,7 +37,7 @@ function presentEp(opts: {
   aired: string;
   source: string;
   resolution: string;
-  size: number;
+  sizeBytes: number;
   companions?: number;
 }): EpisodeShow {
   return {
@@ -49,7 +49,7 @@ function presentEp(opts: {
       source: opts.source,
       resolution: opts.resolution,
       codec: 'HEVC 10-bit',
-      size: opts.size,
+      sizeBytes: opts.sizeBytes,
       companions: opts.companions,
     }),
   };
@@ -69,7 +69,7 @@ const EP_S01E01: EpisodeShow = presentEp({
   aired: '2023-09-29',
   source: 'BluRay',
   resolution: '1080p',
-  size: 1.4 * 1024 ** 3,
+  sizeBytes: 1.4 * 1024 ** 3,
   companions: 2,
 });
 const EP_S01E02: EpisodeShow = presentEp({
@@ -78,7 +78,7 @@ const EP_S01E02: EpisodeShow = presentEp({
   aired: '2023-10-06',
   source: 'BluRay',
   resolution: '1080p',
-  size: 1.3 * 1024 ** 3,
+  sizeBytes: 1.3 * 1024 ** 3,
 });
 const EP_S01E03: EpisodeShow = missingEp('S01E0003', '小さな約束', '2023-10-13');
 const EP_S01E04: EpisodeShow = presentEp({
@@ -87,7 +87,7 @@ const EP_S01E04: EpisodeShow = presentEp({
   aired: '2023-10-20',
   source: 'WebRip',
   resolution: '720p',
-  size: 0.6 * 1024 ** 3,
+  sizeBytes: 0.6 * 1024 ** 3,
 });
 
 const EP_S02E01: EpisodeShow = presentEp({
@@ -96,7 +96,7 @@ const EP_S02E01: EpisodeShow = presentEp({
   aired: '2026-04-01',
   source: 'Web-DL',
   resolution: '2160p',
-  size: 4.1 * 1024 ** 3,
+  sizeBytes: 4.1 * 1024 ** 3,
 });
 const EP_S02E02: EpisodeShow = presentEp({
   episode: 'S02E0002',
@@ -104,7 +104,7 @@ const EP_S02E02: EpisodeShow = presentEp({
   aired: '2026-04-08',
   source: 'Web-DL',
   resolution: '1080p',
-  size: 1.1 * 1024 ** 3,
+  sizeBytes: 1.1 * 1024 ** 3,
   companions: 1,
 });
 const EP_S02E03: EpisodeShow = pendingEp('S02E0003', '名もなき花', '2026-05-15');
@@ -115,7 +115,7 @@ const EP_S00E01: EpisodeShow = presentEp({
   aired: '2024-03-01',
   source: 'BluRay',
   resolution: '1080p',
-  size: 2.0 * 1024 ** 3,
+  sizeBytes: 2.0 * 1024 ** 3,
 });
 const EP_S00E02: EpisodeShow = missingEp('S00E0002', 'OVA: 砂の城', '2024-04-01');
 
@@ -138,8 +138,8 @@ const specials: SeasonShow = {
 };
 
 export const FIXTURE_SHOW_AIRING: Show = {
-  metadataRef: 'tvdb:424536',
-  ref: 'Frieren - Beyond Journeys End',
+  ref: 'tvdb:424536',
+  directory: 'Frieren - Beyond Journeys End',
   root: 'library:Frieren - Beyond Journeys End',
   preferredTitle: '葬送のフリーレン',
   canonicalTitle: 'Frieren: Beyond Journey’s End',
@@ -156,8 +156,8 @@ export const FIXTURE_SHOW_AIRING: Show = {
 };
 
 export const FIXTURE_SHOW_COMPLETE_SINGLE: Show = {
-  metadataRef: 'tvdb:81189',
-  ref: 'Cowboy Bebop',
+  ref: 'tvdb:81189',
+  directory: 'Cowboy Bebop',
   root: 'library:Cowboy Bebop',
   preferredTitle: 'Cowboy Bebop',
   status: 'complete',
@@ -180,7 +180,7 @@ export const FIXTURE_SHOW_COMPLETE_SINGLE: Show = {
           aired: '1998-04-03',
           source: 'BluRay',
           resolution: '1080p',
-          size: 1.0 * 1024 ** 3,
+          sizeBytes: 1.0 * 1024 ** 3,
         }),
         presentEp({
           episode: 'S01E0002',
@@ -188,7 +188,7 @@ export const FIXTURE_SHOW_COMPLETE_SINGLE: Show = {
           aired: '1998-04-10',
           source: 'BluRay',
           resolution: '1080p',
-          size: 1.0 * 1024 ** 3,
+          sizeBytes: 1.0 * 1024 ** 3,
         }),
       ],
     },
@@ -213,29 +213,29 @@ export const FIXTURE_EPISODE_PRESENT_RICH: EpisodeShow = {
     resolution: '1080p',
     dimensions: '1920x1080',
     codec: 'HEVC 10-bit',
-    size: 2.18 * GIB,
-    mtime: '2026-06-30T21:12:00Z',
+    sizeBytes: 2.18 * GIB,
+    modifiedAt: '2026-06-30T21:12:00Z',
     companions: [
       {
         path: 'series:Season 1/Frieren - S01E03.en.ass',
         role: 'subtitle',
         language: 'en',
         label: 'Full',
-        size: 58 * KIB,
-        mtime: '2026-06-30T21:14:00Z',
+        sizeBytes: 58 * KIB,
+        modifiedAt: '2026-06-30T21:14:00Z',
       },
       {
         path: 'series:Season 1/Frieren - S01E03.ja.srt',
         role: 'subtitle',
         language: 'ja',
-        size: 44 * KIB,
-        mtime: '2026-06-30T21:14:00Z',
+        sizeBytes: 44 * KIB,
+        modifiedAt: '2026-06-30T21:14:00Z',
       },
       {
         path: 'series:Season 1/Frieren - S01E03.nfo',
         role: 'metadata',
-        size: 3 * KIB,
-        mtime: '2026-06-30T21:15:00Z',
+        sizeBytes: 3 * KIB,
+        modifiedAt: '2026-06-30T21:15:00Z',
       },
     ],
     attrs: {
@@ -258,15 +258,15 @@ export const FIXTURE_EPISODE_STAGED_REPLACEMENT: EpisodeShow = {
     resolution: '1080p',
     dimensions: '1920x1080',
     codec: 'H.264',
-    size: 1.42 * GIB,
-    mtime: '2025-02-10T10:00:00Z',
+    sizeBytes: 1.42 * GIB,
+    modifiedAt: '2025-02-10T10:00:00Z',
     companions: [
       {
         path: 'series:Season 1/Frieren - S01E03.en.ass',
         role: 'subtitle',
         language: 'en',
-        size: 58 * KIB,
-        mtime: '2025-02-10T10:00:00Z',
+        sizeBytes: 58 * KIB,
+        modifiedAt: '2025-02-10T10:00:00Z',
       },
     ],
     attrs: { release_group: 'Kaleido-Subs' },
@@ -277,23 +277,23 @@ export const FIXTURE_EPISODE_STAGED_REPLACEMENT: EpisodeShow = {
     resolution: '4K',
     dimensions: '3840x2160',
     codec: 'HEVC 10-bit',
-    size: 3.24 * GIB,
-    mtime: '2026-07-17T18:40:00Z',
+    sizeBytes: 3.24 * GIB,
+    modifiedAt: '2026-07-17T18:40:00Z',
     companions: [
       {
         path: 'inbox:downloads/Frieren.S01E03.2160p.en.ass',
         role: 'subtitle',
         language: 'en',
         label: 'Full',
-        size: 60 * KIB,
-        mtime: '2026-07-17T18:40:00Z',
+        sizeBytes: 60 * KIB,
+        modifiedAt: '2026-07-17T18:40:00Z',
       },
       {
         path: 'inbox:downloads/Frieren.S01E03.2160p.ja.ass',
         role: 'subtitle',
         language: 'ja',
-        size: 55 * KIB,
-        mtime: '2026-07-17T18:40:00Z',
+        sizeBytes: 55 * KIB,
+        modifiedAt: '2026-07-17T18:40:00Z',
       },
     ],
     attrs: {
@@ -318,15 +318,15 @@ export const FIXTURE_EPISODE_STAGED_ONLY: EpisodeShow = {
     resolution: '1080p',
     dimensions: '1920x1080',
     codec: 'H.264',
-    size: 1.31 * GIB,
-    mtime: '2026-07-17T04:02:00Z',
+    sizeBytes: 1.31 * GIB,
+    modifiedAt: '2026-07-17T04:02:00Z',
     companions: [
       {
         path: 'inbox:downloads/Frieren - 06 [WebRip 1080p].en.ass',
         role: 'subtitle',
         language: 'en',
-        size: 51 * KIB,
-        mtime: '2026-07-17T04:02:00Z',
+        sizeBytes: 51 * KIB,
+        modifiedAt: '2026-07-17T04:02:00Z',
       },
     ],
   },
@@ -367,8 +367,8 @@ export const FIXTURE_EPISODE_LONG_PATHS: EpisodeShow = {
     resolution: '720p',
     dimensions: '1280x720',
     codec: 'H.264',
-    size: 0.68 * GIB,
-    mtime: '2025-01-02T08:00:00Z',
+    sizeBytes: 0.68 * GIB,
+    modifiedAt: '2025-01-02T08:00:00Z',
     companions: [],
   },
   staged: {
@@ -377,16 +377,16 @@ export const FIXTURE_EPISODE_LONG_PATHS: EpisodeShow = {
     resolution: '1080p',
     dimensions: '1920x1080',
     codec: 'HEVC 10-bit',
-    size: 2.02 * GIB,
-    mtime: '2026-07-17T18:40:00Z',
+    sizeBytes: 2.02 * GIB,
+    modifiedAt: '2026-07-17T18:40:00Z',
     companions: [
       {
         path: 'inbox:downloads/[MoonRaft] Sousou no Frieren - 12 (BD 1920x1080 HEVC-10bit FLAC) [Dual-Audio][A1B2C3D4].en.forced.ass',
         role: 'subtitle',
         language: 'en',
         label: 'Forced signs & songs',
-        size: 22 * KIB,
-        mtime: '2026-07-17T18:40:00Z',
+        sizeBytes: 22 * KIB,
+        modifiedAt: '2026-07-17T18:40:00Z',
       },
     ],
     attrs: {

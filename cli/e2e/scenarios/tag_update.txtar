@@ -5,7 +5,7 @@
 kura_add stub:1001
 
 kura_tag_update stub:1001 Maintenance-Requested PRIORITY
-stdout '"metadataRef":"stub:1001"'
+stdout '"ref":"stub:1001"'
 stdout '"tags":\["maintenance-requested","priority"\]'
 
 kura_show stub:1001

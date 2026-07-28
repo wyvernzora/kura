@@ -148,8 +148,8 @@ func classifyScanAllFailure(ref refs.Series, err error) api.ScanAllFailure {
 		kind = coded.Kind()
 	}
 	return api.ScanAllFailure{
-		Ref:     ref.String(),
-		Kind:    kind,
-		Message: err.Error(),
+		Directory: ref.String(),
+		Kind:      kind,
+		Message:   err.Error(),
 	}
 }

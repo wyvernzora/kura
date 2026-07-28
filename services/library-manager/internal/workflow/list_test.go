@@ -99,8 +99,8 @@ func TestList_FiltersTagsConjunctively(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(result.Rows) != 1 || result.Rows[0].Title != "Priority" {
-		t.Fatalf("rows = %+v, want only Priority", result.Rows)
+	if len(result.Items) != 1 || result.Items[0].Title != "Priority" {
+		t.Fatalf("rows = %+v, want only Priority", result.Items)
 	}
 }
 
@@ -129,10 +129,10 @@ func TestList_ReturnsAllRowsSortedByTitle(t *testing.T) {
 		t.Fatalf("List: %v", err)
 	}
 	want := []string{"Apple", "Mango", "Zebra"}
-	if len(result.Rows) != 3 {
-		t.Fatalf("rows = %d, want 3", len(result.Rows))
+	if len(result.Items) != 3 {
+		t.Fatalf("rows = %d, want 3", len(result.Items))
 	}
-	for i, r := range result.Rows {
+	for i, r := range result.Items {
 		if r.Title != want[i] {
 			t.Fatalf("row[%d] title = %q, want %q", i, r.Title, want[i])
 		}
@@ -177,8 +177,8 @@ func TestList_FilterByStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(result.Rows) != 1 || result.Rows[0].Title != "B" {
-		t.Fatalf("rows = %+v, want only B", result.Rows)
+	if len(result.Items) != 1 || result.Items[0].Title != "B" {
+		t.Fatalf("rows = %+v, want only B", result.Items)
 	}
 }
 
@@ -194,7 +194,7 @@ func TestList_PaginationStableNoChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("page1: %v", err)
 	}
-	if len(page1.Rows) != 2 || page1.NextCursor == "" {
+	if len(page1.Items) != 2 || page1.NextCursor == "" {
 		t.Fatalf("page1 = %+v", page1)
 	}
 	if page1.DataChanged {
@@ -208,11 +208,11 @@ func TestList_PaginationStableNoChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("page2: %v", err)
 	}
-	if len(page2.Rows) != 2 {
-		t.Fatalf("page2 rows = %d, want 2", len(page2.Rows))
+	if len(page2.Items) != 2 {
+		t.Fatalf("page2 rows = %d, want 2", len(page2.Items))
 	}
-	if page2.Rows[0].Title != "C" || page2.Rows[1].Title != "D" {
-		t.Fatalf("page2 = %+v, want [C D]", page2.Rows)
+	if page2.Items[0].Title != "C" || page2.Items[1].Title != "D" {
+		t.Fatalf("page2 = %+v, want [C D]", page2.Items)
 	}
 	if page2.DataChanged {
 		t.Fatal("page2 DataChanged = true, want false (no mutation between pages)")
@@ -233,8 +233,8 @@ func TestList_PaginationDataChangedWhenIndexMutates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("page1: %v", err)
 	}
-	if len(page1.Rows) != 1 || page1.Rows[0].Title != "A" {
-		t.Fatalf("page1 = %+v, want only A", page1.Rows)
+	if len(page1.Items) != 1 || page1.Items[0].Title != "A" {
+		t.Fatalf("page1 = %+v, want only A", page1.Items)
 	}
 
 	// Mutate the index between pages.
@@ -253,8 +253,8 @@ func TestList_PaginationDataChangedWhenIndexMutates(t *testing.T) {
 		t.Fatal("page2 DataChanged = false, want true after index mutation")
 	}
 	// Anchor "A" still present; resume after it.
-	if len(page2.Rows) != 1 || page2.Rows[0].Title != "B" {
-		t.Fatalf("page2 = %+v, want [B] (resume after anchor A)", page2.Rows)
+	if len(page2.Items) != 1 || page2.Items[0].Title != "B" {
+		t.Fatalf("page2 = %+v, want [B] (resume after anchor A)", page2.Items)
 	}
 }
 
@@ -283,8 +283,8 @@ func TestList_PaginationAnchorRemovedRestarts(t *testing.T) {
 	if !page2.DataChanged {
 		t.Fatal("page2 DataChanged = false, want true after anchor removal")
 	}
-	if len(page2.Rows) != 1 || page2.Rows[0].Title != "B" {
-		t.Fatalf("page2 = %+v, want [B] (restart from page 1)", page2.Rows)
+	if len(page2.Items) != 1 || page2.Items[0].Title != "B" {
+		t.Fatalf("page2 = %+v, want [B] (restart from page 1)", page2.Items)
 	}
 }
 
@@ -307,8 +307,8 @@ func TestList_PaginationEmptyResultNoCursor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(result.Rows) != 0 {
-		t.Fatalf("rows = %d, want 0", len(result.Rows))
+	if len(result.Items) != 0 {
+		t.Fatalf("rows = %d, want 0", len(result.Items))
 	}
 	if result.NextCursor != "" {
 		t.Fatalf("NextCursor = %q, want empty", result.NextCursor)

@@ -99,8 +99,8 @@ func TestKuraShow_RejectsMalformedEpisodesAtBoundary(t *testing.T) {
 
 func TestProjectShow_DropsOperatorFields(t *testing.T) {
 	in := api.Show{
-		MetadataRef:    refs.Metadata("tvdb:1"),
-		Ref:            mustSeries(t, "Bookworm"),
+		Ref:            refs.Metadata("tvdb:1"),
+		Directory:      mustSeries(t, "Bookworm"),
 		Root:           "/library/Bookworm",
 		LastScanned:    "2026-04-12T08:31:00Z",
 		PreferredTitle: "Bookworm",
@@ -113,7 +113,7 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 					Active: &api.MediaShow{
 						Source:     "BDRip",
 						Resolution: "1080p",
-						Size:       1024,
+						SizeBytes:  1024,
 						File:       "series:Season 1/Bookworm S01E01.mkv",
 						Companions: []api.CompanionShow{
 							{Path: "series:Season 1/Bookworm S01E01.en.srt"},
@@ -125,8 +125,8 @@ func TestProjectShow_DropsOperatorFields(t *testing.T) {
 		},
 	}
 	out := projectShow(in)
-	if out.MetadataRef != "tvdb:1" {
-		t.Fatalf("MetadataRef = %q", out.MetadataRef)
+	if out.Ref != "tvdb:1" {
+		t.Fatalf("MetadataRef = %q", out.Ref)
 	}
 	if len(out.Seasons) != 1 || len(out.Seasons[0].Episodes) != 1 {
 		t.Fatalf("unexpected seasons: %+v", out.Seasons)
@@ -153,9 +153,9 @@ func TestProjectEpisode_StagedReplacementCollapsesToStaged(t *testing.T) {
 	got := projectEpisode(api.EpisodeShow{
 		Episode: mustEpisode(t, 1, 2),
 		Status:  api.StatusStagedReplacement,
-		Active:  &api.MediaShow{Source: "WebRip", Size: 100},
+		Active:  &api.MediaShow{Source: "WebRip", SizeBytes: 100},
 		Staged: &api.MediaShow{
-			Source: "BDRip", Size: 200,
+			Source: "BDRip", SizeBytes: 200,
 			File: "/staging/x.mkv",
 			Companions: []api.CompanionShow{
 				{Path: "/staging/x.en.srt"},
@@ -178,7 +178,7 @@ func TestProjectEpisode_StagedReplacementCollapsesToStaged(t *testing.T) {
 
 func TestProjectShow_StagedReplacementSummaryCollapsesToStaged(t *testing.T) {
 	got := projectShow(api.Show{
-		MetadataRef:    refs.Metadata("tvdb:370070"),
+		Ref:            refs.Metadata("tvdb:370070"),
 		PreferredTitle: "Bookworm",
 		Seasons: []api.SeasonShow{{
 			Number: 1,
@@ -198,7 +198,7 @@ func TestTruncateMCPShow_DropsTailOverBudget(t *testing.T) {
 	// Synthesize a large response: 5 seasons × 400 episodes each =
 	// 2000 episodes with verbose titles to force a JSON > 80 KB.
 	out := mcpShow{
-		MetadataRef:    "tvdb:1",
+		Ref:            "tvdb:1",
 		PreferredTitle: "BigShow",
 	}
 	const seasonCount = 5
@@ -214,7 +214,7 @@ func TestTruncateMCPShow_DropsTailOverBudget(t *testing.T) {
 				PreferredTitle: "本好きのお姫様 — A Long Episode Title in Japanese with Padding",
 				CanonicalTitle: "The Bookworm Princess — A Long Episode Title in English with Padding",
 				Active: &mcpActiveMedia{
-					Source: "BluRay", Resolution: "1080p", Codec: "HEVC", Size: 1234567890,
+					Source: "BluRay", Resolution: "1080p", Codec: "HEVC", SizeBytes: 1234567890,
 					Companions: []string{"sub.en.srt", "sub.ja.srt"},
 				},
 			})
@@ -253,7 +253,7 @@ func TestTruncateMCPShow_DropsTailOverBudget(t *testing.T) {
 
 func TestTruncateMCPShow_NoOpUnderBudget(t *testing.T) {
 	out := mcpShow{
-		MetadataRef:    "tvdb:1",
+		Ref:            "tvdb:1",
 		PreferredTitle: "SmallShow",
 		Seasons: []mcpSeason{{
 			Number:  1,
@@ -274,8 +274,8 @@ func TestTruncateMCPShow_NoOpUnderBudget(t *testing.T) {
 
 func TestProjectShow_PosterAndEpisodeTitles(t *testing.T) {
 	in := api.Show{
-		MetadataRef:    refs.Metadata("tvdb:1"),
-		Ref:            mustSeries(t, "Bookworm"),
+		Ref:            refs.Metadata("tvdb:1"),
+		Directory:      mustSeries(t, "Bookworm"),
 		Root:           "/library/Bookworm",
 		PreferredTitle: "Bookworm",
 		Artwork: &api.ArtworkShow{
@@ -316,17 +316,17 @@ func TestProjectShow_PosterAndEpisodeTitles(t *testing.T) {
 
 func TestProjectShow_StagedTrashAndExtras(t *testing.T) {
 	in := api.Show{
-		MetadataRef:    refs.Metadata("tvdb:1"),
-		Ref:            mustSeries(t, "Bookworm"),
+		Ref:            refs.Metadata("tvdb:1"),
+		Directory:      mustSeries(t, "Bookworm"),
 		Root:           "/library/Bookworm",
 		PreferredTitle: "Bookworm",
 		StagedTrash: []api.TrashItemShow{{
-			ID:    "01H0000000000000000000AAAA",
-			Path:  "Season 1/loser.mkv",
-			Size:  1024,
-			MTime: "2026-04-12T08:31:00Z",
+			ID:         "01H0000000000000000000AAAA",
+			Path:       "Season 1/loser.mkv",
+			SizeBytes:  1024,
+			ModifiedAt: "2026-04-12T08:31:00Z",
 			Companions: []api.CompanionShow{
-				{Path: "Season 1/loser.en.srt", Size: 10},
+				{Path: "Season 1/loser.en.srt", SizeBytes: 10},
 			},
 		}},
 		StagedExtras: []api.ExtraItemShow{{
@@ -341,7 +341,7 @@ func TestProjectShow_StagedTrashAndExtras(t *testing.T) {
 		t.Fatalf("StagedTrash len = %d, want 1", len(out.StagedTrash))
 	}
 	tr := out.StagedTrash[0]
-	if tr.ID != "01H0000000000000000000AAAA" || tr.Path != "Season 1/loser.mkv" || tr.Size != 1024 {
+	if tr.ID != "01H0000000000000000000AAAA" || tr.Path != "Season 1/loser.mkv" || tr.SizeBytes != 1024 {
 		t.Fatalf("StagedTrash[0] = %+v", tr)
 	}
 	// Reflect-style: confirm no companion field on the wire shape.

@@ -26,7 +26,7 @@ func TestUpdateTagsRequest(t *testing.T) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     make(http.Header),
-			Body:       io.NopCloser(strings.NewReader(`{"metadataRef":"tvdb:42","tags":["priority"]}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"ref":"tvdb:42","tags":["priority"]}`)),
 		}, nil
 	})
 	out, err := c.UpdateTags(context.Background(), "tvdb:42", []string{"Priority", "!Disabled"})
@@ -52,7 +52,7 @@ func TestListSeriesSendsTagFilter(t *testing.T) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     make(http.Header),
-			Body:       io.NopCloser(strings.NewReader(`{"rows":[]}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"items":[]}`)),
 		}, nil
 	})
 	if _, err := c.ListSeries(context.Background(), nil, nil, []string{"priority", "!disabled"}, 100, ""); err != nil {

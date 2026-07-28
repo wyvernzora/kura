@@ -31,28 +31,28 @@ const FRIEREN = row({
   isAiring: true,
   episodesAvailable: 4,
   episodeCount: 28,
-  metadataRef: 'tvdb:1',
+  ref: 'tvdb:1',
 });
 const SPY = row({
   title: 'Spy x Family',
   status: 'complete',
   episodesAvailable: 25,
   episodeCount: 25,
-  metadataRef: 'tvdb:2',
+  ref: 'tvdb:2',
 });
 const ATTACK = row({
   title: '進撃の巨人',
   status: 'complete',
   episodesAvailable: 87,
   episodeCount: 87,
-  metadataRef: 'tvdb:3',
+  ref: 'tvdb:3',
 });
 const VINLAND = row({
   title: 'Vinland Saga',
   status: 'incomplete',
   episodesAvailable: 18,
   episodeCount: 24,
-  metadataRef: 'tvdb:4',
+  ref: 'tvdb:4',
 });
 const UNTRACKED = row({
   title: 'Mystery Folder',
@@ -238,9 +238,9 @@ describe('intersectWithCandidates', () => {
     expect(intersectWithCandidates(ALL, [])).toEqual([]);
   });
 
-  it('keeps only rows whose metadataRef matches a candidate', () => {
+  it('keeps only rows whose ref matches a candidate', () => {
     const result = intersectWithCandidates(ALL, [candidate('tvdb:2'), candidate('tvdb:1')]);
-    expect(result.map((r) => r.metadataRef)).toEqual(['tvdb:2', 'tvdb:1']);
+    expect(result.map((r) => r.ref)).toEqual(['tvdb:2', 'tvdb:1']);
   });
 
   it('preserves candidate order, not row order', () => {
@@ -248,7 +248,7 @@ describe('intersectWithCandidates', () => {
     expect(result).toEqual([VINLAND, FRIEREN]);
   });
 
-  it('excludes rows without a metadataRef', () => {
+  it('excludes rows without a ref', () => {
     const result = intersectWithCandidates(ALL, [candidate('tvdb:1')]);
     expect(result).toEqual([FRIEREN]);
     expect(result).not.toContain(UNTRACKED);

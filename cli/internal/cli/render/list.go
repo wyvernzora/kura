@@ -22,7 +22,7 @@ func List(w io.Writer, result api.ListResult, asJSON bool) error {
 	if asJSON {
 		encoder := json.NewEncoder(w)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(result.Rows)
+		return encoder.Encode(result.Items)
 	}
 	styled := style.ShouldStyle(w)
 	tw := table.NewWriter()
@@ -39,7 +39,7 @@ func List(w io.Writer, result api.ListResult, asJSON bool) error {
 		{Number: 8},
 	})
 	now := time.Now()
-	for _, row := range result.Rows {
+	for _, row := range result.Items {
 		statusText := string(row.Status)
 		if row.Staged {
 			statusText += "*"
@@ -61,10 +61,10 @@ func List(w io.Writer, result api.ListResult, asJSON bool) error {
 // idCell renders the metadata ref ("ID" column). Single dash for
 // untracked / error rows that have no metadata ref.
 func idCell(row api.ListRow) string {
-	if row.MetadataRef == "" {
+	if row.Ref == "" {
 		return "-"
 	}
-	return row.MetadataRef.String()
+	return row.Ref.String()
 }
 
 // resolutionListCell renders the per-series distinct-resolutions

@@ -14,9 +14,9 @@ import (
 )
 
 type addInput struct {
-	Ref      string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
-	Dirname  string `json:"dirname,omitempty" jsonschema:"Optional override for the on-disk directory name. Defaults to a sanitized form of the provider's preferred title."`
-	Ordering string `json:"ordering,omitempty" jsonschema:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`
+	Ref       string `json:"ref" jsonschema:"Metadata ref, e.g. \"tvdb:370070\"."`
+	Directory string `json:"directory,omitempty" jsonschema:"Optional override for the on-disk directory name. Defaults to a sanitized form of the provider's preferred title."`
+	Ordering  string `json:"ordering,omitempty" jsonschema:"Pin the per-series episode ordering used for the initial spine fetch. One of: default, official, dvd, absolute, alternate, regional. Omit to use the provider's default."`
 }
 
 //go:embed tool_add.md
@@ -42,12 +42,12 @@ func addAddTool(s *sdkmcp.Server, deps Deps) {
 			}), nil, nil
 		}
 		var seriesRef refs.Series
-		if in.Dirname != "" {
-			seriesRef, err = refs.ParseSeries(in.Dirname)
+		if in.Directory != "" {
+			seriesRef, err = refs.ParseSeries(in.Directory)
 			if err != nil {
 				return toolErrorResult(&invalidInputError{
 					kind:    errkind.KindInvalidRef,
-					message: fmt.Sprintf("kura_add: dirname: %v", err),
+					message: fmt.Sprintf("kura_add: directory: %v", err),
 				}), nil, nil
 			}
 		}

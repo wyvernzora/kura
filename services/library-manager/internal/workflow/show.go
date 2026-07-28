@@ -105,8 +105,8 @@ func Show(ctx context.Context, deps Deps, in ShowInput) (api.Show, error) {
 		seasons = buildSeasons(seriesRoot, model, now, filter, false)
 	}
 	out := api.Show{
-		MetadataRef:    model.Metadata,
-		Ref:            in.Ref,
+		Ref:            model.Metadata,
+		Directory:      in.Ref,
 		Root:           librarySelector(deps.LibRoot, seriesRoot),
 		Generation:     model.Generation,
 		LastScanned:    formatOptionalTime(model.LastScanned),
@@ -161,8 +161,8 @@ func showPreview(ctx context.Context, deps Deps, in ShowInput) (api.Show, error)
 		seasons = buildSeasons(seriesRoot, model, now, filter, true)
 	}
 	return api.Show{
-		MetadataRef:    metadataRef,
-		Ref:            ref,
+		Ref:            metadataRef,
+		Directory:      ref,
 		Root:           librarySelector(deps.LibRoot, seriesRoot),
 		PreferredTitle: preferredTitle,
 		CanonicalTitle: model.CanonicalTitle.String(),
@@ -202,19 +202,19 @@ func buildStagedTrash(seriesRoot string, items []domainseries.StagedTrashItem) [
 		companions := make([]api.CompanionShow, 0, len(item.Companions))
 		for _, c := range item.Companions {
 			companions = append(companions, api.CompanionShow{
-				Path:     seriesSelector(seriesRoot, c.Path),
-				Role:     c.Role,
-				Language: c.Language,
-				Label:    c.Label,
-				Size:     c.Size,
-				MTime:    c.MTime.UTC().Format(time.RFC3339),
+				Path:       seriesSelector(seriesRoot, c.Path),
+				Role:       c.Role,
+				Language:   c.Language,
+				Label:      c.Label,
+				SizeBytes:  c.Size,
+				ModifiedAt: c.MTime.UTC().Format(time.RFC3339),
 			})
 		}
 		out = append(out, api.TrashItemShow{
 			ID:         item.ID.String(),
 			Path:       seriesSelector(seriesRoot, item.Path),
-			Size:       item.Size,
-			MTime:      item.MTime.UTC().Format(time.RFC3339),
+			SizeBytes:  item.Size,
+			ModifiedAt: item.MTime.UTC().Format(time.RFC3339),
 			AddedAt:    formatOptionalTime(item.AddedAt),
 			Companions: companions,
 		})
@@ -459,12 +459,12 @@ func mediaShow(seriesRoot string, record media.Record) api.MediaShow {
 	companions := make([]api.CompanionShow, 0, len(record.Companions))
 	for _, c := range record.Companions {
 		companions = append(companions, api.CompanionShow{
-			Path:     seriesSelector(seriesRoot, c.Path),
-			Role:     c.Role,
-			Language: c.Language,
-			Label:    c.Label,
-			Size:     c.Size,
-			MTime:    c.MTime.UTC().Format(time.RFC3339),
+			Path:       seriesSelector(seriesRoot, c.Path),
+			Role:       c.Role,
+			Language:   c.Language,
+			Label:      c.Label,
+			SizeBytes:  c.Size,
+			ModifiedAt: c.MTime.UTC().Format(time.RFC3339),
 		})
 	}
 	dimensions := ""
@@ -476,8 +476,8 @@ func mediaShow(seriesRoot string, record media.Record) api.MediaShow {
 		Resolution: record.Resolution.Display(),
 		Dimensions: dimensions,
 		Codec:      record.Codec.String(),
-		Size:       record.Size,
-		MTime:      formatOptionalTime(record.MTime),
+		SizeBytes:  record.Size,
+		ModifiedAt: formatOptionalTime(record.MTime),
 		File:       seriesSelector(seriesRoot, record.Path),
 		Companions: companions,
 		Attrs:      media.CloneAttrs(record.Attrs),

@@ -75,10 +75,10 @@ func TestShowPreviewBuildsFromProviderAllMissing(t *testing.T) {
 		t.Fatalf("Show preview: %v", err)
 	}
 
-	if show.MetadataRef.String() != "tvdb:42" {
-		t.Errorf("metadataRef = %q, want tvdb:42", show.MetadataRef)
+	if show.Ref.String() != "tvdb:42" {
+		t.Errorf("ref = %q, want tvdb:42", show.Ref)
 	}
-	if show.Ref.IsZero() {
+	if show.Directory.IsZero() {
 		t.Error("preview ref is zero; want a derived directory name")
 	}
 	if show.Artwork == nil || show.Artwork.Poster == nil || show.Artwork.Poster.URL != "https://art/p.jpg" {

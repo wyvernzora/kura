@@ -6,16 +6,17 @@
 // source: add.go
 
 /**
- * AddResult is workflow.Add's response. MetadataRef is echoed because
- * the surface caller (CLI / script) often resolved it from text terms
- * rather than passing it directly — the resolved ref is genuinely new
- * info to them. The on-disk Ref is the sanitized directory basename
- * (non-trivial to derive from arbitrary titles); PreferredTitle is the
- * provider's display string. Library root is implicit and dropped.
+ * AddResult is workflow.Add's response. Ref (the metadata ref) is
+ * echoed because the surface caller (CLI / script) often resolved it
+ * from text terms rather than passing it directly — the resolved ref
+ * is genuinely new info to them. Directory is the sanitized on-disk
+ * basename (non-trivial to derive from arbitrary titles);
+ * PreferredTitle is the provider's display string. Library root is
+ * implicit and dropped.
  */
 export interface AddResult {
-  metadataRef: string;
   ref: string;
+  directory: string;
   preferredTitle: string;
 }
 /**
@@ -69,7 +70,7 @@ export interface InboxList {
 /**
  * InboxEntry is one filesystem entry under the inbox root. Path is
  * an `inbox:<rel>` selector — pass it straight back to kura_stage as
- * the `media` arg. Size is meaningful only for files; dirs and
+ * the `media` arg. SizeBytes is meaningful only for files; dirs and
  * symlinks emit 0. SymlinkTarget is populated only when Kind ==
  * "symlink" and is the symlink's literal target string (may point
  * outside any known root).
@@ -77,8 +78,8 @@ export interface InboxList {
 export interface InboxEntry {
   path: string;
   kind: string;
-  size?: number /* int64 */;
-  mtime?: string;
+  sizeBytes?: number /* int64 */;
+  modifiedAt?: string;
   symlinkTarget?: string;
 }
 
@@ -197,7 +198,7 @@ export interface ListRow {
   seasonCount: number /* int */;
   episodesAvailable: number /* int */;
   episodeCount: number /* int */;
-  metadataRef?: string;
+  ref?: string;
   resolutions?: string[];
   sources?: string[];
   tags?: string[];
@@ -222,7 +223,7 @@ export interface ListRow {
   error?: string;
 }
 /**
- * ListResult is the full library-list response. Rows are sorted by
+ * ListResult is the full library-list response. Items are sorted by
  * title (lower-cased) and tie-broken on series ref.
  * NextCursor is non-empty when MaxResults capped the page; pass it back
  * as the next request's Cursor to fetch the following page. DataChanged
@@ -230,7 +231,7 @@ export interface ListRow {
  * from the start of the current page if they care about strict ordering.
  */
 export interface ListResult {
-  rows: ListRow[];
+  items: ListRow[];
   nextCursor?: string;
   dataChanged?: boolean;
 }
@@ -265,8 +266,8 @@ export interface ReconcilePlanDetail {
  * .kura/trash/<id>/ on apply. StepIDs lists the step IDs that produced
  * this trash bucket so callers can deterministically map the entry
  * back to plan steps. Source / Resolution / Codec are empty for
- * standalone stagedTrash (no mediainfo probe at stage time); Size and
- * MTime are populated from the on-disk file.
+ * standalone stagedTrash (no mediainfo probe at stage time); SizeBytes
+ * and ModifiedAt are populated from the on-disk file.
  */
 export interface ReconcileTrashChange {
   id: string;
@@ -275,8 +276,8 @@ export interface ReconcileTrashChange {
   source?: string;
   resolution?: string;
   codec?: string;
-  size?: number /* int64 */;
-  mtime?: string;
+  sizeBytes?: number /* int64 */;
+  modifiedAt?: string;
   companions?: ReconcileMove[];
   stepIds?: string[];
 }
@@ -301,8 +302,8 @@ export interface ReconcileChange {
   source?: string;
   resolution?: string;
   codec?: string;
-  size?: number /* int64 */;
-  mtime?: string;
+  sizeBytes?: number /* int64 */;
+  modifiedAt?: string;
   companions?: ReconcileMove[];
   replaced?: ReconcileReplaced;
   stepIds?: string[];
@@ -317,8 +318,8 @@ export interface ReconcileReplaced {
   source?: string;
   resolution?: string;
   codec?: string;
-  size?: number /* int64 */;
-  mtime?: string;
+  sizeBytes?: number /* int64 */;
+  modifiedAt?: string;
   companions?: ReconcileMove[];
   stepIds?: string[];
 }
@@ -361,7 +362,7 @@ export interface FailedReconcileStep {
  * identifies who was holding it.
  */
 export interface RecoverReconcile {
-  ref: string;
+  directory: string;
   cleared: boolean;
   priorHolder?: { op: string; token?: string; pid: number; host: string; started: string };
 }
@@ -376,10 +377,10 @@ export interface RecoverReconcile {
  */
 export interface ReindexResult {
   /**
-   * Rows is the total number of rows the rebuild emitted (tracked +
+   * Items is the total number of rows the rebuild emitted (tracked +
    * untracked + error). Matches `len(index.Rows())` post-write.
    */
-  rows: number /* int */;
+  items: number /* int */;
 }
 
 //////////
@@ -507,7 +508,7 @@ export interface ScannedEpisode {
 /**
  * ScanSkip is one file or directory the scan walked past with an
  * explanation. Codes mirror the scan-internal SkipCode* constants.
- * Source / Resolution / Size are populated when the skipped path is a
+ * Source / Resolution / SizeBytes are populated when the skipped path is a
  * recognized video file (notably duplicate_slot entries). They give
  * callers enough signal to pick a winner among duplicates without
  * re-walking the filesystem. Other skip codes leave them empty.
@@ -518,7 +519,7 @@ export interface ScanSkip {
   reason: string;
   source?: string;
   resolution?: string;
-  size?: number /* int64 */;
+  sizeBytes?: number /* int64 */;
 }
 /**
  * Skip code constants. Exported so renderers and MCP schemas can
@@ -575,7 +576,7 @@ export interface ScanAllResult {
  * parsing free-form messages.
  */
 export interface ScanAllFailure {
-  ref: string;
+  directory: string;
   kind: string;
   message: string;
 }
@@ -617,8 +618,8 @@ export interface SeriesAliases {
  * filesystem paths.
  */
 export interface Show {
-  metadataRef: string;
   ref: string;
+  directory: string;
   root: string;
   generation?: number /* int */;
   lastScanned?: string;
@@ -649,8 +650,8 @@ export interface Show {
 export interface TrashItemShow {
   id: string;
   path: string;
-  size: number /* int64 */;
-  mtime: string;
+  sizeBytes: number /* int64 */;
+  modifiedAt: string;
   addedAt?: string;
   companions?: CompanionShow[];
 }
@@ -734,8 +735,8 @@ export interface MediaShow {
   resolution?: string;
   dimensions?: string;
   codec?: string;
-  size: number /* int64 */;
-  mtime?: string;
+  sizeBytes: number /* int64 */;
+  modifiedAt?: string;
   file: string;
   companions: CompanionShow[];
   attrs?: { [key: string]: string };
@@ -745,8 +746,8 @@ export interface CompanionShow {
   role?: string;
   language?: string;
   label?: string;
-  size: number /* int64 */;
-  mtime: string;
+  sizeBytes: number /* int64 */;
+  modifiedAt: string;
 }
 
 //////////
@@ -863,7 +864,7 @@ export interface TagUpdate {
  * SeriesTags is the resulting stored tag set after an update.
  */
 export interface SeriesTags {
-  metadataRef: string;
+  ref: string;
   tags: string[];
 }
 
@@ -884,7 +885,7 @@ export interface TrashList {
  * TrashSeriesEntry rolls up trash for one series.
  */
 export interface TrashSeriesEntry {
-  ref: string;
+  directory: string;
   entries: TrashEntry[];
   bytes: number /* int64 */;
 }
@@ -900,12 +901,12 @@ export interface TrashEntry {
   mediaPath: string;
   source?: string;
   resolution?: string;
-  size: number /* int64 */;
+  sizeBytes: number /* int64 */;
   companions?: TrashCompanion[];
 }
 export interface TrashCompanion {
   path: string;
-  size: number /* int64 */;
+  sizeBytes: number /* int64 */;
 }
 /**
  * TrashEmpty is workflow.TrashEmpty's response. Attempts is the total
@@ -927,7 +928,7 @@ export interface TrashEmpty {
   failures?: TrashEmptyFailure[];
 }
 export interface TrashSeriesEmpty {
-  ref: string;
+  directory: string;
   removed: string[];
   reclaimedBytes: number /* int64 */;
 }
@@ -937,7 +938,7 @@ export interface TrashSeriesEmpty {
  * stays in the server log via deps.Logger.Warn.
  */
 export interface TrashEmptyFailure {
-  ref: string;
+  directory: string;
   error: string;
 }
 /**

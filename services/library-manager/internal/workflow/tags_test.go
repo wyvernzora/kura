@@ -71,7 +71,7 @@ func TestUpdateTagsRemovalOnlyReturnsEmptyJSONArray(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if got, want := string(data), `{"metadataRef":"tvdb:42","tags":[]}`; got != want {
+	if got, want := string(data), `{"ref":"tvdb:42","tags":[]}`; got != want {
 		t.Fatalf("JSON = %s, want %s", got, want)
 	}
 }

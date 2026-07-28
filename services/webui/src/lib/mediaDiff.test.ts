@@ -8,7 +8,7 @@ const BASE_MEDIA: MediaShow = {
   source: 'WebRip',
   resolution: '1080p',
   codec: 'H.264',
-  size: 1024,
+  sizeBytes: 1024,
   companions: [],
 };
 
@@ -19,8 +19,8 @@ describe('diffMedia', () => {
       companions: [
         {
           path: 'inbox:downloads/Example - S01E01.en.ass',
-          size: 512,
-          mtime: '2026-07-18T00:00:00Z',
+          sizeBytes: 512,
+          modifiedAt: '2026-07-18T00:00:00Z',
         },
       ],
     };
@@ -38,8 +38,8 @@ describe('diffMedia', () => {
       companions: [
         {
           path: 'series:Season 1/Example - S01E01.en.ass',
-          size: 512,
-          mtime: '2026-07-17T00:00:00Z',
+          sizeBytes: 512,
+          modifiedAt: '2026-07-17T00:00:00Z',
         },
       ],
     };
@@ -48,8 +48,8 @@ describe('diffMedia', () => {
       companions: [
         {
           path: 'inbox:downloads/Example - S01E01.en.ass',
-          size: 640,
-          mtime: '2026-07-18T00:00:00Z',
+          sizeBytes: 640,
+          modifiedAt: '2026-07-18T00:00:00Z',
         },
       ],
     };
@@ -66,8 +66,8 @@ describe('diffMedia', () => {
       role: 'subtitle',
       language: 'en',
       label: 'Full',
-      size: 512,
-      mtime: '2026-07-17T00:00:00Z',
+      sizeBytes: 512,
+      modifiedAt: '2026-07-17T00:00:00Z',
     };
     const from = { ...BASE_MEDIA, companions: [companion] };
     const to = {
@@ -84,8 +84,8 @@ describe('diffMedia', () => {
   it('returns no rows when media is unchanged', () => {
     const companion = {
       path: 'series:Season 1/Example - S01E01.en.ass',
-      size: 512,
-      mtime: '2026-07-17T00:00:00Z',
+      sizeBytes: 512,
+      modifiedAt: '2026-07-17T00:00:00Z',
     };
     const from = { ...BASE_MEDIA, companions: [companion], attrs: { group: 'Example' } };
     const to = { ...BASE_MEDIA, companions: [{ ...companion }], attrs: { group: 'Example' } };
@@ -109,7 +109,7 @@ describe('diffMedia', () => {
       source: 'BluRay',
       resolution: '4K',
       codec: 'HEVC',
-      size: 2048,
+      sizeBytes: 2048,
     };
 
     expect(diffMedia(BASE_MEDIA, to)).toEqual([

@@ -42,7 +42,7 @@ async function fetchAllSeries(): Promise<ListRow[]> {
       params.set('cursor', cursor);
     }
     const page = await api<ListResult>(`/api/v1/series?${params.toString()}`);
-    acc.push(...page.rows);
+    acc.push(...page.items);
     if (!page.nextCursor || page.nextCursor === cursor) {
       return acc;
     }
@@ -75,7 +75,7 @@ const RESOLVE_DEBOUNCE_MS = 300;
 const RESOLVE_MIN_QUERY_LENGTH = 2;
 
 /**
- * Debounced wrapper around POST /api/v1/resolve. The library home
+ * Debounced wrapper around POST /api/v1/series/resolve. The library home
  * uses this to turn the user's search query into a ranked list of
  * metadata candidates; the home page then intersects those refs
  * against the loaded library to render matches in candidate order.
@@ -115,7 +115,7 @@ export function useResolveSearch(query: string) {
     enabled,
     staleTime: 60_000,
     queryFn: () =>
-      api<Resolution>('/api/v1/resolve', {
+      api<Resolution>('/api/v1/series/resolve', {
         method: 'POST',
         body: JSON.stringify({ terms: [debounced] } satisfies ResolveRequest),
       }),
@@ -125,7 +125,7 @@ export function useResolveSearch(query: string) {
 /**
  * Add a series to the library by metadata ref (POST /api/v1/series).
  * On success invalidates the library list so the new series lands in the
- * grid; callers navigate to the returned metadataRef.
+ * grid; callers navigate to the returned ref.
  */
 export function useAddSeries() {
   const qc = useQueryClient();

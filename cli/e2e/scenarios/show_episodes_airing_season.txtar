@@ -3,7 +3,7 @@
 
 kura_add stub:1004
 kura_show_ep $KURA_LAST_REF AIRING_SEASON
-stdout '"metadataRef":"stub:1004"'
+stdout '"ref":"stub:1004"'
 stdout '"number":1'
 stdout 'S01E0001'
 stdout 'S01E0002'

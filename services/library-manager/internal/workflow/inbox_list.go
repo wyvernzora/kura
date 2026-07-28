@@ -111,12 +111,12 @@ func InboxList(ctx context.Context, deps Deps, in InboxListInput) (api.InboxList
 	}
 	for i, e := range res.Entries {
 		entry := api.InboxEntry{
-			Path: inboxSelector(deps.InboxRoot, e.RelPath),
-			Kind: string(e.Kind),
-			Size: e.Size,
+			Path:      inboxSelector(deps.InboxRoot, e.RelPath),
+			Kind:      string(e.Kind),
+			SizeBytes: e.Size,
 		}
 		if !e.MTime.IsZero() {
-			entry.MTime = e.MTime.UTC().Format("2006-01-02T15:04:05Z")
+			entry.ModifiedAt = e.MTime.UTC().Format("2006-01-02T15:04:05Z")
 		}
 		if e.SymlinkTarget != "" {
 			entry.SymlinkTarget = e.SymlinkTarget

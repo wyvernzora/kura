@@ -50,8 +50,8 @@ func TestErrorPayload_WorkflowNotFoundIsCoded(t *testing.T) {
 	if got["category"] != errkind.CategoryInvalidParams {
 		t.Fatalf("category = %v, want %v", got["category"], errkind.CategoryInvalidParams)
 	}
-	if got["ref"] != ref.String() {
-		t.Fatalf("ref = %v, want %q", got["ref"], ref.String())
+	if got["directory"] != ref.String() {
+		t.Fatalf("directory = %v, want %q", got["directory"], ref.String())
 	}
 }
 

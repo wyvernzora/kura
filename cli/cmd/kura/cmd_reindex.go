@@ -53,7 +53,7 @@ func (cmd *reindexCmd) Run(rt *runContext) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(result)
 	}
-	fmt.Fprintf(rt.Stdout, "reindex done: %d rows\n", result.Rows)
+	fmt.Fprintf(rt.Stdout, "reindex done: %d rows\n", result.Items)
 	return nil
 }
 

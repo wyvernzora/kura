@@ -89,7 +89,7 @@ func List(ctx context.Context, deps Deps, in ListInput) (api.ListResult, error) 
 	progress.Success(ctx, "list", fmt.Sprintf("Listed library contents (%d series)", len(out)), len(out))
 
 	return api.ListResult{
-		Rows:        out,
+		Items:       out,
 		DataChanged: dataChanged,
 		NextCursor:  nextListCursor(view, page, pageSize, startAt, len(rows)),
 	}, nil
@@ -200,7 +200,7 @@ func rowToListRow(row indexfile.Row) api.ListRow {
 		SeasonCount:        row.SeasonCount,
 		EpisodesAvailable:  row.EpisodesAvailable,
 		EpisodeCount:       row.EpisodeCount,
-		MetadataRef:        row.Metadata,
+		Ref:                row.Metadata,
 		Resolutions:        row.Resolutions,
 		Sources:            row.Sources,
 		Tags:               row.Tags,

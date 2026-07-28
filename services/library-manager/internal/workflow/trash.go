@@ -68,16 +68,16 @@ func TrashList(ctx context.Context, deps Deps, in TrashListInput) (api.TrashList
 			return api.TrashList{}, err
 		}
 		seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
-		entry := api.TrashSeriesEntry{Ref: ref, Entries: make([]api.TrashEntry, 0, len(metas))}
+		entry := api.TrashSeriesEntry{Directory: ref, Entries: make([]api.TrashEntry, 0, len(metas))}
 		for _, meta := range metas {
 			if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
 				continue
 			}
 			view := trashEntryView(seriesRoot, meta)
 			entry.Entries = append(entry.Entries, view)
-			entry.Bytes += view.Size
+			entry.Bytes += view.SizeBytes
 			for _, c := range view.Companions {
-				entry.Bytes += c.Size
+				entry.Bytes += c.SizeBytes
 			}
 		}
 		if len(entry.Entries) == 0 {
@@ -108,7 +108,7 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (api.TrashEm
 	out := api.TrashEmpty{Series: make([]api.TrashSeriesEmpty, 0, len(refsList))}
 	for index, ref := range refsList {
 		progress.Update(ctx, "trash-empty", fmt.Sprintf("Emptying trash for %s", ref), index+1, len(refsList))
-		series := api.TrashSeriesEmpty{Ref: ref, Removed: make([]string, 0)}
+		series := api.TrashSeriesEmpty{Directory: ref, Removed: make([]string, 0)}
 		// attempts counts entries the inner closure actually tried to
 		// delete (matched OlderThan), so callers can distinguish "no
 		// trash for this series" from "every attempt failed."
@@ -158,8 +158,8 @@ func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (api.TrashEm
 				)
 			}
 			out.Failures = append(out.Failures, api.TrashEmptyFailure{
-				Ref:   ref,
-				Error: emptyErr.Error(),
+				Directory: ref,
+				Error:     emptyErr.Error(),
 			})
 			if in.All {
 				// Best-effort under --all: continue to subsequent
@@ -335,14 +335,14 @@ func trashEntryView(seriesRoot string, meta trashfile.Meta) api.TrashEntry {
 		MediaPath:  seriesSelector(seriesRoot, meta.Record.Path),
 		Source:     meta.Record.Source,
 		Resolution: meta.Record.Resolution,
-		Size:       meta.Record.Size,
+		SizeBytes:  meta.Record.Size,
 	}
 	if len(meta.Record.Companions) > 0 {
 		view.Companions = make([]api.TrashCompanion, 0, len(meta.Record.Companions))
 		for _, c := range meta.Record.Companions {
 			view.Companions = append(view.Companions, api.TrashCompanion{
-				Path: seriesSelector(seriesRoot, c.Path),
-				Size: c.Size,
+				Path:      seriesSelector(seriesRoot, c.Path),
+				SizeBytes: c.Size,
 			})
 		}
 	}

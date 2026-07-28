@@ -60,21 +60,19 @@ export default meta;
 type Story = StoryObj<typeof SeriesDetail>;
 
 export const AiringMultiSeason: Story = {
-  decorators: [withSeededShow(FIXTURE_SHOW_AIRING.metadataRef, FIXTURE_SHOW_AIRING)],
+  decorators: [withSeededShow(FIXTURE_SHOW_AIRING.ref, FIXTURE_SHOW_AIRING)],
   render: () => (
     <div className="min-h-dvh bg-paper">
-      <SeriesDetail seriesRef={FIXTURE_SHOW_AIRING.metadataRef} />
+      <SeriesDetail seriesRef={FIXTURE_SHOW_AIRING.ref} />
     </div>
   ),
 };
 
 export const CompleteSingleSeason: Story = {
-  decorators: [
-    withSeededShow(FIXTURE_SHOW_COMPLETE_SINGLE.metadataRef, FIXTURE_SHOW_COMPLETE_SINGLE),
-  ],
+  decorators: [withSeededShow(FIXTURE_SHOW_COMPLETE_SINGLE.ref, FIXTURE_SHOW_COMPLETE_SINGLE)],
   render: () => (
     <div className="min-h-dvh bg-paper">
-      <SeriesDetail seriesRef={FIXTURE_SHOW_COMPLETE_SINGLE.metadataRef} />
+      <SeriesDetail seriesRef={FIXTURE_SHOW_COMPLETE_SINGLE.ref} />
     </div>
   ),
 };

@@ -191,9 +191,9 @@ export function sortRows(rows: readonly ListRow[], sort: SortSpec): readonly Lis
 }
 
 /**
- * Filters `rows` to those whose `metadataRef` appears in `candidates`,
+ * Filters `rows` to those whose `ref` appears in `candidates`,
  * preserving candidate order (so the most relevant matches sort
- * first). Untracked rows have no metadataRef and are excluded by
+ * first). Untracked rows have no ref and are excluded by
  * design — the resolve flow speaks the metadata vocabulary, and
  * untracked folders haven't been mapped into it yet.
  */
@@ -211,10 +211,10 @@ export function intersectWithCandidates(
 
   const matched: { row: ListRow; index: number }[] = [];
   for (const row of rows) {
-    if (!row.metadataRef) {
+    if (!row.ref) {
       continue;
     }
-    const idx = rank.get(row.metadataRef);
+    const idx = rank.get(row.ref);
     if (idx !== undefined) {
       matched.push({ row, index: idx });
     }

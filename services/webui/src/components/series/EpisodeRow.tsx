@@ -176,8 +176,8 @@ function renderSubText(
   if (active?.codec) {
     parts.push(active.codec);
   }
-  if (active && active.size > 0) {
-    parts.push(formatSize(active.size));
+  if (active && active.sizeBytes > 0) {
+    parts.push(formatSize(active.sizeBytes));
   }
   if (subAnnotation) {
     parts.push(subAnnotation);

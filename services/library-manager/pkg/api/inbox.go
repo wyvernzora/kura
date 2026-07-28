@@ -18,14 +18,14 @@ type InboxList struct {
 
 // InboxEntry is one filesystem entry under the inbox root. Path is
 // an `inbox:<rel>` selector — pass it straight back to kura_stage as
-// the `media` arg. Size is meaningful only for files; dirs and
+// the `media` arg. SizeBytes is meaningful only for files; dirs and
 // symlinks emit 0. SymlinkTarget is populated only when Kind ==
 // "symlink" and is the symlink's literal target string (may point
 // outside any known root).
 type InboxEntry struct {
 	Path          string `json:"path"`
 	Kind          string `json:"kind"`
-	Size          int64  `json:"size,omitempty"`
-	MTime         string `json:"mtime,omitempty"`
+	SizeBytes     int64  `json:"sizeBytes,omitempty"`
+	ModifiedAt    string `json:"modifiedAt,omitempty"`
 	SymlinkTarget string `json:"symlinkTarget,omitempty"`
 }

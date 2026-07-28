@@ -10,22 +10,22 @@ import (
 
 // addRequest is the POST /api/v1/series body. Mirrors the MCP
 // kura_add tool shape: `ref` is the metadata ref (resolved upstream
-// via /resolve), `dirname` overrides the new on-disk directory
+// via /resolve), `directory` overrides the new on-disk directory
 // name, `ordering` pins the spine ordering.
 type addRequest struct {
-	Ref      string `json:"ref"`
-	Dirname  string `json:"dirname,omitempty"`
-	Ordering string `json:"ordering,omitempty"`
+	Ref       string `json:"ref"`
+	Directory string `json:"directory,omitempty"`
+	Ordering  string `json:"ordering,omitempty"`
 }
 
 // importRequest is the POST /api/v1/series/import body. Mirrors
-// kura_import: `ref` is the metadata ref, `dirname` is the existing
+// kura_import: `ref` is the metadata ref, `directory` is the existing
 // directory under the library root to adopt.
 type importRequest struct {
-	Ref      string `json:"ref"`
-	Dirname  string `json:"dirname"`
-	Force    bool   `json:"force,omitempty"`
-	Ordering string `json:"ordering,omitempty"`
+	Ref       string `json:"ref"`
+	Directory string `json:"directory"`
+	Force     bool   `json:"force,omitempty"`
+	Ordering  string `json:"ordering,omitempty"`
 }
 
 func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
@@ -40,13 +40,13 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := workflow.AddInput{Metadata: meta, Ordering: req.Ordering}
-	if req.Dirname != "" {
-		dirname, perr := refs.ParseSeries(req.Dirname)
+	if req.Directory != "" {
+		directory, perr := refs.ParseSeries(req.Directory)
 		if perr != nil {
-			writeError(w, &validationError{msg: fmt.Sprintf("dirname: %v", perr)})
+			writeError(w, &validationError{msg: fmt.Sprintf("directory: %v", perr)})
 			return
 		}
-		in.Ref = dirname
+		in.Ref = directory
 	}
 	result, werr := workflow.Add(r.Context(), s.deps.Workflow, in)
 	if werr != nil {
@@ -62,13 +62,13 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if req.Dirname == "" {
-		writeError(w, &validationError{msg: "dirname is required"})
+	if req.Directory == "" {
+		writeError(w, &validationError{msg: "directory is required"})
 		return
 	}
-	dirname, err := refs.ParseSeries(req.Dirname)
+	directory, err := refs.ParseSeries(req.Directory)
 	if err != nil {
-		writeError(w, &validationError{msg: fmt.Sprintf("dirname: %v", err)})
+		writeError(w, &validationError{msg: fmt.Sprintf("directory: %v", err)})
 		return
 	}
 	meta, err := refs.ParseMetadata(req.Ref)
@@ -78,7 +78,7 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 	}
 	result, werr := workflow.Import(r.Context(), s.deps.Workflow, workflow.ImportInput{
 		Metadata: meta,
-		Ref:      dirname,
+		Ref:      directory,
 		Force:    req.Force,
 		Ordering: req.Ordering,
 	})

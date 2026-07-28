@@ -24,7 +24,7 @@ That Go definition is authoritative. If this section conflicts with the Go file,
 `kura_list` returns one page, not the whole library. Treat each call as a slice.
 
 **Response fields:**
-- `rows` — this page only.
+- `items` — this page only.
 - `nextCursor` — present iff more rows remain. Absent or empty = last page. Stop iterating.
 - `dataChanged` — true when the underlying library mutated between the prior page and this one (a series was added/removed/re-titled, or filter membership shifted). Cursor still resolves; pagination still completes; ordering across the boundary may have shifted.
 

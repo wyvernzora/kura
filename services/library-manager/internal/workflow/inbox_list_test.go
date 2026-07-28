@@ -40,7 +40,7 @@ func TestInboxList_DefaultsAndShape(t *testing.T) {
 		if e.Path == "" {
 			t.Error("path empty")
 		}
-		if e.MTime == "" {
+		if e.ModifiedAt == "" {
 			t.Errorf("mtime empty for %q", e.Path)
 		}
 	}

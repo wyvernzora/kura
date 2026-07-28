@@ -11,8 +11,8 @@ func TestInboxList_BasicFormatting(t *testing.T) {
 	in := api.InboxList{
 		Path: "[BDrip] Hoshi.../",
 		Entries: []api.InboxEntry{
-			{Path: "[BDrip] Hoshi.../E01.mkv", Kind: "file", Size: 1234567890, MTime: "2026-05-01T03:14:00Z"},
-			{Path: "[BDrip] Hoshi.../Subs", Kind: "dir", MTime: "2026-05-01T03:14:00Z"},
+			{Path: "[BDrip] Hoshi.../E01.mkv", Kind: "file", SizeBytes: 1234567890, ModifiedAt: "2026-05-01T03:14:00Z"},
+			{Path: "[BDrip] Hoshi.../Subs", Kind: "dir", ModifiedAt: "2026-05-01T03:14:00Z"},
 		},
 	}
 	out := InboxList(in)
@@ -37,7 +37,7 @@ func TestInboxList_BasicFormatting(t *testing.T) {
 func TestInboxList_SymlinkTargetSurfacedWithArrow(t *testing.T) {
 	in := api.InboxList{
 		Entries: []api.InboxEntry{
-			{Path: "link", Kind: "symlink", SymlinkTarget: "/elsewhere", MTime: "2026-04-22T18:02:00Z"},
+			{Path: "link", Kind: "symlink", SymlinkTarget: "/elsewhere", ModifiedAt: "2026-04-22T18:02:00Z"},
 		},
 	}
 	out := InboxList(in)
@@ -58,7 +58,7 @@ func TestInboxList_SymlinkTargetSurfacedWithArrow(t *testing.T) {
 func TestInboxList_TruncationFooterAndHint(t *testing.T) {
 	in := api.InboxList{
 		Entries: []api.InboxEntry{
-			{Path: "a.mkv", Kind: "file", Size: 1024, MTime: "2026-05-01T03:14:00Z"},
+			{Path: "a.mkv", Kind: "file", SizeBytes: 1024, ModifiedAt: "2026-05-01T03:14:00Z"},
 		},
 		Truncated:   true,
 		ElidedCount: 47,

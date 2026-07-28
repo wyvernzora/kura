@@ -11,7 +11,7 @@ interface VirtualPosterGridProps {
   density: Density;
   /**
    * Click handler for tracked posters. Untracked rows (no
-   * `metadataRef`) skip this — they have no detail page to navigate
+   * `ref`) skip this — they have no detail page to navigate
    * to and stay visually flat (no cursor pointer, no keyboard
    * affordance). Omit the prop entirely to keep every cell inert.
    */
@@ -161,7 +161,7 @@ export function VirtualPosterGrid({ rows, density, onSelect }: VirtualPosterGrid
           >
             {visible.map((row) => (
               <Poster
-                key={row.metadataRef ?? row.title}
+                key={row.ref ?? row.title}
                 title={row.title}
                 status={withAiring(row.status, !!row.isAiring)}
                 posterUrl={row.posterUrl}
@@ -173,7 +173,7 @@ export function VirtualPosterGrid({ rows, density, onSelect }: VirtualPosterGrid
                 // Untracked rows have no metadata ref → no detail page →
                 // stay flat. Tracked rows pick up cursor pointer +
                 // role=button via Poster's onClick handling.
-                onClick={onSelect && row.metadataRef ? () => onSelect(row) : undefined}
+                onClick={onSelect && row.ref ? () => onSelect(row) : undefined}
               />
             ))}
           </div>

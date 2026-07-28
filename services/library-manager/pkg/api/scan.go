@@ -42,7 +42,7 @@ type ScannedEpisode struct {
 // ScanSkip is one file or directory the scan walked past with an
 // explanation. Codes mirror the scan-internal SkipCode* constants.
 //
-// Source / Resolution / Size are populated when the skipped path is a
+// Source / Resolution / SizeBytes are populated when the skipped path is a
 // recognized video file (notably duplicate_slot entries). They give
 // callers enough signal to pick a winner among duplicates without
 // re-walking the filesystem. Other skip codes leave them empty.
@@ -52,7 +52,7 @@ type ScanSkip struct {
 	Reason     string `json:"reason"`
 	Source     string `json:"source,omitempty"`
 	Resolution string `json:"resolution,omitempty"`
-	Size       int64  `json:"size,omitempty"`
+	SizeBytes  int64  `json:"sizeBytes,omitempty"`
 }
 
 // Skip code constants. Exported so renderers and MCP schemas can
