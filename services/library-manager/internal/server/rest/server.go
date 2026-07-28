@@ -99,11 +99,10 @@ type ServeOptions struct {
 	PortFile string
 }
 
-// Serve binds the REST surface on addr. Bind-safety is now enforced
-// by the bearer-token gate (set via Deps.BearerToken at NewServer
-// time): a public bind without a valid token returns 401 to all
-// callers. On ctx cancellation the listener gets httpShutdownGrace
-// to drain in-flight requests before forced close.
+// Serve binds the REST surface on addr. Deployment policy owns access
+// control; the service does not authenticate callers. On ctx cancellation
+// the listener gets httpShutdownGrace to drain in-flight requests before
+// forced close.
 func Serve(ctx context.Context, addr string, opts ServeOptions, server *Server) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {

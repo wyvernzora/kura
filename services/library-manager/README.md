@@ -97,8 +97,8 @@ moves files and sends displaced media to trash.
 ## Deployment
 
 The Docker image runs `kura-library-manager --config=/etc/kura/library-manager.toml`
-by default. Its bundled config serves REST on `:8080`,
-`:8081`, and expects mounts at `/library` and `/inbox`.
+by default. Its bundled config serves REST on `:8080` and expects mounts at
+`/library` and `/inbox`.
 
 ```sh
 docker build --build-arg VERSION=v0.5.1 -t kura:v0.5.1 .
@@ -107,14 +107,13 @@ docker run --rm \
   -v /media/anime:/library \
   -v /downloads:/inbox \
   -p 8080:8080 \
-  -p 8081:8081 \
   kura:v0.5.1
 ```
 
 Run one writer per library. Kura targets a single personal library, not
 multi-replica writes against the same filesystem. See
-[docs/deployment.md](docs/deployment.md) for auth, UID/GID, Kubernetes, and
-stuck-claim recovery.
+[docs/deployment.md](docs/deployment.md) for the access boundary, UID/GID,
+Kubernetes, and stuck-claim recovery.
 
 ## Documentation
 
@@ -122,7 +121,7 @@ stuck-claim recovery.
 - [Concepts](docs/concepts.md) — vocabulary and invariants.
 - [Lifecycle](docs/lifecycle.md) — add, import, scan, stage, reconcile, trash.
 - [CLI](docs/cli.md) — commands, selectors, configuration.
-- [REST API](docs/rest-api.md) — endpoints, auth, async jobs.
+- [REST API](docs/rest-api.md) — endpoints, access boundary, async jobs.
 - [Storage](docs/storage.md) — on-disk JSON/JSONL formats.
 - [Changelog](CHANGELOG.md) — release notes.
 

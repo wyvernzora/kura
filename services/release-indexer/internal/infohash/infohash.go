@@ -1,5 +1,5 @@
 // Package infohash owns the canonical dedup key. takuhai derives the
-// canonical v1 btih (40 lowercase hex) from each post's magnet on /ingest and
+// canonical v1 btih (40 lowercase hex) from each post's magnet on ingest and
 // drops pure-v2/malformed values; the crawler stays dumb and emits raw posts
 // with no infohash. This package is a leaf — it imports nothing internal.
 package infohash

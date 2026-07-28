@@ -12,12 +12,12 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
-// maxBatchPosts is the hard cap on one POST /ingest body (an oversized batch -> 400
-// rather than an unbounded transaction stream). n8n keeps batches modest; this is the
-// boundary backstop.
+// maxBatchPosts is the hard cap on one POST /api/v1/releases/ingest body.
+// An oversized batch returns 400 rather than creating an unbounded transaction
+// stream. n8n keeps batches modest; this is the boundary backstop.
 const maxBatchPosts = 1000
 
-// ingestRequest is the POST /ingest request body: a batch of raw crawled posts.
+// ingestRequest is the POST /api/v1/releases/ingest request body.
 type ingestRequest struct {
 	Posts []api.RawPost `json:"posts"`
 }

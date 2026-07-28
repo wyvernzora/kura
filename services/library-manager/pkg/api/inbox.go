@@ -17,7 +17,7 @@ type InboxList struct {
 }
 
 // InboxEntry is one filesystem entry under the inbox root. Path is
-// an `inbox:<rel>` selector — pass it straight back to kura_stage as
+// an `inbox:<rel>` selector — pass it straight back to stage_series_media as
 // the `media` arg. SizeBytes is meaningful only for files; dirs and
 // symlinks emit 0. SymlinkTarget is populated only when Kind ==
 // "symlink" and is the symlink's literal target string (may point

@@ -114,7 +114,7 @@ type PosterShow struct {
 // File / Companions[].Path are scheme-tagged selectors:
 // `series:<rel>` for files inside the series root, `inbox:<rel>` for
 // inbox-staged files. Agents can pass them straight back to
-// kura_stage / kura_trash without further parsing.
+// stage_series_media without further parsing.
 type MediaShow struct {
 	Source     string            `json:"source"`
 	Resolution string            `json:"resolution,omitempty"`

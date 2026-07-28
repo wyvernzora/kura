@@ -178,7 +178,7 @@ func parseStageRequestExtras(items []StageRequestExtra) ([]ExtraStageItem, error
 		if item.Source == "" {
 			return nil, &StageRequestError{
 				Axis: "extras", Index: index, Field: "source",
-				Message: "is required (an inbox: selector — see kura_inbox_list)",
+				Message: "is required (an inbox: selector — see list_inbox)",
 			}
 		}
 		sourceSel, err := selector.ParseInbox(item.Source)

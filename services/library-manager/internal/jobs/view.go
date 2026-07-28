@@ -9,7 +9,7 @@ import (
 )
 
 // UntypedJob is the type-erased view of a tracked job exposed by
-// Registry.Get. Polling clients (kura_job_status, future REST poll)
+// Registry.Get. Polling clients (get_job or REST polling)
 // read this; tools that submitted the job and want the typed result
 // hold the original *Job[T] and Wait on it instead.
 //

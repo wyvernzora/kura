@@ -9,7 +9,7 @@ import (
 )
 
 // addRequest is the POST /api/v1/series body. Mirrors the MCP
-// kura_add tool shape: `ref` is the metadata ref (resolved upstream
+// add_series tool shape: `ref` is the metadata ref (resolved upstream
 // via /resolve), `directory` overrides the new on-disk directory
 // name, `ordering` pins the spine ordering.
 type addRequest struct {
@@ -19,7 +19,7 @@ type addRequest struct {
 }
 
 // importRequest is the POST /api/v1/series/import body. Mirrors
-// kura_import: `ref` is the metadata ref, `directory` is the existing
+// import_series: `ref` is the metadata ref, `directory` is the existing
 // directory under the library root to adopt.
 type importRequest struct {
 	Ref       string `json:"ref"`

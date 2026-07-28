@@ -46,7 +46,7 @@ export interface InboxList {
 }
 /**
  * InboxEntry is one filesystem entry under the inbox root. Path is
- * an `inbox:<rel>` selector — pass it straight back to kura_stage as
+ * an `inbox:<rel>` selector — pass it straight back to stage_series_media as
  * the `media` arg. SizeBytes is meaningful only for files; dirs and
  * symlinks emit 0. SymlinkTarget is populated only when Kind ==
  * "symlink" and is the symlink's literal target string (may point
@@ -75,7 +75,7 @@ export interface JobHandle {
 }
 /**
  * JobStatus is the polled view of a tracked job. Built by the
- * surface (e.g. kura_job_status tool, future REST GET /jobs/{id})
+ * surface (e.g. get_job tool or REST GET /jobs/{id})
  * from a jobs.UntypedJob plus the registry-side error mapping.
  */
 export interface JobStatus {
@@ -671,7 +671,7 @@ export interface PosterShow {
  * File / Companions[].Path are scheme-tagged selectors:
  * `series:<rel>` for files inside the series root, `inbox:<rel>` for
  * inbox-staged files. Agents can pass them straight back to
- * kura_stage / kura_trash without further parsing.
+ * stage_series_media without further parsing.
  */
 export interface MediaShow {
   source: string;

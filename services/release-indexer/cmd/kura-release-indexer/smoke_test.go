@@ -77,11 +77,11 @@ func TestSmoke(t *testing.T) {
 		})
 		resp, err := http.Post(baseURL+"/api/v1/releases/ingest", "application/json", bytes.NewReader(ingestBody))
 		if err != nil {
-			t.Fatalf("POST /ingest: %v", err)
+			t.Fatalf("POST /api/v1/releases/ingest: %v", err)
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("POST /ingest = %d, want 200", resp.StatusCode)
+			t.Fatalf("POST /api/v1/releases/ingest = %d, want 200", resp.StatusCode)
 		}
 		var summary api.IngestSummary
 		if err := json.NewDecoder(resp.Body).Decode(&summary); err != nil {

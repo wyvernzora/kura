@@ -52,7 +52,7 @@ devserver:
 
 # Real-binary smoke (cmd/kura-release-indexer/smoke_test.go, //go:build smoke): builds + runs the
 # actual binary against a testcontainers Postgres and asserts the wired deploy shape
-# (migrations -> /healthz -> /ingest -> /queue -> /mcp -> fail-fast bind -> bounded
+# (migrations -> /healthz -> versioned REST routes -> fail-fast bind -> bounded
 # drain). Needs Docker; kept OUT of `check` so the default loop stays container-free.
 # CI runs this same command in the dedicated `smoke` job.
 smoke:

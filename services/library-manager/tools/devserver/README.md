@@ -1,10 +1,9 @@
-# Combined dev container
+# Library-manager dev container
 
-One container with hot-reloaded Kura, MCP Inspector, Vite, and Storybook.
-The committed [library-manager.toml](library-manager.toml) serves REST on
-`:8080`, MCP over HTTP on `:8081`, uses `/mnt/library` and `/mnt/inbox`,
-enables debug logs. Kura does not authenticate, so host port mappings stay
-loopback-only by default.
+One container with the hot-reloaded library-manager REST service. The committed
+[library-manager.toml](library-manager.toml) serves REST on `:8080`, uses
+`/mnt/library` and `/mnt/inbox`, and enables debug logs. Kura does not
+authenticate, so the host port mapping stays loopback-only by default.
 
 ## Quick start
 
@@ -18,21 +17,17 @@ kura list
 kura add stub:1001
 ```
 
-The container prints a copy-paste Inspector URL once Kura's MCP HTTP transport
-binds. The URL includes Inspector's own proxy-session token and the streamable
-HTTP endpoint; open it and click **Connect**.
-
 ## What runs inside
 
 | Process | Role |
 |---|---|
-| `air` | Watches `/src/internal` and `/src/cmd`, rebuilds, and restarts Kura. |
-| `kura serve` | Loads `/etc/kura/library-manager.toml`; serves REST and MCP HTTP. |
-| `mcp-inspector` | Browser UI on `:6274`, proxy on `:6277`. |
-| Vite / Storybook | Web UI development servers unless `KURA_WEB_DISABLED=1`. |
+| `air` | Watches `/src/internal`, `/src/cmd`, and `/src/pkg`; rebuilds and restarts the service. |
+| `kura-library-manager` | Loads `/etc/kura/library-manager.toml` and serves REST. |
 | `mediainfo` | Runtime dependency of scan workflows. |
 
-`tini -g` reaps the process group when Docker stops the container.
+The suite MCP server and SPA live under `services/gateway`; they are not part
+of this service-local dev container. `tini -g` reaps the process group when
+Docker stops the container.
 
 ## Modes
 
@@ -67,42 +62,26 @@ directories. A nonexistent host path fails before Docker starts.
 | `KURA_LIBRARY_ROOT` | Host directory bind-mounted at `/mnt/library`. |
 | `KURA_INBOX_ROOT` | Host directory bind-mounted at `/mnt/inbox`. |
 | `KURA_TVDB_KEY` | TVDB secret forwarded to Kura. |
-| `KURA_DEV_STUBS` | `1` enables the e2e stub provider and inspector. |
-| `KURA_WEB_DISABLED` | `1` skips Vite and Storybook. |
+| `KURA_DEV_STUBS` | `1` enables the in-memory e2e provider. |
 | `REST_DEV_PORT` | Host REST port; default `8080`. |
-| `MCP_HTTP_PORT` | Host MCP HTTP port; default `8081`. |
-| `INSPECTOR_PORT` | Host Inspector UI port; default `6274`. |
-| `INSPECTOR_PROXY_PORT` | Host Inspector proxy port; default `6277`. |
 
 Edit [library-manager.toml](library-manager.toml) for non-secret server
-settings such as preferred languages, CORS, logging, or auth posture, then
-rebuild the dev image.
+settings such as roots, preferred languages, CORS, and logging, then rebuild
+the dev image.
 
-## Ports
-
-| Container port | Role | Default host bind |
-|---|---|---|
-| 8080 | REST API | `127.0.0.1:$REST_DEV_PORT` |
-| 8081 | Kura MCP HTTP | `127.0.0.1:$MCP_HTTP_PORT` |
-| 6274 | Inspector UI | `127.0.0.1:$INSPECTOR_PORT` |
-| 6277 | Inspector proxy | `127.0.0.1:$INSPECTOR_PROXY_PORT` |
-
-## Reload and auth
+## Reload and access
 
 Air polls the bind-mounted Go source, rebuilds `/src/tmp/kura`, and runs it
-through `run-kura.sh` with the committed config. Inspector stays running across
-Kura restarts, although its UI may need a manual reconnect.
-
-Inspector's browser-to-proxy session token remains enabled. Kura itself does
-not authenticate, so do not expose these host ports beyond loopback.
+through `run-kura.sh` with the committed config. Kura itself does not
+authenticate, so do not expose the REST port beyond loopback.
 
 ## Files
 
-- `Dockerfile` — Go, air, Node, MCP Inspector, mediainfo, and tini.
+- `Dockerfile` — Go, air, mediainfo, and tini.
 - `library-manager.toml` — dev runtime settings.
 - `.air.toml` — watch and build configuration.
 - `run-kura.sh` — air's binary entrypoint.
-- `entrypoint.sh` — starts Inspector, web tooling, and air.
+- `entrypoint.sh` — validates mounts and starts air.
 
 Initial startup includes a cold Go build. Test-file changes do not trigger a
 server rebuild.

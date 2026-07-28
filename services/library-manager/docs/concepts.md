@@ -351,11 +351,9 @@ are real.
   files in trash, scans re-derive metadata from reality. Permanent
   deletion (`trash empty`) requires deliberate CLI invocation.
   Structural property, not convention.
-- **Single binary, multiple surfaces.** Everything ships as `kura`.
-  CLI verbs run as `kura <verb>`. Long-running surfaces run as
-  transports enabled in the library-manager TOML config;
-  flags can combine to host multiple transports under one process
-  sharing one Coordinator + index cache.
+- **One service transport.** The `kura-library-manager` binary serves REST.
+  CLI verbs run through that REST API, while suite MCP tools live in the
+  gateway and call the same service routes.
 - **Single writer at any moment.** Kura is built for single-replica
   deployment. The library has at most one active mutator process at a
   time. Multi-replica setups are not supported. Normal CLI use talks
@@ -376,8 +374,8 @@ are real.
 - **Long workflows are job-shaped.** `Scan` and `ApplyReconcile` run
   via `internal/jobs/` regardless of surface. CLI blocks on the job
   and renders inline (operator sees no behavioral change). MCP / REST
-  return a `JobHandle` to the client and let it poll `kura_job_status`
-  / `GET /jobs/{id}`. Same registry, same lifecycle, same
+  return a `JobHandle` to the client and let it poll `get_job` or
+  `GET /jobs/{id}`. Same registry, same lifecycle, same
   `jobs.timeout` bounds runaway operations across all surfaces.
 
 ## Hard invariants
@@ -486,7 +484,7 @@ is honest about its edges.
   flows are expected to be operator-initiated or scheduled by
   a REST consumer of the library-manager server with appropriate
   pacing; no in-product rate-limiting affordance for now.
-- **Multi-user, OIDC, scopes, federation.** Auth is a deploy-time
-  bearer-token gate, not user identity. Multi-user concerns belong to
-  an authenticating proxy (Authelia, oauth2-proxy, Caddy
-  forward_auth). See [deployment.md](deployment.md).
+- **Multi-user, OIDC, scopes, federation.** The service does not authenticate.
+  Identity and multi-user concerns belong to an authenticating proxy
+  (Authelia, oauth2-proxy, Caddy forward_auth). See
+  [deployment.md](deployment.md).

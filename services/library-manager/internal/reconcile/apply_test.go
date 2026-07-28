@@ -488,7 +488,7 @@ func TestPruneEmptyAncestors_StopsOnNonEmpty(t *testing.T) {
 func TestApplyPostStateMutations_CanonicalRenameUpdatesActivePath(t *testing.T) {
 	// Regression: an active-only canonical-rename step (intent="move",
 	// no Staged record) must rewrite Active.Path so future plans /
-	// kura_show reflect the post-apply filesystem state. Previously
+	// get_series reflect the post-apply filesystem state. Previously
 	// the post-state walk only handled the staged → active promotion
 	// path, leaving Active.Path stale after a normalization rename.
 	ep, _ := refs.NewEpisode(1, 1)

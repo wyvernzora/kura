@@ -24,7 +24,7 @@ type JobHandle struct {
 }
 
 // JobStatus is the polled view of a tracked job. Built by the
-// surface (e.g. kura_job_status tool, future REST GET /jobs/{id})
+// surface (e.g. get_job tool or REST GET /jobs/{id})
 // from a jobs.UntypedJob plus the registry-side error mapping.
 type JobStatus struct {
 	JobID     string           `json:"jobId"`

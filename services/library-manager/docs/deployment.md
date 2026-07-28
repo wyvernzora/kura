@@ -47,10 +47,9 @@ busybox shell + coreutils stay in the image so operators can
 
 `ENTRYPOINT` is `kura-library-manager`; `CMD` defaults to
 `["--config=/etc/kura/library-manager.toml"]`, so a pod or `docker run`
-invocation with no `args:` / `command:` starts both transports using the
-bundled config — REST on `:8080`. It uses
-`EXPOSE 8080 8081`. Mount a ConfigMap
-or file at `/etc/kura/library-manager.toml` to change settings.
+invocation with no `args:` / `command:` starts REST on `:8080` using the
+bundled config. It uses `EXPOSE 8080`. Mount a ConfigMap or file at
+`/etc/kura/library-manager.toml` to change settings.
 
 The image is serve-only. CLI verbs live in the separate top-level `cli/`
 module, whose `kura` binary is a pure REST client configured through

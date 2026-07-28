@@ -1,7 +1,6 @@
 # air config for the combined dev container. Watches /src/internal/
 # and /src/cmd/ for .go changes; rebuilds with $BUILD_TAGS, restarts
-# kura via run-kura.sh which assembles the right serve args (REST +
-# MCP HTTP).
+# kura via run-kura.sh with the committed REST configuration.
 #
 # Polling is on because macOS bind mounts don't deliver inotify
 # events reliably to Linux containers; CPU cost is negligible at

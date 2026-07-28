@@ -96,5 +96,5 @@ type EpisodeAlreadyExistsError struct {
 }
 
 func (err EpisodeAlreadyExistsError) Error() string {
-	return fmt.Sprintf("episode %s already has an active record at a different path; use kura_stage with replace=true to install the new file", err.Episode.Marker())
+	return fmt.Sprintf("episode %s already has an active record at a different path; use stage_series_media with replace=true to install the new file", err.Episode.Marker())
 }

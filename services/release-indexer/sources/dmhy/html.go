@@ -38,7 +38,7 @@ var (
 )
 
 // arrowMagnetRe pulls the tracker-rich magnet out of the normal download link. Its
-// btih may be 32-char base32; takuhai decodes it on /ingest. dataMagnetRe is the
+// btih may be 32-char base32; takuhai decodes it during ingest. dataMagnetRe is the
 // fallback Xunlei magnet, which is usually bare hex with no trackers.
 var (
 	dataMagnetRe  = regexp.MustCompile(`data-magnet="(magnet:[^"]*)"`)
@@ -60,7 +60,7 @@ var hiddenDateRe = regexp.MustCompile(`display:\s*none;?">\s*([0-9]{4}/[0-9]{2}/
 // title+magnet+metadata+size), including rows whose magnet has no canonical v1 btih
 // (pure-v2 / malformed) — those were SKIPPED by the old parser but are now emitted
 // here with their raw magnet and no infohash. takuhai derives the dedup key and the
-// skipped bucket on /ingest.
+// skipped bucket during ingest.
 //
 // End-of-archive detection rides on the row count, but ONLY for pages that are
 // structurally real archive listings: a page with zero `<tr class="">` rows is the

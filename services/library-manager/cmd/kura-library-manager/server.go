@@ -228,7 +228,7 @@ func buildServeDeps(
 	logger *slog.Logger,
 ) (workflow.Deps, *jobs.Registry, indexfile.WatchConfig, error) {
 	// Async index path: any cold-start rebuild proceeds in the
-	// background. kura_list returns server_not_ready until the rebuild
+	// background. list_series returns server_not_ready until the rebuild
 	// completes; transports come up immediately.
 	coordinator := coord.NewMCPCoordinator()
 	deps, err := buildDepsAsyncIndex(ctx, getenv, cfg, coordinator, logger)

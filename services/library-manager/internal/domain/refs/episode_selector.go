@@ -24,7 +24,7 @@ const (
 
 // EpisodeSelector restricts a set of Episode refs to one season,
 // optionally to a [From, To] inclusive episode-number range. Used by
-// `kura_show` and the CLI's `--episodes` flag to scope output to a
+// `get_series` and the CLI's `--episodes` flag to scope output to a
 // portion of a series's spine.
 //
 // Grammar:
@@ -90,7 +90,7 @@ func (sel EpisodeSelector) Matches(ref Episode) bool {
 
 // String returns the canonical selector string. Useful for round-trip
 // and for surfacing selector-shaped values in responses (e.g. truncated
-// ranges in `kura_show`).
+// ranges in `get_series`).
 func (sel EpisodeSelector) String() string {
 	switch sel.Kind {
 	case EpisodeSelectorDefault:

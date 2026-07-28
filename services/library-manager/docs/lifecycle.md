@@ -22,7 +22,7 @@ caller poll. Across surfaces:
 - REST returns `202 Accepted` with `{jobId, statusUrl, streamUrl}`.
   Clients poll `GET /api/v1/jobs/{id}` or stream
   `GET /api/v1/jobs/{id}/stream` (SSE).
-- MCP returns a job handle. Agents poll `kura_job_status`.
+- MCP returns a job handle. Agents poll `get_job`.
 
 Per-job forensic logs are written to
 `<library>/.kura/jobs/<ulid>.jsonl` and pruned after
@@ -413,7 +413,7 @@ time per library; not an agent steady-state operation.
    rows. Available on every surface.
 2. For each untracked directory to adopt:
    1. Resolve a MetadataRef. Either operator picks one, or agent
-      calls `kura_resolve` with the directory name and inspects
+      calls `resolve_series` with the directory name and inspects
       candidates.
    2. Call `import <directory> <ref>` to adopt the directory
       at the chosen identity.
@@ -421,9 +421,9 @@ time per library; not an agent steady-state operation.
 3. After adoption, normal workflows resume.
 
 **Rationale:** `import` establishes durable identity; the cost of a
-wrong choice is real, but the choice is fundamentally a `kura_resolve`
+wrong choice is real, but the choice is fundamentally a `resolve_series`
 decision the agent already makes via candidate inspection. MCP exposes
-`kura_import` so an agent processing untracked rows from `kura_list`
+`import_series` so an agent processing untracked rows from `list_series`
 can complete the adoption end-to-end. The CLI-only `--force` flag
 (overwrite a corrupted `.kura/series.json`) remains the operator-only
 escape hatch.
