@@ -72,10 +72,6 @@ preferred_languages = ["en-US", "ja", "en-US"]
 mediainfo_command = "/usr/local/bin/mediainfo"
 tvdb_url = "http://tvdb.test"
 
-[auth]
-disabled = true
-token_path = "/run/secrets/kura-token"
-
 [jobs]
 timeout = "1h"
 retention = "45m"
@@ -121,9 +117,6 @@ conflict_retries = 2
 	}
 	if cfg.Metadata.TVDBURL != "http://tvdb.test" {
 		t.Fatalf("TVDBURL = %q", cfg.Metadata.TVDBURL)
-	}
-	if !cfg.Auth.Disabled || cfg.Auth.TokenPath != "/run/secrets/kura-token" {
-		t.Fatalf("Auth = %+v", cfg.Auth)
 	}
 	if cfg.Jobs.Timeout != time.Hour ||
 		cfg.Jobs.Retention != 45*time.Minute ||

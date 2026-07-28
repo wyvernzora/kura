@@ -13,7 +13,6 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/wyvernzora/kura/services/library-manager/internal/server/auth"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
@@ -44,14 +43,12 @@ var (
 // tool handlers. Tools consume Workflow; Logger is optional (nil →
 // no per-call logging).
 //
-// BearerToken, when non-empty, gates the streamable-HTTP transport
-// (not stdio): every HTTP request must carry "Authorization: Bearer
-// <token>" or be rejected with 401. Stdio is unauthenticated by
-// design — process boundary already trusts the parent.
+// Neither transport authenticates. The deployment fronts this service with
+// Pomerium and confines it with a NetworkPolicy; stdio has always trusted its
+// parent process.
 type Deps struct {
-	Workflow    workflow.Deps
-	Logger      *slog.Logger
-	BearerToken string
+	Workflow workflow.Deps
+	Logger   *slog.Logger
 
 	// Version surfaces in the MCP Implementation handshake. Empty
 	// falls back to defaultServerVersion. cmd/kura-library-manager sets this to the
@@ -155,22 +152,17 @@ func ServeStdio(ctx context.Context, server *sdkmcp.Server) error {
 //
 // On ctx cancellation, the underlying http.Server is given
 // httpShutdownGrace to drain in-flight requests before forced close.
-//
-// bearerToken, when non-empty, gates access via "Authorization:
-// Bearer <token>". MCP-stdio is unauthenticated (process boundary);
-// only the HTTP transport reaches this code path.
-func ServeHTTP(ctx context.Context, addr string, server *sdkmcp.Server, bearerToken string) error {
+func ServeHTTP(ctx context.Context, addr string, server *sdkmcp.Server) error {
 	handler := sdkmcp.NewStreamableHTTPHandler(func(*http.Request) *sdkmcp.Server {
 		return server
 	}, nil)
-	gated := auth.BearerMiddleware(bearerToken)(handler)
 	// Mount under /mcp per MCP Streamable HTTP convention so the path
 	// is interoperable with the broader ecosystem (inspector defaults,
 	// reverse-proxy layouts that route /mcp to the transport while
 	// reserving / for REST or a webui).
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", gated)
-	mux.Handle("/mcp/", gated)
+	mux.Handle("/mcp", handler)
+	mux.Handle("/mcp/", handler)
 	httpServer := &http.Server{
 		Addr:              addr,
 		Handler:           mux,

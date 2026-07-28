@@ -20,7 +20,6 @@ const (
 	defaultShutdownTimeout      = 10 * time.Second
 	defaultMediaInfoCommand     = "mediainfo"
 	defaultAiringTailDays       = 7
-	defaultTokenPath            = "/var/lib/kura/token"
 	defaultJobRetention         = 30 * time.Minute
 	defaultJobReaperInterval    = 5 * time.Minute
 	defaultIndexProbeInterval   = 2 * time.Second
@@ -38,7 +37,6 @@ type Config struct {
 	Server       Server
 	Library      Library
 	Metadata     Metadata
-	Auth         Auth
 	Jobs         Jobs
 	Index        Index
 	Sweep        Sweep
@@ -69,13 +67,6 @@ type Metadata struct {
 	PreferredLanguages []string
 	MediaInfoCommand   string
 	TVDBURL            string
-}
-
-// Auth configures the shared bearer-token gate. The token itself remains
-// outside TOML and is supplied through KURA_TOKEN or the token file.
-type Auth struct {
-	Disabled  bool
-	TokenPath string
 }
 
 // Jobs configures asynchronous workflow jobs.
@@ -117,9 +108,6 @@ func Defaults() Config {
 		},
 		Metadata: Metadata{
 			MediaInfoCommand: defaultMediaInfoCommand,
-		},
-		Auth: Auth{
-			TokenPath: defaultTokenPath,
 		},
 		Jobs: Jobs{
 			Retention:      defaultJobRetention,
@@ -165,7 +153,6 @@ func (c Config) Validate() error {
 		c.Server.validate,
 		c.Library.validate,
 		c.Metadata.validate,
-		c.Auth.validate,
 		c.Jobs.validate,
 		c.Index.validate,
 		c.Sweep.validate,
@@ -214,13 +201,6 @@ func (c Library) validate() error {
 func (c Metadata) validate() error {
 	if strings.TrimSpace(c.MediaInfoCommand) == "" {
 		return fmt.Errorf("metadata.mediainfo_command must not be empty")
-	}
-	return nil
-}
-
-func (c Auth) validate() error {
-	if strings.TrimSpace(c.TokenPath) == "" {
-		return fmt.Errorf("auth.token_path must not be empty")
 	}
 	return nil
 }
@@ -283,7 +263,6 @@ type fileConfig struct {
 	Server       *fileServer       `toml:"server"`
 	Library      *fileLibrary      `toml:"library"`
 	Metadata     *fileMetadata     `toml:"metadata"`
-	Auth         *fileAuth         `toml:"auth"`
 	Jobs         *fileJobs         `toml:"jobs"`
 	Index        *fileIndex        `toml:"index"`
 	Sweep        *fileSweep        `toml:"sweep"`
@@ -311,11 +290,6 @@ type fileMetadata struct {
 	PreferredLanguages []string `toml:"preferred_languages"`
 	MediaInfoCommand   *string  `toml:"mediainfo_command"`
 	TVDBURL            *string  `toml:"tvdb_url"`
-}
-
-type fileAuth struct {
-	Disabled  *bool   `toml:"disabled"`
-	TokenPath *string `toml:"token_path"`
 }
 
 type fileJobs struct {
@@ -348,7 +322,6 @@ func (r fileConfig) resolve() (Config, error) {
 	if err := r.Metadata.resolve(&cfg.Metadata); err != nil {
 		return Config{}, err
 	}
-	r.Auth.resolve(&cfg.Auth)
 	if err := r.Jobs.resolve(&cfg.Jobs); err != nil {
 		return Config{}, err
 	}
@@ -410,14 +383,6 @@ func (r *fileMetadata) resolve(dst *Metadata) error {
 	setString(&dst.MediaInfoCommand, r.MediaInfoCommand)
 	setString(&dst.TVDBURL, r.TVDBURL)
 	return nil
-}
-
-func (r *fileAuth) resolve(dst *Auth) {
-	if r == nil {
-		return
-	}
-	setBool(&dst.Disabled, r.Disabled)
-	setString(&dst.TokenPath, r.TokenPath)
 }
 
 func (r *fileJobs) resolve(dst *Jobs) error {

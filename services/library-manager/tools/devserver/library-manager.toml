@@ -11,5 +11,3 @@ log_level = "debug"
 root = "/mnt/library"
 inbox = "/mnt/inbox"
 
-[auth]
-disabled = true

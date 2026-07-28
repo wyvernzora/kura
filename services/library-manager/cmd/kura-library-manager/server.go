@@ -16,7 +16,6 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/config"
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
-	"github.com/wyvernzora/kura/services/library-manager/internal/server/auth"
 	mcpserver "github.com/wyvernzora/kura/services/library-manager/internal/server/mcp"
 	restserver "github.com/wyvernzora/kura/services/library-manager/internal/server/rest"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
@@ -73,24 +72,10 @@ func runServer(
 
 	deps.Index.Watch(ctx, watch)
 
-	// Applies to both REST and MCP-HTTP transports. MCP-stdio is
-	// unauthenticated (process boundary).
-	tokenResult, err := auth.Load(auth.Options{
-		Disabled:  cfg.Auth.Disabled,
-		Token:     getenv(auth.EnvLiteral),
-		TokenPath: cfg.Auth.TokenPath,
-	})
-	if err != nil {
-		logger.Error("auth token load failed", "err", err)
-		return err
-	}
-	logTokenStatus(logger, tokenResult, cfg.Auth.TokenPath)
-
 	server := mcpserver.NewServer(mcpserver.Deps{
-		Workflow:    deps,
-		Logger:      logger,
-		BearerToken: tokenResult.Token,
-		Version:     Version,
+		Workflow: deps,
+		Logger:   logger,
+		Version:  Version,
 	})
 
 	var restSrv *restserver.Server
@@ -99,7 +84,6 @@ func runServer(
 			Workflow:       deps,
 			Logger:         logger,
 			AllowedOrigins: cfg.Server.RESTCORSOrigins,
-			BearerToken:    tokenResult.Token,
 			Version:        Version,
 		})
 	}
@@ -110,7 +94,7 @@ func runServer(
 		"transports", serverTransports(cfg.Server),
 	)
 
-	runErr := launchServerTransports(ctx, cfg, server, restSrv, tokenResult, deps, logger)
+	runErr := launchServerTransports(ctx, cfg, server, restSrv, deps, logger)
 	return finishServerShutdown(registry, logger, runErr, cfg.Server.ShutdownTimeout)
 }
 
@@ -137,7 +121,6 @@ func launchServerTransports(
 	cfg config.Config,
 	server *sdkmcp.Server,
 	restSrv *restserver.Server,
-	tokenResult auth.Result,
 	deps workflow.Deps,
 	logger *slog.Logger,
 ) error {
@@ -147,8 +130,7 @@ func launchServerTransports(
 	}
 	if cfg.Server.MCPHTTPAddr != "" {
 		addr := cfg.Server.MCPHTTPAddr
-		token := tokenResult.Token
-		g.Go(func() error { return mcpserver.ServeHTTP(gctx, addr, server, token) })
+		g.Go(func() error { return mcpserver.ServeHTTP(gctx, addr, server) })
 	}
 	if restSrv != nil {
 		addr := cfg.Server.RESTAddr
@@ -237,24 +219,6 @@ func finishServerShutdown(
 	}
 	logger.Info("kura serve stopped cleanly")
 	return nil
-}
-
-// logTokenStatus emits one structured log line describing the auth
-// posture, including a copy-paste hint when a fresh token was just
-// generated. Operators wiring up the CLI for the first time get the
-// secret from this line plus the token file path.
-func logTokenStatus(logger *slog.Logger, r auth.Result, tokenPath string) {
-	switch {
-	case r.Disabled:
-		logger.Warn("kura serve auth disabled by config",
-			"hint", "front kura with an authenticating proxy or set auth.disabled=false")
-	case r.Generated:
-		logger.Info("kura serve generated bearer token",
-			"path", tokenPath,
-			"hint", "set KURA_TOKEN="+r.Token+" on clients (or read the token file)")
-	default:
-		logger.Info("kura serve bearer token loaded", "source", r.Source)
-	}
 }
 
 // serverTransports returns the configured transport names for the boot log.

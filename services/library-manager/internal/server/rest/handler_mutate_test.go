@@ -33,26 +33,6 @@ func TestHandleImport_RequiresRef(t *testing.T) {
 	}
 }
 
-func TestHandleRemove_PurgeRequiresOperatorHeader(t *testing.T) {
-	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodDelete, "/api/v1/series/some-series?purge=1", http.NoBody)
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status: got %d want 403, body=%s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestHandleReconcileRecover_RequiresOperatorHeader(t *testing.T) {
-	srv := newTestServer(t)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/some-series/reconcile/recover", http.NoBody)
-	rec := httptest.NewRecorder()
-	srv.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("status: got %d want 403", rec.Code)
-	}
-}
-
 func TestHandleReset_BadEpisode(t *testing.T) {
 	srv := newTestServer(t)
 	body := strings.NewReader(`{"episode":"bad-format"}`)

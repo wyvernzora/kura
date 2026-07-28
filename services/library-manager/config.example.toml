@@ -63,17 +63,6 @@ tvdb_url = ""
 
 
 # This table and all its fields are optional.
-[auth]
-
-# Optional; default = false. Disable only behind an authenticating proxy
-# or in a loopback-only development environment.
-disabled = false
-
-# Optional; default = "/var/lib/kura/token".
-token_path = "/var/lib/kura/token"
-
-
-# This table and all its fields are optional.
 [jobs]
 
 # Optional; default = "0s" (no per-job deadline).

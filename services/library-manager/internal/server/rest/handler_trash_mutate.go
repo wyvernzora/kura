@@ -36,10 +36,6 @@ func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) {
 // handleTrashEmptySeries serves DELETE /api/v1/series/{ref}/trash.
 // Operator-only + X-Confirm: 1 required.
 func (s *Server) handleTrashEmptySeries(w http.ResponseWriter, r *http.Request) {
-	if err := requireConfirm(r); err != nil {
-		writeError(w, err)
-		return
-	}
 	ref, err := s.resolveRefPath(r.PathValue("ref"))
 	if err != nil {
 		writeError(w, err)
@@ -64,10 +60,6 @@ func (s *Server) handleTrashEmptySeries(w http.ResponseWriter, r *http.Request) 
 // handleTrashEmptyAll serves DELETE /api/v1/trash. Library-wide
 // destructive; operator-only + X-Confirm: 1 required.
 func (s *Server) handleTrashEmptyAll(w http.ResponseWriter, r *http.Request) {
-	if err := requireConfirm(r); err != nil {
-		writeError(w, err)
-		return
-	}
 	older, err := parseOlderThan(r.URL.Query().Get("olderThan"))
 	if err != nil {
 		writeError(w, err)
@@ -82,14 +74,4 @@ func (s *Server) handleTrashEmptyAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
-}
-
-// requireConfirm enforces X-Confirm: 1 on destructive operations as a
-// belt-and-suspenders check beyond the operator-gate. Returns
-// validationError on absence; CLI sets the header by default.
-func requireConfirm(r *http.Request) error {
-	if r.Header.Get(headerConfirm) != "1" {
-		return &validationError{msg: "destructive operation requires X-Confirm: 1 header"}
-	}
-	return nil
 }

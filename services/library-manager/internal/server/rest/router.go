@@ -10,11 +10,12 @@ import (
 //
 // Two muxes compose into the final handler:
 //
-//   - apiMux owns every /api/v1/... route and is wrapped by the
-//     bearer-auth middleware. The web UI bundle is not gated, so the
-//     login flow itself can load before the user has a token.
-//   - rootMux dispatches requests: /api/* goes to the bearer-wrapped
-//     apiMux, everything else falls through to the embedded SPA.
+//   - apiMux owns every /api/v1/... route.
+//   - rootMux dispatches /api/* to it; there are no other routes.
+//
+// There is no authentication here. The deployment fronts this service with
+// Pomerium and confines it with a NetworkPolicy; nothing downstream of that
+// boundary re-checks a credential.
 //
 // Cross-cutting middleware (logging, version, CORS, recover) wraps
 // rootMux so it observes every request — including static UI hits —
@@ -26,8 +27,8 @@ import (
 //	version   - sets X-Kura-Version on every response
 //	cors      - origin allow-list + preflight
 //	recover   - turns panics into 500 internal errors
-//	(rootMux: /api/* → bearer → apiMux; no other routes — the web UI
-//	lives in services/webui and fronts this API through its proxy)
+//	(rootMux: /api/* → apiMux; no other routes — the web UI lives in
+//	services/gateway and fronts this API through its proxy)
 //
 // recover sits closest to the inner muxes so panics in middleware itself
 // still propagate; they're rare enough not to deserve their own net.
@@ -43,7 +44,6 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("GET /api/v1/series/{ref}", s.handleShow)
 	apiMux.HandleFunc("POST /api/v1/series", s.handleAdd)
 	apiMux.HandleFunc("POST /api/v1/series/import", s.handleImport)
-	apiMux.HandleFunc("DELETE /api/v1/series/{ref}", s.handleRemoveDispatch)
 	apiMux.HandleFunc("PATCH /api/v1/series/{ref}/tags", s.handleTagsUpdate)
 
 	// resolve
@@ -52,14 +52,9 @@ func (s *Server) buildRouter() http.Handler {
 	// reset
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/reset", s.handleReset)
 
-	// user aliases (search-key shorthands)
-	apiMux.HandleFunc("GET /api/v1/series/{ref}/aliases", s.handleAliasesList)
-	apiMux.HandleFunc("POST /api/v1/series/{ref}/aliases", s.handleAliasesAdd)
-	apiMux.HandleFunc("DELETE /api/v1/series/{ref}/aliases", s.handleAliasesRemove)
-
 	// reconcile sync
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/plan", s.handleReconcilePlan)
-	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/recover", requireOperator(s.handleReconcileRecover))
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/recover", s.handleReconcileRecover)
 
 	// async mutations (job-shaped)
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/scan", s.handleScan)
@@ -67,9 +62,9 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("POST /api/v1/series/{ref}/reconcile/apply", s.handleApply)
 
 	// trash mutations (operator-only)
-	apiMux.HandleFunc("POST /api/v1/series/{ref}/trash/{ulid}/restore", requireOperator(s.handleTrashRestore))
-	apiMux.HandleFunc("DELETE /api/v1/series/{ref}/trash", requireOperator(s.handleTrashEmptySeries))
-	apiMux.HandleFunc("DELETE /api/v1/trash", requireOperator(s.handleTrashEmptyAll))
+	apiMux.HandleFunc("POST /api/v1/series/{ref}/trash/{ulid}/restore", s.handleTrashRestore)
+	apiMux.HandleFunc("DELETE /api/v1/series/{ref}/trash", s.handleTrashEmptySeries)
+	apiMux.HandleFunc("DELETE /api/v1/trash", s.handleTrashEmptyAll)
 
 	// library — long-running but non-destructive, ungated.
 	apiMux.HandleFunc("POST /api/v1/library/reindex", s.handleReindex)
@@ -86,29 +81,14 @@ func (s *Server) buildRouter() http.Handler {
 	apiMux.HandleFunc("GET /api/v1/jobs/{job}", s.handleJobStatus)
 	apiMux.HandleFunc("GET /api/v1/jobs/{job}/stream", s.handleJobStream)
 
-	apiHandler := bearerAuthMiddleware(s.deps.BearerToken)(apiMux)
-
 	rootMux := http.NewServeMux()
-	rootMux.Handle("/api/", apiHandler)
+	rootMux.Handle("/api/", apiMux)
 
 	return s.applyMiddleware(rootMux)
 }
 
-// handleRemoveDispatch routes DELETE /series/{ref}: ?purge=1 invokes
-// the operator-gated handler, default mode is open. Inline-gating
-// keeps a single mux entry per HTTP method.
-func (s *Server) handleRemoveDispatch(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Query().Get("purge") == "1" {
-		requireOperator(s.handleRemove)(w, r)
-		return
-	}
-	s.handleRemove(w, r)
-}
-
-// applyMiddleware wraps rootMux with cross-cutting middleware that
-// observes every request, web UI included. The bearer-auth gate is
-// not in this chain; it lives inside the rootMux dispatch so it only
-// applies to /api/* paths.
+// applyMiddleware wraps rootMux with cross-cutting middleware that observes
+// every request.
 func (s *Server) applyMiddleware(next http.Handler) http.Handler {
 	h := next
 	h = recoverMiddleware(s.deps.Logger)(h)

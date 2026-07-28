@@ -6,14 +6,10 @@ import (
 	"runtime/debug"
 	"slices"
 	"time"
-
-	"github.com/wyvernzora/kura/services/library-manager/internal/server/auth"
 )
 
 const (
 	headerVersion        = "X-Kura-Version"
-	headerOperator       = "X-Kura-Operator"
-	headerConfirm        = "X-Confirm"
 	headerJobID          = "X-Kura-Job-Id"
 	headerIfNoneMatch    = "If-None-Match"
 	headerETag           = "ETag"
@@ -91,7 +87,7 @@ func corsMiddleware(allowedOrigins []string) middleware {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Vary", "Origin")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, "+headerOperator+", "+headerConfirm+", "+headerIfNoneMatch)
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, "+headerIfNoneMatch)
 				w.Header().Set("Access-Control-Max-Age", "600")
 			}
 			if r.Method == http.MethodOptions {
@@ -112,29 +108,6 @@ func versionMiddleware(version string) middleware {
 			w.Header().Set(headerVersion, version)
 			next.ServeHTTP(w, r)
 		})
-	}
-}
-
-// bearerAuthMiddleware delegates to internal/server/auth so MCP-HTTP
-// and REST share the same gate. Wrapped here in the local middleware
-// type for chain composition.
-func bearerAuthMiddleware(token string) middleware {
-	mw := auth.BearerMiddleware(token)
-	return func(next http.Handler) http.Handler { return mw(next) }
-}
-
-// requireOperator wraps a handler with X-Kura-Operator: 1 enforcement.
-// Operator-only endpoints (trash restore/empty, remove --purge,
-// reindex, reconcile recover) wrap themselves with this in router.go.
-// The deployer's auth proxy must strip the header from external
-// requests so only trusted internal callers can invoke these.
-func requireOperator(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get(headerOperator) != "1" {
-			writeError(w, &forbiddenError{msg: "operator-only endpoint; missing X-Kura-Operator: 1 header"})
-			return
-		}
-		next(w, r)
 	}
 }
 
