@@ -60,20 +60,12 @@ func TestPrintTags(t *testing.T) {
 	}
 }
 
-func TestPrintTagsAndAliasesEmptyMessages(t *testing.T) {
+func TestPrintTagsEmptyMessage(t *testing.T) {
 	var out bytes.Buffer
 	if err := printTags(&out, api.SeriesTags{Tags: []string{}}, false); err != nil {
 		t.Fatalf("printTags: %v", err)
 	}
 	if got := out.String(); got != "(no tags)\n" {
 		t.Fatalf("tag output = %q", got)
-	}
-
-	out.Reset()
-	if err := printAliases(&out, api.UserAliasList{Aliases: []string{}}, false); err != nil {
-		t.Fatalf("printAliases: %v", err)
-	}
-	if got := out.String(); got != "(no user aliases)\n" {
-		t.Fatalf("alias output = %q", got)
 	}
 }

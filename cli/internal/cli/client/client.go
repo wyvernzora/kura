@@ -3,10 +3,8 @@
 // of importing internal/workflow directly, keeping the server as the
 // normal filesystem writer.
 //
-// Discovery: `KURA_SERVER_URL` (default `http://127.0.0.1:8080`).
-// Operator-only verbs (trash empty/restore, remove --purge,
-// reconcile recover) set the X-Kura-Operator: 1 header. Destructive
-// ops (trash empty, remove --purge) also set X-Confirm: 1.
+// Discovery: `KURA_SERVER_URL` (default `http://127.0.0.1:8080`), plus
+// `KURA_TOKEN` for the bearer header a fronting proxy may want.
 package client
 
 import (
@@ -29,14 +27,19 @@ const (
 	// EnvBaseURL is the env var name CLI consumers read for discovery.
 	EnvBaseURL = "KURA_SERVER_URL"
 
-	// EnvToken is the env var holding the bearer token sent on
-	// every request. Same convention as the server's KURA_TOKEN
-	// resolver — operators export it once and both ends pick it up.
+	// EnvToken is the env var holding the bearer token sent on every
+	// request. Kura itself no longer authenticates; the header is
+	// kept for whatever proxy fronts the deployment.
 	EnvToken = "KURA_TOKEN"
 
-	headerOperator = "X-Kura-Operator"
-	headerConfirm  = "X-Confirm"
 	defaultTimeout = 5 * time.Minute
+
+	// maxErrBodyBytes caps how much of an error body is buffered, and
+	// errBodySnippetMax how much of it an undecodable body echoes
+	// back: enough to recognize a proxy's HTML error page, short
+	// enough not to bury the real message.
+	maxErrBodyBytes   = 1 << 20
+	errBodySnippetMax = 256
 )
 
 // Client wraps net/http with kura-aware request building and error
@@ -44,11 +47,6 @@ const (
 type Client struct {
 	BaseURL    string
 	HTTPClient *http.Client
-
-	// Operator marks every request with X-Kura-Operator: 1. Set this
-	// once on construction for operator-only verbs; the gate stays
-	// off otherwise.
-	Operator bool
 
 	// BearerToken, when non-empty, is sent as Authorization: Bearer
 	// <token> on every request. Read from KURA_TOKEN by FromEnv.
@@ -80,15 +78,6 @@ func FromEnv(getenv func(string) string) *Client {
 	c := New(getenv(EnvBaseURL))
 	c.BearerToken = strings.TrimSpace(getenv(EnvToken))
 	return c
-}
-
-// AsOperator returns a copy of c with the operator gate set. Use for
-// verbs that need X-Kura-Operator: 1 without flipping the receiver's
-// flag for unrelated calls.
-func (c *Client) AsOperator() *Client {
-	cp := *c
-	cp.Operator = true
-	return &cp
 }
 
 // ErrorEnvelope is the wire shape for non-2xx responses. Callers use
@@ -124,14 +113,14 @@ func IsKind(err error, kind string) bool {
 
 // Do builds, executes, and decodes a JSON request. respBody can be
 // nil for endpoints that return no body or whose body the caller
-// wants to ignore. confirm controls X-Confirm: 1 (destructive ops).
+// wants to ignore.
 //
 // The transport returns:
 //
 //	(nil)             on 2xx with body decoded into respBody
 //	(*ErrorEnvelope)  on JSON-shaped non-2xx
 //	(error)           on transport / decode failures
-func (c *Client) Do(ctx context.Context, method, path string, query url.Values, reqBody, respBody any, confirm bool) error {
+func (c *Client) Do(ctx context.Context, method, path string, query url.Values, reqBody, respBody any) error {
 	full := c.BaseURL + path
 	if len(query) > 0 {
 		full += "?" + query.Encode()
@@ -140,7 +129,7 @@ func (c *Client) Do(ctx context.Context, method, path string, query url.Values, 
 	if err != nil {
 		return err
 	}
-	setRequestHeaders(req, c, confirm)
+	setRequestHeaders(req, c)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -175,37 +164,21 @@ func buildHTTPRequest(ctx context.Context, method, fullURL string, reqBody any) 
 }
 
 // setRequestHeaders attaches every per-request header the kura REST
-// client speaks: Accept always, then the conditional operator /
-// confirm gates, then the bearer-token authorization when configured.
-func setRequestHeaders(req *http.Request, c *Client, confirm bool) {
+// client speaks: Accept always, then the bearer-token authorization
+// when configured.
+func setRequestHeaders(req *http.Request, c *Client) {
 	req.Header.Set("Accept", "application/json")
-	if c.Operator {
-		req.Header.Set(headerOperator, "1")
-	}
-	if confirm {
-		req.Header.Set(headerConfirm, "1")
-	}
 	if c.BearerToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.BearerToken)
 	}
 }
 
-// decodeHTTPResponse interprets resp.Body. Non-2xx responses decode
-// into an *ErrorEnvelope (with the 401 hint attached when the bearer
-// gate rejected the call). 2xx responses with respBody!=nil and a
-// non-204 status decode the JSON body into respBody.
+// decodeHTTPResponse interprets resp.Body. Non-2xx responses go to
+// decodeErrorBody. 2xx responses with respBody!=nil and a non-204
+// status decode the JSON body into respBody.
 func decodeHTTPResponse(resp *http.Response, respBody any) error {
 	if resp.StatusCode >= 400 {
-		var env ErrorEnvelope
-		if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-			return fmt.Errorf("server returned %d (%s) and body did not decode: %w", resp.StatusCode, resp.Status, err)
-		}
-		env.Status = resp.StatusCode
-		if resp.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("%w\n  hint: kura server requires a bearer token. Read it from /var/lib/kura/token (or wherever your server persists it) and set "+EnvToken+"=<value>",
-				&env)
-		}
-		return &env
+		return decodeErrorBody(resp)
 	}
 	if respBody == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
@@ -214,6 +187,42 @@ func decodeHTTPResponse(resp *http.Response, respBody any) error {
 		return fmt.Errorf("decode response: %w", err)
 	}
 	return nil
+}
+
+// decodeErrorBody turns a non-2xx response into an *ErrorEnvelope.
+// When the body is not the envelope at all — a proxy's HTML error
+// page, most likely — the returned error carries a bounded snippet
+// of it, so the operator can tell who actually answered. Shared with
+// the SSE path, where a fronting proxy is the likeliest respondent.
+func decodeErrorBody(resp *http.Response) error {
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrBodyBytes))
+	var env ErrorEnvelope
+	// Decoder, not Unmarshal: it stops at the first JSON value and
+	// tolerates trailing bytes, matching what this path did before
+	// the body had to be buffered for the snippet.
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&env); err != nil {
+		return fmt.Errorf("server returned %d (%s) and body did not decode: %w\n  body: %s",
+			resp.StatusCode, resp.Status, errors.Join(err, readErr), bodySnippet(body))
+	}
+	env.Status = resp.StatusCode
+	return &env
+}
+
+// bodySnippet renders an undecodable error body on one line, capped
+// at errBodySnippetMax bytes. ToValidUTF8 runs after the cut so it
+// drops both the partial rune a byte-wise cut leaves behind and any
+// garbage a binary body carried in the first place.
+func bodySnippet(body []byte) string {
+	s := strings.Join(strings.Fields(string(body)), " ")
+	if len(s) > errBodySnippetMax {
+		s = strings.ToValidUTF8(s[:errBodySnippetMax], "") + "…"
+	} else {
+		s = strings.ToValidUTF8(s, "")
+	}
+	if s == "" {
+		return "(empty)"
+	}
+	return s
 }
 
 // discoveryHint wraps connection errors with a hint about starting

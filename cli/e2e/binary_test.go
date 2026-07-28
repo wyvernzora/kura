@@ -176,7 +176,6 @@ func startDaemon(t *testing.T, libRoot, inboxRoot, umask string) *e2eBinary {
 type daemonConfig struct {
 	Server  daemonServer  `toml:"server"`
 	Library daemonLibrary `toml:"library"`
-	Auth    daemonAuth    `toml:"auth"`
 }
 
 type daemonServer struct {
@@ -190,10 +189,6 @@ type daemonServer struct {
 type daemonLibrary struct {
 	Root  string `toml:"root"`
 	Inbox string `toml:"inbox"`
-}
-
-type daemonAuth struct {
-	Disabled bool `toml:"disabled"`
 }
 
 func writeDaemonConfig(t *testing.T, dir, libRoot, inboxRoot, portFile, umask string) string {
@@ -210,7 +205,6 @@ func writeDaemonConfig(t *testing.T, dir, libRoot, inboxRoot, portFile, umask st
 			Root:  libRoot,
 			Inbox: inboxRoot,
 		},
-		Auth: daemonAuth{Disabled: true},
 	}
 	buf, err := toml.Marshal(cfg)
 	if err != nil {

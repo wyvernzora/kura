@@ -710,22 +710,6 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 		},
 	)
 
-	// ── kura_remove ───────────────────────────────────────────────────────
-	cmds["kura_remove"] = script.Command(
-		script.CmdUsage{Summary: "untrack a series", Args: "<series_ref>"},
-		func(s *script.State, args ...string) (script.WaitFunc, error) {
-			if len(args) == 0 {
-				return nil, fmt.Errorf("kura_remove: expected series ref")
-			}
-			ref := s.ExpandEnv(strings.Join(args, " "), false)
-			out, _, err := b.run(s.Context(), "remove", "--json", ref)
-			if err != nil {
-				return nil, fmt.Errorf("kura_remove: %w", err)
-			}
-			return staticOutput(out), nil
-		},
-	)
-
 	// ── kura_series_dir ───────────────────────────────────────────────────
 	cmds["kura_series_dir"] = script.Command(
 		script.CmdUsage{Summary: "compute series dir, set $KURA_SERIES_DIR", Args: "<ref>"},

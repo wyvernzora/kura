@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 
 	"github.com/wyvernzora/kura/cli/internal/cli/stdio"
@@ -25,6 +27,22 @@ func (cmd *tagUpdateCmd) Run(rt *runContext) error {
 	return printTags(stdio.From(rt.Context).Out, out, cmd.JSON)
 }
 
+// printTags renders the tag set as a single-column human read or as
+// JSON. The human form stays minimal so it pipes into shell loops.
 func printTags(out io.Writer, result api.SeriesTags, asJSON bool) error {
-	return printStringList(out, result, result.Tags, "(no tags)", asJSON)
+	if asJSON {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+	if len(result.Tags) == 0 {
+		_, err := fmt.Fprintln(out, "(no tags)")
+		return err
+	}
+	for _, tag := range result.Tags {
+		if _, err := fmt.Fprintln(out, tag); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -74,7 +74,7 @@ func (cmd *trashEmptyCmd) Run(rt *runContext) error {
 	if _, err := clipkg.ParseDuration(cmd.OlderThan); err != nil {
 		return err
 	}
-	c := operatorClientFromRT(rt)
+	c := clientFromRT(rt)
 	if cmd.All {
 		result, err := c.TrashEmptyAll(rt.Context, cmd.OlderThan)
 		if err != nil {
@@ -102,7 +102,7 @@ func (cmd *trashRestoreCmd) Run(rt *runContext) error {
 	if _, err := ulid.ParseStrict(idStr); err != nil {
 		return fmt.Errorf("invalid trash ULID %q: %w", idStr, err)
 	}
-	c := operatorClientFromRT(rt)
+	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
 	ref, err := resolveTermsToRef(rt, c, io, terms)
 	if err != nil {

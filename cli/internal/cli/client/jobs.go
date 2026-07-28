@@ -75,20 +75,15 @@ func (c *Client) StreamJob(ctx context.Context, jobID string, onEvent func(JobEv
 	}
 }
 
-// buildJobStreamRequest constructs the SSE upgrade request, including
-// the Accept header and the operator/bearer auth headers the rest of
-// the client speaks. The bearer is required: the SSE handler is
-// hand-rolled (vs. Do's JSON path) and silently dropping the header
-// leads to 401s on every async-job follow-up.
+// buildJobStreamRequest constructs the SSE upgrade request. The SSE
+// handler is hand-rolled rather than routed through Do, so the Accept
+// and bearer headers are attached here instead of inherited.
 func buildJobStreamRequest(ctx context.Context, c *Client, jobID string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/jobs/"+jobID+"/stream", http.NoBody)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "text/event-stream")
-	if c.Operator {
-		req.Header.Set(headerOperator, "1")
-	}
 	if c.BearerToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.BearerToken)
 	}
@@ -96,18 +91,15 @@ func buildJobStreamRequest(ctx context.Context, c *Client, jobID string) (*http.
 }
 
 // checkJobStreamStatus inspects the SSE response status. 200 returns
-// nil; non-200 attempts to decode the body as an ErrorEnvelope, with
-// a generic fallback for non-JSON error bodies.
+// nil; non-200 goes through the same envelope-or-snippet decode the
+// JSON path uses. A long-lived stream is where an ingress timeout is
+// most likely to answer instead of kura, so the snippet matters more
+// here than anywhere else.
 func checkJobStreamStatus(resp *http.Response) error {
 	if resp.StatusCode == http.StatusOK {
 		return nil
 	}
-	var env ErrorEnvelope
-	if jerr := json.NewDecoder(resp.Body).Decode(&env); jerr == nil {
-		env.Status = resp.StatusCode
-		return &env
-	}
-	return fmt.Errorf("stream returned %d %s", resp.StatusCode, resp.Status)
+	return decodeErrorBody(resp)
 }
 
 // handleSSELine consumes one trimmed SSE line. The blank-line
@@ -196,7 +188,7 @@ func (c *Client) PollJob(ctx context.Context, jobID string, interval time.Durati
 			Result   json.RawMessage `json:"result,omitempty"`
 			Error    *JobError       `json:"error,omitempty"`
 		}
-		if err := c.Do(ctx, http.MethodGet, "/api/v1/jobs/"+jobID, nil, nil, &status, false); err != nil {
+		if err := c.Do(ctx, http.MethodGet, "/api/v1/jobs/"+jobID, nil, nil, &status); err != nil {
 			return nil, err
 		}
 		if status.Progress != nil && (lastProgress == nil || *lastProgress != *status.Progress) && onProgress != nil {

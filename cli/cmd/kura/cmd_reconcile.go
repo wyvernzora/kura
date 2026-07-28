@@ -115,7 +115,7 @@ func (cmd *reconcileRecoverCmd) Run(rt *runContext) error {
 	if cmd.Force && !cmd.Confirm {
 		return errors.New("reconcile recover --force requires --confirm")
 	}
-	c := operatorClientFromRT(rt)
+	c := clientFromRT(rt)
 	io := stdio.From(rt.Context)
 	ref, err := resolveTermsToRef(rt, c, io, cmd.Terms)
 	if err != nil {

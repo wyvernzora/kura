@@ -39,14 +39,14 @@ type JobAck struct {
 // Health calls GET /api/v1/health.
 func (c *Client) Health(ctx context.Context) (HealthResponse, error) {
 	var out HealthResponse
-	err := c.Do(ctx, http.MethodGet, "/api/v1/health", nil, nil, &out, false)
+	err := c.Do(ctx, http.MethodGet, "/api/v1/health", nil, nil, &out)
 	return out, err
 }
 
 // Library calls GET /api/v1/library.
 func (c *Client) Library(ctx context.Context) (LibraryResponse, error) {
 	var out LibraryResponse
-	err := c.Do(ctx, http.MethodGet, "/api/v1/library", nil, nil, &out, false)
+	err := c.Do(ctx, http.MethodGet, "/api/v1/library", nil, nil, &out)
 	return out, err
 }
 
@@ -74,7 +74,7 @@ func (c *Client) ListSeries(ctx context.Context, statuses []string, airing *bool
 		q.Set("cursor", cursor)
 	}
 	var out api.ListResult
-	err := c.Do(ctx, http.MethodGet, "/api/v1/series", q, nil, &out, false)
+	err := c.Do(ctx, http.MethodGet, "/api/v1/series", q, nil, &out)
 	return out, err
 }
 
@@ -82,7 +82,7 @@ func (c *Client) ListSeries(ctx context.Context, statuses []string, airing *bool
 // tags and expressions prefixed with ! remove tags.
 func (c *Client) UpdateTags(ctx context.Context, ref string, tags []string) (api.SeriesTags, error) {
 	var out api.SeriesTags
-	err := c.Do(ctx, http.MethodPatch, "/api/v1/series/"+url.PathEscape(ref)+"/tags", nil, api.TagUpdate{Tags: tags}, &out, false)
+	err := c.Do(ctx, http.MethodPatch, "/api/v1/series/"+url.PathEscape(ref)+"/tags", nil, api.TagUpdate{Tags: tags}, &out)
 	return out, err
 }
 
@@ -110,7 +110,7 @@ func (c *Client) ShowSeries(ctx context.Context, ref string, opts ShowOptions) (
 		q.Add("resolution", s)
 	}
 	var out api.Show
-	err := c.Do(ctx, http.MethodGet, "/api/v1/series/"+url.PathEscape(ref), q, nil, &out, false)
+	err := c.Do(ctx, http.MethodGet, "/api/v1/series/"+url.PathEscape(ref), q, nil, &out)
 	return out, err
 }
 
@@ -122,7 +122,7 @@ type ResolveRequest struct {
 // Resolve calls POST /api/v1/resolve.
 func (c *Client) Resolve(ctx context.Context, terms []string) (api.Resolution, error) {
 	var out api.Resolution
-	err := c.Do(ctx, http.MethodPost, "/api/v1/resolve", nil, ResolveRequest{Terms: terms}, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/resolve", nil, ResolveRequest{Terms: terms}, &out)
 	return out, err
 }
 
@@ -138,7 +138,7 @@ type AddRequest struct {
 // AddSeries calls POST /api/v1/series.
 func (c *Client) AddSeries(ctx context.Context, req AddRequest) (api.AddResult, error) {
 	var out api.AddResult
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series", nil, req, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series", nil, req, &out)
 	return out, err
 }
 
@@ -155,20 +155,7 @@ type ImportRequest struct {
 // ImportSeries calls POST /api/v1/series/import.
 func (c *Client) ImportSeries(ctx context.Context, req ImportRequest) (api.AddResult, error) {
 	var out api.AddResult
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/import", nil, req, &out, false)
-	return out, err
-}
-
-// RemoveSeries calls DELETE /api/v1/series/{ref}. Set purge=true for
-// the wholesale-delete flow (operator + confirm).
-func (c *Client) RemoveSeries(ctx context.Context, ref string, purge bool) (api.Remove, error) {
-	q := url.Values{}
-	if purge {
-		q.Set("purge", "1")
-	}
-	var out api.Remove
-	confirm := purge
-	err := c.Do(ctx, http.MethodDelete, "/api/v1/series/"+url.PathEscape(ref), q, nil, &out, confirm)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/import", nil, req, &out)
 	return out, err
 }
 
@@ -183,49 +170,25 @@ type ResetRequest struct {
 // ResetSeries calls POST /api/v1/series/{ref}/reset.
 func (c *Client) ResetSeries(ctx context.Context, ref string, req ResetRequest) (api.ResetResult, error) {
 	var out api.ResetResult
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reset", nil, req, &out, false)
-	return out, err
-}
-
-// ListAliases calls GET /api/v1/series/{ref}/aliases.
-func (c *Client) ListUserAliases(ctx context.Context, ref string) (api.UserAliasList, error) {
-	var out api.UserAliasList
-	err := c.Do(ctx, http.MethodGet, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, nil, &out, false)
-	return out, err
-}
-
-// AddAliases calls POST /api/v1/series/{ref}/aliases. Returns the
-// resulting alias list. Idempotent.
-func (c *Client) AddUserAliases(ctx context.Context, ref string, aliases []string) (api.UserAliasList, error) {
-	var out api.UserAliasList
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, api.UserAliasMutation{Aliases: aliases}, &out, false)
-	return out, err
-}
-
-// RemoveAliases calls DELETE /api/v1/series/{ref}/aliases. Returns
-// the resulting alias list. Idempotent.
-func (c *Client) RemoveUserAliases(ctx context.Context, ref string, aliases []string) (api.UserAliasList, error) {
-	var out api.UserAliasList
-	err := c.Do(ctx, http.MethodDelete, "/api/v1/series/"+url.PathEscape(ref)+"/aliases", nil, api.UserAliasMutation{Aliases: aliases}, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reset", nil, req, &out)
 	return out, err
 }
 
 // ReconcilePlan calls POST /api/v1/series/{ref}/reconcile/plan.
 func (c *Client) ReconcilePlan(ctx context.Context, ref string) (api.ReconcilePlan, error) {
 	var out api.ReconcilePlan
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reconcile/plan", nil, nil, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reconcile/plan", nil, nil, &out)
 	return out, err
 }
 
 // ReconcileRecover calls POST /api/v1/series/{ref}/reconcile/recover.
-// Operator-only.
 func (c *Client) ReconcileRecover(ctx context.Context, ref string, force bool) (api.RecoverReconcile, error) {
 	body := map[string]any{}
 	if force {
 		body["force"] = true
 	}
 	var out api.RecoverReconcile
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reconcile/recover", nil, body, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reconcile/recover", nil, body, &out)
 	return out, err
 }
 
@@ -239,21 +202,21 @@ type ScanRequest struct {
 // SubmitScan returns a JobAck the caller can poll or stream.
 func (c *Client) SubmitScan(ctx context.Context, ref string, req ScanRequest) (JobAck, error) {
 	var out JobAck
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/scan", nil, req, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/scan", nil, req, &out)
 	return out, err
 }
 
 // SubmitApply returns a JobAck for reconcile apply.
 func (c *Client) SubmitApply(ctx context.Context, ref, token string) (JobAck, error) {
 	var out JobAck
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reconcile/apply", nil, map[string]string{"token": token}, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/reconcile/apply", nil, map[string]string{"token": token}, &out)
 	return out, err
 }
 
 // SubmitStage returns a JobAck for stage.
 func (c *Client) SubmitStage(ctx context.Context, ref string, body any) (JobAck, error) {
 	var out JobAck
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/stage", nil, body, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/stage", nil, body, &out)
 	return out, err
 }
 
@@ -264,7 +227,7 @@ func (c *Client) TrashListSeries(ctx context.Context, ref, olderThan string) (ap
 		q.Set("olderThan", olderThan)
 	}
 	var out api.TrashList
-	err := c.Do(ctx, http.MethodGet, "/api/v1/series/"+url.PathEscape(ref)+"/trash", q, nil, &out, false)
+	err := c.Do(ctx, http.MethodGet, "/api/v1/series/"+url.PathEscape(ref)+"/trash", q, nil, &out)
 	return out, err
 }
 
@@ -275,37 +238,36 @@ func (c *Client) TrashListAll(ctx context.Context, olderThan string) (api.TrashL
 		q.Set("olderThan", olderThan)
 	}
 	var out api.TrashList
-	err := c.Do(ctx, http.MethodGet, "/api/v1/trash", q, nil, &out, false)
+	err := c.Do(ctx, http.MethodGet, "/api/v1/trash", q, nil, &out)
 	return out, err
 }
 
 // TrashRestore calls POST /api/v1/series/{ref}/trash/{ulid}/restore.
-// Operator-only.
 func (c *Client) TrashRestore(ctx context.Context, ref, id string) (api.TrashRestore, error) {
 	var out api.TrashRestore
-	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/trash/"+url.PathEscape(id)+"/restore", nil, nil, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/series/"+url.PathEscape(ref)+"/trash/"+url.PathEscape(id)+"/restore", nil, nil, &out)
 	return out, err
 }
 
-// TrashEmptySeries calls DELETE /api/v1/series/{ref}/trash. Operator + confirm.
+// TrashEmptySeries calls DELETE /api/v1/series/{ref}/trash.
 func (c *Client) TrashEmptySeries(ctx context.Context, ref, olderThan string) (api.TrashEmpty, error) {
 	q := url.Values{}
 	if olderThan != "" {
 		q.Set("olderThan", olderThan)
 	}
 	var out api.TrashEmpty
-	err := c.Do(ctx, http.MethodDelete, "/api/v1/series/"+url.PathEscape(ref)+"/trash", q, nil, &out, true)
+	err := c.Do(ctx, http.MethodDelete, "/api/v1/series/"+url.PathEscape(ref)+"/trash", q, nil, &out)
 	return out, err
 }
 
-// TrashEmptyAll calls DELETE /api/v1/trash. Operator + confirm.
+// TrashEmptyAll calls DELETE /api/v1/trash.
 func (c *Client) TrashEmptyAll(ctx context.Context, olderThan string) (api.TrashEmpty, error) {
 	q := url.Values{}
 	if olderThan != "" {
 		q.Set("olderThan", olderThan)
 	}
 	var out api.TrashEmpty
-	err := c.Do(ctx, http.MethodDelete, "/api/v1/trash", q, nil, &out, true)
+	err := c.Do(ctx, http.MethodDelete, "/api/v1/trash", q, nil, &out)
 	return out, err
 }
 
@@ -313,7 +275,7 @@ func (c *Client) TrashEmptyAll(ctx context.Context, olderThan string) (api.Trash
 // JobAck the caller streams via /jobs/{id}/stream.
 func (c *Client) SubmitReindex(ctx context.Context) (JobAck, error) {
 	var out JobAck
-	err := c.Do(ctx, http.MethodPost, "/api/v1/library/reindex", nil, nil, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/library/reindex", nil, nil, &out)
 	return out, err
 }
 
@@ -329,7 +291,7 @@ type ScanAllRequest struct {
 // server-side; the response result decodes to api.ScanAllResult.
 func (c *Client) SubmitScanAll(ctx context.Context, req ScanAllRequest) (JobAck, error) {
 	var out JobAck
-	err := c.Do(ctx, http.MethodPost, "/api/v1/library/scan", nil, req, &out, false)
+	err := c.Do(ctx, http.MethodPost, "/api/v1/library/scan", nil, req, &out)
 	return out, err
 }
 
@@ -370,6 +332,6 @@ func (c *Client) InboxList(ctx context.Context, opts InboxListOptions) (api.Inbo
 		q.Set("include_hidden", "1")
 	}
 	var out api.InboxList
-	err := c.Do(ctx, http.MethodGet, "/api/v1/inbox", q, nil, &out, false)
+	err := c.Do(ctx, http.MethodGet, "/api/v1/inbox", q, nil, &out)
 	return out, err
 }
