@@ -69,7 +69,6 @@ Then use the CLI from another shell. It talks to the REST server at
 
 ```sh
 export KURA_SERVER_URL=http://127.0.0.1:8080
-# Export KURA_TOKEN too unless auth.disabled=true in the server config.
 
 ../../cli/bin/kura add "Bocchi the Rock!"
 ../../cli/bin/kura scan "Bocchi the Rock!"
@@ -108,7 +107,6 @@ docker run --rm \
   -e KURA_TVDB_KEY=... \
   -v /media/anime:/library \
   -v /downloads:/inbox \
-  -v kura-token:/var/lib/kura \
   -p 8080:8080 \
   -p 8081:8081 \
   kura:v0.5.1

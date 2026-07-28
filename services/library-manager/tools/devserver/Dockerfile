@@ -43,8 +43,8 @@ RUN chmod +x /usr/local/bin/run-kura.sh /entrypoint.sh
 
 # REST and MCP HTTP both listen on 0.0.0.0 inside the container; the
 # Makefile target pins the host-side ports to 127.0.0.1 so binds are
-# not publicly reachable. The bearer-token gate (auth middleware) is
-# the actual security boundary. 6274 = inspector UI, 6277 = inspector
+# not publicly reachable — with no auth in kura, that pinning is the
+# only boundary. 6274 = inspector UI, 6277 = inspector
 # proxy (browser ↔ MCP).
 ENV HOST=0.0.0.0 \
     CLIENT_PORT=6274 \

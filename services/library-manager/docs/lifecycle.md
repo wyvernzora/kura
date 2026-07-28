@@ -437,36 +437,6 @@ escape hatch.
   series → `import` resolves to one show; subsequent `scan` returns
   the unrelated files as orphans. Operator handles them out of band.
 
-### 11. Remove a series
-
-**Intent:** Stop tracking a series. Infrequent operator action.
-
-**Journey:**
-
-1. Operator calls `kura remove <selector>` from the CLI.
-2. Default behavior: Kura deletes the series's `.kura/` metadata
-   directory and removes its entries from the library index. Media
-   files are left in place. The directory becomes untracked.
-3. With `--purge --confirm`: Kura removes the entire series directory
-   (media, metadata, trash, all). `--confirm` is required.
-
-`remove` is intentionally CLI-only and not exposed via MCP. REST
-exposes it only when both `X-Kura-Operator: 1` and (for `--purge`)
-`X-Confirm: 1` headers are present. Untracking and deletion of media
-should not happen at agent or browser-driven initiative; it stays in
-operator hands.
-
-**Edge cases:**
-
-- Selector resolves to a series with staged records → default
-  `remove` errors. Caller must `reconcile` or `reset --all` first.
-  `--purge` bypasses the gate (wholesale delete drops the staged
-  records along with everything else).
-- Selector resolves to a series with non-empty trash → default
-  `remove` leaves the trash on disk (since the directory is left
-  behind); `--purge` deletes it with the rest.
-- Selector does not resolve to a tracked series → error.
-
 ## Trash management
 
 Each series has its own trash directory at `<series>/.kura/trash/`.
@@ -592,8 +562,6 @@ is designed assuming this escape hatch exists.
   standard verbs handle the rest.
 - **Trash is never collateral damage.** The recovery matrix never
   deletes trash. Trash is operator-managed via `trash empty` only.
-  The sole exception is `remove --purge`, which deletes the entire
-  series wholesale.
 - **`import` operates on directories without Kura metadata.** If
   `.kura/` is present in any state — valid, partial, corrupt —
   `import` errors. Operator surgery comes first.

@@ -60,22 +60,14 @@ RUN apk add --no-cache \
         ca-certificates \
         tzdata
 
-# Create the unprivileged runtime user + group at the requested UID/GID
-# and pre-create /var/lib/kura with that ownership so the bearer-token
-# bootstrap can write the persisted token file.
+# Create the unprivileged runtime user + group at the requested UID/GID.
 RUN addgroup -S -g ${KURA_GID} kura \
  && adduser -S -D -H -u ${KURA_UID} -G kura kura \
- && mkdir -p /etc/kura /var/lib/kura \
- && chown -R ${KURA_UID}:${KURA_GID} /var/lib/kura
+ && mkdir -p /etc/kura
 
 # kura binary. Static (CGO_ENABLED=0) so musl-vs-glibc doesn't matter.
 COPY --from=go-build /out/kura-library-manager /usr/local/bin/kura-library-manager
 COPY config.example.toml /etc/kura/library-manager.toml
-
-# Volume for the persisted bearer token. Mount a PVC / Docker volume
-# to retain across pod restarts, or inject KURA_TOKEN from a Secret to
-# bypass the file path entirely.
-VOLUME ["/var/lib/kura"]
 
 # Default bind ports: REST on 8080, MCP-over-HTTP on 8081. Adjust the
 # mounted config if you bind different ports.

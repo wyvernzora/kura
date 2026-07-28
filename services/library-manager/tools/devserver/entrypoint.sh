@@ -34,8 +34,7 @@ else
 fi
 
 # Pin inspector proxy auth token up front so we can print a copy-paste
-# URL with the token + UI prefill query params (transport, serverUrl,
-# bearerToken).
+# URL with the token + UI prefill query params (transport, serverUrl).
 if [ -z "${MCP_PROXY_AUTH_TOKEN}" ]; then
   MCP_PROXY_AUTH_TOKEN="$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)"
   export MCP_PROXY_AUTH_TOKEN
@@ -49,15 +48,14 @@ devserver: REST     listening on container 0.0.0.0:${REST_PORT}
 devserver: MCP HTTP listening on container 0.0.0.0:${MCP_PORT}
 devserver: from host  →  export KURA_SERVER_URL=http://127.0.0.1:\$REST_DEV_PORT
 devserver: edit any .go file under cmd/ or internal/ and air rebuilds in ~3s
-devserver: bearer-token gate disabled by /etc/kura/library-manager.toml
 EOF
 
 # Prefill-URL printer. Backgrounded so air can exec in the foreground.
-# Waits for kura to bind the MCP HTTP port, resolves the bearer token
-# (which may have just been generated), and prints the inspector URL
+# Waits for kura to bind the MCP HTTP port, then prints the inspector URL
 # with all prefill query params attached. Runs once per container
 # start; air's restart of kura on .go save does not retrigger this
-# (the URL stays valid as long as ports + token don't change).
+# (the URL stays valid as long as ports + the inspector proxy token
+# do not change).
 (
   # Probe via loopback regardless of bind addr — works for both
   # 127.0.0.1:PORT and 0.0.0.0:PORT.

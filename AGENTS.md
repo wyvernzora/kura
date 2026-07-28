@@ -123,7 +123,7 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Domain types:** `internal/domain/{refs,media,series,filename,selector}` are pure types shared across packages. Leaf-level — they do not import sibling internal packages.
 - **Inbox:** `internal/inbox` walks the configured `library.inbox` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
 - **Search keys:** `internal/searchkey` computes the per-series fuzzy-search blob shipped on `ListRow` — flattened, deduplicated alias lines fed to client-side fuse.js. Never user-facing.
-- **Transports:** `kura-library-manager --config=...` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, bearer-token auth via `internal/server/auth`). Servers depend on `internal/workflow` for behavior. The CLI lives in `/cli`; binary `kura` is a pure REST client discovered through `KURA_SERVER_URL` (default `http://127.0.0.1:8080`) and authenticated through `KURA_TOKEN`.
+- **Transports:** `kura-library-manager --config=...` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, unauthenticated — the deployment's fronting proxy is the only gate). Servers depend on `internal/workflow` for behavior. The CLI lives in `/cli`; binary `kura` is a pure REST client discovered through `KURA_SERVER_URL` (default `http://127.0.0.1:8080`).
 - **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (strict TOML loading, defaults, validation, metadata-source construction), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `pkg/api` (wire response shapes plus public `refs`, `selector`, and `media` vocabulary facades).
 - **Container:** Docker, single-binary image.
 
@@ -210,7 +210,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Commit subjects use Conventional Commits with the closed scope enum above; the former `<scope>: <message>` convention is retired (2026-07, monorepo migration).
 - Run LTO/LTFS tooling on a dedicated VM with its own read-only library-root mount and VM-local disposable tape state; derive hot/cold placement from payload-change history rather than raw metadata-write frequency.
 - Treat LTO as operator-assisted homelab archival for valuable-but-replaceable data; prefer visible manual recovery conflicts and operator-approved risk over high-availability protocols or automatic conflict resolution.
-- Keep library-manager serve settings in strict TOML; reserve environment variables for TVDB/token secrets, stable host identity, client discovery, and the local `path` command.
+- Keep library-manager serve settings in strict TOML; reserve environment variables for the TVDB secret, stable host identity, client discovery, and the local `path` command.
 
 ---
 
@@ -222,9 +222,11 @@ When the user corrects your approach, append a one-line rule here before ending 
 - **Boundary:** REST-client-only. Code under `cli/` must never import
   `services/library-manager/internal`; shared wire and vocabulary types
   come only from `services/library-manager/pkg/api*`.
-- **Discovery/auth:** `KURA_SERVER_URL` selects the library-manager REST
-  endpoint (default `http://127.0.0.1:8080`); `KURA_TOKEN` supplies bearer
-  auth. `KURA_LIBRARY_ROOT` is used only by the local `kura path` command.
+- **Discovery:** `KURA_SERVER_URL` selects the library-manager REST
+  endpoint (default `http://127.0.0.1:8080`). Kura does not authenticate;
+  `KURA_TOKEN` is still sent as a bearer header for whatever proxy fronts
+  the deployment. `KURA_LIBRARY_ROOT` is used only by the local `kura path`
+  command.
 - **E2E:** `cli/e2e` owns the CLI-driven txtar scenarios. Its harness
   builds the library-manager stub server with `-tags=e2e_stub` and the
   `kura` CLI as separate binaries.

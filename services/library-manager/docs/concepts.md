@@ -13,10 +13,10 @@ indirectly via an AI agent, or via the bundled web dashboard.
 behalf of the user. May operate autonomously or with user confirmation
 for ambiguous cases.
 
-**Operator** — the human running the deployment. The only actor allowed
-to invoke permanently-destructive verbs (`trash empty`, `remove --purge`).
-Operator-only operations are CLI-only or REST endpoints gated by an
-explicit operator header (`X-Kura-Operator: 1`).
+**Operator** — the human running the deployment. Kura has no
+operator tier in the protocol sense: the boundary in front of the
+service is the only gate. Permanently-destructive verbs (`trash empty`)
+stay off the MCP surface and are gated in the CLI by `--confirm`.
 
 ## Vocabulary
 
@@ -348,8 +348,8 @@ are real.
   agent can make is reversible from filesystem state plus existing
   artifacts: staged records can be reset, reconciles place displaced
   files in trash, scans re-derive metadata from reality. Permanent
-  deletion (`trash empty`, `remove --purge`) requires operator action
-  via CLI. Structural property, not convention.
+  deletion (`trash empty`) requires deliberate CLI invocation.
+  Structural property, not convention.
 - **Single binary, multiple surfaces.** Everything ships as `kura`.
   CLI verbs run as `kura <verb>`. Long-running surfaces run as
   transports enabled in the library-manager TOML config;
@@ -418,10 +418,9 @@ These are the contracts Kura enforces at all times.
 10. **Permanent deletion is always explicit.** `trash empty` requires
     deliberate invocation; library-wide invocation requires
     `--confirm`. **No other operation deletes trash contents** — not
-    `scan`, not `reset`, not surgery-based recovery. The sole
-    exception is `remove --purge`, which deletes the entire series
-    directory wholesale and is treated as a deliberate operator
-    action.
+    `scan`, not `reset`, not surgery-based recovery. Kura offers no
+    verb that deletes a series directory wholesale; that is a
+    filesystem operation the operator performs directly.
 11. **Companion files follow their media record.** Replacement, trash,
     restore — companions move together with the media file they
     accompany.

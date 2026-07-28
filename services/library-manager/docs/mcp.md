@@ -5,8 +5,8 @@ transports in the library-manager TOML config:
 
 - `server.mcp_stdio = true` — stdio MCP, for agents launched as a child
   process. Unauthenticated; the process boundary already trusts the parent.
-- `server.mcp_http = ":port"` — MCP-over-HTTP. Auth gated by the
-  same bearer token as REST (see [rest-api.md](rest-api.md#auth)).
+- `server.mcp_http = ":port"` — MCP-over-HTTP. Unauthenticated, like
+  REST (see [rest-api.md](rest-api.md#auth)).
 
 For underlying terms, see [concepts.md](concepts.md). For each tool's
 journey, see [lifecycle.md](lifecycle.md).
@@ -60,15 +60,14 @@ Specifically:
 - **Reconcile displaces, never deletes.** `kura_reconcile_apply`
   moves displaced active files to `<series>/.kura/trash/<ulid>/`
   with self-describing `meta.json`; restoration is filesystem-only
-  via `trash restore` (CLI / REST operator).
+  via `trash restore` (CLI / REST).
 - **Scan re-derives metadata from filesystem reality.** Does not
   modify files.
 - **Permanent trash is invisible on agent surfaces.** No
   `trash list / empty / restore` tools exist. `kura_show` only
   exposes staged trash intent that the agent can still reset.
-- **Permanent deletion is operator-only.** `trash empty` and
-  `remove --purge` require explicit CLI invocation, or REST with
-  operator + confirm headers. Operator review is the durability
+- **Permanent deletion stays off this surface.** `trash empty`
+  requires explicit CLI invocation. Operator review is the durability
   boundary.
 
 The same property protects against bugs in Kura itself. Reconcile is

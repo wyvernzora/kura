@@ -26,16 +26,15 @@ surfaces unless noted. **Surface** columns: CLI, MCP, REST.
 | `reset <selector> [--episode S01E03 \| --trash ULID \| --extra ULID \| --all]` | CLI + MCP + REST | — | Remove staged record(s). Does not touch staged files on disk. |
 | `reconcile plan <selector>` | CLI + MCP + REST | — | Compute the planned filesystem changes for a series and persist them to `<series>/.kura/reconcile/<token>.jsonl`. Returns the plan plus a token (token is a hash of the series snapshot; apply re-validates the snapshot at execute time). No filesystem moves. |
 | `reconcile apply <selector> <token>` | CLI + MCP + REST | — | Validate the persisted plan against current state and execute it. Job-shaped. All-or-nothing in intent; failures leave the series in an inconsistent state for manual resolution. |
-| `reconcile recover <selector>` | CLI + REST (operator) | Operator judgment | Clear a stale `in_progress` claim left by a crashed `reconcile apply`. |
+| `reconcile recover <selector>` | CLI + REST | Operator judgment | Clear a stale `in_progress` claim left by a crashed `reconcile apply`. |
 | `resolve <selector>` | CLI + MCP + REST | — | Resolve selector terms to candidate `MetadataRef`s. Returns the candidate list without auto-picking. |
 | `list [--tag tag] [--tag '!tag']` | CLI + MCP + REST | — | Fast metadata inventory with optional conjunctive tag filtering. Tag expressions are normalized to lowercase. Repeat `--tag` for multiple expressions. Untracked rows are surfaced on every surface. |
 | `show <selector>` | CLI + MCP + REST | — | Return full observed state for a series. Agent-facing surfaces omit permanent trash listings. |
 | `tag update <metadata-ref> --tag tag [--tag '!tag']` | CLI + MCP + REST | — | Atomically add plain tags and remove `!tag` expressions. Tag expressions are normalized to lowercase. Repeat `--tag` for multiple changes. |
-| `trash list <selector> \| --all` | CLI + REST (operator) | Safety boundary | List trashed files. `--older-than DURATION` filters by age. |
-| `trash empty <selector> \| --all --confirm` | CLI + REST (operator; REST also requires confirm) | Safety boundary | Permanently delete trashed files. CLI requires `--confirm` only with `--all`. |
-| `trash restore <selector> <ULID>` | CLI + REST (operator) | Safety boundary | Move a trashed entry's files back to their recorded paths. Run `scan` afterward to re-adopt. |
+| `trash list <selector> \| --all` | CLI + REST | Safety boundary | List trashed files. `--older-than DURATION` filters by age. |
+| `trash empty <selector> \| --all --confirm` | CLI + REST | Safety boundary | Permanently delete trashed files. CLI requires `--confirm` only with `--all`. |
+| `trash restore <selector> <ULID>` | CLI + REST | Safety boundary | Move a trashed entry's files back to their recorded paths. Run `scan` afterward to re-adopt. |
 | `reindex` | CLI + REST | Context efficiency | Walk library, regenerate `.kura/index.jsonl` source snapshots from per-series metadata. |
-| `remove <selector> [--purge --confirm]` | CLI + REST (operator + confirm for `--purge`) | Operator judgment | Untrack a series. Default: delete `.kura/`, leave media. `--purge --confirm`: wholesale delete the entire series directory. |
 
 Surface exclusions fall into three categories:
 
@@ -43,9 +42,9 @@ Surface exclusions fall into three categories:
   that would cost agent context on every call for rare use.
 - **Safety boundary** — verbs that permanently destroy data or
   surface trash state. Keeping them off MCP enforces the agent-safety
-  property; REST exposes them only behind operator headers.
+  property.
 - **Operator judgment** — verbs that require human review of
-  destructive consequences (`remove`, `reconcile recover`).
+  destructive consequences (`reconcile recover`).
 
 Bulk library queries (e.g. "list all series with sub-1080p episodes")
 are deferred. Every such query requires a full library walk plus
@@ -77,7 +76,6 @@ combinations or transport failures).
 |------|---------|
 | `kura add <selector> [--directory NAME]` | Register a new series; create its directory and write the persisted spine. |
 | `kura import <directory> [terms...]` | Adopt an existing untracked directory under the library root. |
-| `kura remove <selector> [--purge --confirm]` | Untrack a series (default: drop `.kura/`, leave media). `--purge --confirm` wholesale deletes the directory. |
 
 ## Inspection
 
@@ -156,7 +154,6 @@ Environment variables remain only where runtime injection is useful:
 | Environment variable | Purpose |
 |----------------------|---------|
 | `KURA_SERVER_URL` | REST server URL for CLI commands. Default `http://127.0.0.1:8080`. |
-| `KURA_TOKEN` | Server bearer secret and CLI bearer header. See [deployment.md](deployment.md). |
 | `KURA_TVDB_KEY` | Server TVDB API key. Required lazily by provider-needing verbs (`add`, `import`, `scan`, `resolve`). |
 | `KURA_HOST_ID` | Server claim-holder identity. Set to a stable value in container deployments. |
 | `KURA_LIBRARY_ROOT` | Used only by the local `path` CLI command to translate a `library:` selector to an absolute path. |

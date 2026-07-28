@@ -1,8 +1,8 @@
 # Library-manager runtime configuration.
 #
 # The file is decoded strictly: unknown tables and fields fail startup.
-# Secrets do not belong here. Supply KURA_TVDB_KEY and, when desired,
-# KURA_TOKEN through the environment.
+# Secrets do not belong here. Supply KURA_TVDB_KEY through the
+# environment.
 
 # This table and all its fields are optional.
 [server]

@@ -13,9 +13,8 @@
 # halving wall-clock on a typical library.
 #
 # Requires:
-#   - kura on PATH (its CLI reads KURA_SERVER_URL + KURA_TOKEN itself)
+#   - kura on PATH (its CLI reads KURA_SERVER_URL itself)
 #   - jq
-#   - KURA_TOKEN  — bearer token; matches the server's gate
 #   - KURA_SERVER_URL  (optional; defaults to http://127.0.0.1:8080)
 #
 # Server-side: the serve config supplies library.root, while
@@ -29,14 +28,7 @@ if ! command -v jq >/dev/null 2>&1; then
   echo "jq is required but not on PATH" >&2
   exit 127
 fi
-if [ -z "${KURA_TOKEN:-}" ]; then
-  echo "KURA_TOKEN is not set — export the server's bearer token before running this script." >&2
-  exit 64
-fi
-# Ensure child `kura` invocations inherit the bearer + server URL.
-# `set -a` would also work but explicit `export` keeps the script's
-# requirements visible.
-export KURA_TOKEN
+# Ensure child `kura` invocations inherit the server URL.
 [ -n "${KURA_SERVER_URL:-}" ] && export KURA_SERVER_URL
 
 # Pull the ref of every tracked (non-untracked, non-error) row

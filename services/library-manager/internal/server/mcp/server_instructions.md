@@ -59,4 +59,4 @@ Library-list row status values:
 - Read tools do not mutate library state.
 - Staging and reset mutate Kura metadata only; they do not move media files.
 - Reconcile apply moves files but displaces active media into recoverable Kura trash rather than permanently deleting it.
-- Permanent deletion and operator repair workflows are outside the MCP tool surface. If a task requires trash restore/empty, permanent series removal/untracking, or stale reconcile recovery, surface that to the user.
+- Permanent deletion and repair workflows are outside the MCP tool surface. If a task requires trash restore/empty or stale reconcile recovery, surface that to the user. Untracking a series has no verb at all — it is a filesystem operation the operator performs directly.

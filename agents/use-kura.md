@@ -638,12 +638,12 @@ exactly `maxResults` rows.
 
 ## 13. What you cannot do via MCP today
 
-- **Inspect or restore trashed files.** CLI or REST operator route
+- **Inspect or restore trashed files.** CLI or REST route
   (`kura trash list/restore/empty`).
-- **Recover a stuck reconcile.** CLI or REST operator route
+- **Recover a stuck reconcile.** CLI or REST route
   (`kura reconcile recover <ref>`).
-- **Untrack or delete a series.** CLI or REST operator route
-  (`kura remove`).
+- **Untrack or delete a series.** No verb on any surface; the operator
+  removes the directory from the filesystem.
 - **Cross-series moves or merges.** Not modeled.
 - **Reach files outside the configured inbox root or a series root.**
   Selectors gate every path-bearing input. To stage a file the agent

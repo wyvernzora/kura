@@ -25,22 +25,15 @@ on the single-writer rule, not on the underlying filesystem.
 
 ## Auth
 
-Bearer token, deploy-gate posture. Resolution order:
+Kura does not authenticate. There is no bearer token, no `[auth]`
+config, and no operator tier — a request that reaches the service is
+served.
 
-1. `auth.disabled = true` in TOML — auth bypassed entirely. Use only when
-   fronting the library-manager server with an authenticating proxy
-   (Traefik+Authelia, nginx+oauth2-proxy, Caddy+forward_auth, etc.)
-   that handles user identity.
-2. `KURA_TOKEN=<value>` — explicit env var. Recommended for
-   Kubernetes (inject from a Secret).
-3. `auth.token_path` (default `/var/lib/kura/token`) — file persisted
-   on first start. If absent,
-   the library-manager server generates a 32-byte hex token, writes it (mode
-   `0600`), and logs it once at INFO level. Subsequent restarts read
-   the same file.
-
-Multi-user, OIDC, scopes, and federation remain proxy responsibility
-— Kura deliberately does not implement them.
+That makes the boundary in front of it load-bearing. Run the
+library-manager server behind an authenticating proxy, and confine it
+with a NetworkPolicy (or equivalent) so nothing else can route to the
+Pod directly. Identity, multi-user, OIDC, scopes, and federation are
+all that proxy's responsibility.
 
 ## Container / Kubernetes setup
 
@@ -56,12 +49,12 @@ busybox shell + coreutils stay in the image so operators can
 `["--config=/etc/kura/library-manager.toml"]`, so a pod or `docker run`
 invocation with no `args:` / `command:` starts both transports using the
 bundled config — REST on `:8080` and MCP-over-HTTP on `:8081`. Both use
-`EXPOSE 8080 8081`. The same bearer token gates both. Mount a ConfigMap
+`EXPOSE 8080 8081`. Mount a ConfigMap
 or file at `/etc/kura/library-manager.toml` to change settings.
 
 The image is serve-only. CLI verbs live in the separate top-level `cli/`
 module, whose `kura` binary is a pure REST client configured through
-`KURA_SERVER_URL` and `KURA_TOKEN`. Do not override the container's
+`KURA_SERVER_URL`. Do not override the container's
 `args:` to run CLI verbs; they are not part of this image.
 
 If you only want REST (or only MCP), disable the unwanted transport in
@@ -83,7 +76,7 @@ Three knobs flow through `--build-arg`:
 
 | Arg | Default | Purpose |
 |---|---|---|
-| `KURA_UID` | `10001` | UID baked into `USER` directive and `/var/lib/kura` ownership. Match your NFS export's enforced UID. |
+| `KURA_UID` | `10001` | UID baked into the `USER` directive. Match your NFS export's enforced UID. |
 | `KURA_GID` | `10001` | GID counterpart. Match your NFS export's enforced GID (or use k8s `securityContext.fsGroup` to chown the mounted volume to runtime GID). |
 | `VERSION` | `dev` | Stamped into the binary via `-ldflags`. Surfaces on `/api/v1/health` and the `X-Kura-Version` response header. |
 
@@ -96,14 +89,8 @@ The remaining environment variables are deliberately narrow:
 
 | Environment variable | Purpose | Recommendation |
 |---|---|---|
-| `KURA_TOKEN` | Literal bearer secret. Takes precedence over `auth.token_path`. | Inject from a Secret in Kubernetes. |
 | `KURA_TVDB_KEY` | TVDB API key. Lazy: only required for metadata-needing workflows. | Inject from a Secret. |
 | `KURA_HOST_ID` | Stable claim-stamp identity used by the boot-time stuck-claim recovery sweep. | **Set this** to a stable string such as a node hostname or fixed deployment label. |
-
-If `KURA_TOKEN` is absent and auth is enabled, mount `/var/lib/kura/` (or the
-parent of your configured `auth.token_path`) to persist the generated token.
-Without persistence, the server regenerates a token after each container
-replacement.
 
 Permission normalization after moving media is best-effort. On NFS
 exports or Kubernetes security contexts that reject `chown` / `chmod`,
@@ -111,16 +98,6 @@ Kura keeps the successful move and relies on the operator to fix the
 mount UID/GID, parent setgid bit, `server.umask`, or existing file modes.
 For the intended single-writer personal-library deployment, this is an
 operational repair, not a reason to roll back a 100+ GB move.
-
-### Bootstrap on first start
-
-A fresh container with no `KURA_TOKEN` set and an empty
-`/var/lib/kura/` mount generates a 32-byte hex token, persists it to
-`/var/lib/kura/token` (mode `0600`), and logs it once at INFO level —
-copy that into your client config. Subsequent restarts read the same
-file and do not regenerate. If you would rather manage the token
-out-of-band, set `KURA_TOKEN` from a Secret and skip the PVC entirely;
-the file path is then ignored.
 
 ### Stuck-claim recovery
 
@@ -162,13 +139,11 @@ Adjust the port if `server.rest` binds anything other than `:8080`.
 
 ### Runtime UID overrides
 
-`docker run --user X:Y` and k8s `securityContext.runAsUser` work but
-only if `/var/lib/kura` ownership inside the image matches `X:Y` (the
-image's `chown` runs at build time; the runtime user is created
-read-only). Either rebuild the image with matching `KURA_UID` /
-`KURA_GID`, set `KURA_TOKEN` from a Secret to skip the file path
-entirely, or use k8s `securityContext.fsGroup` plus a PVC to have the
-kubelet chown the mount before the container starts.
+`docker run --user X:Y` and k8s `securityContext.runAsUser` work, but
+the library and inbox mounts must be writable by `X:Y`. Either rebuild
+the image with matching `KURA_UID` / `KURA_GID`, or use k8s
+`securityContext.fsGroup` to have the kubelet chown the mount before
+the container starts.
 
 ### Building a versioned image
 

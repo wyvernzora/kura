@@ -11,10 +11,9 @@ if [ "${KURA_DEV_STUBS:-}" = "1" ]; then
   EXTRA_ARGS="--use-test-stubs"
 fi
 
-# Bind safety lives in the bearer-token gate. 0.0.0.0 inside the
-# container is fine because requests without a valid token return
-# 401, and the host port mapping pins to 127.0.0.1 by default
-# (Makefile target).
+# Kura does not authenticate, so bind safety is the port mapping
+# alone: 0.0.0.0 inside the container is fine only because the
+# Makefile target pins the host side to 127.0.0.1.
 exec /src/tmp/kura \
   --config=/etc/kura/library-manager.toml \
   ${EXTRA_ARGS}

@@ -11,23 +11,14 @@ operations each endpoint implements, see
 
 ## Auth
 
-Bind safety is the bearer token: any reachable client must present
-`Authorization: Bearer <token>`. Token resolution order:
+None. Kura does not authenticate: no bearer token, no `[auth]` config,
+no operator tier. Every route below is served to any client that can
+reach the port.
 
-1. `auth.disabled = true` — auth bypassed entirely (use only when
-   fronting the library-manager server with an authenticating proxy).
-2. `KURA_TOKEN=<value>` — explicit env var.
-3. `/var/lib/kura/token` — file persisted on first start. If absent,
-   the library-manager server generates a 32-byte hex token, writes it (mode
-   `0600`), and logs it once at INFO level. Subsequent restarts read
-   the same file and do not regenerate.
-
-The same secret protects REST and MCP-over-HTTP. MCP-stdio is
-unauthenticated (the process boundary already trusts the parent).
-`/api/v1/health` is exempt from auth.
-
-**Stance:** auth is a deploy-time access gate, not user identity.
-Multi-user, OIDC, scopes, and federation remain proxy responsibility.
+**Stance:** access is a deployment concern, not an application one.
+Front the server with an authenticating proxy and confine it with a
+NetworkPolicy so only that proxy can route to it. See
+[deployment.md](deployment.md#auth).
 
 ## CORS
 
@@ -40,19 +31,6 @@ rest = ":8080"
 mcp_http = ":8081"
 rest_cors_origins = ["https://ui.local"]
 ```
-
-## Operator gating
-
-Per [concepts.md](concepts.md#actors), permanently-destructive verbs
-are operator-only. REST enforces this with two headers:
-
-- `X-Kura-Operator: 1` — required for trash mutations, purge remove,
-  and reconcile recover.
-- `X-Confirm: 1` — additionally required for trash empty and
-  `remove --purge`.
-
-Configure your auth proxy to strip these headers from external
-requests so only trusted internal callers can invoke them.
 
 ## Reads, ETag
 
@@ -74,29 +52,25 @@ SeriesRef in the request body as `directory`.
 
 | Method | Path | Body | Response | Headers |
 |--------|------|------|----------|---------|
-| GET    | `/api/v1/health` | — | `{ok, version, libraryRoot, uptimeMs, startedAt}` | none (auth-exempt) |
+| GET    | `/api/v1/health` | — | `{ok, version, libraryRoot, uptimeMs, startedAt}` | — |
 | GET    | `/api/v1/library` | — | Library summary | ETag |
 | GET    | `/api/v1/series` | — | Paginated `ListResult` | ETag, query: `status`, `airing`, `tags`, `cursor`, `limit` |
 | GET    | `/api/v1/series/{ref}` | — | `Show` (series + episodes) | ETag, query: `episodes`, `status`, `source`, `resolution` |
 | PATCH  | `/api/v1/series/{ref}/tags` | `{tags[]}` | `{ref, tags[]}` | — |
 | POST   | `/api/v1/series` | `{ref, directory?, ordering?}` | Series spine | — |
 | POST   | `/api/v1/series/import` | `{ref, directory, force?, ordering?}` | Series spine | — |
-| DELETE | `/api/v1/series/{ref}` | — | — | `X-Kura-Operator + X-Confirm` if `?purge=1`; no operator header for untrack-only removal |
 | POST   | `/api/v1/series/{ref}/reset` | `{episode?, trash?, extras?, all?}` | Reset summary | — |
 | POST   | `/api/v1/series/{ref}/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 {jobId, kind, statusUrl, streamUrl, submittedAt}` | async |
 | POST   | `/api/v1/series/{ref}/stage` | `{episodes[{episode, media, source?, companions?, replace?, attrs?}], trash[], extras[]}` | `202 Job` | async |
 | POST   | `/api/v1/series/{ref}/reconcile/plan` | — | `{token, changes[], trashItems[], extras[]}` | — |
 | POST   | `/api/v1/series/{ref}/reconcile/apply` | `{token}` | `202 Job` | async |
-| POST   | `/api/v1/series/{ref}/reconcile/recover` | — | — | `X-Kura-Operator` |
-| GET    | `/api/v1/series/{ref}/aliases` | — | `{aliases[]}` | ETag |
-| POST   | `/api/v1/series/{ref}/aliases` | `{alias}` | — | — |
-| DELETE | `/api/v1/series/{ref}/aliases` | `{alias}` | — | — |
+| POST   | `/api/v1/series/{ref}/reconcile/recover` | — | — | — |
 | POST   | `/api/v1/series/resolve` | `{terms[]}` | Resolve candidates | — |
 | GET    | `/api/v1/series/{ref}/trash` | — | Trash listing | ETag |
 | GET    | `/api/v1/trash` | — | Library-wide trash | ETag |
-| POST   | `/api/v1/series/{ref}/trash/{ulid}/restore` | — | Trash restore result | `X-Kura-Operator` |
-| DELETE | `/api/v1/series/{ref}/trash` | — | Trash empty result | `X-Kura-Operator + X-Confirm` |
-| DELETE | `/api/v1/trash` | — | Library-wide empty result | `X-Kura-Operator + X-Confirm` |
+| POST   | `/api/v1/series/{ref}/trash/{ulid}/restore` | — | Trash restore result | — |
+| DELETE | `/api/v1/series/{ref}/trash` | — | Trash empty result | — |
+| DELETE | `/api/v1/trash` | — | Library-wide empty result | — |
 | POST   | `/api/v1/library/reindex` | — | `202 Job` | async |
 | POST   | `/api/v1/library/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 Job` | async |
 | GET    | `/api/v1/inbox` | — | Inbox listing | ETag |
@@ -129,7 +103,7 @@ absent. Multiple `tags` query parameters are concatenated. List and show
 responses expose the stored tag set when non-empty.
 
 Handlers live under `internal/server/rest/handler_*.go`. The router
-and middleware chain (auth, CORS, version header, recover) are in
+and middleware chain (CORS, version header, recover) are in
 `internal/server/rest/router.go` and `middleware.go`.
 
 ## Async jobs

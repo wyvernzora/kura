@@ -3,7 +3,7 @@
 One container with hot-reloaded Kura, MCP Inspector, Vite, and Storybook.
 The committed [library-manager.toml](library-manager.toml) serves REST on
 `:8080`, MCP over HTTP on `:8081`, uses `/mnt/library` and `/mnt/inbox`,
-enables debug logs, and disables Kura's bearer gate. Host port mappings remain
+enables debug logs. Kura does not authenticate, so host port mappings stay
 loopback-only by default.
 
 ## Quick start
@@ -93,10 +93,8 @@ Air polls the bind-mounted Go source, rebuilds `/src/tmp/kura`, and runs it
 through `run-kura.sh` with the committed config. Inspector stays running across
 Kura restarts, although its UI may need a manual reconnect.
 
-Inspector's browser-to-proxy session token remains enabled. Kura's own bearer
-gate is disabled only in this loopback-oriented dev config. If you expose the
-host ports beyond loopback, first enable `auth.disabled = false` and provide
-`KURA_TOKEN`.
+Inspector's browser-to-proxy session token remains enabled. Kura itself does
+not authenticate, so do not expose these host ports beyond loopback.
 
 ## Files
 
