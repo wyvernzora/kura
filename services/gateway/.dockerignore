@@ -1,11 +1,8 @@
-# Docker reads .dockerignore from the context root only, so these are
-# rooted at services/gateway even though everything they exclude lives
-# under web/. A stale host node_modules copied over the container's
-# install is a build failure, not a slow build.
 web/node_modules
 web/dist
 web/storybook-static
 web/.vite
+bin
 **/*.log
 **/*.tsbuildinfo
 Dockerfile

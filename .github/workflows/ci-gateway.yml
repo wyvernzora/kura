@@ -19,6 +19,45 @@ permissions:
   contents: read
 
 jobs:
+  go:
+    name: go
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/gateway
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version-file: services/gateway/go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          drift=$(gofmt -l cmd internal)
+          if [ -n "$drift" ]; then
+            echo "::error::gofmt drift in:" >&2
+            echo "$drift" >&2
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9
+        with:
+          version: v2.12.2
+          install-mode: goinstall
+          working-directory: services/gateway
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+      - name: go build
+        run: go build -trimpath -o bin/kura-mcp-bridge ./cmd/kura-mcp-bridge
+
   web:
     name: web
     runs-on: ubuntu-24.04
@@ -58,7 +97,7 @@ jobs:
   # :dev image publish, gated on the test job.
   build-push:
     name: build & push
-    needs: [web]
+    needs: [go, web]
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:

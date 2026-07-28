@@ -1,0 +1,23 @@
+# kura-gateway MCP bridge configuration.
+#
+# Leaf addresses are deliberately absent: the bridge reads
+# KURA_LIBRARY_UPSTREAM and KURA_RELEASES_UPSTREAM, the same two variables
+# Caddy interpolates, and derives both the /api/v1 base and the /healthz probe
+# from each. One declaration per leaf, nothing to desync.
+#
+# There is no version key either — the bridge stamps its version from ldflags,
+# as both leaves do. A ConfigMap value would lag the image tag and make
+# /api/v1/health and X-Kura-Version lie.
+
+[server]
+# Loopback only. Binding this to the Pod network would publish an
+# unauthenticated MCP endpoint reachable without passing Pomerium.
+address = "127.0.0.1:8081"
+
+[api]
+request_timeout = "30s"
+max_response_bytes = 1048576
+component_timeout = "1s"
+
+[mcp]
+session_timeout = "5m"
