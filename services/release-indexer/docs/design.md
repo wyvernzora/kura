@@ -124,18 +124,11 @@ if event counts grow enough to make responses large. Lists stay magnet-free, but
 release detail includes `magnet` because it is a single-row full-context lookup
 rather than a paged listing.
 
-## MCP API
+## Consumer surface
 
-The MCP surface is read-only:
-
-- `list_releases({ref?, since?, limit?, cursor?})` returns matched releases, optionally filtered by ref, with
-  `infohash`, `ref`, `title`, `sizeBytes`, `publishedAt`, `confidence`, `sources`, and
-  `nextCursor`. `sizeBytes` and `confidence` are explicit null when unrecorded,
-  never coerced to zero.
-- `get_release({infohash})` returns the same single-release detail object as
-  `GET /api/v1/releases/{infohash}`.
-- `resolve_magnets({infohashes})` returns `{ "magnets": { "<infohash>": "<magnet>" } }`.
-  Unknown infohashes and known releases without magnets are omitted.
-  Returned magnets are the stored full magnet strings.
+This service serves REST only. Agent-facing MCP tools — `list_releases`,
+`get_release`, and `get_magnet` — are served by the suite gateway, which calls
+the endpoints above. The gateway owns the tool names, schemas, annotations, and
+error projection; nothing here should grow a second copy of them.
 
 The REST `/api/v1/releases/{infohash}/magnet` endpoint returns `{ "infohash": "...", "magnet": "..." }`.

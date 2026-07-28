@@ -54,8 +54,6 @@ func TestLoadRuntimeAllFields(t *testing.T) {
 	cfg, err := Load(writeConfig(t, `
 [server]
 rest = "127.0.0.1:9000"
-mcp_http = ""
-mcp_stdio = true
 rest_cors_origins = ["https://kura.example"]
 rest_port_file = "/tmp/kura-port"
 log_level = "debug"
@@ -94,8 +92,6 @@ conflict_retries = 2
 	}
 
 	if cfg.Server.RESTAddr != "127.0.0.1:9000" ||
-		cfg.Server.MCPHTTPAddr != "" ||
-		!cfg.Server.MCPStdio ||
 		cfg.Server.LogLevel != "debug" ||
 		cfg.Server.ShutdownTimeout != 20*time.Second ||
 		cfg.Server.Umask != "0007" {
@@ -190,9 +186,9 @@ func TestLoadRuntimeRejectsInvalidValues(t *testing.T) {
 			want: "metadata.preferred_languages",
 		},
 		{
-			name: "no transport",
-			body: "[library]\nroot = \"/library\"\ninbox = \"/inbox\"\n[server]\nrest = \"\"\nmcp_http = \"\"\nmcp_stdio = false\n",
-			want: "at least one transport",
+			name: "no rest address",
+			body: "[library]\nroot = \"/library\"\ninbox = \"/inbox\"\n[server]\nrest = \"\"\n",
+			want: "server.rest must not be empty",
 		},
 	}
 	for _, tt := range tests {

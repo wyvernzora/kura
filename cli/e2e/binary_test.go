@@ -180,7 +180,6 @@ type daemonConfig struct {
 
 type daemonServer struct {
 	RESTAddr     string `toml:"rest"`
-	MCPHTTPAddr  string `toml:"mcp_http"`
 	RESTPortFile string `toml:"rest_port_file"`
 	LogLevel     string `toml:"log_level"`
 	Umask        string `toml:"umask,omitempty"`
@@ -196,7 +195,6 @@ func writeDaemonConfig(t *testing.T, dir, libRoot, inboxRoot, portFile, umask st
 	cfg := daemonConfig{
 		Server: daemonServer{
 			RESTAddr:     "127.0.0.1:0",
-			MCPHTTPAddr:  "",
 			RESTPortFile: portFile,
 			LogLevel:     "error",
 			Umask:        umask,

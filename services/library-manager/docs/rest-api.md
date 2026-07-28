@@ -28,7 +28,6 @@ browser origins.
 ```toml
 [server]
 rest = ":8080"
-mcp_http = ":8081"
 rest_cors_origins = ["https://ui.local"]
 ```
 

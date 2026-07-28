@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
@@ -247,81 +246,6 @@ func TestSmoke(t *testing.T) {
 		}
 	})
 
-	t.Run("mcp-list-and-call", func(t *testing.T) {
-		client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "smoke-client", Version: "0.0.0"}, nil)
-		session, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: baseURL + "/mcp"}, nil)
-		if err != nil {
-			t.Fatalf("MCP connect: %v", err)
-		}
-		defer session.Close()
-
-		tools, err := session.ListTools(ctx, nil)
-		if err != nil {
-			t.Fatalf("MCP tools/list: %v", err)
-		}
-		gotTools := map[string]bool{}
-		for _, tool := range tools.Tools {
-			gotTools[tool.Name] = true
-		}
-		for _, want := range []string{"list_releases", "get_release", "resolve_magnets"} {
-			if !gotTools[want] {
-				t.Fatalf("MCP tools/list missing %q (have %v)", want, gotTools)
-			}
-		}
-		for _, absent := range []string{"get_releases", "get_magnets", "claim", "submit_match"} {
-			if gotTools[absent] {
-				t.Fatalf("MCP tools/list exposes removed tool %q", absent)
-			}
-		}
-
-		res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
-			Name:      "list_releases",
-			Arguments: map[string]any{"ref": "tvdb:12345"},
-		})
-		if err != nil {
-			t.Fatalf("MCP list_releases: %v", err)
-		}
-		if res.IsError {
-			t.Fatalf("MCP list_releases returned IsError: %v", res.Content)
-		}
-		var env struct {
-			Releases []struct {
-				Infohash string `json:"infohash"`
-				Ref      string `json:"ref"`
-			} `json:"items"`
-		}
-		if err := json.Unmarshal([]byte(firstText(res)), &env); err != nil {
-			t.Fatalf("decode list_releases: %v", err)
-		}
-		if len(env.Releases) != 1 || env.Releases[0].Infohash != smokeHexInfohash {
-			t.Fatalf("list_releases = %+v, want smoke release", env.Releases)
-		}
-		if env.Releases[0].Ref != "tvdb:12345" {
-			t.Fatalf("list_releases ref = %q, want tvdb:12345", env.Releases[0].Ref)
-		}
-
-		detail, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
-			Name:      "get_release",
-			Arguments: map[string]any{"infohash": smokeHexInfohash},
-		})
-		if err != nil {
-			t.Fatalf("MCP get_release: %v", err)
-		}
-		if detail.IsError {
-			t.Fatalf("MCP get_release returned IsError: %v", detail.Content)
-		}
-		var releaseDetail struct {
-			Infohash    string `json:"infohash"`
-			MatchStatus string `json:"matchStatus"`
-		}
-		if err := json.Unmarshal([]byte(firstText(detail)), &releaseDetail); err != nil {
-			t.Fatalf("decode get_release: %v", err)
-		}
-		if releaseDetail.Infohash != smokeHexInfohash || releaseDetail.MatchStatus != "matched" {
-			t.Fatalf("get_release = %+v, want matched smoke release", releaseDetail)
-		}
-	})
-
 	t.Run("bind-fast", func(t *testing.T) {
 		second := exec.CommandContext(ctx, binPath, "--config="+configPath)
 		second.Env = append(os.Environ(), "KURA_RELEASES_DATABASE_URL="+dsn)
@@ -390,15 +314,6 @@ func freePort(t *testing.T) string {
 		t.Fatalf("split free port: %v", err)
 	}
 	return port
-}
-
-func firstText(res *mcpsdk.CallToolResult) string {
-	for _, c := range res.Content {
-		if tc, ok := c.(*mcpsdk.TextContent); ok {
-			return tc.Text
-		}
-	}
-	return ""
 }
 
 func mustJSON(t *testing.T, v any) []byte {

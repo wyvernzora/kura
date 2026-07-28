@@ -11,10 +11,7 @@ import (
 	"testing"
 	"time"
 
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
-
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
-	takuhaimcp "github.com/wyvernzora/kura/services/release-indexer/internal/mcp"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/rest"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
 )
@@ -284,34 +281,6 @@ func TestAPIShape_GetReleaseRESTErrors(t *testing.T) {
 	}
 }
 
-func TestAPIShape_GetReleaseMCPNoSuchRelease(t *testing.T) {
-	ctx := context.Background()
-	st := newConformanceStore(t)
-	httpSrv := httptest.NewServer(takuhaimcp.NewServer(st, nil).Handler())
-	t.Cleanup(httpSrv.Close)
-
-	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "conformance-client", Version: "0"}, nil)
-	session, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: httpSrv.URL + "/mcp"}, nil)
-	if err != nil {
-		t.Fatalf("MCP connect: %v", err)
-	}
-	t.Cleanup(func() { session.Close() })
-
-	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{
-		Name:      "get_release",
-		Arguments: map[string]any{"infohash": apiIH3},
-	})
-	if err != nil {
-		t.Fatalf("MCP get_release: %v", err)
-	}
-	if !res.IsError {
-		t.Fatalf("IsError = false, content = %v", res.Content)
-	}
-	if got := firstMCPText(res); !strings.Contains(got, `"kind":"not_found"`) {
-		t.Fatalf("error content = %s, want not_found kind", got)
-	}
-}
-
 func TestAPIShape_StaleClaimTokenRejected(t *testing.T) {
 	ctx := context.Background()
 	clock := &fakeClock{now: time.Date(2026, 6, 24, 12, 0, 0, 0, time.UTC)}
@@ -486,15 +455,6 @@ func assertJSONArray(t *testing.T, obj map[string]json.RawMessage, key string) {
 	if len(got) == 0 || got[0] != '[' {
 		t.Fatalf("%s = %s, want JSON array", key, got)
 	}
-}
-
-func firstMCPText(res *mcpsdk.CallToolResult) string {
-	for _, c := range res.Content {
-		if tc, ok := c.(*mcpsdk.TextContent); ok {
-			return tc.Text
-		}
-	}
-	return ""
 }
 
 func claimOne(t *testing.T, ctx context.Context, st store.Store, leaseSeconds int) store.ClaimedRelease {

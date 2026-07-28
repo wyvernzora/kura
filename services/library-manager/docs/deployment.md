@@ -48,7 +48,7 @@ busybox shell + coreutils stay in the image so operators can
 `ENTRYPOINT` is `kura-library-manager`; `CMD` defaults to
 `["--config=/etc/kura/library-manager.toml"]`, so a pod or `docker run`
 invocation with no `args:` / `command:` starts both transports using the
-bundled config — REST on `:8080` and MCP-over-HTTP on `:8081`. Both use
+bundled config — REST on `:8080`. It uses
 `EXPOSE 8080 8081`. Mount a ConfigMap
 or file at `/etc/kura/library-manager.toml` to change settings.
 
@@ -57,8 +57,7 @@ module, whose `kura` binary is a pure REST client configured through
 `KURA_SERVER_URL`. Do not override the container's
 `args:` to run CLI verbs; they are not part of this image.
 
-If you only want REST (or only MCP), disable the unwanted transport in
-TOML by setting its address to `""`.
+REST is the service's only transport; the suite MCP surface is the gateway's.
 
 The image runs as UID/GID baked at build time (default
 `10001:10001`). For NFS-backed library mounts where the export

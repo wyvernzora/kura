@@ -15,7 +15,6 @@ import (
 
 const (
 	defaultRESTAddr             = ":8080"
-	defaultMCPHTTPAddr          = ":8081"
 	defaultLogLevel             = "info"
 	defaultShutdownTimeout      = 10 * time.Second
 	defaultMediaInfoCommand     = "mediainfo"
@@ -46,8 +45,6 @@ type Config struct {
 // Server configures transports and process-wide behavior.
 type Server struct {
 	RESTAddr        string
-	MCPHTTPAddr     string
-	MCPStdio        bool
 	RESTCORSOrigins []string
 	RESTPortFile    string
 	LogLevel        string
@@ -99,7 +96,6 @@ func Defaults() Config {
 	return Config{
 		Server: Server{
 			RESTAddr:        defaultRESTAddr,
-			MCPHTTPAddr:     defaultMCPHTTPAddr,
 			LogLevel:        defaultLogLevel,
 			ShutdownTimeout: defaultShutdownTimeout,
 		},
@@ -167,8 +163,8 @@ func (c Config) Validate() error {
 }
 
 func (c Server) validate() error {
-	if c.RESTAddr == "" && c.MCPHTTPAddr == "" && !c.MCPStdio {
-		return fmt.Errorf("server must enable at least one transport")
+	if c.RESTAddr == "" {
+		return fmt.Errorf("server.rest must not be empty")
 	}
 	if !slices.Contains(validLogLevels, c.LogLevel) {
 		return fmt.Errorf("server.log_level %q is invalid (want one of %v)", c.LogLevel, validLogLevels)
@@ -271,8 +267,6 @@ type fileConfig struct {
 
 type fileServer struct {
 	RESTAddr        *string  `toml:"rest"`
-	MCPHTTPAddr     *string  `toml:"mcp_http"`
-	MCPStdio        *bool    `toml:"mcp_stdio"`
 	RESTCORSOrigins []string `toml:"rest_cors_origins"`
 	RESTPortFile    *string  `toml:"rest_port_file"`
 	LogLevel        *string  `toml:"log_level"`
@@ -343,8 +337,6 @@ func (r *fileServer) resolve(dst *Server) error {
 		return nil
 	}
 	setString(&dst.RESTAddr, r.RESTAddr)
-	setString(&dst.MCPHTTPAddr, r.MCPHTTPAddr)
-	setBool(&dst.MCPStdio, r.MCPStdio)
 	if r.RESTCORSOrigins != nil {
 		dst.RESTCORSOrigins = slices.Clone(r.RESTCORSOrigins)
 	}

@@ -69,9 +69,9 @@ RUN addgroup -S -g ${KURA_GID} kura \
 COPY --from=go-build /out/kura-library-manager /usr/local/bin/kura-library-manager
 COPY config.example.toml /etc/kura/library-manager.toml
 
-# Default bind ports: REST on 8080, MCP-over-HTTP on 8081. Adjust the
-# mounted config if you bind different ports.
-EXPOSE 8080 8081
+# REST is the only transport; MCP is served by the suite gateway. Adjust the
+# mounted config if you bind a different port.
+EXPOSE 8080
 
 USER ${KURA_UID}:${KURA_GID}
 
@@ -82,7 +82,7 @@ USER ${KURA_UID}:${KURA_GID}
 
 ENTRYPOINT ["/usr/local/bin/kura-library-manager"]
 
-# The bundled config serves REST and MCP-over-HTTP and expects library
-# and inbox mounts at /library and /inbox. Mount a replacement at
+# The bundled config serves REST and expects library and inbox mounts at
+# /library and /inbox. Mount a replacement at
 # /etc/kura/library-manager.toml for deployment-specific settings.
 CMD ["--config=/etc/kura/library-manager.toml"]

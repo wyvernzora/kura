@@ -8,7 +8,7 @@ The release-indexer exposes Prometheus metrics at `/metrics`.
 | --- | --- | --- | --- |
 | `takuhai_build_info` | gauge | `version`, `commit` | Build metadata; value is always `1`. |
 | `takuhai_http_requests_total` | counter | `method`, `path`, `status` | HTTP requests by routed path. Unknown paths use `path="other"`. |
-| `takuhai_http_request_duration_seconds` | histogram | `method`, `path` | HTTP request duration. Streamable MCP `GET /mcp` sessions are excluded. |
+| `takuhai_http_request_duration_seconds` | histogram | `method`, `path` | HTTP request duration. |
 | `takuhai_ingest_batches_total` | counter | `result` | Ingest batches by `ok` or `error`. |
 | `takuhai_ingest_posts_total` | counter | `source`, `result` | Ingested posts by source and outcome. Results include `new`, `updated`, `duplicate`, `conflict`, `skipped`, and `error`. |
 | `takuhai_ingest_batch_size` | histogram | none | Posts per ingest batch. |
@@ -26,9 +26,6 @@ The release-indexer exposes Prometheus metrics at `/metrics`.
 | `takuhai_queue_claim_batch_size` | histogram | none | Items per non-empty claim response. |
 | `takuhai_submit_total` | counter | `status`, `result` | Submit attempts by matcher status and result. Status is `matched`, `unmatched`, `suppressed`, or `invalid`; result is `ok`, `conflict`, or `error`. |
 | `takuhai_submit_confidence` | histogram | `status` | Confidence values for successful `matched` and `suppressed` submissions. |
-| `takuhai_mcp_tool_calls_total` | counter | `tool`, `result` | MCP tool calls by tool and `ok`/`error`. |
-| `takuhai_mcp_tool_duration_seconds` | histogram | `tool` | MCP tool call duration; use this for MCP latency. |
-| `takuhai_mcp_resolve_magnets_infohashes_total` | counter | `result` | `resolve_magnets` infohash lookups by `hit` or `miss`. |
 
 Go runtime and process metrics are exported by the single service.
 

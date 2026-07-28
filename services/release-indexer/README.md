@@ -38,7 +38,7 @@ their posts directly. Each run starts at the newest listing and is bounded to th
 latest 200 posts; durable ingestion makes replay harmless. `POST /ingest` remains an
 escape hatch for external producers. n8n drives only the **match loop** over the queue
 REST API; a stateless matcher resolves each release. Consumers read the catalog over
-an **MCP** API (`list_releases`, `get_release`, `resolve_magnets`). Postgres is both
+a REST API under `/api/v1/releases`. Postgres is both
 the store and the work queue. See [docs/design.md](docs/design.md).
 
 ## Quick start

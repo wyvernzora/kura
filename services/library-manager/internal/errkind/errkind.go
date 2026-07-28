@@ -4,7 +4,7 @@
 // error payloads.
 //
 // Workflow / coord / jobs error types implement Coded by adding
-// matching Kind, Category, and Data methods. Surfaces (MCP today,
+// matching Kind, Category, and Data methods. Surfaces (REST today,
 // REST later) consume the interface; they do not need a switch over
 // concrete error types beyond the Coded check.
 package errkind
@@ -21,7 +21,7 @@ const (
 	CategoryCancelled     = "cancelled"
 )
 
-// Kind is the closed enum of MCP `data.kind` strings. Adding a new
+// Kind is the closed enum of error-envelope `kind` strings. Adding a new
 // Kind requires a coordinated change in clients; new typed errors
 // should reuse an existing Kind unless none fit.
 const (

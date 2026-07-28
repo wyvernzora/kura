@@ -7,14 +7,9 @@
 # This table and all its fields are optional.
 [server]
 
-# Optional; default = ":8080". Set to "" to disable REST.
+# Optional; default = ":8080". The service's only transport — MCP is served
+# by the suite gateway, not here.
 rest = ":8080"
-
-# Optional; default = ":8081". Set to "" to disable MCP over HTTP.
-mcp_http = ":8081"
-
-# Optional; default = false.
-mcp_stdio = false
 
 # Optional; default = []. Use ["*"] to allow any Origin.
 rest_cors_origins = []

@@ -10,13 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/wyvernzora/kura/services/library-manager/internal/config"
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
-	mcpserver "github.com/wyvernzora/kura/services/library-manager/internal/server/mcp"
 	restserver "github.com/wyvernzora/kura/services/library-manager/internal/server/rest"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/sweep"
@@ -72,12 +70,6 @@ func runServer(
 
 	deps.Index.Watch(ctx, watch)
 
-	server := mcpserver.NewServer(mcpserver.Deps{
-		Workflow: deps,
-		Logger:   logger,
-		Version:  Version,
-	})
-
 	var restSrv *restserver.Server
 	if cfg.Server.RESTAddr != "" {
 		restSrv = restserver.NewServer(restserver.Deps{
@@ -94,7 +86,7 @@ func runServer(
 		"transports", serverTransports(cfg.Server),
 	)
 
-	runErr := launchServerTransports(ctx, cfg, server, restSrv, deps, logger)
+	runErr := launchServerTransports(ctx, cfg, restSrv, deps, logger)
 	return finishServerShutdown(registry, logger, runErr, cfg.Server.ShutdownTimeout)
 }
 
@@ -111,27 +103,18 @@ func runShutdownSignalLoop(ctx context.Context, sigCh <-chan os.Signal, cancel c
 	}
 }
 
-// launchServerTransports starts each enabled transport (mcp-stdio,
-// mcp-http, rest) plus the unconditional sweep loop in their own
-// errgroup goroutines, then blocks until the first one returns. The
-// returned error is the errgroup's collected error (nil on clean
-// shutdown).
+// launchServerTransports starts the REST transport plus the
+// unconditional sweep loop in their own errgroup goroutines, then
+// blocks until the first one returns. The returned error is the
+// errgroup's collected error (nil on clean shutdown).
 func launchServerTransports(
 	ctx context.Context,
 	cfg config.Config,
-	server *sdkmcp.Server,
 	restSrv *restserver.Server,
 	deps workflow.Deps,
 	logger *slog.Logger,
 ) error {
 	g, gctx := errgroup.WithContext(ctx)
-	if cfg.Server.MCPStdio {
-		g.Go(func() error { return mcpserver.ServeStdio(gctx, server) })
-	}
-	if cfg.Server.MCPHTTPAddr != "" {
-		addr := cfg.Server.MCPHTTPAddr
-		g.Go(func() error { return mcpserver.ServeHTTP(gctx, addr, server) })
-	}
 	if restSrv != nil {
 		addr := cfg.Server.RESTAddr
 		opts := restserver.ServeOptions{
@@ -224,12 +207,6 @@ func finishServerShutdown(
 // serverTransports returns the configured transport names for the boot log.
 func serverTransports(cfg config.Server) []string {
 	var out []string
-	if cfg.MCPStdio {
-		out = append(out, "mcp-stdio")
-	}
-	if cfg.MCPHTTPAddr != "" {
-		out = append(out, "mcp-http="+cfg.MCPHTTPAddr)
-	}
 	if cfg.RESTAddr != "" {
 		out = append(out, "rest="+cfg.RESTAddr)
 	}

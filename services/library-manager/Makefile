@@ -27,9 +27,6 @@ GOLANGCI_LINT ?= $(shell if command -v golangci-lint >/dev/null 2>&1; then \
 
 DEVSERVER_IMAGE      ?= kura-devserver
 REST_DEV_PORT        ?= 8080
-MCP_HTTP_PORT        ?= 8081
-INSPECTOR_PORT       ?= 6274
-INSPECTOR_PROXY_PORT ?= 6277
 
 .PHONY: build check check-gen fmt gen-ts install lint test vet devserver-build devserver-run
 
@@ -73,7 +70,7 @@ test:
 
 check: fmt vet lint test build check-gen
 
-# Combined hot-reload dev container: REST + MCP HTTP + Inspector UI.
+# Hot-reload dev container for the REST service.
 # See tools/devserver/README.md for usage.
 devserver-build:
 	docker build -f tools/devserver/Dockerfile -t $(DEVSERVER_IMAGE) .
@@ -89,9 +86,6 @@ devserver-run:
 	fi
 	docker run --rm -it \
 		-p 127.0.0.1:$(REST_DEV_PORT):8080 \
-		-p 127.0.0.1:$(MCP_HTTP_PORT):8081 \
-		-p 127.0.0.1:$(INSPECTOR_PORT):6274 \
-		-p 127.0.0.1:$(INSPECTOR_PROXY_PORT):6277 \
 		-v "$(CURDIR):/src" \
 		$(if $(KURA_LIBRARY_ROOT),-v "$(KURA_LIBRARY_ROOT):/mnt/library") \
 		$(if $(KURA_INBOX_ROOT),-v "$(KURA_INBOX_ROOT):/mnt/inbox") \

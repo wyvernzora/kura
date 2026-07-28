@@ -1,35 +1,24 @@
-# Combined dev container: hot-reload kura serve (REST + MCP HTTP
-# transports), the bundled @modelcontextprotocol/inspector UI, and the
-# web UI tooling (Vite + Storybook) — all in one image with one
-# bind-mount.
-# Replaces tools/inspector/ and tools/restdev/.
+# Dev container: hot-reload `kura serve` against a bind-mounted source
+# tree. REST is the service's only transport — the suite MCP surface
+# lives in the gateway, and the SPA has its own tooling under
+# services/gateway/web.
 #
 # Build: `make devserver-build`
 # Run:   `make devserver-run`
 #
 # Wire KURA_DEV_STUBS=1 to compile with -tags=e2e_stub and pass
-# --use-test-stubs (in-memory provider + inspector); leave unset for
-# the real provider path (KURA_TVDB_KEY required for verbs that
-# resolve against TVDB).
-#
-# Set KURA_WEB_DISABLED=1 to skip Vite + Storybook startup for
-# backend-only iteration sessions.
+# --use-test-stubs (in-memory provider); leave unset for the real
+# provider path (KURA_TVDB_KEY required for verbs that resolve against
+# TVDB).
 FROM golang:1.26.4-alpine
 
-# nodejs/npm host mcp-inspector + the web tooling (Vite + Storybook).
-# Alpine's nodejs package strips the bundled corepack shim, so pnpm is
-# installed via `npm install -g` against the version pinned in
-# web/package.json#packageManager. mediainfo is a runtime dep of
-# `kura scan`. tini reaps air/inspector/kura/vite/storybook
-# subprocesses cleanly when docker stops the container; -g (set on
-# ENTRYPOINT) forwards signals to the whole process group so
-# backgrounded children die too. git is needed for `go install`
-# against modules.
-RUN apk add --no-cache mediainfo tini git nodejs npm netcat-openbsd \
- && npm install -g pnpm@10.33.4 \
- && npm install -g @modelcontextprotocol/inspector@latest \
+# mediainfo is a runtime dep of `kura scan`. tini reaps air/kura
+# cleanly when docker stops the container; -g (set on ENTRYPOINT)
+# forwards signals to the whole process group so backgrounded children
+# die too. git is needed for `go install` against modules.
+RUN apk add --no-cache mediainfo tini git netcat-openbsd \
  && go install github.com/air-verse/air@latest \
- && mkdir -p /mnt/library /mnt/inbox /src /var/lib/kura
+ && mkdir -p /mnt/library /mnt/inbox /src
 
 WORKDIR /src
 
@@ -41,17 +30,9 @@ COPY tools/devserver/run-kura.sh /usr/local/bin/run-kura.sh
 COPY tools/devserver/entrypoint.sh /entrypoint.sh
 RUN chmod +x /usr/local/bin/run-kura.sh /entrypoint.sh
 
-# REST and MCP HTTP both listen on 0.0.0.0 inside the container; the
-# Makefile target pins the host-side ports to 127.0.0.1 so binds are
-# not publicly reachable — with no auth in kura, that pinning is the
-# only boundary. 6274 = inspector UI, 6277 = inspector
-# proxy (browser ↔ MCP).
-ENV HOST=0.0.0.0 \
-    CLIENT_PORT=6274 \
-    SERVER_PORT=6277 \
-    MCP_AUTO_OPEN_ENABLED=false \
-    ALLOWED_ORIGINS=http://localhost:6274,http://127.0.0.1:6274
-
-EXPOSE 8080 8081 6274 6277 5173 6006
+# REST listens on 0.0.0.0 inside the container; the Makefile target
+# pins the host-side port to 127.0.0.1 so the bind is not publicly
+# reachable — with no auth in kura, that pinning is the only boundary.
+EXPOSE 8080
 
 ENTRYPOINT ["/sbin/tini", "-g", "--", "/entrypoint.sh"]

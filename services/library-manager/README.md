@@ -92,13 +92,12 @@ moves files and sends displaced media to trash.
 |---|---|---|
 | CLI | Human/scripted operations against a running server. | [docs/cli.md](docs/cli.md) |
 | REST | Custom UI, automation, and the CLI transport. | [docs/rest-api.md](docs/rest-api.md) |
-| MCP | Local agent workflows with no permanent-delete tools. | [docs/mcp.md](docs/mcp.md) |
 | Web UI | Browser dashboard using the configured REST transport. | [docs/deployment.md](docs/deployment.md) |
 
 ## Deployment
 
 The Docker image runs `kura-library-manager --config=/etc/kura/library-manager.toml`
-by default. Its bundled config serves REST on `:8080`, MCP over HTTP on
+by default. Its bundled config serves REST on `:8080`,
 `:8081`, and expects mounts at `/library` and `/inbox`.
 
 ```sh
@@ -124,7 +123,6 @@ stuck-claim recovery.
 - [Lifecycle](docs/lifecycle.md) — add, import, scan, stage, reconcile, trash.
 - [CLI](docs/cli.md) — commands, selectors, configuration.
 - [REST API](docs/rest-api.md) — endpoints, auth, async jobs.
-- [MCP](docs/mcp.md) — tools and agent-safety properties.
 - [Storage](docs/storage.md) — on-disk JSON/JSONL formats.
 - [Changelog](CHANGELOG.md) — release notes.
 

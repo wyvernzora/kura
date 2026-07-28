@@ -1,12 +1,10 @@
 #!/bin/sh
-# Bootstraps mcp-inspector and air against the bind-mounted source
-# tree. air manages the kura subprocess (rebuild + restart on .go
-# change); mcp-inspector runs alongside and proxies the browser UI to
-# kura's MCP HTTP transport.
+# Bootstraps air against the bind-mounted source tree; air manages the
+# kura subprocess, rebuilding and restarting it on any .go change.
 #
 # tini -g (PID 1, set in ENTRYPOINT) forwards SIGTERM to the whole
-# process group so all three (entrypoint shell, air+kura, inspector)
-# die together when docker stops the container.
+# process group so both the entrypoint shell and air+kura die together
+# when docker stops the container.
 
 set -e
 
@@ -23,106 +21,25 @@ if [ ! -d /mnt/inbox ]; then
   exit 1
 fi
 
-# Build tag selection. Stub mode pulls in the in-memory provider +
-# inspector via teststub package; production mode uses the real
-# tvdb client and host mediainfo.
+# Build tag selection. Stub mode pulls in the in-memory provider via the
+# teststub package; production mode uses the real tvdb client and host
+# mediainfo.
 if [ "${KURA_DEV_STUBS:-}" = "1" ]; then
   export BUILD_TAGS="e2e_stub"
-  echo "devserver: stub mode — provider/inspector swapped via teststub"
+  echo "devserver: stub mode — provider swapped via teststub"
 else
   export BUILD_TAGS=""
 fi
 
-# Pin inspector proxy auth token up front so we can print a copy-paste
-# URL with the token + UI prefill query params (transport, serverUrl).
-if [ -z "${MCP_PROXY_AUTH_TOKEN}" ]; then
-  MCP_PROXY_AUTH_TOKEN="$(tr -dc 'a-f0-9' < /dev/urandom | head -c 64)"
-  export MCP_PROXY_AUTH_TOKEN
-fi
-
 REST_PORT=8080
-MCP_PORT=8081
 
 cat <<EOF >&2
-devserver: REST     listening on container 0.0.0.0:${REST_PORT}
-devserver: MCP HTTP listening on container 0.0.0.0:${MCP_PORT}
+devserver: REST listening on container 0.0.0.0:${REST_PORT}
 devserver: from host  →  export KURA_SERVER_URL=http://127.0.0.1:\$REST_DEV_PORT
 devserver: edit any .go file under cmd/ or internal/ and air rebuilds in ~3s
 EOF
 
-# Prefill-URL printer. Backgrounded so air can exec in the foreground.
-# Waits for kura to bind the MCP HTTP port, then prints the inspector URL
-# with all prefill query params attached. Runs once per container
-# start; air's restart of kura on .go save does not retrigger this
-# (the URL stays valid as long as ports + the inspector proxy token
-# do not change).
-(
-  # Probe via loopback regardless of bind addr — works for both
-  # 127.0.0.1:PORT and 0.0.0.0:PORT.
-  i=0
-  while ! nc -z 127.0.0.1 "${MCP_PORT}" 2>/dev/null; do
-    i=$((i + 1))
-    if [ "${i}" -gt 600 ]; then
-      echo "devserver: kura did not bind MCP HTTP :${MCP_PORT} within 60s; skipping inspector URL" >&2
-      exit 0
-    fi
-    sleep 0.1
-  done
-
-  # serverUrl is the inspector proxy's view of kura — always reach
-  # via loopback inside the container, regardless of kura's bind addr.
-  INSPECTOR_URL="http://localhost:${CLIENT_PORT}/?MCP_PROXY_AUTH_TOKEN=${MCP_PROXY_AUTH_TOKEN}&transport=streamable-http&serverUrl=http%3A%2F%2F127.0.0.1%3A${MCP_PORT}%2Fmcp"
-
-  cat <<EOF >&2
-devserver: open the inspector UI at:
-  ${INSPECTOR_URL}
-EOF
-) &
-
 mkdir -p /src/tmp
-
-# mcp-inspector reads MCP_PROXY_AUTH_TOKEN, HOST, CLIENT_PORT,
-# SERVER_PORT, ALLOWED_ORIGINS, MCP_AUTO_OPEN_ENABLED from env.
-# Backgrounded so air can run in the foreground; tini -g cleans
-# both up on container stop.
-mcp-inspector &
-
-# Web tooling: Vite (full app) + Storybook (component sandbox). Both
-# run against the bind-mounted /src/web. node_modules lives in an
-# anonymous docker volume so host (macOS) binaries don't clobber the
-# alpine ones via the bind mount; on first start we trigger a fresh
-# pnpm install into the volume.
-case "${KURA_WEB_DISABLED:-}" in
-  1|true|TRUE|yes|on)
-    echo "devserver: KURA_WEB_DISABLED set — skipping Vite + Storybook"
-    ;;
-  *)
-    if [ ! -d /src/web ]; then
-      echo "devserver: /src/web not found — skipping Vite + Storybook"
-    else
-      if [ ! -d /src/web/node_modules/.pnpm ]; then
-        echo "devserver: /src/web/node_modules empty — running pnpm install"
-        (cd /src/web && pnpm install --frozen-lockfile) || \
-          echo "devserver: pnpm install failed; web tooling will not start" >&2
-      fi
-      if [ -d /src/web/node_modules/.pnpm ]; then
-        # macOS bind-mounts (VirtioFS / gRPC-FUSE) don't propagate
-        # inotify events into the Linux container, so Vite + Storybook
-        # never see source-file edits and HMR is silently broken.
-        # CHOKIDAR_USEPOLLING flips chokidar (the watcher both tools
-        # share) to a polling loop. 300 ms keeps CPU burn modest while
-        # feeling instant. WATCHPACK_POLLING covers Storybook's webpack
-        # builder for older addon versions.
-        export CHOKIDAR_USEPOLLING=1
-        export CHOKIDAR_INTERVAL=300
-        export WATCHPACK_POLLING=true
-        (cd /src/web && pnpm dev) &
-        (cd /src/web && pnpm storybook) &
-        echo "devserver: Vite on container :5173, Storybook on container :6006 (polling watcher)"
-      fi
-    fi
-    ;;
-esac
 
 # air config lives at /etc/kura/air.toml so the /src bind mount
 # doesn't shadow it.

@@ -9,7 +9,8 @@ user-facing nouns; this doc is for everything underneath.
 **User** — the human owner of the library. Interacts directly via CLI,
 indirectly via an AI agent, or via the bundled web dashboard.
 
-**Agent** — an AI agent that consumes Kura's MCP tool surface. Acts on
+**Agent** — an AI agent that consumes the suite's MCP tool surface, served by
+the gateway. Acts on
 behalf of the user. May operate autonomously or with user confirmation
 for ambiguous cases.
 
@@ -199,9 +200,9 @@ surfaces:
    bypasses fuzzy search entirely.
 4. Operation proceeds.
 
-The mechanics are identical for CLI and MCP; only the presentation
+The mechanics are identical for CLI and API callers; only the presentation
 differs. A CLI invocation may render candidates as a prompt or a list
-for the operator to choose from; an MCP call returns the candidates as
+for the operator to choose from; an API call returns the candidates as
 structured data for the agent to reason over and re-call. Kura itself
 does not interact with the caller mid-operation — it returns the
 candidate set and waits for the next call.
@@ -439,7 +440,7 @@ exposed identically across surfaces.
 - **REST** returns `202 Accepted` with `{jobId, statusUrl, streamUrl}`.
   Clients poll `GET /api/v1/jobs/{id}` or stream
   `GET /api/v1/jobs/{id}/stream` (Server-Sent Events).
-- **MCP** returns a job handle. Agents poll `kura_job_status`.
+- **Agents** receive a job handle and poll `get_job` through the gateway.
 
 Lifecycle: each job has a ULID, kind (`scan` / `reconcile_apply` / …),
 optional series ref, status (`running` / `succeeded` / `failed`),
@@ -483,7 +484,7 @@ is honest about its edges.
   series; library-wide scan of a 1k-series library will be
   bottlenecked by provider rate limits, not just disk. Bulk-scan
   flows are expected to be operator-initiated or scheduled by
-  an MCP/REST consumer of the library-manager server with appropriate
+  a REST consumer of the library-manager server with appropriate
   pacing; no in-product rate-limiting affordance for now.
 - **Multi-user, OIDC, scopes, federation.** Auth is a deploy-time
   bearer-token gate, not user identity. Multi-user concerns belong to

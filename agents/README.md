@@ -29,7 +29,7 @@ or strip it with `awk '/^---$/{n++; next} n>=2' use-kura.md`.
 
 The agent also needs a working MCP connection to a `kura-library-manager serve`
 instance with MCP stdio or HTTP enabled in its TOML config — see
-[../docs/mcp.md](../docs/mcp.md) and
+the gateway's MCP surface and
 [../docs/deployment.md](../docs/deployment.md).
 
 If your agent supports reusable prompt or skill files, install

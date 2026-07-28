@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcnetwork "github.com/testcontainers/testcontainers-go/network"
@@ -104,7 +104,7 @@ func TestEndToEndWorkflow(t *testing.T) {
 		t.Fatalf("queue stats = %+v, want matched=1 suppressed=1 exhausted=1 available=0 leased=0", stats)
 	}
 
-	assertMCP(t, ctx, takuhaiURL, matchMagnet)
+	assertConsumerAPI(t, ctx, takuhaiURL, matchMagnet)
 }
 
 func startPostgres(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork) *tcpostgres.PostgresContainer {
@@ -281,59 +281,68 @@ func queueStats(t *testing.T, takuhaiURL string) queueStatsResponse {
 	return stats
 }
 
-func assertMCP(t *testing.T, ctx context.Context, takuhaiURL, wantMagnet string) {
+// assertConsumerAPI checks the read surface after the full workflow: the
+// matched release is listable under its ref, lists stay magnet-free, and the
+// magnet is retrievable per-release.
+//
+// This ran through the leaf MCP server until that was removed; the assertions
+// are unchanged, only the transport. The MCP surface itself is now the
+// gateway's and is covered by its own suite.
+func assertConsumerAPI(t *testing.T, ctx context.Context, takuhaiURL, wantMagnet string) {
 	t.Helper()
-	client := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "takuhai-e2e", Version: "0.0.0"}, nil)
-	session, err := client.Connect(ctx, &mcpsdk.StreamableClientTransport{Endpoint: takuhaiURL + "/mcp"}, nil)
-	if err != nil {
-		t.Fatalf("MCP connect: %v", err)
-	}
-	defer session.Close()
 
-	list := callTool[listReleasesResponse](t, ctx, session, "list_releases", map[string]any{"ref": "tvdb:12345", "limit": 10})
+	var list listReleasesResponse
+	getJSON(t, ctx, takuhaiURL+"/api/v1/releases?ref=tvdb:12345&limit=10", http.StatusOK, &list)
 	if len(list.Releases) != 1 {
-		t.Fatalf("list_releases returned %d releases, want 1", len(list.Releases))
+		t.Fatalf("list returned %d releases, want 1", len(list.Releases))
 	}
 	release := list.Releases[0]
 	if release.Infohash != matchInfohash || release.Confidence != 0 {
-		t.Fatalf("list_releases item = %+v, want matched infohash with zero confidence", release)
+		t.Fatalf("list item = %+v, want matched infohash with zero confidence", release)
 	}
 	if _, ok := release.Raw["magnet"]; ok {
-		t.Fatalf("list_releases leaked magnet field: %+v", release.Raw)
+		t.Fatalf("list leaked magnet field: %+v", release.Raw)
 	}
 	if release.Raw["ref"] != "tvdb:12345" {
-		t.Fatalf("list_releases ref = %v, want tvdb:12345", release.Raw["ref"])
-	}
-	empty := callTool[listReleasesResponse](t, ctx, session, "list_releases", map[string]any{"ref": "tvdb:99999", "limit": 10})
-	if len(empty.Releases) != 0 {
-		t.Fatalf("list_releases for empty ref = %+v, want none", empty.Releases)
+		t.Fatalf("list ref = %v, want tvdb:12345", release.Raw["ref"])
 	}
 
-	resolved := callTool[resolveMagnetsResponse](t, ctx, session, "resolve_magnets", map[string]any{
-		"infohashes": []string{matchInfohash, unknownInfohash},
-	})
-	if got := resolved.Magnets[matchInfohash]; got != wantMagnet {
-		t.Fatalf("resolved magnet = %q, want %q", got, wantMagnet)
+	var empty listReleasesResponse
+	getJSON(t, ctx, takuhaiURL+"/api/v1/releases?ref=tvdb:99999&limit=10", http.StatusOK, &empty)
+	if len(empty.Releases) != 0 {
+		t.Fatalf("list for an unmatched ref = %+v, want none", empty.Releases)
 	}
-	if _, ok := resolved.Magnets[unknownInfohash]; ok {
-		t.Fatalf("resolve_magnets returned unknown infohash: %+v", resolved.Magnets)
+
+	var magnet magnetResponse
+	getJSON(t, ctx, takuhaiURL+"/api/v1/releases/"+matchInfohash+"/magnet", http.StatusOK, &magnet)
+	if magnet.Magnet != wantMagnet {
+		t.Fatalf("magnet = %q, want %q", magnet.Magnet, wantMagnet)
 	}
+	// An unknown infohash is a 404, not an empty body.
+	getJSON(t, ctx, takuhaiURL+"/api/v1/releases/"+unknownInfohash+"/magnet", http.StatusNotFound, nil)
 }
 
-func callTool[T any](t *testing.T, ctx context.Context, session *mcpsdk.ClientSession, name string, args map[string]any) T {
+func getJSON(t *testing.T, ctx context.Context, url string, wantStatus int, out any) {
 	t.Helper()
-	res, err := session.CallTool(ctx, &mcpsdk.CallToolParams{Name: name, Arguments: args})
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
-		t.Fatalf("MCP %s: %v", name, err)
+		t.Fatalf("GET %s: %v", url, err)
 	}
-	if res.IsError {
-		t.Fatalf("MCP %s returned IsError: %s", name, firstText(res))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", url, err)
 	}
-	var out T
-	if err := json.Unmarshal([]byte(firstText(res)), &out); err != nil {
-		t.Fatalf("decode MCP %s response %q: %v", name, firstText(res), err)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != wantStatus {
+		t.Fatalf("GET %s = %d, want %d; body %s", url, resp.StatusCode, wantStatus, body)
 	}
-	return out
+	if out == nil {
+		return
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		t.Fatalf("decode %s response %q: %v", url, body, err)
+	}
 }
 
 func postJSON(t *testing.T, url string, body any, wantStatus int, out any) {
@@ -357,15 +366,6 @@ func postJSON(t *testing.T, url string, body any, wantStatus int, out any) {
 			t.Fatalf("decode %s: %v", url, err)
 		}
 	}
-}
-
-func firstText(res *mcpsdk.CallToolResult) string {
-	for _, c := range res.Content {
-		if tc, ok := c.(*mcpsdk.TextContent); ok {
-			return tc.Text
-		}
-	}
-	return ""
 }
 
 func repoRoot(t *testing.T) string {
@@ -475,6 +475,7 @@ func (r *releaseItem) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-type resolveMagnetsResponse struct {
-	Magnets map[string]string `json:"magnets"`
+type magnetResponse struct {
+	Infohash string `json:"infohash"`
+	Magnet   string `json:"magnet"`
 }

@@ -13,11 +13,10 @@ go test -tags=conformance ./...
 
 | Contract | Test |
 | --- | --- |
-| Claim returns `claim_token`; submit `matched`; MCP `list_releases` includes confidence; `resolve_magnets` wraps magnets and omits unknowns | `TestAPIShape_MatchListsReleaseAndResolvesMagnet` |
+| Claim returns `claimToken`; submit `matched`; `list_releases` includes confidence | `TestAPIShape_MatchListsReleaseAndResolvesMagnet` |
 | Single release detail is available over REST and dispatch, includes raw evidence and chronological match history, keeps magnet in detail, and orders `raw_items` by `id ASC` plus `match_events` by `created_at ASC, id ASC` | `TestAPIShape_GetReleaseDetail` |
 | Release detail preserves absent facts as explicit JSON `null` (`ref`, `confidence`, `first_matched_at`, `magnet`, `size_bytes`, `url`), always renders `raw_items`/`match_events`/`sources` as arrays, and excludes lease internals (`claim_token`, `claimed_at`, `lease_expires_at`) | `TestAPIShape_GetReleaseExplicitNullsAndNoLeaseInternals` |
 | `GET /api/v1/releases/{infohash}` maps malformed infohashes to `400 invalid_input` and unknown releases to `404 no_such_release` | `TestAPIShape_GetReleaseRESTErrors` |
-| MCP `get_release` maps unknown releases to tool error code `no_such_release` | `TestAPIShape_GetReleaseMCPNoSuchRelease` |
 | A stale `claim_token` cannot submit after a newer claim | `TestAPIShape_StaleClaimTokenRejected` |
 | Repeated `unmatched` submissions exhaust after the configured max attempts | `TestAPIShape_UnmatchedExhaustsAfterMaxAttempts` |
 | Migrations and the runtime pool land every migrated table, the goose version table, and the `match_status` enum in the configured `database.schema` and nothing in `public` | `TestConfiguredSchemaOwnsMigrationObjects` |
@@ -25,9 +24,9 @@ go test -tags=conformance ./...
 | Nyaa live fixtures, parser output, newest-window bound, empty-floor threshold, and transient failures | `sources/nyaa` conformance suite |
 
 The real-binary smoke test covers startup migrations, `/healthz`, `/api/v1/releases/ingest`,
-`/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`, `/api/v1/releases/queue/claim`, `/api/v1/releases/queue/submit`, `/api/v1/releases/queue/stats`, MCP tool
+`/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`, `/api/v1/releases/queue/claim`, `/api/v1/releases/queue/submit`, `/api/v1/releases/queue/stats`
 registration/call, removed worker path rejection, fail-fast bind behavior, strict TOML
 startup, an in-process scheduled Nyaa crawl, direct ingest, and bounded shutdown.
 The Docker e2e runs the consolidated release-indexer against fake DMHY and PostgreSQL,
-then exercises the full claim, submit, query, and MCP workflow over those scheduled
+then exercises the full claim, submit, and query workflow over those scheduled
 releases.

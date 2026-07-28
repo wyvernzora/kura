@@ -26,7 +26,6 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/internal/crawlrunner"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/health"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/ingest"
-	"github.com/wyvernzora/kura/services/release-indexer/internal/mcp"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/metrics"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/rest"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store/postgres"
@@ -99,8 +98,7 @@ func run() error {
 	})
 	defer st.Close() //nolint:errcheck // best-effort cleanup at process exit.
 
-	// The single mountable /healthz handler (DB ping only — design §10). Both the HTTP
-	// listener and the MCP server mount the SAME handler.
+	// The single mountable /healthz handler (DB ping only — design §10).
 	healthz := health.NewHandlerWithLogger(st, logger.With("component", "health"), version)
 	metricsSrv := metrics.NewTakuhai(version, commit, st)
 	ingester := ingest.New(st, metricsSrv)
@@ -109,10 +107,6 @@ func run() error {
 		return err
 	}
 
-	// The consumer-only MCP server (list_releases / get_release / resolve_magnets). Its Handler() serves
-	// /mcp + /healthz.
-	mcpSrv := mcp.NewServerWithMetricsAndLogger(st, healthz, metricsSrv, logger.With("component", "mcp"))
-
 	logger.Info("takuhai starting",
 		"version", version,
 		"addr", cfg.Addr,
@@ -120,25 +114,22 @@ func run() error {
 		"nyaa_enabled", cfg.Sources.Nyaa.Enabled,
 	)
 
-	return runHTTP(ctx, logger, cfg.Addr, cfg.MetricsAddr, st, mcpSrv, healthz, metricsSrv, crawls)
+	return runHTTP(ctx, logger, cfg.Addr, cfg.MetricsAddr, st, healthz, metricsSrv, crawls)
 }
 
-// runHTTP mounts every HTTP route — /ingest (push), /queue/* + /submit (match loop), /mcp +
-// /healthz (consumer + health) — on one listener.
+// runHTTP mounts the API routes under /api/v1/releases plus /healthz on one
+// listener, and /metrics on its own.
 func runHTTP(
 	ctx context.Context,
 	logger *slog.Logger,
 	addr string,
 	metricsAddr string,
 	st *postgres.Store,
-	mcpSrv *mcp.Server,
 	healthz http.Handler,
 	metricsSrv *metrics.Takuhai,
 	crawls *crawlrunner.Runner,
 ) error {
 	mux := http.NewServeMux()
-	// The consumer /mcp endpoint + /healthz (the MCP server owns this mux).
-	mux.Handle("/mcp", mcpSrv.Handler())
 	mux.Handle("/healthz", healthz)
 	// The REST push-ingestion and match-loop surfaces.
 	restAPI := rest.NewWithMetricsAndLogger(st, metricsSrv, logger.With("component", "rest"))
@@ -253,10 +244,9 @@ func logHTTP(logger *slog.Logger, routes interface{ Route(string) string }, next
 	})
 }
 
-// drainTimeout bounds the graceful HTTP shutdown. A consumer holding an open /mcp
-// standalone SSE GET stream blocks server-side until its request context is cancelled,
-// which http.Server.Shutdown does NOT do — so an unbounded Shutdown would hang the whole
-// drain forever on a steady-state SIGTERM. The deadline caps in-flight wait; on expiry
+// drainTimeout bounds the graceful HTTP shutdown. The deadline caps the
+// in-flight wait rather than letting a slow request hold the drain open
+// indefinitely on a steady-state SIGTERM; on expiry
 // srv.Close force-closes lingering connections so shutdown can finish.
 const drainTimeout = 10 * time.Second
 

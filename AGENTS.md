@@ -12,7 +12,7 @@ section are relative to that service's directory unless they start with
 | Path | What it is |
 |---|---|
 | `cli/` | the `kura` CLI: REST client for the suite services; dev/operator tool, no image |
-| `services/library-manager/` | kura core: library manager, REST + MCP API (no embedded UI) |
+| `services/library-manager/` | kura core: library manager, REST API (no embedded UI, no MCP — the gateway serves that) |
 | `services/release-indexer/` | release indexer with built-in `sources/{dmhy,nyaa}` crawlers |
 | `services/gateway/` | suite gateway: Caddy + MCP bridge + SPA, one origin over every service API |
 | `integrations/n8n/` | the suite n8n node package: one Kura node (series/release/queue resources) + a queue trigger |
@@ -101,7 +101,7 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Name:** Kura.
 - **Domain:** anime-first library manager, broadly similar in category to Sonarr.
 - **Priority:** anime behavior comes first; other series types can work when compatible but should not drive the design.
-- **Product shape:** no bloat. Prefer CLI tools for manual use and MCP tools for agentic use.
+- **Product shape:** no bloat. Prefer CLI tools for manual use and the gateway's MCP tools for agentic use.
 - **Operational scale:** personal anime library automation, not a high-throughput multi-writer file transaction system. Expect new episodes a few times a week and occasional season upgrades, usually flowing qbit/download inbox -> Kura -> library with an LLM agent driving Kura. Kura is the only intended writer inside the library root; other tools should be readonly there, and direct human writes are rare. Avoid engineering for AWS-S3-scale concurrency or hostile library writers unless the product requirements explicitly change.
 - **UI:** none embedded — the suite web UI lives in `services/gateway/web` (SPA served by the gateway, which proxies this service's REST API). The configured REST transport serves the API only.
 - **Distribution:** Go application shipped as a Docker container.
@@ -112,18 +112,18 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Main command entrypoint:** `cmd/kura-library-manager` — a serve-only
   flag-driven binary. `-config` defaults to `/etc/kura/library-manager.toml`;
   `-version` prints the build version.
-- **Workflow facade:** `internal/workflow` exposes Add/Import/Show/List/Stage/Scan/Reset/Trash/Reindex/Remove + Reconcile{Plan,Apply,Recover}. The Go API behind the serve transports (REST + MCP).
+- **Workflow facade:** `internal/workflow` exposes Add/Import/Show/List/Stage/Scan/Reset/Trash/Reindex/Remove + Reconcile{Plan,Apply,Recover}. The Go API behind the REST transport.
 - **Reconcile internals:** `internal/reconcile` builds plans, applies them, and recovers stuck claims. Imported only via the workflow shim.
 - **Scan internals:** `internal/scan` walks a series directory, parses filenames, and reconciles findings against persisted state. Imported only via the workflow shim.
 - **Resolution:** `internal/resolve` matches user-supplied selectors to a series ref via registered strategies (text, `tvdb:<id>`, `dir:`, etc.).
 - **Storage primitives:** `internal/storage/{indexfile,seriesfile,planfile,paths,seriesdir,trashfile}` own the on-disk JSON / JSONL formats and CAS write semantics. One package per file kind. Sibling storage packages do not import each other; `paths` is the leaf.
 - **Coordination:** `internal/coord` provides per-series and per-index ctx-cancellable serialization plus CAS retry. Owns `Holder` and `Mutator` types.
-- **Jobs:** `internal/jobs` runs async workflow ops and exposes a registry for polling-based clients (MCP).
+- **Jobs:** `internal/jobs` runs async workflow ops and exposes a registry for polling-based clients.
 - **Provider:** `internal/provider` is the metadata-provider abstraction; `internal/provider/tvdb` is the only implementation today.
 - **Domain types:** `internal/domain/{refs,media,series,filename,selector}` are pure types shared across packages. Leaf-level — they do not import sibling internal packages.
 - **Inbox:** `internal/inbox` walks the configured `library.inbox` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
 - **Search keys:** `internal/searchkey` computes the per-series fuzzy-search blob shipped on `ListRow` — flattened, deduplicated alias lines fed to client-side fuse.js. Never user-facing.
-- **Transports:** `kura-library-manager --config=...` hosts the servers: `internal/server/mcp` (MCP tool surface, stdio or streamable HTTP), `internal/server/rest` (REST API under `/api/*`, unauthenticated — the deployment's fronting proxy is the only gate). Servers depend on `internal/workflow` for behavior. The CLI lives in `/cli`; binary `kura` is a pure REST client discovered through `KURA_SERVER_URL` (default `http://127.0.0.1:8080`).
+- **Transports:** `kura-library-manager --config=...` hosts `internal/server/rest` (REST API under `/api/*`, unauthenticated — the deployment's fronting proxy is the only gate). REST is the only transport: the suite MCP surface belongs to `services/gateway`. Servers depend on `internal/workflow` for behavior. The CLI lives in `/cli`; binary `kura` is a pure REST client discovered through `KURA_SERVER_URL` (default `http://127.0.0.1:8080`).
 - **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (strict TOML loading, defaults, validation, metadata-source construction), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `pkg/api` (wire response shapes plus public `refs`, `selector`, and `media` vocabulary facades).
 - **Container:** Docker, single-binary image.
 
@@ -161,7 +161,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - All Kura-generated JSON files include top-level `schemaVersion`. Initial version is `1`.
 - Series metadata uses a single source-neutral `metadataRef`. Do not add local series IDs, `providerRefs`, or `preferredProvider`.
 - Keep dependencies intentional and minimal.
-- Prefer clear CLI/MCP surfaces over background magic.
+- Prefer clear CLI/REST surfaces over background magic.
 - Preserve a small, automation-friendly core before adding optional layers.
 - `KURA_TVDB_KEY` is the TVDB API environment variable currently used by the code.
 - `library.root` in the strict TOML config scopes series selectors. Metadata-ref selectors use `<library>/.kura/index.jsonl`; run `kura reindex` to rebuild it from per-series metadata. `KURA_LIBRARY_ROOT` remains only for the local `path` CLI command.
@@ -185,7 +185,7 @@ Prefer single-package or single-test runs during iteration (`go test ./internal/
 - Active tracked media under `.kura/` (only Kura-managed trash is allowed there).
 - Bare `.series.json` outside `.kura/`.
 - Adding `providerRefs`, local series IDs, or `preferredProvider` to series metadata.
-- Background magic in lieu of explicit CLI/MCP surfaces.
+- Background magic in lieu of explicit CLI/REST surfaces.
 
 ### Learnings
 
@@ -202,7 +202,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - For series-level actions that need review before mutation, use explicit selector-based `plan` and `apply <selector> <token>` workflows instead of combined dry-run/yes commands.
 - Top-level `internal` packages must not import child packages of sibling top-level packages; import the sibling facade instead, while child packages may import siblings under their own top-level package.
 - When extracting an implementation subpackage, move the full cohesive workflow or leave it in place; do not leave runner/helper remnants in the facade package unless they are intentional public API.
-- Workflow responses must never carry raw filesystem paths. Every path field is a scheme-tagged selector: `series:<rel>` for files inside a series root, `inbox:<rel>` for files under the inbox root, `library:<rel>` for paths under the configured library root (e.g. `Show.Root` emits as `library:<series-dir>`). Use the `seriesSelector` / `inboxSelector` / `librarySelector` helpers in `internal/workflow/paths.go` at the response-construction boundary; they panic on outside-root paths so contract violations fail loudly. CLI table renderers strip the prefix for human display via `stripPathScheme`; JSON / MCP / REST keep the prefix.
+- Workflow responses must never carry raw filesystem paths. Every path field is a scheme-tagged selector: `series:<rel>` for files inside a series root, `inbox:<rel>` for files under the inbox root, `library:<rel>` for paths under the configured library root (e.g. `Show.Root` emits as `library:<series-dir>`). Use the `seriesSelector` / `inboxSelector` / `librarySelector` helpers in `internal/workflow/paths.go` at the response-construction boundary; they panic on outside-root paths so contract violations fail loudly. CLI table renderers strip the prefix for human display via `stripPathScheme`; JSON and REST keep the prefix.
 - Treat Kura's library as a single-writer personal anime library on low-IOPS storage, often NFS-backed; do not add high-throughput, multi-writer, or cloud-object-store durability machinery unless a real Kura workflow requires it.
 - Thread deploy-time row-building policy from `cmd/kura-library-manager` through workflow/index builders; do not read env vars directly from storage packages.
 - Kura does not guarantee forward compatibility for old binaries reading newer on-disk metadata; prefer a clear current-schema contract over version machinery whose only benefit is rollback ergonomics.
@@ -262,7 +262,6 @@ Read design.md before any sizable change.
   - REST (n8n-driven), all under `/api/v1/releases`: `GET /` (list),
     `POST /ingest`, `POST /queue/claim`, `GET /queue/stats`,
     `POST /queue/submit`, `GET /{infohash}`, and `GET /{infohash}/magnet`.
-  - MCP (consumer-only): `list_releases`, `get_release`, `resolve_magnets`, over streamable HTTP at `/mcp`.
   - `/healthz` — a live DB ping.
 - **Transport:** HTTP (configured by TOML).
 - **Distribution:** one Go binary + Docker container.
@@ -293,7 +292,6 @@ Read design.md before any sizable change.
   Runs migrations, binds HTTP, then starts enabled source loops.
 - **Store:** PostgreSQL via `pgx`. Migrations are **embedded goose** in
   `db/migrations/`, run at startup under an advisory lock.
-- **MCP SDK:** `github.com/modelcontextprotocol/go-sdk` (streamable HTTP at `/mcp`).
 - **Logs:** structured `slog` (JSON) to stderr.
 
 ### Package map
@@ -311,15 +309,14 @@ internal/dispatch/   transport-neutral worker/consumer dispatch + sentinel→cod
 internal/rest/       REST handlers under /api/v1/releases
 internal/store/      Store interface + param/result types + sentinel errors
 internal/store/postgres/  pgx implementation (only backend in v1)
-internal/mcp/        MCP server: consumer tools only; HTTP /mcp; calls dispatch
 internal/health/     /healthz: DB ping via the Ping seam
 db/migrations/       embedded goose SQL migrations
 sources/dmhy/        DMHY parser and crawler
 sources/nyaa/        Nyaa parser and crawler
 ```
 
-`store` is a leaf (imports neither `pkg/api` nor the REST layer); `mcp` reaches store
-only through `dispatch`; REST queue/submit routes use `dispatch`; REST and scheduled
+`store` is a leaf (imports neither `pkg/api` nor the REST layer); REST reaches store
+through `dispatch` for the queue/submit routes; REST and scheduled
 sources share `internal/ingest`; source packages emit `RawPost` and do not import
 storage.
 
@@ -337,7 +334,7 @@ make smoke                     # real-binary smoke (go test -tags=smoke ./cmd/ku
 corrects your approach, append a one-line, concrete rule here before ending the session.
 
 - The conformance suite drives in-process seams (`httptest`, direct dispatch) and **never
-  boots the binary**, so deploy-shape bugs — MCP transport wiring, startup migrations,
+  boots the binary**, so deploy-shape bugs — listener wiring, startup migrations,
   fail-fast bind, the graceful-drain order — are invisible to it. Validate the binary
   end-to-end with the real-binary smoke (`make smoke`), not the conformance gate alone.
 - `attempt_count` means failed unmatched submissions, not claims; claim crashes must

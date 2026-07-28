@@ -12,7 +12,7 @@ KURA_RELEASES_DATABASE_URL=postgres://… \
 ```
 
 One process serves `/api/v1/releases/ingest`, `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`,
-`/api/v1/releases/queue/claim`, `/api/v1/releases/queue/stats`, `/api/v1/releases/queue/submit`, `/mcp`, and `/healthz` on
+`/api/v1/releases/queue/claim`, `/api/v1/releases/queue/stats`, `/api/v1/releases/queue/submit`, and `/healthz` on
 `server.addr`, and runs every enabled source crawler. `/metrics` is served on a
 second listener, `server.metrics_addr`, and is the only thing on it.
 
@@ -81,7 +81,7 @@ external producer        -> POST /api/v1/releases/ingest (escape hatch)
 n8n                       -> POST /api/v1/releases/queue/claim
 n8n                       -> matcher agent
 n8n                       -> POST /api/v1/releases/queue/submit
-consumer agent            -> MCP list_releases / get_release / resolve_magnets
+consumer agent            -> gateway MCP list_releases / get_release / get_magnet
 ```
 
 `/api/v1/releases/queue/stats.exhausted` is the operator intervention signal for matcher work.
@@ -90,7 +90,7 @@ consumer agent            -> MCP list_releases / get_release / resolve_magnets
 
 The service has no application-level auth. Restrict write surfaces by
 infrastructure. The pod needs egress to PostgreSQL, DNS, and every enabled source
-URL. Consumer agents should only reach `/mcp`.
+URL. Consumer agents reach this service only through the gateway.
 
 This repo does not ship Kubernetes manifests. Platform policy and the mounted
 ConfigMap/Secret belong to the deployment repository.
@@ -110,7 +110,7 @@ Separate crawler images are no longer built or published.
   network policy permitting a scrape of a shared port would also permit
   ingest, claim, and submit.
 - Startup fails fast if migrations or the HTTP bind fail.
-- SIGTERM cancels source crawls, drains HTTP/MCP requests, then closes PostgreSQL.
+- SIGTERM cancels source crawls, drains in-flight HTTP requests, then closes PostgreSQL.
 - Logs are JSON `slog` on stderr.
 
 ## Development

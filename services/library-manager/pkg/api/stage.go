@@ -4,7 +4,7 @@ import "github.com/wyvernzora/kura/services/library-manager/internal/domain/refs
 
 // StageResult is workflow.Stage's response. Stage may queue a mix of
 // episode stages, trash items, and extras in one batch; results surface
-// per-item so the caller (CLI renderer or MCP client) can present a
+// per-item so the caller (CLI renderer or an API client) can present a
 // status table.
 //
 // Rows that survived Phase 1 input validation but failed Phase 2 work

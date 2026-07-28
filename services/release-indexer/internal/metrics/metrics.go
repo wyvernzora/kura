@@ -49,9 +49,7 @@ func (m *HTTP) Wrap(next http.Handler) http.Handler {
 		path := m.route(r.URL.Path)
 		status := strconv.Itoa(captured.Code)
 		m.requests.WithLabelValues(r.Method, path, status).Inc()
-		if r.Method != http.MethodGet || path != "/mcp" {
-			m.duration.WithLabelValues(r.Method, path).Observe(time.Since(start).Seconds())
-		}
+		m.duration.WithLabelValues(r.Method, path).Observe(time.Since(start).Seconds())
 	})
 }
 
@@ -85,22 +83,19 @@ func (m *HTTP) route(path string) string {
 func (m *HTTP) Route(path string) string { return m.route(path) }
 
 type Takuhai struct {
-	HTTP                 *HTTP
-	handler              http.Handler
-	ingestBatches        *prometheus.CounterVec
-	ingestPosts          *prometheus.CounterVec
-	ingestBatchSize      prometheus.Histogram
-	sourceCrawls         *prometheus.CounterVec
-	sourceCrawlDuration  *prometheus.HistogramVec
-	sourceCrawlPosts     *prometheus.CounterVec
-	queueClaims          *prometheus.CounterVec
-	queueClaimedItems    prometheus.Counter
-	queueClaimBatchSize  prometheus.Histogram
-	submits              *prometheus.CounterVec
-	submitConfidence     *prometheus.HistogramVec
-	mcpToolCalls         *prometheus.CounterVec
-	mcpToolDuration      *prometheus.HistogramVec
-	mcpResolveInfohashes *prometheus.CounterVec
+	HTTP                *HTTP
+	handler             http.Handler
+	ingestBatches       *prometheus.CounterVec
+	ingestPosts         *prometheus.CounterVec
+	ingestBatchSize     prometheus.Histogram
+	sourceCrawls        *prometheus.CounterVec
+	sourceCrawlDuration *prometheus.HistogramVec
+	sourceCrawlPosts    *prometheus.CounterVec
+	queueClaims         *prometheus.CounterVec
+	queueClaimedItems   prometheus.Counter
+	queueClaimBatchSize prometheus.Histogram
+	submits             *prometheus.CounterVec
+	submitConfidence    *prometheus.HistogramVec
 }
 
 func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
@@ -113,7 +108,6 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 		handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}),
 		HTTP: newHTTP(reg, "takuhai", map[string]string{
 			"/healthz":                      "/healthz",
-			"/mcp":                          "/mcp",
 			"/metrics":                      "/metrics",
 			"/api/v1/releases":              "/api/v1/releases",
 			"/api/v1/releases/ingest":       "/api/v1/releases/ingest",
@@ -191,25 +185,6 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 			Help:      "Successful matcher submission confidence.",
 			Buckets:   []float64{0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1},
 		}, []string{"status"}),
-		mcpToolCalls: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
-			Subsystem: "mcp",
-			Name:      "tool_calls_total",
-			Help:      "Total MCP tool calls.",
-		}, []string{"tool", "result"}),
-		mcpToolDuration: auto.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: "takuhai",
-			Subsystem: "mcp",
-			Name:      "tool_duration_seconds",
-			Help:      "MCP tool call duration in seconds.",
-			Buckets:   prometheus.DefBuckets,
-		}, []string{"tool"}),
-		mcpResolveInfohashes: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
-			Subsystem: "mcp",
-			Name:      "resolve_magnets_infohashes_total",
-			Help:      "Total resolve_magnets infohash lookups.",
-		}, []string{"result"}),
 	}
 	for _, source := range api.Sources() {
 		for _, result := range []string{"new", "updated", "duplicate", "conflict", "skipped", "error"} {
@@ -273,26 +248,6 @@ func (m *Takuhai) Submit(status, result string, confidence *float64) {
 	m.submits.WithLabelValues(status, result).Inc()
 	if result == "ok" && confidence != nil && (status == "matched" || status == "suppressed") {
 		m.submitConfidence.WithLabelValues(status).Observe(*confidence)
-	}
-}
-
-func (m *Takuhai) MCPTool(tool, result string, dur time.Duration) {
-	if m == nil {
-		return
-	}
-	m.mcpToolCalls.WithLabelValues(tool, result).Inc()
-	m.mcpToolDuration.WithLabelValues(tool).Observe(dur.Seconds())
-}
-
-func (m *Takuhai) MCPResolveMagnets(hits, misses int) {
-	if m == nil {
-		return
-	}
-	if hits > 0 {
-		m.mcpResolveInfohashes.WithLabelValues("hit").Add(float64(hits))
-	}
-	if misses > 0 {
-		m.mcpResolveInfohashes.WithLabelValues("miss").Add(float64(misses))
 	}
 }
 
