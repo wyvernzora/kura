@@ -30,6 +30,7 @@ const (
 	gatewayImage   = "kura-product-e2e-gateway:latest"
 	n8nNodesImage  = "kura-product-e2e-n8n-nodes:latest"
 	n8nImage       = "n8nio/n8n:2.28.3"
+	cleanupImage   = "busybox:1.38-musl"
 )
 
 type productStack struct {
@@ -398,6 +399,22 @@ func writableDir(t *testing.T, name string) string {
 	if err := os.Chmod(dir, 0o777); err != nil {
 		t.Fatalf("chmod %s: %v", name, err)
 	}
+	// Containers use their production UIDs and can create nested directories
+	// that the unprivileged Linux CI runner cannot remove. This cleanup is
+	// registered after TempDir's, so LIFO ordering restores permissions after
+	// container termination and before the testing package removes the tree.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "docker", "run", "--rm",
+			"--volume", dir+":/target",
+			cleanupImage,
+			"chmod", "-R", "a+rwX", "/target",
+		)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("make %s removable: %v\n%s", name, err, output)
+		}
+	})
 	return dir
 }
 
