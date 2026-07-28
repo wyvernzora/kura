@@ -14,7 +14,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 func TestHTTPWrapRecordsRouteAndStatus(t *testing.T) {
@@ -118,7 +118,7 @@ func TestTakuhaiPrecreatesIngestPostCounters(t *testing.T) {
 		t.Fatalf("read /metrics: %v", err)
 	}
 	text := string(body)
-	for _, source := range rawpost.Sources() {
+	for _, source := range api.Sources() {
 		for _, result := range []string{"new", "updated", "duplicate", "conflict", "skipped", "error"} {
 			want := `takuhai_ingest_posts_total{result="` + result + `",source="` + source + `"} 0`
 			if !strings.Contains(text, want) {

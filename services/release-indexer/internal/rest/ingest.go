@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/ingest"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 // maxBatchPosts is the hard cap on one POST /ingest body (an oversized batch -> 400
@@ -19,7 +19,7 @@ const maxBatchPosts = 1000
 
 // ingestRequest is the POST /ingest request body: a batch of raw crawled posts.
 type ingestRequest struct {
-	Posts []rawpost.RawPost `json:"posts"`
+	Posts []api.RawPost `json:"posts"`
 }
 
 func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
@@ -113,12 +113,12 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 		"duration_ms", time.Since(start).Milliseconds(),
 	)
 
-	resp := rawpost.IngestSummary{
+	resp := api.IngestSummary{
 		Batch: batch,
-		Queue: rawpost.QueueStats{
-			Available: int64(qs.Available),
-			Leased:    int64(qs.Leased),
-			Exhausted: int64(qs.Exhausted),
+		Queue: api.QueueCounts{
+			Available: qs.Available,
+			Leased:    qs.Leased,
+			Exhausted: qs.Exhausted,
 		},
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -126,7 +126,7 @@ func (h *Handler) handleIngest(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-func sourceCounts(posts []rawpost.RawPost) map[string]int {
+func sourceCounts(posts []api.RawPost) map[string]int {
 	counts := make(map[string]int)
 	for i := range posts {
 		source := strings.TrimSpace(posts[i].Source)

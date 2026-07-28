@@ -7,7 +7,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 func TestRunnerRunsImmediatelyAndOnInterval(t *testing.T) {
@@ -22,15 +22,15 @@ func TestRunnerRunsImmediatelyAndOnInterval(t *testing.T) {
 				Source:   "test",
 				Interval: time.Minute,
 				Timeout:  10 * time.Second,
-				Crawl: func(context.Context) ([]rawpost.RawPost, error) {
+				Crawl: func(context.Context) ([]api.RawPost, error) {
 					mu.Lock()
 					runs++
 					mu.Unlock()
 					return nil, nil
 				},
 			}},
-			Ingest: func(context.Context, []rawpost.RawPost) (rawpost.IngestBatch, error) {
-				return rawpost.IngestBatch{}, nil
+			Ingest: func(context.Context, []api.RawPost) (api.IngestBatch, error) {
+				return api.IngestBatch{}, nil
 			},
 		}
 
@@ -68,15 +68,15 @@ func TestRunnerAppliesPerRunTimeout(t *testing.T) {
 				Source:   "test",
 				Interval: time.Hour,
 				Timeout:  time.Minute,
-				Crawl: func(ctx context.Context) ([]rawpost.RawPost, error) {
+				Crawl: func(ctx context.Context) ([]api.RawPost, error) {
 					<-ctx.Done()
 					timedOut <- struct{}{}
 					return nil, ctx.Err()
 				},
 			}},
-			Ingest: func(context.Context, []rawpost.RawPost) (rawpost.IngestBatch, error) {
+			Ingest: func(context.Context, []api.RawPost) (api.IngestBatch, error) {
 				t.Fatal("Ingest called after crawl timeout")
-				return rawpost.IngestBatch{}, nil
+				return api.IngestBatch{}, nil
 			},
 		}
 

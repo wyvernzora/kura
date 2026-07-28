@@ -7,10 +7,6 @@ import "time"
 //
 // There is deliberately no infohash field: the service derives the canonical
 // dedup key from Magnet, so a producer cannot disagree with it about identity.
-//
-// This supersedes pkg/rawpost, which carried the same shape in snake_case. That
-// package is folded into this one when the ingest handler moves to /api/v1
-// (plan §8.2); until then both exist and only this one is public contract.
 type RawPost struct {
 	Title       string    `json:"title"`
 	Magnet      string    `json:"magnet"`

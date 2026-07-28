@@ -20,7 +20,7 @@ import (
 	tcnetwork "github.com/testcontainers/testcontainers-go/network"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 const (
@@ -234,7 +234,7 @@ func claimOne(t *testing.T, takuhaiURL, wantInfohash string, leaseSeconds int) i
 	if item.ClaimToken == 0 {
 		t.Fatalf("claimed item = %+v, want token", item)
 	}
-	if len(item.RawItems) != 1 || item.RawItems[0].Source != rawpost.SourceDMHY || item.RawItems[0].Title == "" {
+	if len(item.RawItems) != 1 || item.RawItems[0].Source != api.SourceDMHY || item.RawItems[0].Title == "" {
 		t.Fatalf("claimed raw items = %+v, want crawled DMHY evidence", item.RawItems)
 	}
 	return item.ClaimToken

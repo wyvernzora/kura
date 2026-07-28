@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 // archiveRowRe splits a DMHY archive page's <tbody> into content rows. A content row
@@ -56,7 +56,7 @@ var hiddenDateRe = regexp.MustCompile(`display:\s*none;?">\s*([0-9]{4}/[0-9]{2}/
 
 // ParseArchivePage parses a DMHY HTML-archive page's content rows into raw posts. It is
 // the crawler's exported HTML primitive and emits every content row as a
-// rawpost.RawPost (raw
+// api.RawPost (raw
 // title+magnet+metadata+size), including rows whose magnet has no canonical v1 btih
 // (pure-v2 / malformed) — those were SKIPPED by the old parser but are now emitted
 // here with their raw magnet and no infohash. takuhai derives the dedup key and the
@@ -69,7 +69,7 @@ var hiddenDateRe = regexp.MustCompile(`display:\s*none;?">\s*([0-9]{4}/[0-9]{2}/
 // interstitial, truncation, markup drift) and returns errNonArchivePage so the
 // page-walk surfaces it as a fetch failure — never counting it toward the
 // consecutive-empty floor threshold.
-func ParseArchivePage(html []byte) ([]rawpost.RawPost, error) {
+func ParseArchivePage(html []byte) ([]api.RawPost, error) {
 	body := string(html)
 
 	// Locate each content row by its opening `<tr class="">` and bound it at the next
@@ -87,7 +87,7 @@ func ParseArchivePage(html []byte) ([]rawpost.RawPost, error) {
 		return nil, nil
 	}
 
-	posts := make([]rawpost.RawPost, 0, len(starts))
+	posts := make([]api.RawPost, 0, len(starts))
 	for i, loc := range starts {
 		end := len(body)
 		if i+1 < len(starts) {
@@ -106,8 +106,8 @@ func ParseArchivePage(html []byte) ([]rawpost.RawPost, error) {
 		magnet := rowMagnet(row)
 		sid := rowSourceID(href)
 
-		posts = append(posts, rawpost.RawPost{
-			Source:      rawpost.SourceDMHY,
+		posts = append(posts, api.RawPost{
+			Source:      api.SourceDMHY,
 			SourceID:    sid,
 			URL:         href,
 			Title:       title,

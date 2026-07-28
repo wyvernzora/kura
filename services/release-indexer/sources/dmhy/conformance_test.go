@@ -16,8 +16,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/crawl"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
 )
 
 const (
@@ -153,7 +153,7 @@ func (s *scriptedFetcher) fetch(_ context.Context, page int) ([]byte, error) {
 	return s.pages[page-1], nil
 }
 
-func postSourceIDs(posts []rawpost.RawPost) []string {
+func postSourceIDs(posts []api.RawPost) []string {
 	ids := make([]string, len(posts))
 	for i, post := range posts {
 		ids[i] = post.SourceID
@@ -209,7 +209,7 @@ func TestP1_CrawlerParsesArchivePage(t *testing.T) {
 		t.Fatal("page-real.html emitted no posts")
 	}
 	for _, post := range posts {
-		if post.SizeBytes > 0 && post.Source == rawpost.SourceDMHY &&
+		if post.SizeBytes > 0 && post.Source == api.SourceDMHY &&
 			post.SourceID != "" && post.Title != "" && strings.Contains(post.Magnet, "&tr=") {
 			return
 		}

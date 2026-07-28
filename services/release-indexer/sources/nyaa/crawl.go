@@ -3,8 +3,8 @@ package nyaa
 import (
 	"context"
 
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/crawl"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
 )
 
 // PageFetcher fetches the raw HTML bytes for a 1-based Nyaa result page.
@@ -22,7 +22,7 @@ func NewCrawler(fetch PageFetcher, threshold int) *Crawler {
 }
 
 // Crawl returns up to limit of the newest Nyaa posts.
-func (c *Crawler) Crawl(ctx context.Context, limit int) ([]rawpost.RawPost, error) {
+func (c *Crawler) Crawl(ctx context.Context, limit int) ([]api.RawPost, error) {
 	return crawl.NewCrawler(crawl.Config{
 		Source:    "nyaa",
 		Fetch:     crawl.PageFetcher(c.fetch),

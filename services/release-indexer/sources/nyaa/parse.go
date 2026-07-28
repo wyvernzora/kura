@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 var (
@@ -26,7 +26,7 @@ var (
 )
 
 // ParseListingPage parses a Nyaa HTML listing page into raw posts.
-func ParseListingPage(body []byte) ([]rawpost.RawPost, error) {
+func ParseListingPage(body []byte) ([]api.RawPost, error) {
 	page := string(body)
 	starts := listRowRe.FindAllStringIndex(page, -1)
 	if len(starts) == 0 {
@@ -36,7 +36,7 @@ func ParseListingPage(body []byte) ([]rawpost.RawPost, error) {
 		return nil, nil
 	}
 
-	posts := make([]rawpost.RawPost, 0, len(starts))
+	posts := make([]api.RawPost, 0, len(starts))
 	for i, loc := range starts {
 		end := len(page)
 		if i+1 < len(starts) {
@@ -47,8 +47,8 @@ func ParseListingPage(body []byte) ([]rawpost.RawPost, error) {
 		if id == "" {
 			continue
 		}
-		posts = append(posts, rawpost.RawPost{
-			Source:      rawpost.SourceNyaa,
+		posts = append(posts, api.RawPost{
+			Source:      api.SourceNyaa,
 			SourceID:    id,
 			URL:         "https://nyaa.si/view/" + id,
 			Title:       title,

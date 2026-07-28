@@ -7,12 +7,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
-type CrawlFunc func(ctx context.Context) ([]rawpost.RawPost, error)
+type CrawlFunc func(ctx context.Context) ([]api.RawPost, error)
 
-type IngestFunc func(ctx context.Context, posts []rawpost.RawPost) (rawpost.IngestBatch, error)
+type IngestFunc func(ctx context.Context, posts []api.RawPost) (api.IngestBatch, error)
 
 type Metrics interface {
 	IngestBatch(size int, result string)

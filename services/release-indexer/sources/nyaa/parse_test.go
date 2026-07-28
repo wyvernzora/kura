@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 func TestParseListingPage(t *testing.T) {
@@ -19,8 +19,8 @@ func TestParseListingPage(t *testing.T) {
 		t.Fatalf("len(posts) = %d, want 1", len(posts))
 	}
 	got := posts[0]
-	if got.Source != rawpost.SourceNyaa {
-		t.Fatalf("Source = %q, want %q", got.Source, rawpost.SourceNyaa)
+	if got.Source != api.SourceNyaa {
+		t.Fatalf("Source = %q, want %q", got.Source, api.SourceNyaa)
 	}
 	if got.SourceID != "1234567" {
 		t.Fatalf("SourceID = %q, want 1234567", got.SourceID)

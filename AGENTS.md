@@ -298,7 +298,8 @@ Read design.md before any sizable change.
 
 ```
 cmd/kura-release-indexer/   config + wiring + lifecycle (migrate → bind → crawl/serve → drain)
-pkg/rawpost/         shared wire contract: RawPost + IngestSummary (a leaf)
+pkg/api/             public wire contract: RawPost, IngestSummary, queue + release
+                     DTOs, error envelope, source registry (a leaf)
 internal/config/     strict TOML loading, defaults, and validation
 internal/crawlrunner/ one non-overlapping scheduled loop per enabled source
 internal/ingest/     transport-neutral RawPost normalization + persistence
@@ -315,7 +316,7 @@ sources/dmhy/        DMHY parser and crawler
 sources/nyaa/        Nyaa parser and crawler
 ```
 
-`store` is a leaf (imports neither `rawpost` nor the REST layer); `mcp` reaches store
+`store` is a leaf (imports neither `pkg/api` nor the REST layer); `mcp` reaches store
 only through `dispatch`; REST queue/submit routes use `dispatch`; REST and scheduled
 sources share `internal/ingest`; source packages emit `RawPost` and do not import
 storage.

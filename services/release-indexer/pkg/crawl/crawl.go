@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 // PageFetcher fetches the raw bytes for a 1-based page number.
 type PageFetcher func(ctx context.Context, page int) (body []byte, err error)
 
 // PageParser parses one fetched page into newest-to-oldest raw posts.
-type PageParser func(body []byte) ([]rawpost.RawPost, error)
+type PageParser func(body []byte) ([]api.RawPost, error)
 
 // Config wires a source crawler.
 type Config struct {
@@ -53,10 +53,10 @@ var (
 
 // Crawl returns up to limit of the newest posts. A fetch or parse failure
 // returns no partial batch so a later scheduled run can retry from page one.
-func (c *Crawler) Crawl(ctx context.Context, limit int) ([]rawpost.RawPost, error) {
+func (c *Crawler) Crawl(ctx context.Context, limit int) ([]api.RawPost, error) {
 	limit = clampLimit(limit)
 
-	posts := make([]rawpost.RawPost, 0, limit)
+	posts := make([]api.RawPost, 0, limit)
 	consecutiveEmpty := 0
 	for page := 1; ; page++ {
 		body, err := c.fetch(ctx, page)
@@ -85,7 +85,7 @@ func (c *Crawler) Crawl(ctx context.Context, limit int) ([]rawpost.RawPost, erro
 	}
 }
 
-func (c *Crawler) parsePage(body []byte, page int) ([]rawpost.RawPost, error) {
+func (c *Crawler) parsePage(body []byte, page int) ([]api.RawPost, error) {
 	pagePosts, err := c.parse(body)
 	if err == nil {
 		return pagePosts, nil

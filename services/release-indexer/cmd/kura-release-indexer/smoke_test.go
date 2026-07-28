@@ -17,7 +17,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 const smokeHexInfohash = "0123456789abcdef0123456789abcdef01234567"
@@ -65,8 +65,8 @@ func TestSmoke(t *testing.T) {
 
 	t.Run("ingest-claim-submit-stats", func(t *testing.T) {
 		ingestBody := mustJSON(t, map[string]any{
-			"posts": []rawpost.RawPost{{
-				Source:      rawpost.SourceDMHY,
+			"posts": []api.RawPost{{
+				Source:      api.SourceDMHY,
 				SourceID:    "smoke-1",
 				Title:       "Smoke Test Release",
 				Magnet:      "magnet:?xt=urn:btih:" + smokeHexInfohash + "&tr=udp://smoke:80",
@@ -82,7 +82,7 @@ func TestSmoke(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("POST /ingest = %d, want 200", resp.StatusCode)
 		}
-		var summary rawpost.IngestSummary
+		var summary api.IngestSummary
 		if err := json.NewDecoder(resp.Body).Decode(&summary); err != nil {
 			t.Fatalf("decode /ingest summary: %v", err)
 		}

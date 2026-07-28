@@ -30,7 +30,7 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/internal/metrics"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/rest"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store/postgres"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 	"github.com/wyvernzora/kura/services/release-indexer/sources/dmhy"
 	"github.com/wyvernzora/kura/services/release-indexer/sources/nyaa"
 
@@ -317,10 +317,10 @@ func newCrawlRunner(
 		}
 		crawler := dmhy.NewHTTPCrawler(source.URL, category, source.MaxRPS, source.CacheTTL)
 		jobs = append(jobs, crawlrunner.Job{
-			Source:   rawpost.SourceDMHY,
+			Source:   api.SourceDMHY,
 			Interval: source.Interval,
 			Timeout:  source.Timeout,
-			Crawl: func(ctx context.Context) ([]rawpost.RawPost, error) {
+			Crawl: func(ctx context.Context) ([]api.RawPost, error) {
 				return crawler.Crawl(ctx, crawlPageSize)
 			},
 		})
@@ -328,10 +328,10 @@ func newCrawlRunner(
 	if source := cfg.Sources.Nyaa; source.Enabled {
 		crawler := nyaa.NewHTTPCrawler(source.URL, source.Query, source.Category, source.Filter, source.MaxRPS)
 		jobs = append(jobs, crawlrunner.Job{
-			Source:   rawpost.SourceNyaa,
+			Source:   api.SourceNyaa,
 			Interval: source.Interval,
 			Timeout:  source.Timeout,
-			Crawl: func(ctx context.Context) ([]rawpost.RawPost, error) {
+			Crawl: func(ctx context.Context) ([]api.RawPost, error) {
 				return crawler.Crawl(ctx, crawlPageSize)
 			},
 		})

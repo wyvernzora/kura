@@ -19,8 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/crawl"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
 )
 
 const (
@@ -49,8 +49,8 @@ func TestP4_NyaaParse_LiveListingGolden(t *testing.T) {
 	}
 
 	first := posts[0]
-	if first.Source != rawpost.SourceNyaa {
-		t.Fatalf("Source = %q, want %q", first.Source, rawpost.SourceNyaa)
+	if first.Source != api.SourceNyaa {
+		t.Fatalf("Source = %q, want %q", first.Source, api.SourceNyaa)
 	}
 	if first.SourceID != "2128319" {
 		t.Fatalf("SourceID = %q, want 2128319", first.SourceID)

@@ -8,7 +8,7 @@ import (
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/infohash"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 type Store interface {
@@ -43,8 +43,8 @@ func (e *Failure) Error() string {
 func (e *Failure) Unwrap() error { return e.Err }
 
 // Batch normalizes and ingests posts in order, stopping at the first failure.
-func (p *Processor) Batch(ctx context.Context, posts []rawpost.RawPost) (rawpost.IngestBatch, error) {
-	var batch rawpost.IngestBatch
+func (p *Processor) Batch(ctx context.Context, posts []api.RawPost) (api.IngestBatch, error) {
+	var batch api.IngestBatch
 	for i := range posts {
 		post := posts[i]
 
@@ -88,7 +88,7 @@ func (p *Processor) record(source, result string) {
 	}
 }
 
-func failure(index int, post rawpost.RawPost, err error) *Failure {
+func failure(index int, post api.RawPost, err error) *Failure {
 	return &Failure{
 		Index:    index,
 		Source:   post.Source,
@@ -97,7 +97,7 @@ func failure(index int, post rawpost.RawPost, err error) *Failure {
 	}
 }
 
-func params(p rawpost.RawPost, infohash string) store.IngestParams {
+func params(p api.RawPost, infohash string) store.IngestParams {
 	return store.IngestParams{
 		Infohash:    infohash,
 		Source:      p.Source,

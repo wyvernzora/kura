@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/crawl"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
 )
 
 // PageFetcher fetches the raw bytes for a 1-based DMHY page number.
@@ -24,7 +24,7 @@ func NewCrawler(fetch PageFetcher, threshold int) *Crawler {
 }
 
 // Crawl returns up to limit of the newest DMHY posts.
-func (c *Crawler) Crawl(ctx context.Context, limit int) ([]rawpost.RawPost, error) {
+func (c *Crawler) Crawl(ctx context.Context, limit int) ([]api.RawPost, error) {
 	return c.shared().Crawl(ctx, limit)
 }
 

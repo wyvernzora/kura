@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 const testInfohash = "0123456789abcdef0123456789abcdef01234567"
@@ -20,7 +20,7 @@ func TestProcessorBatch(t *testing.T) {
 	}
 	p := New(s, nil)
 
-	batch, err := p.Batch(t.Context(), []rawpost.RawPost{
+	batch, err := p.Batch(t.Context(), []api.RawPost{
 		post("one", "magnet:?xt=urn:btih:"+testInfohash),
 		post("two", "magnet:?xt=urn:btih:"+testInfohash),
 		post("v2", "magnet:?xt=urn:btmh:1220abcdef"),
@@ -41,7 +41,7 @@ func TestProcessorBatchReportsFailingPost(t *testing.T) {
 	s := &fakeStore{err: wantErr}
 	p := New(s, nil)
 
-	_, err := p.Batch(t.Context(), []rawpost.RawPost{post("source-7", "magnet:?xt=urn:btih:"+testInfohash)})
+	_, err := p.Batch(t.Context(), []api.RawPost{post("source-7", "magnet:?xt=urn:btih:"+testInfohash)})
 	var failure *Failure
 	if !errors.As(err, &failure) {
 		t.Fatalf("Batch() error = %v, want *Failure", err)
@@ -51,9 +51,9 @@ func TestProcessorBatchReportsFailingPost(t *testing.T) {
 	}
 }
 
-func post(sourceID, magnet string) rawpost.RawPost {
-	return rawpost.RawPost{
-		Source:   rawpost.SourceDMHY,
+func post(sourceID, magnet string) api.RawPost {
+	return api.RawPost{
+		Source:   api.SourceDMHY,
 		SourceID: sourceID,
 		Title:    sourceID,
 		Magnet:   magnet,

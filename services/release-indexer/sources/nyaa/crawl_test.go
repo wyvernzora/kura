@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 func TestCrawlReturnsNewestLimit(t *testing.T) {
@@ -36,7 +36,7 @@ func TestCrawlReturnsNewestLimit(t *testing.T) {
 	}
 }
 
-func testPostIDs(posts []rawpost.RawPost) []string {
+func testPostIDs(posts []api.RawPost) []string {
 	ids := make([]string, len(posts))
 	for i, post := range posts {
 		ids[i] = post.SourceID

@@ -14,7 +14,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store"
-	"github.com/wyvernzora/kura/services/release-indexer/pkg/rawpost"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
 type HTTP struct {
@@ -197,7 +197,7 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 			Help:      "Total resolve_magnets infohash lookups.",
 		}, []string{"result"}),
 	}
-	for _, source := range rawpost.Sources() {
+	for _, source := range api.Sources() {
 		for _, result := range []string{"new", "updated", "duplicate", "conflict", "skipped", "error"} {
 			m.ingestPosts.WithLabelValues(source, result).Add(0)
 		}
