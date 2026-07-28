@@ -28,6 +28,8 @@ const (
 	libraryImage   = "kura-product-e2e-library:latest"
 	releaseImage   = "kura-product-e2e-release:latest"
 	gatewayImage   = "kura-product-e2e-gateway:latest"
+	n8nNodesImage  = "kura-product-e2e-n8n-nodes:latest"
+	n8nImage       = "n8nio/n8n:2.28.3"
 )
 
 type productStack struct {
@@ -36,6 +38,7 @@ type productStack struct {
 	libraryRoot string
 	inboxRoot   string
 	gatewayURL  string
+	network     *testcontainers.DockerNetwork
 
 	library testcontainers.Container
 	release testcontainers.Container
@@ -75,6 +78,7 @@ func startProductStack(t *testing.T) *productStack {
 		libraryRoot: libraryRoot,
 		inboxRoot:   inboxRoot,
 		gatewayURL:  gatewayURL,
+		network:     nw,
 		library:     library,
 		release:     release,
 		gateway:     gateway,
@@ -121,6 +125,15 @@ func buildProductImages(t *testing.T) {
 				"--build-arg", "VERSION=" + testVersion,
 				"--tag", gatewayImage,
 				filepath.Join(root, "services", "gateway"),
+			},
+		},
+		{
+			name: "n8n nodes",
+			args: []string{"buildx", "build", "--load",
+				"--build-arg", "VERSION=" + testVersion,
+				"--tag", n8nNodesImage,
+				"--file", filepath.Join(root, "integrations", "n8n", "Dockerfile"),
+				root,
 			},
 		},
 	}

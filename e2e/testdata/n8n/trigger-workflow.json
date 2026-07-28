@@ -1,0 +1,103 @@
+[
+  {
+    "id": "kura-product-trigger",
+    "name": "Kura Product Trigger E2E",
+    "active": true,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "nodes": [
+      {
+        "id": "queue-trigger",
+        "name": "Queue Trigger",
+        "type": "CUSTOM.kuraQueueTrigger",
+        "typeVersion": 2,
+        "position": [0, 0],
+        "parameters": {
+          "pollTimes": {
+            "item": [
+              {
+                "mode": "custom",
+                "cronExpression": "*/2 * * * * *"
+              }
+            ]
+          },
+          "limit": 1,
+          "leaseSeconds": 60
+        },
+        "credentials": {
+          "kuraApi": {
+            "id": "kura-product-e2e",
+            "name": "Kura Product E2E"
+          }
+        }
+      },
+      {
+        "id": "submit",
+        "name": "Submit Match",
+        "type": "CUSTOM.kura",
+        "typeVersion": 2,
+        "position": [220, 0],
+        "parameters": {
+          "resource": "queue",
+          "operation": "submit",
+          "body": "={{ { output: { items: $json.items.map(item => ({ infohash: item.infohash, claimToken: item.claimToken, status: 'matched', ref: 'tvdb:12345', confidence: 1, reason: 'n8n trigger e2e' })) } } }}"
+        },
+        "credentials": {
+          "kuraApi": {
+            "id": "kura-product-e2e",
+            "name": "Kura Product E2E"
+          }
+        }
+      },
+      {
+        "id": "get-release",
+        "name": "Get Release",
+        "type": "CUSTOM.kura",
+        "typeVersion": 2,
+        "position": [440, 0],
+        "parameters": {
+          "resource": "release",
+          "operation": "get",
+          "infohash": "={{ $json.items[0].infohash }}"
+        },
+        "credentials": {
+          "kuraApi": {
+            "id": "kura-product-e2e",
+            "name": "Kura Product E2E"
+          }
+        }
+      },
+      {
+        "id": "update-tags",
+        "name": "Update Series Tags",
+        "type": "CUSTOM.kura",
+        "typeVersion": 2,
+        "position": [660, 0],
+        "parameters": {
+          "resource": "series",
+          "operation": "updateTags",
+          "ref": "={{ $json.ref }}",
+          "tagChanges": "n8n:trigger-e2e"
+        },
+        "credentials": {
+          "kuraApi": {
+            "id": "kura-product-e2e",
+            "name": "Kura Product E2E"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Queue Trigger": {
+        "main": [[{ "node": "Submit Match", "type": "main", "index": 0 }]]
+      },
+      "Submit Match": {
+        "main": [[{ "node": "Get Release", "type": "main", "index": 0 }]]
+      },
+      "Get Release": {
+        "main": [[{ "node": "Update Series Tags", "type": "main", "index": 0 }]]
+      }
+    }
+  }
+]

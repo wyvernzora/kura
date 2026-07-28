@@ -34,6 +34,8 @@ func TestProduct(t *testing.T) {
 	t.Run("restart durability", testRestartDurability)
 	t.Run("partial outage recovery", testPartialOutageRecovery)
 	t.Run("streaming and shutdown", testStreamingAndShutdown)
+	t.Run("n8n action workflow", testN8NActionWorkflow)
+	t.Run("n8n polling trigger workflow", testN8NTriggerWorkflow)
 }
 
 func testReleaseToLibrary(t *testing.T) {
