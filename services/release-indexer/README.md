@@ -42,8 +42,8 @@ ingestion makes replay harmless.
 `POST /api/v1/sources/{source}/crawl` restores the original stateless
 count-and-cursor crawler contract for backfills, except the indexer now ingests
 each chunk directly instead of returning posts for an out-of-process shuffle.
-The `kura crawl` client can run one chunk or own the cursor loop (see
-docs/operations.md).
+The `kura crawl <source> <lookback>` client owns the bounded cursor loop and
+prints resumable checkpoints (see docs/operations.md).
 n8n drives only the **match loop** over the queue
 REST API; a stateless matcher resolves each release. Consumers read the catalog over
 a REST API under `/api/v1/releases`. Postgres is both

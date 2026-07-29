@@ -11,7 +11,7 @@ import (
 )
 
 // CrawlSource asks the release indexer to consume one exact-sized chunk from
-// a source cursor and ingest it directly. The caller owns the loop and threads
+// a source cursor and ingest it directly. The kura crawl command threads
 // NextCursor into the next request while HasMore is true.
 //
 // The releases surface lives on the release indexer, so KURA_SERVER_URL must

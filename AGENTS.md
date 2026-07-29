@@ -233,9 +233,10 @@ When the user corrects your approach, append a one-line rule here before ending 
   `kura` CLI as separate binaries.
 - **Commands:** `make check`, `make e2e`, `make build`, and `make install`
   from `cli/`.
-- **Releases:** `kura crawl <source>` drives exact count-and-cursor chunks
-  through `POST /api/v1/sources/{source}/crawl`; `--loop` threads cursors
-  client-side until the lookback boundary or archive floor. It needs `KURA_SERVER_URL`
+- **Releases:** `kura crawl <source> <lookback>` automatically threads
+  bounded cursor chunks through `POST /api/v1/sources/{source}/crawl` until
+  the lookback boundary or archive floor; `--cursor` resumes from a printed
+  checkpoint. It needs `KURA_SERVER_URL`
   pointing at the suite gateway (one origin over every service API) or at
   the indexer directly; against a bare library-manager they 404.
 

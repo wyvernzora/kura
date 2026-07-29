@@ -112,24 +112,34 @@ When a 100-post request consumes page 1's 80 rows and page 2's first 20, the
 next cursor resumes page 2 at offset 20. The page cache normally reuses the
 same page-2 snapshot for the next request.
 
-The CLI exposes both one-chunk and loop forms:
+The CLI owns the bounded cursor loop:
 
 ```sh
-# One bounded chunk; print the cursor for manual continuation.
-KURA_SERVER_URL=https://kura.example.test kura crawl dmhy --count 100
+# Each HTTP request remains one bounded 200-post chunk. The CLI prints every
+# committed cursor and continues until the lookback boundary.
+KURA_SERVER_URL=https://kura.example.test kura crawl dmhy 30d
 
-# Continue the next bounded chunk.
-kura crawl dmhy --count 100 --cursor eyJzb3VyY2UiOiJkbWh5Iiw…
+# Resume a failed crawl from its last printed checkpoint.
+kura crawl dmhy 30d --cursor eyJzb3VyY2UiOiJkbWh5Iiw…
 
-# Client-side loop. Each HTTP request remains one bounded chunk; the CLI
-# threads cursors until the lookback boundary or archive floor.
-kura crawl dmhy --count 200 --lookback 260w --loop
+# Use 0 as the lookback to walk to the archive floor.
+kura crawl dmhy 0
 ```
 
-`--json` prints the raw terminal object for one chunk; with `--loop` it emits
-one JSON object per chunk (JSONL). A loop failure exits non-zero and prints the
-cursor to resume. Pages already ingested remain committed, and retrying the
-same cursor is safe because ingestion is idempotent.
+Human output prints each committed cursor to stdout. `--json` emits one raw
+JSON object per chunk (JSONL), including `nextCursor`. A failure exits non-zero
+and prints an exact resume command to stderr. Pages already ingested remain
+committed, and retrying the same cursor is safe because ingestion is
+idempotent.
+
+Every source has one shared fetch gate across scheduled and operator crawls.
+The configured `max_rps` is a hard ceiling. After a request completes, the
+gate also waits at least the rolling mean of the last three request durations
+before starting another request; this slows deep SQL-backed pagination even
+when its request rate is already low. Network failures, HTTP 408/429, and 5xx
+responses retry up to three attempts with exponential backoff (2s initial,
+30s cap). A capped `Retry-After` takes precedence when it is longer. Parsing
+failures and other 4xx responses do not retry. All waits honor cancellation.
 
 The server resolves a source's consecutive-empty threshold inside a request,
 so a cursor is never parked in an unresolved empty run. `hasMore=false` and an
@@ -142,9 +152,9 @@ New posts can shift listing rows while a long backfill is running. Within
 `cache_ttl`, an adjacent mid-page continuation uses the same snapshot. After
 expiry, boundary posts may replay as pages drift; duplicate ingestion is
 expected and harmless. The scheduled settle-window crawl heals recent
-deletion-driven movement. Do not run parallel cursor chains for one source:
-the service's shared `max_rps` limiter is the pacing backstop, but parallel
-walks add no useful coverage.
+deletion-driven movement. Parallel cursor chains add no useful coverage. The
+shared source gate serializes their upstream fetches, but their independent
+cursors still create duplicate ingestion work.
 
 ## Security
 

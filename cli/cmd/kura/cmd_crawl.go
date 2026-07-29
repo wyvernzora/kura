@@ -9,29 +9,24 @@ import (
 	relapi "github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
-// crawlCmd drives the source-scoped crawl API. Each request is an exact-sized
-// count+cursor chunk; --loop keeps threading the returned cursor client-side.
-// Fetching, parsing, rate limiting, caching, and ingestion all stay in-process
-// in the indexer.
+// crawlCmd drives the source-scoped crawl API. It threads bounded server-side
+// chunks until the lookback boundary, printing each committed cursor as a
+// durable checkpoint. Fetching, parsing, pacing, caching, and ingestion stay
+// in-process in the indexer.
 type crawlCmd struct {
 	Source   string `arg:"" required:"" enum:"dmhy,nyaa" help:"Source to crawl: dmhy or nyaa."`
-	Count    int    `name:"count" default:"200" help:"Exact posts per request (1-200)."`
+	Lookback string `arg:"" required:"" help:"Stop at now minus this duration (for example 30d or 2w12h); 0 walks to the archive floor."`
 	Cursor   string `name:"cursor" help:"Opaque resume cursor from a previous crawl response."`
-	Lookback string `name:"lookback" help:"Stop at now minus this duration (for example 30d or 2w12h); empty walks to the archive floor."`
-	Loop     bool   `name:"loop" help:"Keep requesting chunks until the lookback boundary or archive floor."`
-	JSON     bool   `name:"json" help:"Print raw JSON; loop mode emits one compact JSON object per chunk."`
+	JSON     bool   `name:"json" help:"Print one compact JSON object per committed chunk (JSONL)."`
 }
 
 func (cmd *crawlCmd) Run(rt *runContext) error {
-	if cmd.Count < 1 || cmd.Count > 200 {
-		return fmt.Errorf("--count must be within 1..200")
-	}
 	c := clientFromRT(rt)
 	cursor := cmd.Cursor
 	var totals crawlTotals
 	for {
 		resp, err := c.CrawlSource(rt.Context, cmd.Source, relapi.CrawlRequest{
-			PageSize: cmd.Count,
+			PageSize: 200,
 			Cursor:   cursor,
 			Lookback: cmd.Lookback,
 		})
@@ -39,15 +34,15 @@ func (cmd *crawlCmd) Run(rt *runContext) error {
 			if cursor == "" {
 				return err
 			}
-			return fmt.Errorf("%w\n  resume with: kura crawl %s --count %d --cursor %s%s",
-				err, cmd.Source, cmd.Count, cursor, lookbackArg(cmd.Lookback))
+			return fmt.Errorf("%w\n  resume with: kura crawl %s %s --cursor %s",
+				err, cmd.Source, cmd.Lookback, cursor)
 		}
 		totals.add(resp)
 		if err := printCrawlResult(rt, resp, cmd.JSON); err != nil {
 			return err
 		}
-		if !cmd.Loop || !resp.HasMore {
-			if cmd.Loop && !cmd.JSON {
+		if !resp.HasMore {
+			if !cmd.JSON {
 				fmt.Fprintf(rt.Stdout, "done: %s (%d posts, %d new, %d duplicate across %d requests)\n",
 					humanStopReason(resp.StopReason), totals.posts, totals.new, totals.duplicate, totals.requests)
 			}
@@ -73,7 +68,7 @@ func printCrawlResult(rt *runContext, resp relapi.CrawlResult, asJSON bool) erro
 			resp.NewestPublishedAt.UTC().Format(time.RFC3339))
 	}
 	if resp.HasMore {
-		fmt.Fprintf(rt.Stdout, "  queue available %d; next cursor %s\n", resp.Queue.Available, resp.NextCursor)
+		fmt.Fprintf(rt.Stdout, "  queue available %d; checkpoint %s\n", resp.Queue.Available, resp.NextCursor)
 	} else {
 		fmt.Fprintf(rt.Stdout, "  queue available %d; done: %s\n", resp.Queue.Available, humanStopReason(resp.StopReason))
 	}
@@ -105,11 +100,4 @@ func humanStopReason(reason string) string {
 	default:
 		return reason
 	}
-}
-
-func lookbackArg(lookback string) string {
-	if lookback == "" {
-		return ""
-	}
-	return " --lookback " + lookback
 }

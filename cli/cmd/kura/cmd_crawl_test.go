@@ -12,46 +12,7 @@ import (
 	relapi "github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
-func TestCrawlOneChunk(t *testing.T) {
-	var calls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		_ = json.NewEncoder(w).Encode(relapi.CrawlResult{
-			Source:     relapi.SourceDMHY,
-			Posts:      100,
-			NextCursor: "next",
-			HasMore:    true,
-			StopReason: relapi.CrawlStopPageBudget,
-		})
-	}))
-	defer srv.Close()
-
-	var out bytes.Buffer
-	err := run([]string{"crawl", "dmhy", "--count", "100", "--json"}, runContext{
-		Stdout: &out,
-		Getenv: func(name string) string {
-			if name == client.EnvBaseURL {
-				return srv.URL
-			}
-			return ""
-		},
-	})
-	if err != nil {
-		t.Fatalf("run() error = %v", err)
-	}
-	if calls != 1 {
-		t.Fatalf("calls = %d, want one bounded chunk", calls)
-	}
-	var got relapi.CrawlResult
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
-		t.Fatalf("decode output: %v", err)
-	}
-	if got.NextCursor != "next" || !got.HasMore {
-		t.Fatalf("output = %+v", got)
-	}
-}
-
-func TestCrawlLoopThreadsCursorUntilDone(t *testing.T) {
+func TestCrawlThreadsCursorUntilDone(t *testing.T) {
 	var requests []relapi.CrawlRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req relapi.CrawlRequest
@@ -81,7 +42,7 @@ func TestCrawlLoopThreadsCursorUntilDone(t *testing.T) {
 	defer srv.Close()
 
 	var out bytes.Buffer
-	err := run([]string{"crawl", "dmhy", "--count", "100", "--lookback", "5w", "--loop", "--json"}, runContext{
+	err := run([]string{"crawl", "dmhy", "5w", "--json"}, runContext{
 		Stdout: &out,
 		Getenv: func(name string) string {
 			if name == client.EnvBaseURL {
@@ -100,7 +61,7 @@ func TestCrawlLoopThreadsCursorUntilDone(t *testing.T) {
 		t.Fatalf("cursors = %q, %q", requests[0].Cursor, requests[1].Cursor)
 	}
 	for i, req := range requests {
-		if req.PageSize != 100 || req.Lookback != "5w" {
+		if req.PageSize != 200 || req.Lookback != "5w" {
 			t.Fatalf("request %d = %+v", i, req)
 		}
 	}
@@ -118,7 +79,39 @@ func TestCrawlLoopThreadsCursorUntilDone(t *testing.T) {
 	}
 }
 
-func TestCrawlLoopErrorPrintsResumeCommand(t *testing.T) {
+func TestCrawlStartsFromResumeCursor(t *testing.T) {
+	var got relapi.CrawlRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(relapi.CrawlResult{
+			Source:     relapi.SourceDMHY,
+			StopReason: relapi.CrawlStopLookbackBoundary,
+		})
+	}))
+	defer srv.Close()
+
+	err := run([]string{"crawl", "dmhy", "30d", "--cursor", "resume-here"}, runContext{
+		Stdout: &bytes.Buffer{},
+		Getenv: func(name string) string {
+			if name == client.EnvBaseURL {
+				return srv.URL
+			}
+			return ""
+		},
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if got.Cursor != "resume-here" || got.Lookback != "30d" || got.PageSize != 200 {
+		t.Fatalf("request = %+v", got)
+	}
+}
+
+func TestCrawlErrorPrintsResumeCommand(t *testing.T) {
 	var calls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -140,7 +133,7 @@ func TestCrawlLoopErrorPrintsResumeCommand(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := run([]string{"crawl", "dmhy", "--count", "100", "--lookback", "30d", "--loop"}, runContext{
+	err := run([]string{"crawl", "dmhy", "30d"}, runContext{
 		Stdout: &bytes.Buffer{},
 		Getenv: func(name string) string {
 			if name == client.EnvBaseURL {
@@ -152,8 +145,47 @@ func TestCrawlLoopErrorPrintsResumeCommand(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected second chunk to fail")
 	}
-	want := "kura crawl dmhy --count 100 --cursor resume-here --lookback 30d"
+	want := "kura crawl dmhy 30d --cursor resume-here"
 	if !strings.Contains(err.Error(), want) {
 		t.Fatalf("error = %q, want resume command %q", err, want)
+	}
+}
+
+func TestCrawlHumanOutputIncludesCheckpoint(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		result := relapi.CrawlResult{
+			Source:     relapi.SourceDMHY,
+			Posts:      200,
+			NextCursor: "checkpoint-token",
+			HasMore:    true,
+			StopReason: relapi.CrawlStopPageBudget,
+		}
+		if calls == 2 {
+			result.Posts = 0
+			result.NextCursor = ""
+			result.HasMore = false
+			result.StopReason = relapi.CrawlStopLookbackBoundary
+		}
+		_ = json.NewEncoder(w).Encode(result)
+	}))
+	defer srv.Close()
+
+	var out bytes.Buffer
+	err := run([]string{"crawl", "dmhy", "30d"}, runContext{
+		Stdout: &out,
+		Getenv: func(name string) string {
+			if name == client.EnvBaseURL {
+				return srv.URL
+			}
+			return ""
+		},
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if !strings.Contains(out.String(), "checkpoint checkpoint-token") {
+		t.Fatalf("stdout = %q, want checkpoint", out.String())
 	}
 }

@@ -114,12 +114,13 @@ window, the operator drives `POST /api/v1/sources/{source}/crawl`. Each request
 consumes an exact post budget (up to 200), may cross listing-page boundaries,
 ingests directly, and returns an opaque `(page, offset)` cursor. The client
 threads that cursor until the requested lookback boundary or the confirmed
-archive floor; `kura crawl --loop` owns this loop without adding server-side
-state (see operations.md). Requests share the scheduled loop's crawler
-instances, so `max_rps` caps combined upstream traffic. A short per-source
-page cache lets adjacent chunks that split a listing page reuse the same
-snapshot; after it expires, ordinary listing drift can replay boundary posts,
-which idempotent ingestion absorbs.
+archive floor; `kura crawl <source> <lookback>` owns this loop automatically
+without adding server-side state (see operations.md). Requests share the
+scheduled loop's crawler instances, so one fetch gate applies the `max_rps`
+ceiling, latency-aware cooldown, and transient retry policy to their combined
+upstream traffic. A short per-source page cache lets adjacent chunks that split
+a listing page reuse the same snapshot; after it expires, ordinary listing
+drift can replay boundary posts, which idempotent ingestion absorbs.
 
 ## Queue Semantics
 
