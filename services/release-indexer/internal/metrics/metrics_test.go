@@ -187,8 +187,8 @@ func TestSourceCrawlSuccessStampsGauge(t *testing.T) {
 	rec := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
 	body := rec.Body.String()
-	if !strings.Contains(body, `kura_indexer_source_last_success_timestamp_seconds{source="nyaa"} 0`) {
-		t.Errorf("nyaa gauge should be pre-seeded to 0")
+	if strings.Contains(body, `kura_indexer_source_last_success_timestamp_seconds{source="nyaa"}`) {
+		t.Errorf("nyaa gauge should be absent before its first success (disabled sources must export nothing)")
 	}
 	for _, line := range strings.Split(body, "\n") {
 		if strings.HasPrefix(line, `kura_indexer_source_last_success_timestamp_seconds{source="dmhy"} `) {

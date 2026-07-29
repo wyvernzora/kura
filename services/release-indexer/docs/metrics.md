@@ -2,6 +2,13 @@
 
 The release-indexer exposes Prometheus metrics at `/metrics`.
 
+> **Rename note:** every metric was renamed from the historical `takuhai_*`
+> namespace to `kura_indexer_*` in the monorepo observability pass.
+> Prometheus alert/recording rules and dashboards referencing `takuhai_*`
+> silently stop matching — update them when deploying past that release.
+> The example dashboard below also carries a new `uid`, so importing it
+> creates a new dashboard rather than updating a previously imported one.
+
 ## kura_indexer
 
 | Metric | Type | Labels | Meaning |
@@ -15,7 +22,7 @@ The release-indexer exposes Prometheus metrics at `/metrics`.
 | `kura_indexer_source_crawls_total` | counter | `source`, `result` | Scheduled crawls by source and `ok`, `crawl_error`, or `ingest_error`. |
 | `kura_indexer_source_crawl_duration_seconds` | histogram | `source` | End-to-end scheduled crawl and ingest duration. |
 | `kura_indexer_source_crawl_posts_total` | counter | `source` | Posts returned by scheduled crawls. |
-| `kura_indexer_source_last_success_timestamp_seconds` | gauge | `source` | Unix time of the last fully successful scheduled crawl+ingest; `0` until the first success after boot. Panel: `time() - gauge`. |
+| `kura_indexer_source_last_success_timestamp_seconds` | gauge | `source` | Unix time of the last fully successful scheduled crawl+ingest. The series is absent until a source's first success since boot (and always absent for disabled sources), so pair the `time() - gauge` staleness panel/alert with an `absent()`-aware expression and a `for:` window longer than one crawl interval. |
 | `kura_indexer_queue_items` | gauge | `state` | Current release queue/status counts. States are `claimable`, `leased`, `unmatched`, `matched`, `suppressed`, and `exhausted`. |
 | `kura_indexer_queue_stats_scrape_ok` | gauge | none | `1` when queue stats were readable during scrape, otherwise `0`. |
 | `kura_indexer_catalog_raw_posts` | gauge | none | Current row count in `raw_items`. |

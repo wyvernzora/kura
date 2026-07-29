@@ -160,7 +160,7 @@ func New(version, commit string, qs queueStatsProvider) *Metrics {
 			Namespace: "kura_indexer",
 			Subsystem: "source",
 			Name:      "last_success_timestamp_seconds",
-			Help:      "Unix time of the last fully successful scheduled crawl+ingest. 0 = none since boot.",
+			Help:      "Unix time of the last fully successful scheduled crawl+ingest. Deliberately not pre-seeded: the series is absent until a source's first success since boot, so disabled sources export nothing.",
 		}, []string{"source"}),
 		queueClaims: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "kura_indexer",
@@ -209,7 +209,6 @@ func New(version, commit string, qs queueStatsProvider) *Metrics {
 			m.sourceCrawls.WithLabelValues(source, result).Add(0)
 		}
 		m.sourceCrawlPosts.WithLabelValues(source).Add(0)
-		m.sourceLastSuccess.WithLabelValues(source).Set(0)
 	}
 	for _, reason := range append(knownUnmatchedReasons, "none", "other") {
 		m.unmatchedReasons.WithLabelValues(reason).Add(0)
