@@ -154,3 +154,49 @@ func assertHistogram(t *testing.T, metric prometheus.Observer, count uint64, sum
 		t.Fatalf("histogram = count %d sum %v, want count %d sum %v", h.GetSampleCount(), h.GetSampleSum(), count, sum)
 	}
 }
+
+func TestUnmatchedReasonNormalizesFreeText(t *testing.T) {
+	m := New("v", "c", fakeQueueStats{})
+	m.UnmatchedReason("unmatched", "no_candidate")
+	m.UnmatchedReason("unmatched", "  Parse_Failure ")
+	m.UnmatchedReason("unmatched", "the moon was in the wrong phase")
+	m.UnmatchedReason("unmatched", "")
+	m.UnmatchedReason("matched", "no_candidate") // wrong status: ignored
+
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
+	body := rec.Body.String()
+	for _, want := range []string{
+		`kura_indexer_submit_unmatched_reasons_total{reason="no_candidate"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="parse_failure"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="other"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="none"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="ambiguous"} 0`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="low_confidence"} 0`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape missing %q", want)
+		}
+	}
+}
+
+func TestSourceCrawlSuccessStampsGauge(t *testing.T) {
+	m := New("v", "c", fakeQueueStats{})
+	m.SourceCrawlSuccess("dmhy")
+
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
+	body := rec.Body.String()
+	if !strings.Contains(body, `kura_indexer_source_last_success_timestamp_seconds{source="nyaa"} 0`) {
+		t.Errorf("nyaa gauge should be pre-seeded to 0")
+	}
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, `kura_indexer_source_last_success_timestamp_seconds{source="dmhy"} `) {
+			if strings.HasSuffix(line, " 0") {
+				t.Errorf("dmhy gauge not stamped: %s", line)
+			}
+			return
+		}
+	}
+	t.Errorf("dmhy gauge missing from scrape")
+}

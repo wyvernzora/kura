@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -91,11 +92,13 @@ type Metrics struct {
 	sourceCrawls        *prometheus.CounterVec
 	sourceCrawlDuration *prometheus.HistogramVec
 	sourceCrawlPosts    *prometheus.CounterVec
+	sourceLastSuccess   *prometheus.GaugeVec
 	queueClaims         *prometheus.CounterVec
 	queueClaimedItems   prometheus.Counter
 	queueClaimBatchSize prometheus.Histogram
 	submits             *prometheus.CounterVec
 	submitConfidence    *prometheus.HistogramVec
+	unmatchedReasons    *prometheus.CounterVec
 }
 
 func New(version, commit string, qs queueStatsProvider) *Metrics {
@@ -153,6 +156,12 @@ func New(version, commit string, qs queueStatsProvider) *Metrics {
 			Name:      "crawl_posts_total",
 			Help:      "Posts returned by scheduled source crawls.",
 		}, []string{"source"}),
+		sourceLastSuccess: auto.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: "kura_indexer",
+			Subsystem: "source",
+			Name:      "last_success_timestamp_seconds",
+			Help:      "Unix time of the last fully successful scheduled crawl+ingest. 0 = none since boot.",
+		}, []string{"source"}),
 		queueClaims: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "kura_indexer",
 			Subsystem: "queue",
@@ -185,6 +194,12 @@ func New(version, commit string, qs queueStatsProvider) *Metrics {
 			Help:      "Successful matcher submission confidence.",
 			Buckets:   []float64{0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 1},
 		}, []string{"status"}),
+		unmatchedReasons: auto.NewCounterVec(prometheus.CounterOpts{
+			Namespace: "kura_indexer",
+			Subsystem: "submit",
+			Name:      "unmatched_reasons_total",
+			Help:      "Successful unmatched submissions by normalized matcher reason.",
+		}, []string{"reason"}),
 	}
 	for _, source := range api.Sources() {
 		for _, result := range []string{"new", "updated", "duplicate", "conflict", "skipped", "error"} {
@@ -194,6 +209,10 @@ func New(version, commit string, qs queueStatsProvider) *Metrics {
 			m.sourceCrawls.WithLabelValues(source, result).Add(0)
 		}
 		m.sourceCrawlPosts.WithLabelValues(source).Add(0)
+		m.sourceLastSuccess.WithLabelValues(source).Set(0)
+	}
+	for _, reason := range append(knownUnmatchedReasons, "none", "other") {
+		m.unmatchedReasons.WithLabelValues(reason).Add(0)
 	}
 	return m
 }
@@ -249,6 +268,43 @@ func (m *Metrics) Submit(status, result string, confidence *float64) {
 	if result == "ok" && confidence != nil && (status == "matched" || status == "suppressed") {
 		m.submitConfidence.WithLabelValues(status).Observe(*confidence)
 	}
+}
+
+// SourceCrawlSuccess stamps the source's last fully successful scheduled
+// crawl+ingest. Backs the "time since last successful crawl" panel via
+// time() - gauge, which survives restarts because it's absolute.
+func (m *Metrics) SourceCrawlSuccess(source string) {
+	if m == nil {
+		return
+	}
+	m.sourceLastSuccess.WithLabelValues(source).SetToCurrentTime()
+}
+
+// knownUnmatchedReasons is the closed label vocabulary for unmatched
+// submissions. The wire field is free text (the indexer records what the
+// matcher reports and holds no matching policy); anything unrecognized
+// buckets to "other" so an LLM matcher writing prose can't explode label
+// cardinality.
+var knownUnmatchedReasons = []string{"no_candidate", "ambiguous", "parse_failure", "low_confidence"}
+
+// UnmatchedReason counts a successful unmatched submission by normalized
+// reason. No-op for any other status.
+func (m *Metrics) UnmatchedReason(status, reason string) {
+	if m == nil || status != "unmatched" {
+		return
+	}
+	m.unmatchedReasons.WithLabelValues(normalizeReason(reason)).Inc()
+}
+
+func normalizeReason(reason string) string {
+	reason = strings.ToLower(strings.TrimSpace(reason))
+	if reason == "" {
+		return "none"
+	}
+	if slices.Contains(knownUnmatchedReasons, reason) {
+		return reason
+	}
+	return "other"
 }
 
 func submitStatus(status string) string {
