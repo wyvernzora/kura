@@ -18,13 +18,9 @@ const (
 	sweepReasonInvalidCompletionMarker = "invalid_completion_marker"
 )
 
-type eventEmitter interface {
-	Emit(backupplan.Event) error
-}
-
 func sweepSnapshots(
 	ltfsRoot string,
-	events eventEmitter,
+	appendEvent func(backupplan.Event) error,
 ) (map[string]struct{}, error) {
 	committed := make(map[string]struct{})
 	snapshotsDir := tapevolume.SnapshotsDir(ltfsRoot)
@@ -43,7 +39,7 @@ func sweepSnapshots(
 		return nil, fmt.Errorf("executor: read snapshots directory: %w", err)
 	}
 	for _, entry := range entries {
-		swept, err := sweepEntry(snapshotsDir, entry.Name(), events)
+		swept, err := sweepEntry(snapshotsDir, entry.Name(), appendEvent)
 		if err != nil {
 			return nil, err
 		}
@@ -56,7 +52,7 @@ func sweepSnapshots(
 
 func sweepEntry(
 	snapshotsDir, name string,
-	events eventEmitter,
+	appendEvent func(backupplan.Event) error,
 ) (bool, error) {
 	entryPath := filepath.Join(snapshotsDir, name)
 	info, err := os.Lstat(entryPath)
@@ -91,7 +87,7 @@ func sweepEntry(
 	if reason == "" {
 		return false, nil
 	}
-	if err := events.Emit(backupplan.Event{
+	if err := appendEvent(backupplan.Event{
 		Type:   backupplan.EventSnapshotSwept,
 		Entry:  name,
 		Reason: reason,

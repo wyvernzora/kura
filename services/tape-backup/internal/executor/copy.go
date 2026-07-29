@@ -173,7 +173,10 @@ func copySeries(
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("executor: copy series target: %w", err)
 	}
-	if err := prepareCopyTarget(snapshotDir); err != nil {
+	if err := prepareCopyTarget(
+		snapshotDir,
+		request.AllowCommittedOverwrite,
+	); err != nil {
 		return SnapshotResult{}, err
 	}
 	committed := false
@@ -243,16 +246,6 @@ func copySeries(
 	if err != nil {
 		return SnapshotResult{}, writeFailure("read completion marker", err)
 	}
-	name := filepath.Base(snapshotDir)
-	if err := request.Events.Emit(backupplan.Event{
-		Type:        backupplan.EventItemCompleted,
-		PlanID:      request.PlanID,
-		MetadataRef: request.Action.MetadataRef,
-		Generation:  request.Action.Generation,
-		Snapshot:    name,
-	}); err != nil {
-		return SnapshotResult{}, err
-	}
 	return SnapshotResult{
 		MetadataRef: request.Action.MetadataRef,
 		Generation:  request.Action.Generation,
@@ -273,7 +266,7 @@ func copyArchive(
 	if err := os.MkdirAll(filepath.Join(snapshotDir, "tree"), 0o775); err != nil {
 		return nil, 0, writeFailure("create snapshot tree", err)
 	}
-	if err := request.Events.Emit(backupplan.Event{
+	if err := appendSessionEvent(request.Journal, backupplan.Event{
 		Type:        backupplan.EventItemStarted,
 		PlanID:      request.PlanID,
 		MetadataRef: request.Action.MetadataRef,
@@ -321,7 +314,7 @@ func copyArchiveFile(
 	if err := ctx.Err(); err != nil {
 		return tapemanifest.File{}, 0, err
 	}
-	if err := request.Events.Emit(backupplan.Event{
+	if err := appendSessionEvent(request.Journal, backupplan.Event{
 		Type:        backupplan.EventFileStarted,
 		PlanID:      request.PlanID,
 		MetadataRef: request.Action.MetadataRef,
@@ -361,7 +354,7 @@ func copyArchiveFile(
 			err,
 		)
 	}
-	if err := request.Events.Emit(backupplan.Event{
+	if err := appendSessionEvent(request.Journal, backupplan.Event{
 		Type:        backupplan.EventFileCompleted,
 		PlanID:      request.PlanID,
 		MetadataRef: request.Action.MetadataRef,
@@ -377,7 +370,10 @@ func copyArchiveFile(
 	}, written, nil
 }
 
-func prepareCopyTarget(snapshotDir string) error {
+func prepareCopyTarget(
+	snapshotDir string,
+	allowCommittedOverwrite bool,
+) error {
 	_, err := os.Lstat(snapshotDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -385,7 +381,8 @@ func prepareCopyTarget(snapshotDir string) error {
 	if err != nil {
 		return writeFailure("inspect copy target", err)
 	}
-	if _, err := tapemanifest.Read(snapshotDir); err == nil {
+	if _, err := tapemanifest.Read(snapshotDir); err == nil &&
+		!allowCommittedOverwrite {
 		return fmt.Errorf(
 			"executor: copy target %q is already committed",
 			snapshotDir,

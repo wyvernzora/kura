@@ -361,39 +361,32 @@ func TestClassifyDriveAvailabilityTaxonomy(t *testing.T) {
 }
 
 func TestRunSessionHoldsCustodyOnlyForSessionDuration(t *testing.T) {
-	root := t.TempDir()
-	writeVolume(t, root, "ABC123L6", firstVolume)
-	drive := newDrive(t, []executor.DirectoryCartridge{{
-		TapeID:           "ABC123L6",
-		Root:             root,
-		Mounted:          true,
-		IdentityState:    executor.LoadedIdentityIdentified,
-		MediumSerial:     firstMediumSerial,
-		EncryptionActive: true,
-		Capacity:         100,
-	}}, "ABC123L6")
-	outbox := newOutbox(t, &collectingSink{}, 16)
-
-	err := executor.RunSession(
-		t.Context(),
-		drive,
-		[]backupplan.Plan{testPlan(firstPlanID, "ABC123L6", firstVolume)},
-		outbox,
-		func(_ context.Context, _ executor.PreparedPlan) error {
-			if !drive.IsOpen() {
-				t.Fatal("drive custody was not held inside session")
-			}
-			return nil
-		},
-		fastSessionOptions,
+	fixture := newSessionFixture(t)
+	action := writeSeries(t, fixture.libraryRoot, "Series", "tvdb:custody", 1)
+	fixture.plan = fillPlan(
+		firstPlanID,
+		firstVolume,
+		"ABC123L6",
+		nil,
+		[]backupplan.Action{action},
 	)
+	fixture.promote(t)
+	normal := fixture.backupHandler(t)
+	err := fixture.run(t, func(
+		ctx context.Context,
+		request executor.BackupActionRequest,
+	) error {
+		if !fixture.drive.IsOpen() {
+			t.Fatal("drive custody was not held inside session")
+		}
+		return normal(ctx, request)
+	})
 	if err != nil {
 		t.Fatalf("RunSession: %v", err)
 	}
-	if drive.IsOpen() {
+	if fixture.drive.IsOpen() {
 		t.Fatal("drive custody remains held after session")
 	}
-	closeOutbox(t, outbox)
 }
 
 func TestNewHardwareDriveIsDeferredPendingHardwarePass(t *testing.T) {

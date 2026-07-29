@@ -21,6 +21,7 @@ const (
 	defaultDriveDevice           = "/dev/nst0"
 	defaultFreeSpaceMargin int64 = 1 << 30
 	defaultIdleTimeout           = 30 * time.Minute
+	defaultFlushCadence          = 1
 )
 
 var validLogLevels = []string{"debug", "info", "warn", "error"}
@@ -56,6 +57,7 @@ type Tape struct {
 	DriveDevice     string
 	FreeSpaceMargin int64
 	IdleTimeout     time.Duration
+	FlushCadence    int
 }
 
 // Defaults returns all non-required runtime defaults.
@@ -70,6 +72,7 @@ func Defaults() Config {
 			DriveDevice:     defaultDriveDevice,
 			FreeSpaceMargin: defaultFreeSpaceMargin,
 			IdleTimeout:     defaultIdleTimeout,
+			FlushCadence:    defaultFlushCadence,
 		},
 	}
 }
@@ -127,6 +130,9 @@ func (c Config) Validate() error {
 	if c.Tape.IdleTimeout <= 0 {
 		return fmt.Errorf("tape.idle_timeout must be greater than zero")
 	}
+	if c.Tape.FlushCadence < 1 {
+		return fmt.Errorf("tape.flush_cadence must be at least 1")
+	}
 	if c.Tape.DriveDevice == "" {
 		return nil
 	}
@@ -169,6 +175,7 @@ type fileTape struct {
 	DriveDevice     *string `toml:"drive_device"`
 	FreeSpaceMargin *int64  `toml:"free_space_margin"`
 	IdleTimeout     *string `toml:"idle_timeout"`
+	FlushCadence    *int    `toml:"flush_cadence"`
 }
 
 func (r fileConfig) resolve() (Config, error) {
@@ -188,6 +195,7 @@ func (r fileConfig) resolve() (Config, error) {
 		setString(&cfg.Tape.LTFSRoot, r.Tape.LTFSRoot)
 		setString(&cfg.Tape.DriveDevice, r.Tape.DriveDevice)
 		setInt64(&cfg.Tape.FreeSpaceMargin, r.Tape.FreeSpaceMargin)
+		setInt(&cfg.Tape.FlushCadence, r.Tape.FlushCadence)
 		var err error
 		cfg.Tape.IdleTimeout, err = optionalDuration(
 			"tape.idle_timeout",
@@ -208,6 +216,12 @@ func setString(dst *string, src *string) {
 }
 
 func setInt64(dst *int64, src *int64) {
+	if src != nil {
+		*dst = *src
+	}
+}
+
+func setInt(dst *int, src *int) {
 	if src != nil {
 		*dst = *src
 	}

@@ -18,19 +18,13 @@ func TestSweepSnapshotsKeepsEntryWhenEventRecordingFails(t *testing.T) {
 	}
 	recordErr := errors.New("journal failed")
 
-	_, err := sweepSnapshots(root, eventEmitterFunc(func(backupplan.Event) error {
+	_, err := sweepSnapshots(root, func(backupplan.Event) error {
 		return recordErr
-	}))
+	})
 	if !errors.Is(err, recordErr) {
 		t.Fatalf("sweepSnapshots error = %v, want journal failure", err)
 	}
 	if _, err := os.Lstat(entry); err != nil {
 		t.Fatalf("Lstat snapshot entry after journal failure: %v", err)
 	}
-}
-
-type eventEmitterFunc func(backupplan.Event) error
-
-func (f eventEmitterFunc) Emit(event backupplan.Event) error {
-	return f(event)
 }

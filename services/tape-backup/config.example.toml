@@ -42,3 +42,7 @@ free_space_margin = 1073741824
 
 # Optional; executor only. Go duration. Default = "30m".
 idle_timeout = "30m"
+
+# Optional; executor only. Snapshot boundaries per explicit LTFS sync.
+# Default = 1 (per-snapshot).
+flush_cadence = 1

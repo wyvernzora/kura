@@ -13,13 +13,12 @@ import (
 	"github.com/wyvernzora/kura/services/tape-backup/internal/fingerprint"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/seriesmeta"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
-	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapemanifest"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
-	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
 )
 
 var (
-	// ErrPlanFailed reports an assertion that aborted one plan at its position.
+	// ErrPlanFailed reports a failure that halted and retired one plan.
 	ErrPlanFailed = errors.New("executor: plan failed")
 )
 
@@ -31,102 +30,143 @@ type SnapshotResult struct {
 	Complete    []byte
 }
 
-// ExistingSnapshot is retained as the classification name for an already
-// committed SnapshotResult.
-type ExistingSnapshot = SnapshotResult
-
-// PreparedExecution contains results released after the cartridge index is
-// durable.
-type PreparedExecution struct {
-	AlreadyPresent []ExistingSnapshot
-	Written        []SnapshotResult
-	TapeID         tape.ID
-	ObservedAt     time.Time
-	CapacityBytes  int64
-	FreeBytes      int64
-}
-
-// BackupActionRequest is the narrow hand-off to the byte-copy slice.
+// BackupActionRequest is the narrow hand-off to the byte-copy path.
 type BackupActionRequest struct {
-	PlanID      string
-	Cartridge   Cartridge
-	Events      *EventOutbox
-	LibraryRoot string
-	WrittenBy   backupplan.Creator
-	Action      backupplan.Action
-	result      *SnapshotResult
+	PlanID                  string
+	Cartridge               Cartridge
+	Journal                 *backupplan.Writer
+	LibraryRoot             string
+	WrittenBy               backupplan.Creator
+	Action                  backupplan.Action
+	AllowCommittedOverwrite bool
+	result                  *SnapshotResult
 }
 
-// BackupActionHandler executes one backup action after phase 2 accepts it.
+// BackupActionHandler copies one backup action through its completion marker.
 type BackupActionHandler func(context.Context, BackupActionRequest) error
 
-type actionDisposition uint8
-
-const (
-	actionPending actionDisposition = iota
-	actionReady
-	actionSkipped
-	actionDropped
-)
-
-type preparedAction struct {
-	action      backupplan.Action
-	disposition actionDisposition
-	reason      backupplan.ItemReason
-	detail      string
-}
-
-// ExecutePreparedPlan classifies every backup target, pre-flights the remaining
-// mutations, then executes the ordered assertions and accepted backup seams.
+// ExecutePreparedPlan runs one validated fill plan. Every snapshot batch is
+// synced before its catalog records are appended.
 func ExecutePreparedPlan(
 	ctx context.Context,
 	prepared PreparedPlan,
 	freeSpaceMargin int64,
+	flushCadence int,
 	backup BackupActionHandler,
-) (PreparedExecution, error) {
-	if err := validatePreparedPlan(prepared, freeSpaceMargin, backup); err != nil {
-		return PreparedExecution{}, err
+) error {
+	if err := validatePreparedPlan(
+		prepared,
+		freeSpaceMargin,
+		flushCadence,
+		backup,
+	); err != nil {
+		return err
 	}
 
-	actions := make([]preparedAction, len(prepared.Plan.Actions))
-	for i, action := range prepared.Plan.Actions {
-		actions[i].action = action
-		if action.Type != backupplan.ActionBackup {
-			continue
+	leadingInventoryIndex, err := findLeadingInventory(prepared.Plan)
+	if err != nil {
+		return planFailure(err)
+	}
+	execution := fillExecution{
+		prepared:              prepared,
+		freeSpaceMargin:       freeSpaceMargin,
+		flushCadence:          flushCadence,
+		backup:                backup,
+		leadingInventoryIndex: leadingInventoryIndex,
+		pending:               make([]SnapshotResult, 0, flushCadence),
+	}
+	if err := execution.run(ctx); err != nil {
+		return planFailure(err)
+	}
+	return appendSessionEvent(prepared.Journal, backupplan.Event{
+		Type:         backupplan.EventPlanCompleted,
+		PlanID:       prepared.Plan.PlanID,
+		ItemsWritten: execution.itemsWritten,
+		ItemsFailed:  0,
+	})
+}
+
+type fillExecution struct {
+	prepared              PreparedPlan
+	freeSpaceMargin       int64
+	flushCadence          int
+	backup                BackupActionHandler
+	leadingInventoryIndex int
+	pending               []SnapshotResult
+	itemsWritten          int
+	seenBackup            bool
+}
+
+func (e *fillExecution) run(ctx context.Context) error {
+	for index, action := range e.prepared.Plan.Actions {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		actions[i].disposition = actionReady
+		if action.Type != backupplan.ActionBackup {
+			if err := e.flushPending(); err != nil {
+				return err
+			}
+		}
+		if err := e.executeAction(ctx, index, action); err != nil {
+			return err
+		}
 	}
+	return e.flushPending()
+}
 
-	execution, err := classifyTargets(prepared, actions)
-	if err != nil {
-		return PreparedExecution{}, planFailure(err)
-	}
-	if err := preflightBackups(prepared, actions, freeSpaceMargin); err != nil {
-		return PreparedExecution{}, planFailure(err)
-	}
-	if err := reportFreshness(prepared, actions); err != nil {
-		return PreparedExecution{}, planFailure(err)
-	}
-	written, err := executeActions(ctx, prepared, actions, backup)
-	if err != nil {
-		return PreparedExecution{}, planFailure(err)
-	}
-	if err := prepared.Drive.Sync(); err != nil {
-		return PreparedExecution{}, fmt.Errorf("executor: sync cartridge index: %w", err)
-	}
-	total, free, err := prepared.Drive.Capacity()
-	if err != nil {
-		return PreparedExecution{}, fmt.Errorf(
-			"executor: observe capacity after sync: %w",
-			err,
+func (e *fillExecution) executeAction(
+	ctx context.Context,
+	index int,
+	action backupplan.Action,
+) error {
+	switch action.Type {
+	case backupplan.ActionAssertVolume:
+		if !e.seenBackup {
+			return nil
+		}
+		return assertVolume(e.prepared, action)
+	case backupplan.ActionAssertInventory:
+		if index == e.leadingInventoryIndex {
+			return nil
+		}
+		return assertInventory(e.prepared, action)
+	case backupplan.ActionAssertFreeSpace:
+		return assertFreeSpace(e.prepared, action)
+	case backupplan.ActionBackup:
+		e.seenBackup = true
+		result, skipped, err := executeBackup(
+			ctx,
+			e.prepared,
+			action,
+			e.freeSpaceMargin,
+			e.backup,
+		)
+		if err != nil || skipped {
+			return err
+		}
+		e.pending = append(e.pending, result)
+		if len(e.pending) < e.flushCadence {
+			return nil
+		}
+		return e.flushPending()
+	default:
+		return fmt.Errorf(
+			"executor: execute unsupported action %q",
+			action.Type,
 		)
 	}
-	execution.Written = written
-	execution.TapeID = prepared.Cartridge.TapeID
-	execution.ObservedAt = time.Now().UTC().Truncate(time.Second)
-	execution.CapacityBytes = total
-	execution.FreeBytes = free
-	return execution, nil
+}
+
+func (e *fillExecution) flushPending() error {
+	if len(e.pending) == 0 {
+		return nil
+	}
+	if err := flushSnapshots(e.prepared, e.pending); err != nil {
+		return err
+	}
+	e.itemsWritten += len(e.pending)
+	e.pending = e.pending[:0]
+	return nil
 }
 
 func planFailure(err error) error {
@@ -139,48 +179,66 @@ func planFailure(err error) error {
 func validatePreparedPlan(
 	prepared PreparedPlan,
 	freeSpaceMargin int64,
+	flushCadence int,
 	backup BackupActionHandler,
 ) error {
 	if prepared.Drive == nil {
 		return errors.New("executor: prepared plan drive is required")
 	}
-	if prepared.Events == nil {
-		return errors.New("executor: prepared plan event outbox is required")
+	if prepared.Journal == nil {
+		return errors.New("executor: prepared plan session journal is required")
 	}
 	if prepared.Cartridge.Root == "" {
 		return errors.New("executor: prepared plan cartridge root is required")
 	}
+	if prepared.StateRoot == "" {
+		return errors.New("executor: prepared plan state root is required")
+	}
 	if prepared.LibraryRoot == "" {
 		return errors.New("executor: prepared plan library root is required")
 	}
-	if prepared.CommittedSnapshots == nil {
-		return errors.New("executor: prepared plan committed set is required")
+	if prepared.CatalogSnapshots == nil {
+		return errors.New("executor: prepared plan catalog set is required")
+	}
+	if prepared.DebrisSnapshots == nil {
+		return errors.New("executor: prepared plan debris set is required")
 	}
 	if freeSpaceMargin < 0 {
 		return errors.New("executor: free space margin must not be negative")
 	}
+	if flushCadence < 1 {
+		return errors.New("executor: flush cadence must be at least 1")
+	}
 	if backup == nil {
 		return errors.New("executor: backup action handler is required")
 	}
-	for _, action := range prepared.Plan.Actions {
+	return validateExecutionActionTypes(prepared.Plan)
+}
+
+func validateExecutionActionTypes(plan backupplan.Plan) error {
+	for _, action := range plan.Actions {
 		switch action.Type {
 		case backupplan.ActionBackup,
 			backupplan.ActionAssertVolume,
 			backupplan.ActionAssertInventory,
 			backupplan.ActionAssertFreeSpace:
-		case backupplan.ActionReformat,
-			backupplan.ActionAdmit,
-			backupplan.ActionImport,
-			backupplan.ActionVerify:
+			continue
+		case backupplan.ActionReformat, backupplan.ActionAdmit:
 			return fmt.Errorf(
-				"executor: plan %s contains out-of-scope action %q",
-				prepared.Plan.PlanID,
+				"executor: plan %s contains init action %q",
+				plan.PlanID,
+				action.Type,
+			)
+		case backupplan.ActionImport, backupplan.ActionVerify:
+			return fmt.Errorf(
+				"executor: plan %s contains deferred action %q",
+				plan.PlanID,
 				action.Type,
 			)
 		default:
 			return fmt.Errorf(
 				"executor: plan %s contains unknown action %q",
-				prepared.Plan.PlanID,
+				plan.PlanID,
 				action.Type,
 			)
 		}
@@ -188,146 +246,185 @@ func validatePreparedPlan(
 	return nil
 }
 
-func classifyTargets(
-	prepared PreparedPlan,
-	actions []preparedAction,
-) (PreparedExecution, error) {
-	execution := PreparedExecution{
-		AlreadyPresent: make([]ExistingSnapshot, 0),
-	}
-	for i := range actions {
-		item := &actions[i]
-		if item.action.Type != backupplan.ActionBackup {
-			continue
-		}
-		name, err := tapevolume.SnapshotName(
-			item.action.MetadataRef,
-			item.action.Generation,
-		)
-		if err != nil {
-			return PreparedExecution{}, fmt.Errorf(
-				"executor: classify backup target: %w",
-				err,
-			)
-		}
-		if _, committed := prepared.CommittedSnapshots[name]; !committed {
-			continue
-		}
-
-		snapshotDir := filepath.Join(tapevolume.SnapshotsDir(prepared.Cartridge.Root), name)
-		if _, err := tapemanifest.Read(snapshotDir); err != nil {
-			item.disposition = actionDropped
-			item.reason = backupplan.ReasonChecksumMismatch
-			item.detail = err.Error()
-			if err := emitItemEvent(
-				prepared,
-				backupplan.EventItemFailed,
-				*item,
-			); err != nil {
-				return PreparedExecution{}, err
-			}
-			continue
-		}
-		manifestBytes, err := os.ReadFile(filepath.Join(snapshotDir, "manifest.json"))
-		if err != nil {
-			return PreparedExecution{}, fmt.Errorf(
-				"executor: read already-present manifest: %w",
-				err,
-			)
-		}
-		completeBytes, err := os.ReadFile(filepath.Join(snapshotDir, "complete.json"))
-		if err != nil {
-			return PreparedExecution{}, fmt.Errorf(
-				"executor: read already-present completion marker: %w",
-				err,
-			)
-		}
-		item.disposition = actionSkipped
-		item.reason = backupplan.ReasonAlreadyPresent
-		execution.AlreadyPresent = append(
-			execution.AlreadyPresent,
-			ExistingSnapshot{
-				MetadataRef: item.action.MetadataRef,
-				Generation:  item.action.Generation,
-				Manifest:    manifestBytes,
-				Complete:    completeBytes,
-			},
-		)
-		if err := emitItemEvent(
-			prepared,
-			backupplan.EventItemSkipped,
-			*item,
-		); err != nil {
-			return PreparedExecution{}, err
-		}
-	}
-	return execution, nil
-}
-
-func preflightBackups(
-	prepared PreparedPlan,
-	actions []preparedAction,
-	freeSpaceMargin int64,
-) error {
-	ready := make([]int, 0)
-	for i := range actions {
-		item := &actions[i]
-		if item.action.Type != backupplan.ActionBackup ||
-			item.disposition != actionReady {
-			continue
-		}
-		reason, detail := preflightBackup(prepared.LibraryRoot, item.action)
-		if reason != "" {
-			item.disposition = actionDropped
-			item.reason = reason
-			item.detail = detail
-			if err := emitItemEvent(
-				prepared,
-				backupplan.EventItemFailed,
-				*item,
-			); err != nil {
-				return err
-			}
-			continue
-		}
-		ready = append(ready, i)
-	}
-	if len(ready) == 0 {
-		return nil
-	}
-
-	_, free, err := prepared.Drive.Capacity()
-	if err != nil {
-		return fmt.Errorf("executor: inspect capacity for pre-flight: %w", err)
-	}
-	available := free - freeSpaceMargin
-	var used int64
-	for position, index := range ready {
-		bytes := actions[index].action.Bytes
-		if available < 0 || bytes > available-used {
-			for _, trailing := range ready[position:] {
-				item := &actions[trailing]
-				item.disposition = actionDropped
-				item.reason = backupplan.ReasonInsufficientSpace
-				item.detail = fmt.Sprintf(
-					"trailing item needs %d bytes; %d bytes used, %d-byte margin, %d bytes free",
-					item.action.Bytes,
-					used,
-					freeSpaceMargin,
-					free,
-				)
-				if err := emitItemEvent(
-					prepared,
-					backupplan.EventItemFailed,
-					*item,
-				); err != nil {
-					return err
-				}
-			}
+func findLeadingInventory(plan backupplan.Plan) (int, error) {
+	for index, action := range plan.Actions {
+		if action.Type == backupplan.ActionBackup {
 			break
 		}
-		used += bytes
+		if action.Type == backupplan.ActionAssertInventory {
+			return index, nil
+		}
 	}
+	return -1, fmt.Errorf(
+		"executor: plan %s must assert inventory before backup",
+		plan.PlanID,
+	)
+}
+
+func executeBackup(
+	ctx context.Context,
+	prepared PreparedPlan,
+	action backupplan.Action,
+	freeSpaceMargin int64,
+	backup BackupActionHandler,
+) (SnapshotResult, bool, error) {
+	name, err := tapevolume.SnapshotName(action.MetadataRef, action.Generation)
+	if err != nil {
+		return SnapshotResult{}, false, fmt.Errorf(
+			"executor: classify backup target: %w",
+			err,
+		)
+	}
+	if _, cataloged := prepared.CatalogSnapshots[name]; cataloged {
+		if err := appendSessionEvent(prepared.Journal, backupplan.Event{
+			Type:        backupplan.EventItemSkipped,
+			PlanID:      prepared.Plan.PlanID,
+			MetadataRef: action.MetadataRef,
+			Generation:  action.Generation,
+			Reason:      string(backupplan.ReasonAlreadyPresent),
+		}); err != nil {
+			return SnapshotResult{}, false, err
+		}
+		return SnapshotResult{}, true, nil
+	}
+
+	if reason, detail := preflightBackup(prepared.LibraryRoot, action); reason != "" {
+		return SnapshotResult{}, false, haltItem(prepared, action, reason, detail)
+	}
+	_, free, err := prepared.Drive.Capacity()
+	if err != nil {
+		return SnapshotResult{}, false, haltItem(
+			prepared,
+			action,
+			backupplan.ReasonWriteFailed,
+			fmt.Sprintf("inspect capacity: %v", err),
+		)
+	}
+	available := free - freeSpaceMargin
+	if available < 0 || action.Bytes > available {
+		return SnapshotResult{}, false, haltItem(
+			prepared,
+			action,
+			backupplan.ReasonInsufficientSpace,
+			fmt.Sprintf(
+				"item needs %d bytes; %d-byte margin, %d bytes free",
+				action.Bytes,
+				freeSpaceMargin,
+				free,
+			),
+		)
+	}
+
+	result := SnapshotResult{}
+	_, overwriteDebris := prepared.DebrisSnapshots[name]
+	err = backup(ctx, BackupActionRequest{
+		PlanID:                  prepared.Plan.PlanID,
+		Cartridge:               prepared.Cartridge,
+		Journal:                 prepared.Journal,
+		LibraryRoot:             prepared.LibraryRoot,
+		WrittenBy:               prepared.Plan.CreatedBy,
+		Action:                  action,
+		AllowCommittedOverwrite: overwriteDebris,
+		result:                  &result,
+	})
+	if err == nil {
+		return result, false, nil
+	}
+	failure, ok := errors.AsType[*itemFailure](err)
+	if ok {
+		haltErr := haltItem(
+			prepared,
+			action,
+			failure.reason,
+			failure.Error(),
+		)
+		return SnapshotResult{}, false, errors.Join(haltErr, err)
+	}
+	haltErr := haltItem(
+		prepared,
+		action,
+		backupplan.ReasonWriteFailed,
+		err.Error(),
+	)
+	return SnapshotResult{}, false, errors.Join(haltErr, err)
+}
+
+func haltItem(
+	prepared PreparedPlan,
+	action backupplan.Action,
+	reason backupplan.ItemReason,
+	detail string,
+) error {
+	if err := appendSessionEvent(prepared.Journal, backupplan.Event{
+		Type:        backupplan.EventItemFailed,
+		PlanID:      prepared.Plan.PlanID,
+		MetadataRef: action.MetadataRef,
+		Generation:  action.Generation,
+		Reason:      string(reason),
+		Detail:      detail,
+	}); err != nil {
+		return err
+	}
+	return fmt.Errorf(
+		"executor: backup action (%q, %d) failed: %s: %s",
+		action.MetadataRef,
+		action.Generation,
+		reason,
+		detail,
+	)
+}
+
+func flushSnapshots(
+	prepared PreparedPlan,
+	results []SnapshotResult,
+) error {
+	if err := prepared.Drive.Sync(); err != nil {
+		return fmt.Errorf("executor: sync cartridge index: %w", err)
+	}
+	for _, result := range results {
+		name, err := tapevolume.SnapshotName(
+			result.MetadataRef,
+			result.Generation,
+		)
+		if err != nil {
+			return fmt.Errorf("executor: name committed snapshot: %w", err)
+		}
+		if err := tapecatalog.PutSnapshot(
+			prepared.StateRoot,
+			prepared.Volume.VolumeID,
+			name,
+			result.Manifest,
+			result.Complete,
+		); err != nil {
+			return fmt.Errorf("executor: append catalog snapshot %q: %w", name, err)
+		}
+		prepared.CatalogSnapshots[name] = struct{}{}
+		if err := appendSessionEvent(prepared.Journal, backupplan.Event{
+			Type:        backupplan.EventItemCompleted,
+			PlanID:      prepared.Plan.PlanID,
+			MetadataRef: result.MetadataRef,
+			Generation:  result.Generation,
+			Snapshot:    name,
+		}); err != nil {
+			return err
+		}
+	}
+	total, free, err := prepared.Drive.Capacity()
+	if err != nil {
+		return fmt.Errorf("executor: observe capacity after sync: %w", err)
+	}
+	observed := prepared.CatalogObservation
+	observed.ObservedAt = time.Now().UTC().Truncate(time.Second)
+	observed.CapacityBytes = total
+	observed.FreeBytes = free
+	if err := tapecatalog.SaveObserved(
+		prepared.StateRoot,
+		prepared.Volume.VolumeID,
+		observed,
+	); err != nil {
+		return fmt.Errorf("executor: refresh catalog observation: %w", err)
+	}
+	prepared.CatalogObservation = observed
 	return nil
 }
 
@@ -389,137 +486,6 @@ func preflightBackup(
 	return "", ""
 }
 
-func reportFreshness(
-	prepared PreparedPlan,
-	actions []preparedAction,
-) error {
-	dropped := make([]backupplan.DroppedItem, 0)
-	for _, item := range actions {
-		if item.action.Type != backupplan.ActionBackup ||
-			item.disposition != actionDropped {
-			continue
-		}
-		dropped = append(dropped, backupplan.DroppedItem{
-			MetadataRef: item.action.MetadataRef,
-			Generation:  item.action.Generation,
-			Reason:      string(item.reason),
-		})
-	}
-	return prepared.Events.Emit(backupplan.Event{
-		Type:    backupplan.EventFreshnessChecked,
-		PlanID:  prepared.Plan.PlanID,
-		Dropped: dropped,
-	})
-}
-
-func executeActions(
-	ctx context.Context,
-	prepared PreparedPlan,
-	actions []preparedAction,
-	backup BackupActionHandler,
-) ([]SnapshotResult, error) {
-	itemsWritten := 0
-	itemsFailed := 0
-	writtenResults := make([]SnapshotResult, 0)
-	for _, item := range actions {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		switch item.action.Type {
-		case backupplan.ActionAssertVolume:
-			if err := assertVolume(prepared, item.action); err != nil {
-				return nil, err
-			}
-		case backupplan.ActionAssertInventory:
-			if err := assertInventory(prepared, actions, item.action); err != nil {
-				return nil, err
-			}
-		case backupplan.ActionAssertFreeSpace:
-			if err := assertFreeSpace(prepared, item.action); err != nil {
-				return nil, err
-			}
-		case backupplan.ActionBackup:
-			result, written, failed, err := executeBackup(ctx, prepared, item, backup)
-			if err != nil {
-				return nil, err
-			}
-			if written {
-				itemsWritten++
-				writtenResults = append(writtenResults, result)
-			}
-			if failed {
-				itemsFailed++
-			}
-		default:
-			return nil, fmt.Errorf(
-				"executor: execute unsupported action %q",
-				item.action.Type,
-			)
-		}
-	}
-	if err := prepared.Events.Emit(backupplan.Event{
-		Type:         backupplan.EventPlanCompleted,
-		PlanID:       prepared.Plan.PlanID,
-		ItemsWritten: itemsWritten,
-		ItemsFailed:  itemsFailed,
-	}); err != nil {
-		return nil, err
-	}
-	return writtenResults, nil
-}
-
-func executeBackup(
-	ctx context.Context,
-	prepared PreparedPlan,
-	item preparedAction,
-	backup BackupActionHandler,
-) (result SnapshotResult, written, failed bool, err error) {
-	switch item.disposition {
-	case actionReady:
-		result := SnapshotResult{}
-		err := backup(ctx, BackupActionRequest{
-			PlanID:      prepared.Plan.PlanID,
-			Cartridge:   prepared.Cartridge,
-			Events:      prepared.Events,
-			LibraryRoot: prepared.LibraryRoot,
-			WrittenBy:   prepared.Plan.CreatedBy,
-			Action:      item.action,
-			result:      &result,
-		})
-		if err != nil {
-			failure, ok := errors.AsType[*itemFailure](err)
-			if ok {
-				failedItem := item
-				failedItem.reason = failure.reason
-				failedItem.detail = failure.Error()
-				if emitErr := emitItemEvent(
-					prepared,
-					backupplan.EventItemFailed,
-					failedItem,
-				); emitErr != nil {
-					return SnapshotResult{}, false, false, errors.Join(err, emitErr)
-				}
-				return SnapshotResult{}, false, true, nil
-			}
-			return SnapshotResult{}, false, false, fmt.Errorf(
-				"executor: execute backup action (%q, %d): %w",
-				item.action.MetadataRef,
-				item.action.Generation,
-				err,
-			)
-		}
-		return result, true, false, nil
-	case actionDropped:
-		return SnapshotResult{}, false, true, nil
-	case actionSkipped:
-		return SnapshotResult{}, false, false, nil
-	default:
-		return SnapshotResult{}, false, false, errors.New(
-			"executor: backup action was not classified",
-		)
-	}
-}
-
 func assertVolume(prepared PreparedPlan, action backupplan.Action) error {
 	mounted, err := tapevolume.Read(prepared.Cartridge.Root)
 	if err != nil {
@@ -545,58 +511,34 @@ func assertVolume(prepared PreparedPlan, action backupplan.Action) error {
 
 func assertInventory(
 	prepared PreparedPlan,
-	actions []preparedAction,
 	action backupplan.Action,
 ) error {
 	expected := make(map[string]struct{}, len(action.Snapshots))
-	excludedExtras := make(map[string]struct{})
 	for _, name := range action.Snapshots {
 		expected[name] = struct{}{}
 	}
-	for _, item := range actions {
-		if item.action.Type != backupplan.ActionBackup ||
-			item.disposition != actionDropped {
-			continue
-		}
-		name, err := tapevolume.SnapshotName(
-			item.action.MetadataRef,
-			item.action.Generation,
-		)
-		if err != nil {
-			return fmt.Errorf("executor: adjust inventory assertion: %w", err)
-		}
-		delete(expected, name)
-		if item.reason == backupplan.ReasonChecksumMismatch {
-			excludedExtras[name] = struct{}{}
-		}
-	}
-
 	present, err := committedMarkers(prepared.Cartridge.Root)
 	if err != nil {
 		return failAssertion(prepared, action.Type, err.Error())
 	}
-	for name := range excludedExtras {
-		delete(present, name)
-	}
-	missing := setDifference(expected, present)
-	extra := setDifference(present, expected)
+	difference := compareInventory(expected, present)
 	result := "match"
-	if len(missing) > 0 {
+	if len(difference.missing) > 0 {
 		result = "missing"
 	}
-	if err := prepared.Events.Emit(backupplan.Event{
+	if err := appendSessionEvent(prepared.Journal, backupplan.Event{
 		Type:           backupplan.EventDivergenceChecked,
 		PlanID:         prepared.Plan.PlanID,
 		Result:         result,
-		ExtraSnapshots: extra,
+		ExtraSnapshots: difference.extra,
 	}); err != nil {
 		return err
 	}
-	if len(missing) > 0 {
+	if len(difference.missing) > 0 {
 		return failAssertion(
 			prepared,
 			action.Type,
-			"missing snapshots: "+strings.Join(missing, ", "),
+			"missing snapshots: "+strings.Join(difference.missing, ", "),
 		)
 	}
 	return nil
@@ -615,7 +557,11 @@ func assertFreeSpace(prepared PreparedPlan, action backupplan.Action) error {
 		return failAssertion(
 			prepared,
 			action.Type,
-			fmt.Sprintf("free space is %d bytes, expected at least %d", free, action.Bytes),
+			fmt.Sprintf(
+				"free space is %d bytes, expected at least %d",
+				free,
+				action.Bytes,
+			),
 		)
 	}
 	return nil
@@ -626,7 +572,7 @@ func failAssertion(
 	actionType backupplan.ActionType,
 	detail string,
 ) error {
-	if err := prepared.Events.Emit(backupplan.Event{
+	if err := appendSessionEvent(prepared.Journal, backupplan.Event{
 		Type:   backupplan.EventPlanFailed,
 		PlanID: prepared.Plan.PlanID,
 		Reason: string(actionType),
@@ -635,8 +581,7 @@ func failAssertion(
 		return err
 	}
 	return fmt.Errorf(
-		"%w: plan %s %s: %s",
-		ErrPlanFailed,
+		"executor: plan %s %s: %s",
 		prepared.Plan.PlanID,
 		actionType,
 		detail,
@@ -680,9 +625,7 @@ func committedMarkers(ltfsRoot string) (map[string]struct{}, error) {
 	return present, nil
 }
 
-func setDifference(
-	left, right map[string]struct{},
-) []string {
+func setDifference(left, right map[string]struct{}) []string {
 	difference := make([]string, 0)
 	for name := range left {
 		if _, exists := right[name]; !exists {
@@ -693,17 +636,16 @@ func setDifference(
 	return difference
 }
 
-func emitItemEvent(
-	prepared PreparedPlan,
-	eventType backupplan.EventType,
-	item preparedAction,
-) error {
-	return prepared.Events.Emit(backupplan.Event{
-		Type:        eventType,
-		PlanID:      prepared.Plan.PlanID,
-		MetadataRef: item.action.MetadataRef,
-		Generation:  item.action.Generation,
-		Reason:      string(item.reason),
-		Detail:      item.detail,
-	})
+type inventoryDifference struct {
+	missing []string
+	extra   []string
+}
+
+func compareInventory(
+	expected, present map[string]struct{},
+) inventoryDifference {
+	return inventoryDifference{
+		missing: setDifference(expected, present),
+		extra:   setDifference(present, expected),
+	}
 }

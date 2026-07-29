@@ -4,10 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/wyvernzora/kura/services/tape-backup/internal/seriesmeta"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapemanifest"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
@@ -19,213 +27,38 @@ var (
 	// ErrEncryptionInactive reports that the write gate rejected a cartridge
 	// because drive encryption was inactive.
 	ErrEncryptionInactive = errors.New("executor: drive encryption is inactive")
-	errCartridgeRejected  = errors.New("executor: cartridge rejected")
+	// ErrSessionActive reports that another session owns the service slot.
+	ErrSessionActive = errors.New("executor: session is already active")
 )
 
-// EventSink accepts a best-effort copy of a durable executor event.
-// Implementations must honor ctx.
-type EventSink interface {
-	Deliver(ctx context.Context, event backupplan.Event) error
+var sessionRegistry struct {
+	sync.Mutex
+	active bool
 }
 
-// OutboxOptions controls asynchronous best-effort event delivery.
-type OutboxOptions struct {
-	Capacity    int
-	CallTimeout time.Duration
-}
-
-// EventOutbox writes sequenced events to a session log before offering them to
-// one bounded, best-effort delivery goroutine.
-type EventOutbox struct {
-	mu         sync.Mutex
-	journal    *backupplan.Writer
-	sink       EventSink
-	options    OutboxOptions
-	queue      []backupplan.Event
-	nextSeq    uint64
-	overflowed bool
-	closed     bool
-	wake       chan struct{}
-	done       chan struct{}
-}
-
-// NewEventOutbox starts one best-effort delivery goroutine. The caller retains
-// ownership of journal and must close it after the outbox is closed. For a
-// resumed journal, re-offer its recorded events in order before emitting new
-// events.
-func NewEventOutbox(
-	journal *backupplan.Writer,
-	sink EventSink,
-	options OutboxOptions,
-) (*EventOutbox, error) {
-	if journal == nil {
-		return nil, errors.New("executor: session journal is required")
-	}
-	if sink == nil {
-		return nil, errors.New("executor: event sink is required")
-	}
-	if options.Capacity < 1 {
-		return nil, errors.New("executor: outbox capacity must be at least 1")
-	}
-	if options.CallTimeout <= 0 {
-		return nil, errors.New("executor: outbox call timeout must be greater than zero")
-	}
-	outbox := &EventOutbox{
-		journal: journal,
-		sink:    sink,
-		options: options,
-		queue:   make([]backupplan.Event, 0, options.Capacity),
-		nextSeq: journal.HighestSeq(),
-		wake:    make(chan struct{}, 1),
-		done:    make(chan struct{}),
-	}
-	go outbox.deliver()
-	return outbox, nil
-}
-
-// Emit assigns the event's timestamp and per-session sequence, synchronously
-// records it, then offers it to the bounded relay without waiting for the sink.
-func (o *EventOutbox) Emit(event backupplan.Event) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.closed {
-		return errors.New("executor: emit to closed event outbox")
-	}
-
-	if len(o.queue) >= o.options.Capacity && !o.overflowed {
-		overflow, err := o.record(backupplan.Event{Type: backupplan.EventOutboxOverflow})
-		if err != nil {
-			return err
-		}
-		o.overflowed = true
-		o.queue[len(o.queue)-1] = overflow
-	}
-	event, err := o.record(event)
-	if err != nil {
-		return err
-	}
-	o.offer(event)
-	return nil
-}
-
-// Reoffer offers a previously recorded event to the relay without changing its
-// sequence or timestamp.
-func (o *EventOutbox) Reoffer(event backupplan.Event) error {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.closed {
-		return errors.New("executor: re-offer to closed event outbox")
-	}
-	if !o.offer(event) {
-		return errors.New("executor: event relay is full")
-	}
-	return nil
-}
-
-func (o *EventOutbox) offer(event backupplan.Event) bool {
-	if len(o.queue) < o.options.Capacity {
-		o.queue = append(o.queue, event)
-		o.notify()
-		return true
-	}
-	return false
-}
-
-// Close stops accepting events and waits for all queued relay attempts to
-// finish. Failed attempts are dropped; if ctx expires, delivery continues and
-// Close may be called again.
-func (o *EventOutbox) Close(ctx context.Context) error {
-	o.mu.Lock()
-	o.closed = true
-	o.notify()
-	o.mu.Unlock()
-	select {
-	case <-o.done:
-		return nil
-	case <-ctx.Done():
-		return fmt.Errorf("executor: close event outbox: %w", ctx.Err())
-	}
-}
-
-func (o *EventOutbox) record(event backupplan.Event) (backupplan.Event, error) {
-	event.Seq = o.nextSeq + 1
-	event.At = time.Now().UTC().Truncate(time.Second)
-	if err := o.journal.Append(event); err != nil {
-		o.nextSeq = o.journal.HighestSeq()
-		return backupplan.Event{}, fmt.Errorf("executor: append session event: %w", err)
-	}
-	o.nextSeq = event.Seq
-	return event, nil
-}
-
-func (o *EventOutbox) notify() {
-	select {
-	case o.wake <- struct{}{}:
-	default:
-	}
-}
-
-func (o *EventOutbox) deliver() {
-	defer close(o.done)
-	for {
-		event, ok := o.front()
-		if !ok {
-			return
-		}
-		if event.Type == "" {
-			<-o.wake
-			continue
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), o.options.CallTimeout)
-		err := o.sink.Deliver(ctx, event)
-		cancel()
-		if err != nil {
-			continue
-		}
-	}
-}
-
-func (o *EventOutbox) front() (backupplan.Event, bool) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if len(o.queue) > 0 {
-		event := o.queue[0]
-		o.queue[0] = backupplan.Event{}
-		o.queue = o.queue[1:]
-		if len(o.queue) == 0 {
-			o.queue = make([]backupplan.Event, 0, o.options.Capacity)
-			o.overflowed = false
-		}
-		return event, true
-	}
-	if o.closed {
-		return backupplan.Event{}, false
-	}
-	return backupplan.Event{}, true
-}
-
-// PreparedPlan is the hand-off point to the next slice's phase 2 and phase 3.
-// The cartridge is mounted, encryption is active, identity is confirmed, and
-// load-time normalization has completed.
+// PreparedPlan is one fill plan whose loaded cartridge and recorded pre-state
+// have been validated. DebrisSnapshots is forensic session state only.
 type PreparedPlan struct {
 	Drive              Drive
-	Events             *EventOutbox
+	Journal            *backupplan.Writer
 	Cartridge          Cartridge
 	Volume             tapevolume.Volume
 	Plan               backupplan.Plan
+	StateRoot          string
 	LibraryRoot        string
-	CommittedSnapshots map[string]struct{}
+	CatalogSnapshots   map[string]struct{}
+	DebrisSnapshots    map[string]struct{}
+	CatalogObservation tapecatalog.Observed
 }
 
-// PreparedPlanHandler owns phase 2 classification and phase 3 execution.
-type PreparedPlanHandler func(context.Context, PreparedPlan) error
-
-// SessionOptions controls the polling session loop.
+// SessionOptions controls the polling loop and per-snapshot commit policy.
 type SessionOptions struct {
-	PollInterval time.Duration
-	IdleTimeout  time.Duration
-	LibraryRoot  string
+	PollInterval    time.Duration
+	IdleTimeout     time.Duration
+	StateRoot       string
+	LibraryRoot     string
+	FreeSpaceMargin int64
+	FlushCadence    int
 }
 
 type admittedPlan struct {
@@ -233,26 +66,31 @@ type admittedPlan struct {
 	pin  volume.ID
 }
 
-// RunSession works through the supplied ready plans as cartridges are swapped.
-// It stops at PreparedPlanHandler; no backup action is implemented here.
+// RunSession executes ready fill plans synchronously as cartridges are swapped.
+// Each plan leaves the live set: success completes it and any execution failure
+// discards it after recording the halt.
 func RunSession(
 	ctx context.Context,
 	drive Drive,
 	plans []backupplan.Plan,
-	events *EventOutbox,
-	handle PreparedPlanHandler,
+	journal *backupplan.Writer,
+	backup BackupActionHandler,
 	options SessionOptions,
 ) (resultErr error) {
-	if err := validateRunSession(drive, events, handle, options); err != nil {
+	if err := validateRunSession(drive, journal, backup, options); err != nil {
 		return err
 	}
-	pending, err := admitPlans(plans)
+	pending, err := admitPlans(options.StateRoot, plans)
 	if err != nil {
 		return err
 	}
 	if len(pending) == 0 {
 		return ErrNoReadyPlans
 	}
+	if err := registerSession(); err != nil {
+		return err
+	}
+	defer unregisterSession()
 	if err := drive.Open(); err != nil {
 		return fmt.Errorf("executor: open drive: %w", err)
 	}
@@ -262,29 +100,45 @@ func RunSession(
 		}
 	}()
 
-	return runAdmittedPlans(ctx, drive, pending, events, handle, options)
+	return runAdmittedPlans(ctx, drive, pending, journal, backup, options)
+}
+
+func registerSession() error {
+	sessionRegistry.Lock()
+	defer sessionRegistry.Unlock()
+	if sessionRegistry.active {
+		return ErrSessionActive
+	}
+	sessionRegistry.active = true
+	return nil
+}
+
+func unregisterSession() {
+	sessionRegistry.Lock()
+	defer sessionRegistry.Unlock()
+	sessionRegistry.active = false
 }
 
 func runAdmittedPlans(
 	ctx context.Context,
 	drive Drive,
 	pending []admittedPlan,
-	events *EventOutbox,
-	handle PreparedPlanHandler,
+	journal *backupplan.Writer,
+	backup BackupActionHandler,
 	options SessionOptions,
 ) error {
 	plansAdmitted := len(pending)
 	plansCompleted := 0
 	idleDeadline := time.Now().Add(options.IdleTimeout)
 	for len(pending) > 0 {
-		if err := events.Emit(backupplan.Event{
+		if err := appendSessionEvent(journal, backupplan.Event{
 			Type:       backupplan.EventWaitingForTape,
 			Candidates: candidateTapeIDs(pending),
 		}); err != nil {
 			return err
 		}
 
-		index, cartridge, err := waitForCandidate(
+		index, identity, err := waitForCandidate(
 			ctx,
 			drive,
 			pending,
@@ -292,80 +146,91 @@ func runAdmittedPlans(
 			idleDeadline,
 		)
 		if errors.Is(err, errIdleTimeout) {
-			if emitErr := events.Emit(backupplan.Event{
-				Type:           backupplan.EventTerminal,
-				State:          "ended",
-				Reason:         "idle_timeout",
-				PlansCompleted: plansCompleted,
-			}); emitErr != nil {
-				return emitErr
-			}
-			return nil
+			retireErr := retirePendingPlans(
+				options.StateRoot,
+				journal,
+				pending,
+				errors.New("executor: session idle timeout"),
+			)
+			return errors.Join(
+				retireErr,
+				appendTerminal(journal, "idle_timeout", plansCompleted),
+			)
 		}
 		if err != nil {
-			return err
+			retireErr := retirePendingPlans(
+				options.StateRoot,
+				journal,
+				pending,
+				err,
+			)
+			terminalErr := appendTerminal(journal, "session_failed", plansCompleted)
+			return errors.Join(err, retireErr, terminalErr)
 		}
 
-		prepared, err := prepareCartridge(
+		selected := pending[index]
+		prepared, err := prepareFillCartridge(
 			drive,
-			cartridge,
-			pending[index],
-			events,
-			options.LibraryRoot,
+			identity,
+			selected,
+			journal,
+			options,
 		)
-		if errors.Is(err, errCartridgeRejected) {
-			if emitErr := events.Emit(backupplan.Event{
-				Type:   backupplan.EventPlanFailed,
-				PlanID: pending[index].plan.PlanID,
-				Reason: "cartridge_rejected",
-				Detail: err.Error(),
-			}); emitErr != nil {
-				return errors.Join(err, emitErr)
+		if err == nil {
+			err = ExecutePreparedPlan(
+				ctx,
+				prepared,
+				options.FreeSpaceMargin,
+				options.FlushCadence,
+				backup,
+			)
+		}
+		if err != nil {
+			if retireErr := retirePlan(
+				options.StateRoot,
+				journal,
+				selected.plan,
+				err,
+			); retireErr != nil {
+				return errors.Join(err, retireErr)
 			}
 			pending = append(pending[:index], pending[index+1:]...)
 			idleDeadline = time.Now().Add(options.IdleTimeout)
 			continue
 		}
-		if err != nil {
-			return err
-		}
-		if err := handle(ctx, prepared); errors.Is(err, ErrPlanFailed) {
-			pending = append(pending[:index], pending[index+1:]...)
-			idleDeadline = time.Now().Add(options.IdleTimeout)
-			continue
-		} else if err != nil {
-			return fmt.Errorf("executor: handle prepared plan %s: %w", prepared.Plan.PlanID, err)
+		if err := backupplan.Complete(options.StateRoot, selected.plan.PlanID); err != nil {
+			return fmt.Errorf(
+				"executor: complete plan %s: %w",
+				selected.plan.PlanID,
+				err,
+			)
 		}
 		pending = append(pending[:index], pending[index+1:]...)
 		plansCompleted++
 		idleDeadline = time.Now().Add(options.IdleTimeout)
 	}
-	terminalReason := "completed"
+
+	reason := "completed"
 	if plansCompleted < plansAdmitted {
-		terminalReason = "plans_failed"
+		reason = "plans_failed"
 	}
-	return events.Emit(backupplan.Event{
-		Type:           backupplan.EventTerminal,
-		State:          "ended",
-		Reason:         terminalReason,
-		PlansCompleted: plansCompleted,
-	})
+	return appendTerminal(journal, reason, plansCompleted)
 }
 
 func validateRunSession(
 	drive Drive,
-	events *EventOutbox,
-	handle PreparedPlanHandler,
+	journal *backupplan.Writer,
+	backup BackupActionHandler,
 	options SessionOptions,
 ) error {
 	if drive == nil {
 		return errors.New("executor: drive is required")
 	}
-	if events == nil {
-		return errors.New("executor: event outbox is required")
+	if journal == nil {
+		return errors.New("executor: session journal is required")
 	}
-	if handle == nil {
-		return errors.New("executor: prepared plan handler is required")
+	if backup == nil {
+		return errors.New("executor: backup action handler is required")
 	}
 	if options.PollInterval <= 0 {
 		return errors.New("executor: poll interval must be greater than zero")
@@ -373,8 +238,17 @@ func validateRunSession(
 	if options.IdleTimeout <= 0 {
 		return errors.New("executor: idle timeout must be greater than zero")
 	}
+	if options.StateRoot == "" {
+		return errors.New("executor: state root is required")
+	}
 	if options.LibraryRoot == "" {
 		return errors.New("executor: library root is required")
+	}
+	if options.FreeSpaceMargin < 0 {
+		return errors.New("executor: free space margin must not be negative")
+	}
+	if options.FlushCadence < 1 {
+		return errors.New("executor: flush cadence must be at least 1")
 	}
 	return nil
 }
@@ -387,19 +261,21 @@ func waitForCandidate(
 	plans []admittedPlan,
 	pollInterval time.Duration,
 	idleDeadline time.Time,
-) (int, Cartridge, error) {
+) (int, LoadedIdentity, error) {
 	for {
 		identity, err := drive.LoadedIdentity()
 		switch {
 		case err != nil:
-			return -1, Cartridge{}, fmt.Errorf("executor: identify loaded cartridge: %w", err)
+			return -1, LoadedIdentity{}, fmt.Errorf(
+				"executor: identify loaded cartridge: %w",
+				err,
+			)
 		case identity.State == LoadedIdentityIdentified:
-			cartridge := identity.Cartridge
-			if index := matchingPlan(plans, cartridge.TapeID); index >= 0 {
+			if index := matchingPlan(plans, identity.Cartridge.TapeID); index >= 0 {
 				if _, _, capacityErr := drive.Capacity(); capacityErr == nil {
-					return index, cartridge, nil
+					return index, identity, nil
 				} else if !errors.Is(capacityErr, ErrNotMounted) {
-					return -1, Cartridge{}, fmt.Errorf(
+					return -1, LoadedIdentity{}, fmt.Errorf(
 						"executor: inspect mounted cartridge capacity: %w",
 						capacityErr,
 					)
@@ -408,7 +284,7 @@ func waitForCandidate(
 		case identity.State == LoadedIdentityNone,
 			identity.State == LoadedIdentityUnidentified:
 		default:
-			return -1, Cartridge{}, fmt.Errorf(
+			return -1, LoadedIdentity{}, fmt.Errorf(
 				"executor: identify loaded cartridge: unknown identity state %q",
 				identity.State,
 			)
@@ -416,125 +292,336 @@ func waitForCandidate(
 
 		remaining := time.Until(idleDeadline)
 		if remaining <= 0 {
-			return -1, Cartridge{}, errIdleTimeout
+			return -1, LoadedIdentity{}, errIdleTimeout
 		}
-		delay := min(pollInterval, remaining)
-		timer := time.NewTimer(delay)
+		timer := time.NewTimer(min(pollInterval, remaining))
 		select {
 		case <-ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
 			}
-			return -1, Cartridge{}, ctx.Err()
+			return -1, LoadedIdentity{}, ctx.Err()
 		case <-timer.C:
 		}
 	}
 }
 
-func prepareCartridge(
+func prepareFillCartridge(
 	drive Drive,
-	cartridge Cartridge,
-	plan admittedPlan,
-	events *EventOutbox,
-	libraryRoot string,
+	identity LoadedIdentity,
+	admitted admittedPlan,
+	journal *backupplan.Writer,
+	options SessionOptions,
 ) (PreparedPlan, error) {
-	if err := events.Emit(backupplan.Event{
+	plan := admitted.plan
+	if err := appendSessionEvent(journal, backupplan.Event{
 		Type:   backupplan.EventPlanStarted,
-		PlanID: plan.plan.PlanID,
+		PlanID: plan.PlanID,
 	}); err != nil {
 		return PreparedPlan{}, err
 	}
-
-	encryptionActive, err := drive.EncryptionActive()
-	if err != nil {
-		return PreparedPlan{}, fmt.Errorf("executor: check drive encryption: %w", err)
-	}
-	if !encryptionActive {
-		if emitErr := events.Emit(backupplan.Event{
-			Type:   backupplan.EventTapeRejected,
-			TapeID: cartridge.TapeID,
-			Reason: "encryption_inactive",
-		}); emitErr != nil {
-			return PreparedPlan{}, errors.Join(ErrEncryptionInactive, emitErr)
-		}
-		return PreparedPlan{}, errors.Join(errCartridgeRejected, ErrEncryptionInactive)
-	}
-	if err := events.Emit(backupplan.Event{
-		Type:   backupplan.EventEncryptionVerified,
-		PlanID: plan.plan.PlanID,
-	}); err != nil {
+	if err := verifyFillEncryption(drive, journal, plan.PlanID); err != nil {
 		return PreparedPlan{}, err
 	}
 
-	loadedVolume, err := tapevolume.Read(cartridge.Root)
+	entry, err := loadCatalogEntry(options.StateRoot, admitted.pin)
 	if err != nil {
-		identityErr := fmt.Errorf(
-			"executor: confirm cartridge %s identity: %w",
-			cartridge.TapeID,
+		return PreparedPlan{}, fmt.Errorf(
+			"executor: plan %s catalog entry is not complete: %w",
+			plan.PlanID,
 			err,
 		)
-		if emitErr := events.Emit(backupplan.Event{
-			Type:   backupplan.EventTapeRejected,
-			TapeID: cartridge.TapeID,
-			Reason: "identity_unconfirmed",
-			Detail: err.Error(),
-		}); emitErr != nil {
-			return PreparedPlan{}, errors.Join(identityErr, emitErr)
-		}
-		return PreparedPlan{}, errors.Join(errCartridgeRejected, identityErr)
 	}
-	if loadedVolume.VolumeID != plan.pin {
-		identityErr := fmt.Errorf(
-			"executor: cartridge %s volume is %s, plan %s requires %s",
-			cartridge.TapeID,
-			loadedVolume.VolumeID,
-			plan.plan.PlanID,
-			plan.pin,
-		)
-		if emitErr := events.Emit(backupplan.Event{
-			Type:   backupplan.EventTapeRejected,
-			TapeID: cartridge.TapeID,
-			Reason: "volume_mismatch",
-			Detail: fmt.Sprintf("loaded %s, expected %s", loadedVolume.VolumeID, plan.pin),
-		}); emitErr != nil {
-			return PreparedPlan{}, errors.Join(identityErr, emitErr)
-		}
-		return PreparedPlan{}, errors.Join(errCartridgeRejected, identityErr)
+	if err := validateFillIdentity(identity, admitted, entry); err != nil {
+		return PreparedPlan{}, err
 	}
-	if err := events.Emit(backupplan.Event{
+	if err := validateRecordedInventory(plan, entry.snapshots); err != nil {
+		return PreparedPlan{}, err
+	}
+	debris, err := observeFillTape(identity, entry, journal, options, plan)
+	if err != nil {
+		return PreparedPlan{}, err
+	}
+	if err := appendSessionEvent(journal, backupplan.Event{
 		Type:     backupplan.EventTapeLoaded,
-		TapeID:   cartridge.TapeID,
-		VolumeID: loadedVolume.VolumeID,
+		TapeID:   identity.Volume.TapeID,
+		VolumeID: identity.Volume.VolumeID,
 	}); err != nil {
 		return PreparedPlan{}, err
 	}
-	committed, err := sweepSnapshots(cartridge.Root, events)
-	if err != nil {
-		if emitErr := events.Emit(backupplan.Event{
-			Type:   backupplan.EventTapeRejected,
-			TapeID: cartridge.TapeID,
-			Reason: "sweep_failed",
-			Detail: err.Error(),
-		}); emitErr != nil {
-			return PreparedPlan{}, errors.Join(errCartridgeRejected, err, emitErr)
-		}
-		return PreparedPlan{}, errors.Join(errCartridgeRejected, err)
-	}
+
 	return PreparedPlan{
 		Drive:              drive,
-		Events:             events,
-		Cartridge:          cartridge,
-		Volume:             loadedVolume,
-		Plan:               plan.plan,
-		LibraryRoot:        libraryRoot,
-		CommittedSnapshots: committed,
+		Journal:            journal,
+		Cartridge:          identity.Cartridge,
+		Volume:             identity.Volume,
+		Plan:               plan,
+		StateRoot:          options.StateRoot,
+		LibraryRoot:        options.LibraryRoot,
+		CatalogSnapshots:   entry.snapshots,
+		DebrisSnapshots:    debris,
+		CatalogObservation: entry.observed,
 	}, nil
 }
 
-func admitPlans(plans []backupplan.Plan) ([]admittedPlan, error) {
+func verifyFillEncryption(
+	drive Drive,
+	journal *backupplan.Writer,
+	planID string,
+) error {
+	active, err := drive.EncryptionActive()
+	if err != nil {
+		return fmt.Errorf("executor: check drive encryption: %w", err)
+	}
+	if !active {
+		return ErrEncryptionInactive
+	}
+	return appendSessionEvent(journal, backupplan.Event{
+		Type:   backupplan.EventEncryptionVerified,
+		PlanID: planID,
+	})
+}
+
+func validateFillIdentity(
+	identity LoadedIdentity,
+	admitted admittedPlan,
+	entry catalogEntry,
+) error {
+	plan := admitted.plan
+	matchesVolume := identity.Volume.VolumeID == admitted.pin &&
+		entry.volume.VolumeID == admitted.pin
+	matchesTape := identity.Volume.TapeID == plan.Target.TapeID &&
+		entry.volume.TapeID == plan.Target.TapeID
+	if matchesVolume && matchesTape {
+		return nil
+	}
+	return fmt.Errorf(
+		"executor: plan %s pre-state mismatch: loaded volume %s on tape %s, catalog volume %s on tape %s, want volume %s on tape %s",
+		plan.PlanID,
+		identity.Volume.VolumeID,
+		identity.Volume.TapeID,
+		entry.volume.VolumeID,
+		entry.volume.TapeID,
+		admitted.pin,
+		plan.Target.TapeID,
+	)
+}
+
+func validateRecordedInventory(
+	plan backupplan.Plan,
+	catalogSnapshots map[string]struct{},
+) error {
+	expected, err := leadingInventory(plan)
+	if err != nil {
+		return err
+	}
+	catalogNames := sortedSet(catalogSnapshots)
+	expectedNames := sortedSet(expected)
+	if reflect.DeepEqual(expectedNames, catalogNames) {
+		return nil
+	}
+	return fmt.Errorf(
+		"executor: plan %s pre-state mismatch: catalog snapshots %v, plan expects %v",
+		plan.PlanID,
+		catalogNames,
+		expectedNames,
+	)
+}
+
+func observeFillTape(
+	identity LoadedIdentity,
+	entry catalogEntry,
+	journal *backupplan.Writer,
+	options SessionOptions,
+	plan backupplan.Plan,
+) (map[string]struct{}, error) {
+	appendEvent := func(event backupplan.Event) error {
+		return appendSessionEvent(journal, event)
+	}
+	tapeSnapshots, err := sweepSnapshots(identity.Cartridge.Root, appendEvent)
+	if err != nil {
+		return nil, err
+	}
+	difference := compareInventory(entry.snapshots, tapeSnapshots)
+	if len(difference.missing) > 0 {
+		return nil, fmt.Errorf(
+			"executor: plan %s pre-state mismatch: catalog snapshots missing from tape: %s",
+			plan.PlanID,
+			strings.Join(difference.missing, ", "),
+		)
+	}
+	indexed, err := libraryMetadataRefs(options.LibraryRoot)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"executor: inspect library index for pre-state validation: %w",
+			err,
+		)
+	}
+	debris, foreign, err := classifyTapeExtras(
+		difference.extra,
+		indexed,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if len(foreign) > 0 {
+		return nil, fmt.Errorf(
+			"executor: plan %s divergence_deferred: foreign marked snapshots: %s",
+			plan.PlanID,
+			strings.Join(foreign, ", "),
+		)
+	}
+	if err := appendSessionEvent(journal, backupplan.Event{
+		Type:           backupplan.EventDivergenceChecked,
+		PlanID:         plan.PlanID,
+		Result:         "match",
+		ExtraSnapshots: sortedSet(debris),
+	}); err != nil {
+		return nil, err
+	}
+	return debris, nil
+}
+
+func classifyTapeExtras(
+	extras []string,
+	indexed map[string]struct{},
+) (
+	debris map[string]struct{},
+	foreign []string,
+	err error,
+) {
+	debris = make(map[string]struct{})
+	foreign = make([]string, 0)
+	for _, name := range extras {
+		metadataRef, _, err := tapevolume.ParseSnapshotName(name)
+		if err != nil {
+			return nil, nil, fmt.Errorf(
+				"executor: parse swept snapshot %q: %w",
+				name,
+				err,
+			)
+		}
+		if _, exists := indexed[metadataRef]; exists {
+			debris[name] = struct{}{}
+			continue
+		}
+		foreign = append(foreign, name)
+	}
+	slices.Sort(foreign)
+	return debris, foreign, nil
+}
+
+type catalogEntry struct {
+	volume    tapevolume.Volume
+	observed  tapecatalog.Observed
+	snapshots map[string]struct{}
+}
+
+func loadCatalogEntry(stateRoot string, id volume.ID) (catalogEntry, error) {
+	active, err := tapecatalog.ListActive(stateRoot)
+	if err != nil {
+		return catalogEntry{}, err
+	}
+	if !slices.Contains(active, id) {
+		return catalogEntry{}, fmt.Errorf("active volume %s does not exist", id)
+	}
+	dir, err := tapecatalog.VolumeDir(stateRoot, id)
+	if err != nil {
+		return catalogEntry{}, err
+	}
+	header, err := tapevolume.Read(dir)
+	if err != nil {
+		return catalogEntry{}, err
+	}
+	observed, err := tapecatalog.LoadObserved(stateRoot, id)
+	if err != nil {
+		return catalogEntry{}, err
+	}
+	entries, err := os.ReadDir(tapevolume.SnapshotsDir(dir))
+	if err != nil {
+		return catalogEntry{}, fmt.Errorf("read catalog snapshots: %w", err)
+	}
+	snapshots := make(map[string]struct{})
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		snapshotDir := filepath.Join(tapevolume.SnapshotsDir(dir), entry.Name())
+		manifest, readErr := tapemanifest.Read(snapshotDir)
+		if errors.Is(readErr, tapemanifest.ErrIncomplete) {
+			continue
+		}
+		if readErr != nil {
+			return catalogEntry{}, fmt.Errorf(
+				"read catalog snapshot %q: %w",
+				entry.Name(),
+				readErr,
+			)
+		}
+		name, err := tapevolume.SnapshotName(
+			manifest.MetadataRef,
+			manifest.Generation,
+		)
+		if err != nil {
+			return catalogEntry{}, err
+		}
+		if name != entry.Name() {
+			return catalogEntry{}, fmt.Errorf(
+				"catalog snapshot directory %q contains identity %q",
+				entry.Name(),
+				name,
+			)
+		}
+		snapshots[name] = struct{}{}
+	}
+	return catalogEntry{
+		volume:    header,
+		observed:  observed,
+		snapshots: snapshots,
+	}, nil
+}
+
+func libraryMetadataRefs(libraryRoot string) (map[string]struct{}, error) {
+	entries, err := os.ReadDir(libraryRoot)
+	if err != nil {
+		return nil, err
+	}
+	refs := make(map[string]struct{})
+	for _, entry := range entries {
+		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		path := filepath.Join(libraryRoot, entry.Name(), ".kura", "series.json")
+		metadata, err := seriesmeta.Read(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read series %q: %w", entry.Name(), err)
+		}
+		refs[metadata.MetadataRef] = struct{}{}
+	}
+	return refs, nil
+}
+
+func admitPlans(stateRoot string, plans []backupplan.Plan) ([]admittedPlan, error) {
 	admitted := make([]admittedPlan, 0, len(plans))
 	for _, plan := range plans {
-		pin, err := admitPlan(plan)
+		ready, err := backupplan.ReadReady(stateRoot, plan.PlanID)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"executor: read ready plan %s: %w",
+				plan.PlanID,
+				err,
+			)
+		}
+		if !reflect.DeepEqual(ready, plan) {
+			return nil, fmt.Errorf(
+				"executor: ready plan %s differs from supplied plan",
+				plan.PlanID,
+			)
+		}
+		pin, err := admitFillPlan(plan)
 		if err != nil {
 			return nil, err
 		}
@@ -543,16 +630,19 @@ func admitPlans(plans []backupplan.Plan) ([]admittedPlan, error) {
 	return admitted, nil
 }
 
-func admitPlan(plan backupplan.Plan) (volume.ID, error) {
+func admitFillPlan(plan backupplan.Plan) (volume.ID, error) {
 	var pin volume.ID
 	for _, action := range plan.Actions {
 		switch action.Type {
-		case backupplan.ActionReformat,
-			backupplan.ActionAdmit,
-			backupplan.ActionImport,
-			backupplan.ActionVerify:
+		case backupplan.ActionReformat, backupplan.ActionAdmit:
 			return "", fmt.Errorf(
-				"executor: plan %s contains out-of-scope action %q",
+				"executor: plan %s contains init action %q; init sessions are not implemented",
+				plan.PlanID,
+				action.Type,
+			)
+		case backupplan.ActionImport, backupplan.ActionVerify:
+			return "", fmt.Errorf(
+				"executor: plan %s contains deferred action %q",
 				plan.PlanID,
 				action.Type,
 			)
@@ -583,6 +673,99 @@ func admitPlan(plan backupplan.Plan) (volume.ID, error) {
 		)
 	}
 	return pin, nil
+}
+
+func leadingInventory(plan backupplan.Plan) (map[string]struct{}, error) {
+	for _, action := range plan.Actions {
+		if action.Type == backupplan.ActionBackup {
+			break
+		}
+		if action.Type != backupplan.ActionAssertInventory {
+			continue
+		}
+		expected := make(map[string]struct{}, len(action.Snapshots))
+		for _, name := range action.Snapshots {
+			expected[name] = struct{}{}
+		}
+		return expected, nil
+	}
+	return nil, fmt.Errorf(
+		"executor: plan %s must assert inventory before backup",
+		plan.PlanID,
+	)
+}
+
+func retirePlan(
+	stateRoot string,
+	journal *backupplan.Writer,
+	plan backupplan.Plan,
+	cause error,
+) error {
+	logErr := appendSessionEvent(journal, backupplan.Event{
+		Type:   backupplan.EventPlanFailed,
+		PlanID: plan.PlanID,
+		Reason: "halted",
+		Detail: cause.Error(),
+	})
+	discardErr := backupplan.Discard(stateRoot, plan.PlanID)
+	if discardErr != nil {
+		discardErr = fmt.Errorf("executor: discard halted plan %s: %w", plan.PlanID, discardErr)
+	}
+	return errors.Join(logErr, discardErr)
+}
+
+func retirePendingPlans(
+	stateRoot string,
+	journal *backupplan.Writer,
+	pending []admittedPlan,
+	cause error,
+) error {
+	retirementErrors := make([]error, 0, len(pending))
+	for _, admitted := range pending {
+		if err := retirePlan(
+			stateRoot,
+			journal,
+			admitted.plan,
+			cause,
+		); err != nil {
+			retirementErrors = append(retirementErrors, err)
+		}
+	}
+	return errors.Join(retirementErrors...)
+}
+
+func appendTerminal(
+	journal *backupplan.Writer,
+	reason string,
+	plansCompleted int,
+) error {
+	return appendSessionEvent(journal, backupplan.Event{
+		Type:           backupplan.EventTerminal,
+		State:          "ended",
+		Reason:         reason,
+		PlansCompleted: plansCompleted,
+	})
+}
+
+func appendSessionEvent(
+	journal *backupplan.Writer,
+	event backupplan.Event,
+) error {
+	event.Seq = journal.HighestSeq() + 1
+	event.At = time.Now().UTC().Truncate(time.Second)
+	if err := journal.Append(event); err != nil {
+		return fmt.Errorf("executor: append session event: %w", err)
+	}
+	return nil
+}
+
+func sortedSet(set map[string]struct{}) []string {
+	values := make([]string, 0, len(set))
+	for value := range set {
+		values = append(values, value)
+	}
+	slices.Sort(values)
+	return values
 }
 
 func candidateTapeIDs(plans []admittedPlan) []tape.ID {

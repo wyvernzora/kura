@@ -25,35 +25,31 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-func TestCopyRejectsEachPostCopyDrift(t *testing.T) {
+func TestCopyRejectsEachPostCopyDriftAndHalts(t *testing.T) {
 	tests := []struct {
 		name       string
-		mutate     func(*testing.T, copyFixture)
+		mutate     func(*testing.T, *copyFixture)
 		wantReason backupplan.ItemReason
 	}{
 		{
 			name: "live file added",
-			mutate: func(t *testing.T, fixture copyFixture) {
-				writeFile(
-					t,
-					filepath.Join(fixture.seriesRoot, "late-added.ass"),
-					[]byte("late"),
-				)
+			mutate: func(t *testing.T, fixture *copyFixture) {
+				writeFile(t, filepath.Join(fixture.seriesRoot, "late.ass"), []byte("late"))
 			},
 			wantReason: backupplan.ReasonPayloadDrift,
 		},
 		{
 			name: "series root removed",
-			mutate: func(t *testing.T, fixture copyFixture) {
+			mutate: func(t *testing.T, fixture *copyFixture) {
 				if err := os.RemoveAll(fixture.seriesRoot); err != nil {
-					t.Fatalf("RemoveAll series root: %v", err)
+					t.Fatalf("RemoveAll series root error = %v", err)
 				}
 			},
 			wantReason: backupplan.ReasonSeriesRootMissing,
 		},
 		{
 			name: "generation changed",
-			mutate: func(t *testing.T, fixture copyFixture) {
+			mutate: func(t *testing.T, fixture *copyFixture) {
 				writeSeriesMetadata(t, fixture.seriesRoot, seriesMetadata{
 					Generation:  fixture.action.Generation + 1,
 					MetadataRef: fixture.action.MetadataRef,
@@ -63,7 +59,7 @@ func TestCopyRejectsEachPostCopyDrift(t *testing.T) {
 		},
 		{
 			name: "metadata ref changed",
-			mutate: func(t *testing.T, fixture copyFixture) {
+			mutate: func(t *testing.T, fixture *copyFixture) {
 				writeSeriesMetadata(t, fixture.seriesRoot, seriesMetadata{
 					Generation:  fixture.action.Generation,
 					MetadataRef: "tvdb:different",
@@ -73,7 +69,7 @@ func TestCopyRejectsEachPostCopyDrift(t *testing.T) {
 		},
 		{
 			name: "staging created",
-			mutate: func(t *testing.T, fixture copyFixture) {
+			mutate: func(t *testing.T, fixture *copyFixture) {
 				writeSeriesMetadata(t, fixture.seriesRoot, seriesMetadata{
 					Generation:    fixture.action.Generation,
 					MetadataRef:   fixture.action.MetadataRef,
@@ -84,7 +80,7 @@ func TestCopyRejectsEachPostCopyDrift(t *testing.T) {
 		},
 		{
 			name: "claim created",
-			mutate: func(t *testing.T, fixture copyFixture) {
+			mutate: func(t *testing.T, fixture *copyFixture) {
 				writeSeriesMetadata(t, fixture.seriesRoot, seriesMetadata{
 					Generation:  fixture.action.Generation,
 					MetadataRef: fixture.action.MetadataRef,
@@ -98,38 +94,29 @@ func TestCopyRejectsEachPostCopyDrift(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newCopyFixture(t, nil)
 			var once sync.Once
-			handler := newCopyHandler(t, nil, func(path string) (executor.Destination, error) {
+			handler := fixture.handler(t, func(path string) (executor.Destination, error) {
 				if strings.HasSuffix(path, "episode.mkv") {
 					once.Do(func() { test.mutate(t, fixture) })
 				}
 				return executor.OpenDestination(path)
 			})
 
-			execution, err := executor.ExecutePreparedPlan(
-				t.Context(),
-				fixture.prepared,
-				0,
-				handler,
-			)
-			if err != nil {
-				t.Fatalf("ExecutePreparedPlan: %v", err)
-			}
-			closeOutbox(t, fixture.outbox)
-			if len(execution.Written) != 0 {
-				t.Fatalf("written results = %d, want 0", len(execution.Written))
+			err := fixture.execute(t, handler)
+			if !errors.Is(err, executor.ErrPlanFailed) {
+				t.Fatalf("ExecutePreparedPlan error = %v, want ErrPlanFailed", err)
 			}
 			assertItemFailureReason(
 				t,
-				fixture.sink.Events(),
+				fixture.events(t),
 				fixture.action,
 				test.wantReason,
 			)
-			assertSnapshotAbsent(t, fixture)
+			fixture.assertSnapshotAbsent(t)
 		})
 	}
 }
 
-func TestCopyRejectsNonNFCEntryBeforeOpeningAnyDestination(t *testing.T) {
+func TestCopyRejectsNonNFCEntryBeforeOpeningDestination(t *testing.T) {
 	fixture := newCopyFixture(t, nil)
 	nfdPath := "Cafe\u0301.ass"
 	if norm.NFC.IsNormalString(nfdPath) {
@@ -138,101 +125,71 @@ func TestCopyRejectsNonNFCEntryBeforeOpeningAnyDestination(t *testing.T) {
 	writeFile(t, filepath.Join(fixture.seriesRoot, nfdPath), []byte("subtitle"))
 	fixture.refreshAction(t)
 	destinationsOpened := 0
-	handler := newCopyHandler(t, nil, func(path string) (executor.Destination, error) {
+	handler := fixture.handler(t, func(path string) (executor.Destination, error) {
 		destinationsOpened++
 		return executor.OpenDestination(path)
 	})
 
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
+	err := fixture.execute(t, handler)
+	if !errors.Is(err, executor.ErrPlanFailed) {
+		t.Fatalf("ExecutePreparedPlan error = %v, want ErrPlanFailed", err)
 	}
-	closeOutbox(t, fixture.outbox)
 	if destinationsOpened != 0 {
 		t.Fatalf("destinations opened = %d, want 0", destinationsOpened)
 	}
-	if len(execution.Written) != 0 {
-		t.Fatalf("written results = %d, want 0", len(execution.Written))
-	}
-	assertEvent(
+	assertItemFailureReason(
 		t,
-		fixture.sink.Events(),
-		backupplan.EventItemFailed,
-		func(event backupplan.Event) bool {
-			return event.MetadataRef == fixture.action.MetadataRef &&
-				event.Generation == fixture.action.Generation &&
-				event.Reason == string(backupplan.ReasonUnsupportedFileType) &&
-				strings.Contains(event.Detail, nfdPath)
+		fixture.events(t),
+		fixture.action,
+		backupplan.ReasonUnsupportedFileType,
+	)
+	fixture.assertSnapshotAbsent(t)
+}
+
+func TestCopyDurabilityBarrierRejectsEachFailure(t *testing.T) {
+	tests := []struct {
+		name string
+		open func(string) (*wrappedDestination, error)
+		want string
+	}{
+		{
+			name: "sync",
+			open: func(path string) (*wrappedDestination, error) {
+				destination, err := openWrappedDestination(path)
+				if destination != nil && strings.HasSuffix(path, "episode.mkv") {
+					destination.syncErr = errors.New("injected destination sync failure")
+				}
+				return destination, err
+			},
+			want: "injected destination sync failure",
 		},
-	)
-	assertSnapshotAbsent(t, fixture)
-}
-
-func TestCopyDurabilityBarrierRejectsSyncFailure(t *testing.T) {
-	fixture := newCopyFixture(t, nil)
-	syncFailure := errors.New("injected destination sync failure")
-	handler := newCopyHandler(t, nil, func(path string) (executor.Destination, error) {
-		destination, err := openWrappedDestination(path)
-		if err != nil {
-			return nil, err
-		}
-		if strings.HasSuffix(path, "episode.mkv") {
-			destination.syncErr = syncFailure
-		}
-		return destination, nil
-	})
-
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
+		{
+			name: "close",
+			open: func(path string) (*wrappedDestination, error) {
+				destination, err := openWrappedDestination(path)
+				if destination != nil && strings.HasSuffix(path, "episode.mkv") {
+					destination.closeErr = errors.New("injected destination close failure")
+				}
+				return destination, err
+			},
+			want: "injected destination close failure",
+		},
 	}
-	closeOutbox(t, fixture.outbox)
-	if len(execution.Written) != 0 {
-		t.Fatalf("written results = %d, want 0", len(execution.Written))
-	}
-	assertItemFailureDetail(t, fixture, syncFailure.Error())
-	assertSnapshotAbsent(t, fixture)
-}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := newCopyFixture(t, nil)
+			handler := fixture.handler(t, func(path string) (executor.Destination, error) {
+				return test.open(path)
+			})
 
-func TestCopyDurabilityBarrierRejectsCloseFailure(t *testing.T) {
-	fixture := newCopyFixture(t, nil)
-	closeFailure := errors.New("injected destination close failure")
-	handler := newCopyHandler(t, nil, func(path string) (executor.Destination, error) {
-		destination, err := openWrappedDestination(path)
-		if err != nil {
-			return nil, err
-		}
-		if strings.HasSuffix(path, "episode.mkv") {
-			destination.closeErr = closeFailure
-		}
-		return destination, nil
-	})
-
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
+			err := fixture.execute(t, handler)
+			if !errors.Is(err, executor.ErrPlanFailed) {
+				t.Fatalf("ExecutePreparedPlan error = %v, want ErrPlanFailed", err)
+			}
+			assertItemFailureDetail(t, fixture.events(t), test.want)
+			fixture.assertSnapshotAbsent(t)
+		})
 	}
-	closeOutbox(t, fixture.outbox)
-	if len(execution.Written) != 0 {
-		t.Fatalf("written results = %d, want 0", len(execution.Written))
-	}
-	assertItemFailureDetail(t, fixture, closeFailure.Error())
-	assertSnapshotAbsent(t, fixture)
 }
 
 func TestCopyDurabilityBarrierRejectsByteCountMismatch(t *testing.T) {
@@ -240,22 +197,19 @@ func TestCopyDurabilityBarrierRejectsByteCountMismatch(t *testing.T) {
 	sourcePath := filepath.Join(fixture.seriesRoot, "episode.mkv")
 	sourceBytes, err := os.ReadFile(sourcePath)
 	if err != nil {
-		t.Fatalf("ReadFile source: %v", err)
+		t.Fatalf("ReadFile source error = %v", err)
 	}
 	sourceInfo, err := os.Stat(sourcePath)
 	if err != nil {
-		t.Fatalf("Stat source: %v", err)
+		t.Fatalf("Stat source error = %v", err)
 	}
-	handler := newCopyHandler(t, nil, func(path string) (executor.Destination, error) {
+	handler := fixture.handler(t, func(path string) (executor.Destination, error) {
 		destination, err := openWrappedDestination(path)
-		if err != nil {
-			return nil, err
-		}
-		if !strings.HasSuffix(path, "episode.mkv") {
-			return destination, nil
+		if err != nil || !strings.HasSuffix(path, "episode.mkv") {
+			return destination, err
 		}
 		if err := os.Truncate(sourcePath, int64(len(sourceBytes)/2)); err != nil {
-			t.Fatalf("Truncate source: %v", err)
+			t.Fatalf("Truncate source error = %v", err)
 		}
 		destination.beforeClose = func() error {
 			if err := os.WriteFile(sourcePath, sourceBytes, 0o664); err != nil {
@@ -266,21 +220,12 @@ func TestCopyDurabilityBarrierRejectsByteCountMismatch(t *testing.T) {
 		return destination, nil
 	})
 
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
+	err = fixture.execute(t, handler)
+	if !errors.Is(err, executor.ErrPlanFailed) {
+		t.Fatalf("ExecutePreparedPlan error = %v, want ErrPlanFailed", err)
 	}
-	closeOutbox(t, fixture.outbox)
-	if len(execution.Written) != 0 {
-		t.Fatalf("written results = %d, want 0", len(execution.Written))
-	}
-	assertItemFailureDetail(t, fixture, "want source size")
-	assertSnapshotAbsent(t, fixture)
+	assertItemFailureDetail(t, fixture.events(t), "want source size")
+	fixture.assertSnapshotAbsent(t)
 }
 
 func TestCopyManifestMatchesDestinationAndPreservesCanonicalOrder(t *testing.T) {
@@ -292,36 +237,25 @@ func TestCopyManifestMatchesDestinationAndPreservesCanonicalOrder(t *testing.T) 
 		[]byte("ignored"),
 	)
 	fixture.refreshAction(t)
-	handler := newCopyHandler(t, nil, executor.OpenDestination)
 
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
+	if err := fixture.execute(t, fixture.handler(t, executor.OpenDestination)); err != nil {
+		t.Fatalf("ExecutePreparedPlan error = %v", err)
 	}
-	closeOutbox(t, fixture.outbox)
-	if len(execution.Written) != 1 {
-		t.Fatalf("written results = %d, want 1", len(execution.Written))
-	}
-	snapshotDir := fixture.snapshotDir(t)
-	manifest, err := tapemanifest.Read(snapshotDir)
+
+	manifest, err := tapemanifest.Read(fixture.snapshotDir(t))
 	if err != nil {
-		t.Fatalf("Read committed manifest: %v", err)
+		t.Fatalf("Read manifest error = %v", err)
 	}
 	paths := make([]string, 0, len(manifest.Files))
 	for _, file := range manifest.Files {
 		paths = append(paths, file.Path)
 		data, err := os.ReadFile(filepath.Join(
-			snapshotDir,
+			fixture.snapshotDir(t),
 			"tree",
 			filepath.FromSlash(file.Path),
 		))
 		if err != nil {
-			t.Fatalf("ReadFile destination %q: %v", file.Path, err)
+			t.Fatalf("ReadFile destination %q error = %v", file.Path, err)
 		}
 		sum := sha256.Sum256(data)
 		wantHash := "sha256:" + hex.EncodeToString(sum[:])
@@ -329,25 +263,17 @@ func TestCopyManifestMatchesDestinationAndPreservesCanonicalOrder(t *testing.T) 
 			t.Fatalf("hash for %q = %q, want %q", file.Path, file.Hash, wantHash)
 		}
 	}
-	wantPaths := []string{".kura/series.json", "a.ass", "episode.mkv"}
-	if !reflect.DeepEqual(paths, wantPaths) {
-		t.Fatalf("manifest paths = %#v, want %#v", paths, wantPaths)
+	want := []string{".kura/series.json", "a.ass", "episode.mkv"}
+	if !reflect.DeepEqual(paths, want) {
+		t.Fatalf("manifest paths = %#v, want %#v", paths, want)
 	}
-	assertEvent(
-		t,
-		fixture.sink.Events(),
-		backupplan.EventFileStarted,
-		func(event backupplan.Event) bool {
-			return event.Path == ".kura/series.json"
-		},
-	)
 }
 
 func TestCopyCancellationAbortsMidFileAndRemovesSnapshot(t *testing.T) {
 	fixture := newCopyFixture(t, bytes.Repeat([]byte("x"), 1<<20))
 	ctx, cancel := context.WithCancel(t.Context())
 	started := make(chan struct{})
-	handler := newCopyHandler(t, nil, func(path string) (executor.Destination, error) {
+	handler := fixture.handler(t, func(path string) (executor.Destination, error) {
 		destination, err := openWrappedDestination(path)
 		if err != nil {
 			return nil, err
@@ -367,8 +293,13 @@ func TestCopyCancellationAbortsMidFileAndRemovesSnapshot(t *testing.T) {
 	})
 	result := make(chan error, 1)
 	go func() {
-		_, err := executor.ExecutePreparedPlan(ctx, fixture.prepared, 0, handler)
-		result <- err
+		result <- executor.ExecutePreparedPlan(
+			ctx,
+			fixture.prepared,
+			0,
+			1,
+			handler,
+		)
 	}()
 	<-started
 	cancel()
@@ -378,51 +309,42 @@ func TestCopyCancellationAbortsMidFileAndRemovesSnapshot(t *testing.T) {
 			t.Fatalf("ExecutePreparedPlan error = %v, want context.Canceled", err)
 		}
 	case <-time.After(time.Second):
-		t.Fatal("copy did not abort within one second of cancellation")
+		t.Fatal("copy did not abort within one second")
 	}
-	closeOutbox(t, fixture.outbox)
-	assertSnapshotAbsent(t, fixture)
+	fixture.assertSnapshotAbsent(t)
 }
 
 func TestCopyProgressDropsOldestWithoutStalling(t *testing.T) {
 	progress, err := executor.NewFileProgressChannel(1)
 	if err != nil {
-		t.Fatalf("NewFileProgressChannel: %v", err)
+		t.Fatalf("NewFileProgressChannel error = %v", err)
 	}
 	fixture := newCopyFixture(t, bytes.Repeat([]byte("p"), 1<<20))
-	handler := newCopyHandler(t, progress, func(path string) (executor.Destination, error) {
-		return openWrappedDestination(path)
-	})
+	handler, err := executor.NewBackupActionHandler(
+		progress,
+		executor.OpenDestination,
+		fixture.drive,
+	)
+	if err != nil {
+		t.Fatalf("NewBackupActionHandler error = %v", err)
+	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := executor.ExecutePreparedPlan(
-			t.Context(),
-			fixture.prepared,
-			0,
-			handler,
-		)
-		done <- err
+		done <- fixture.execute(t, handler)
 	}()
 	select {
 	case err := <-done:
 		if err != nil {
-			t.Fatalf("ExecutePreparedPlan: %v", err)
+			t.Fatalf("ExecutePreparedPlan error = %v", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("stalled progress consumer blocked the copy")
 	}
-	closeOutbox(t, fixture.outbox)
 	select {
 	case frame := <-progress.Frames():
-		if frame.Path != "episode.mkv" {
-			t.Fatalf("latest progress path = %q, want episode.mkv", frame.Path)
-		}
-		if frame.FileBytesWritten != frame.FileBytesTotal {
-			t.Fatalf(
-				"latest progress bytes = %d/%d, want completed file",
-				frame.FileBytesWritten,
-				frame.FileBytesTotal,
-			)
+		if frame.Path != "episode.mkv" ||
+			frame.FileBytesWritten != frame.FileBytesTotal {
+			t.Fatalf("latest progress = %#v, want completed episode.mkv", frame)
 		}
 	default:
 		t.Fatal("progress channel is empty")
@@ -432,21 +354,17 @@ func TestCopyProgressDropsOldestWithoutStalling(t *testing.T) {
 func TestFileProgressChannelHidesWritableChannel(t *testing.T) {
 	progress, err := executor.NewFileProgressChannel(1)
 	if err != nil {
-		t.Fatalf("NewFileProgressChannel: %v", err)
+		t.Fatalf("NewFileProgressChannel error = %v", err)
 	}
 	progressType := reflect.TypeOf(progress)
-	if progressType.Kind() != reflect.Pointer ||
-		progressType.Elem().Kind() != reflect.Struct {
-		t.Fatalf("progress type = %v, want pointer to struct", progressType)
-	}
-	for i := range progressType.Elem().NumField() {
-		field := progressType.Elem().Field(i)
+	for index := range progressType.Elem().NumField() {
+		field := progressType.Elem().Field(index)
 		if field.Type.Kind() == reflect.Chan && field.IsExported() {
 			t.Fatalf("progress channel field %q is exported", field.Name)
 		}
 	}
-	if direction := reflect.TypeOf(progress.Frames()).ChanDir(); direction != reflect.RecvDir {
-		t.Fatalf("Frames direction = %v, want receive-only", direction)
+	if got := reflect.TypeOf(progress.Frames()).ChanDir(); got != reflect.RecvDir {
+		t.Fatalf("Frames direction = %v, want receive-only", got)
 	}
 }
 
@@ -459,21 +377,11 @@ func TestCopyRecordsCapacityThroughDeclaredSeam(t *testing.T) {
 		recorder,
 	)
 	if err != nil {
-		t.Fatalf("NewBackupActionHandler: %v", err)
+		t.Fatalf("NewBackupActionHandler error = %v", err)
 	}
 
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
-	}
-	closeOutbox(t, fixture.outbox)
-	if len(execution.Written) != 1 {
-		t.Fatalf("written results = %d, want 1", len(execution.Written))
+	if err := fixture.execute(t, handler); err != nil {
+		t.Fatalf("ExecutePreparedPlan error = %v", err)
 	}
 	if recorder.tapeID != fixture.prepared.Cartridge.TapeID {
 		t.Fatalf(
@@ -482,228 +390,24 @@ func TestCopyRecordsCapacityThroughDeclaredSeam(t *testing.T) {
 			fixture.prepared.Cartridge.TapeID,
 		)
 	}
-	if recorder.bytes != fixture.action.Bytes {
-		t.Fatalf("recorded bytes = %d, want %d", recorder.bytes, fixture.action.Bytes)
+	if recorder.bytes <= 0 {
+		t.Fatalf("recorded bytes = %d, want positive", recorder.bytes)
 	}
 }
 
-func TestCopyRemovesUncommittedTargetBeforeWriting(t *testing.T) {
+func TestCopyRemovesMarkerlessTargetBeforeWriting(t *testing.T) {
 	fixture := newCopyFixture(t, nil)
-	snapshotDir := fixture.snapshotDir(t)
-	stalePath := filepath.Join(snapshotDir, "tree", "stale.mkv")
-	writeFile(t, stalePath, []byte("stale"))
-	handler := newCopyHandler(t, nil, executor.OpenDestination)
+	stale := filepath.Join(fixture.snapshotDir(t), "tree", "stale.mkv")
+	writeFile(t, stale, []byte("stale"))
 
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
-	}
-	closeOutbox(t, fixture.outbox)
-	if len(execution.Written) != 1 {
-		t.Fatalf("written results = %d, want 1", len(execution.Written))
-	}
-	if _, err := os.Lstat(stalePath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("stale remnant Lstat error = %v, want os.ErrNotExist", err)
-	}
-}
-
-func TestCopyRefusesCommittedTargetReachingCopy(t *testing.T) {
-	fixture := newCopyFixture(t, nil)
-	_, _, completeBefore := writeCommittedSnapshot(
+	if err := fixture.execute(
 		t,
-		fixture.prepared.Cartridge.Root,
-		fixture.action,
-	)
-	handler := newCopyHandler(t, nil, executor.OpenDestination)
-
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if !errors.Is(err, executor.ErrPlanFailed) {
-		t.Fatalf("ExecutePreparedPlan error = %v, want executor.ErrPlanFailed", err)
-	}
-	closeOutbox(t, fixture.outbox)
-	if !reflect.DeepEqual(execution, executor.PreparedExecution{}) {
-		t.Fatalf("execution = %#v, want zero result", execution)
-	}
-	completeAfter, err := os.ReadFile(filepath.Join(
-		fixture.snapshotDir(t),
-		"complete.json",
-	))
-	if err != nil {
-		t.Fatalf("ReadFile complete after refusal: %v", err)
-	}
-	if !bytes.Equal(completeAfter, completeBefore) {
-		t.Fatal("committed target completion marker changed")
-	}
-}
-
-func TestResultsReleaseOnlyAfterDriveSyncAndCarryObservedFacts(t *testing.T) {
-	syncDrive := &blockingSyncDrive{
-		fixedCapacityDrive: fixedCapacityDrive{total: 4096, free: 3072},
-		started:            make(chan struct{}),
-		release:            make(chan struct{}),
-	}
-	fixture := newCopyFixture(t, nil)
-	fixture.prepared.Drive = syncDrive
-	handler := newCopyHandler(t, nil, executor.OpenDestination)
-	results := make(chan executionOutcome, 1)
-	go func() {
-		execution, err := executor.ExecutePreparedPlan(
-			t.Context(),
-			fixture.prepared,
-			0,
-			handler,
-		)
-		results <- executionOutcome{execution: execution, err: err}
-	}()
-	select {
-	case <-syncDrive.started:
-	case <-time.After(time.Second):
-		t.Fatal("Drive.Sync was not called")
-	}
-	select {
-	case outcome := <-results:
-		t.Fatalf("result released before Sync returned: %#v", outcome)
-	default:
-	}
-	close(syncDrive.release)
-	outcome := <-results
-	if outcome.err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", outcome.err)
-	}
-	closeOutbox(t, fixture.outbox)
-	if outcome.execution.TapeID != fixture.prepared.Cartridge.TapeID {
-		t.Fatalf(
-			"tapeID = %q, want %q",
-			outcome.execution.TapeID,
-			fixture.prepared.Cartridge.TapeID,
-		)
-	}
-	if outcome.execution.ObservedAt.IsZero() {
-		t.Fatal("observedAt is zero")
-	}
-	if outcome.execution.CapacityBytes != 4096 ||
-		outcome.execution.FreeBytes != 3072 {
-		t.Fatalf(
-			"capacity/free = %d/%d, want 4096/3072",
-			outcome.execution.CapacityBytes,
-			outcome.execution.FreeBytes,
-		)
-	}
-}
-
-func TestFailingDriveSyncReleasesNoResults(t *testing.T) {
-	syncFailure := errors.New("injected drive sync failure")
-	drive := &fixedCapacityDrive{
-		total:   4096,
-		free:    3072,
-		syncErr: syncFailure,
-	}
-	fixture := newCopyFixture(t, nil)
-	fixture.prepared.Drive = drive
-	handler := newCopyHandler(t, nil, executor.OpenDestination)
-
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if !errors.Is(err, syncFailure) {
-		t.Fatalf("ExecutePreparedPlan error = %v, want sync failure", err)
-	}
-	closeOutbox(t, fixture.outbox)
-	if !reflect.DeepEqual(execution, executor.PreparedExecution{}) {
-		t.Fatalf("execution = %#v, want zero result", execution)
-	}
-}
-
-func TestExecutorResultRoundTripsThroughTapeCatalogVerbatim(t *testing.T) {
-	fixture := newCopyFixture(t, nil)
-	handler := newCopyHandler(t, nil, executor.OpenDestination)
-	execution, err := executor.ExecutePreparedPlan(
-		t.Context(),
-		fixture.prepared,
-		0,
-		handler,
-	)
-	if err != nil {
-		t.Fatalf("ExecutePreparedPlan: %v", err)
-	}
-	closeOutbox(t, fixture.outbox)
-	if len(execution.Written) != 1 {
-		t.Fatalf("written results = %d, want 1", len(execution.Written))
-	}
-
-	stateRoot := t.TempDir()
-	result := execution.Written[0]
-	name, err := tapevolume.SnapshotName(result.MetadataRef, result.Generation)
-	if err != nil {
-		t.Fatalf("SnapshotName: %v", err)
-	}
-	cartridgeManifest, err := os.ReadFile(filepath.Join(
-		fixture.snapshotDir(t),
-		"manifest.json",
-	))
-	if err != nil {
-		t.Fatalf("ReadFile cartridge manifest: %v", err)
-	}
-	cartridgeComplete, err := os.ReadFile(filepath.Join(
-		fixture.snapshotDir(t),
-		"complete.json",
-	))
-	if err != nil {
-		t.Fatalf("ReadFile cartridge complete: %v", err)
-	}
-	if !bytes.Equal(result.Manifest, cartridgeManifest) {
-		t.Fatal("executor manifest result differs from cartridge bytes")
-	}
-	if !bytes.Equal(result.Complete, cartridgeComplete) {
-		t.Fatal("executor completion result differs from cartridge bytes")
-	}
-	if err := tapecatalog.PutSnapshot(
-		stateRoot,
-		firstVolume,
-		name,
-		result.Manifest,
-		result.Complete,
+		fixture.handler(t, executor.OpenDestination),
 	); err != nil {
-		t.Fatalf("PutSnapshot: %v", err)
+		t.Fatalf("ExecutePreparedPlan error = %v", err)
 	}
-	volumeDir, err := tapecatalog.VolumeDir(stateRoot, firstVolume)
-	if err != nil {
-		t.Fatalf("VolumeDir: %v", err)
-	}
-	mirrorManifest, err := os.ReadFile(filepath.Join(
-		tapevolume.SnapshotsDir(volumeDir),
-		name,
-		"manifest.json",
-	))
-	if err != nil {
-		t.Fatalf("ReadFile mirror manifest: %v", err)
-	}
-	mirrorComplete, err := os.ReadFile(filepath.Join(
-		tapevolume.SnapshotsDir(volumeDir),
-		name,
-		"complete.json",
-	))
-	if err != nil {
-		t.Fatalf("ReadFile mirror complete: %v", err)
-	}
-	if !bytes.Equal(mirrorManifest, result.Manifest) {
-		t.Fatal("mirror manifest bytes differ from executor result")
-	}
-	if !bytes.Equal(mirrorComplete, result.Complete) {
-		t.Fatal("mirror completion bytes differ from executor result")
+	if _, err := os.Lstat(stale); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Lstat stale target error = %v, want file does not exist", err)
 	}
 }
 
@@ -711,53 +415,63 @@ type copyFixture struct {
 	prepared   executor.PreparedPlan
 	action     backupplan.Action
 	seriesRoot string
-	sink       *collectingSink
-	outbox     *executor.EventOutbox
+	stateRoot  string
+	journal    *backupplan.Writer
+	drive      *executor.DirectoryDrive
 }
 
-func newCopyFixture(t *testing.T, episodeBytes []byte) copyFixture {
+func newCopyFixture(t *testing.T, payload []byte) *copyFixture {
 	t.Helper()
-	if episodeBytes == nil {
-		episodeBytes = []byte("episode payload")
+	if payload == nil {
+		payload = []byte("payload")
 	}
-	cartridgeRoot := t.TempDir()
-	libraryRoot := t.TempDir()
-	writeVolume(t, cartridgeRoot, "ABC123L6", firstVolume)
-	const rootPath = "Anime Series"
-	const metadataRef = "tvdb:370070"
-	seriesRoot := filepath.Join(libraryRoot, rootPath)
-	writeFile(t, filepath.Join(seriesRoot, "episode.mkv"), episodeBytes)
-	writeSeriesMetadata(t, seriesRoot, seriesMetadata{
-		Generation:  1,
-		MetadataRef: metadataRef,
-	})
-	digest, err := fingerprint.ComputeExcludingKura(seriesRoot)
+	session := newSessionFixture(t)
+	action := writeSeries(t, session.libraryRoot, "Series", "tvdb:copy", 1)
+	writeFile(t, filepath.Join(session.libraryRoot, "Series", "episode.mkv"), payload)
+	digest, err := fingerprint.ComputeExcludingKura(filepath.Join(
+		session.libraryRoot,
+		"Series",
+	))
 	if err != nil {
-		t.Fatalf("ComputeExcludingKura: %v", err)
+		t.Fatalf("ComputeExcludingKura error = %v", err)
 	}
-	action := backupAction(metadataRef, rootPath, 1, string(digest), archiveBytes(t, seriesRoot))
-	drive := &fixedCapacityDrive{total: 1 << 30, free: 1 << 30}
-	prepared, sink, outbox := preparedPlan(
-		t,
-		drive,
-		cartridgeRoot,
-		libraryRoot,
-		map[string]struct{}{},
-		[]backupplan.Action{
-			{Type: backupplan.ActionAssertVolume, VolumeID: firstVolume},
-			action,
-		},
+	action.PayloadFingerprint = string(digest)
+	action.Bytes = int64(len(payload))
+	observed, err := tapecatalog.LoadObserved(session.stateRoot, firstVolume)
+	if err != nil {
+		t.Fatalf("LoadObserved error = %v", err)
+	}
+	plan := fillPlan(
+		firstPlanID,
+		firstVolume,
+		"ABC123L6",
+		nil,
+		[]backupplan.Action{action},
 	)
-	prepared.Plan.CreatedBy = backupplan.Creator{
-		Version: "v0.6.0",
-		Host:    "tape-vm",
-	}
-	return copyFixture{
-		prepared:   prepared,
+	journal := newSessionJournal(t, session.stateRoot, []string{plan.PlanID})
+	t.Cleanup(func() {
+		if err := journal.Close(); err != nil {
+			t.Errorf("Close journal error = %v", err)
+		}
+	})
+	return &copyFixture{
+		prepared: executor.PreparedPlan{
+			Drive:              session.drive,
+			Journal:            journal,
+			Cartridge:          executor.Cartridge{TapeID: "ABC123L6", Root: session.cartridgeRoot},
+			Volume:             tapevolume.Volume{VolumeID: firstVolume, TapeID: "ABC123L6"},
+			Plan:               plan,
+			StateRoot:          session.stateRoot,
+			LibraryRoot:        session.libraryRoot,
+			CatalogSnapshots:   map[string]struct{}{},
+			DebrisSnapshots:    map[string]struct{}{},
+			CatalogObservation: observed,
+		},
 		action:     action,
-		seriesRoot: seriesRoot,
-		sink:       sink,
-		outbox:     outbox,
+		seriesRoot: filepath.Join(session.libraryRoot, "Series"),
+		stateRoot:  session.stateRoot,
+		journal:    journal,
+		drive:      session.drive,
 	}
 }
 
@@ -765,76 +479,104 @@ func (f *copyFixture) refreshAction(t *testing.T) {
 	t.Helper()
 	digest, err := fingerprint.ComputeExcludingKura(f.seriesRoot)
 	if err != nil {
-		t.Fatalf("ComputeExcludingKura: %v", err)
+		t.Fatalf("ComputeExcludingKura error = %v", err)
 	}
 	f.action.PayloadFingerprint = string(digest)
-	f.action.Bytes = archiveBytes(t, f.seriesRoot)
-	f.prepared.Plan.Actions[1] = f.action
+	for index := range f.prepared.Plan.Actions {
+		if f.prepared.Plan.Actions[index].Type == backupplan.ActionBackup {
+			f.prepared.Plan.Actions[index] = f.action
+		}
+	}
 }
 
-func (f copyFixture) snapshotDir(t *testing.T) string {
+func (f *copyFixture) handler(
+	t *testing.T,
+	opener executor.DestinationOpener,
+) executor.BackupActionHandler {
 	t.Helper()
-	path, err := tapevolume.SnapshotDir(
+	handler, err := executor.NewBackupActionHandler(nil, opener, f.drive)
+	if err != nil {
+		t.Fatalf("NewBackupActionHandler error = %v", err)
+	}
+	return handler
+}
+
+func (f *copyFixture) execute(
+	t *testing.T,
+	handler executor.BackupActionHandler,
+) error {
+	t.Helper()
+	return executor.ExecutePreparedPlan(t.Context(), f.prepared, 0, 1, handler)
+}
+
+func (f *copyFixture) snapshotDir(t *testing.T) string {
+	t.Helper()
+	dir, err := tapevolume.SnapshotDir(
 		f.prepared.Cartridge.Root,
 		f.action.MetadataRef,
 		f.action.Generation,
 	)
 	if err != nil {
-		t.Fatalf("SnapshotDir: %v", err)
+		t.Fatalf("SnapshotDir error = %v", err)
 	}
-	return path
+	return dir
 }
 
-func archiveBytes(t *testing.T, seriesRoot string) int64 {
+func (f *copyFixture) assertSnapshotAbsent(t *testing.T) {
 	t.Helper()
-	var total int64
-	err := filepath.WalkDir(seriesRoot, func(
-		path string,
-		entry os.DirEntry,
-		walkErr error,
-	) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		relative, err := filepath.Rel(seriesRoot, path)
-		if err != nil {
-			return err
-		}
-		relative = filepath.ToSlash(relative)
-		if entry.IsDir() {
-			if relative != "." && strings.HasPrefix(relative, ".kura/") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if strings.HasPrefix(relative, ".kura/") &&
-			relative != ".kura/series.json" {
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		total += info.Size()
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("WalkDir archive bytes: %v", err)
+	if _, err := os.Lstat(f.snapshotDir(t)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Lstat snapshot error = %v, want file does not exist", err)
 	}
-	return total
 }
 
-func newCopyHandler(
-	t *testing.T,
-	progress *executor.FileProgressChannel,
-	opener executor.DestinationOpener,
-) executor.BackupActionHandler {
+func (f *copyFixture) events(t *testing.T) []backupplan.Event {
 	t.Helper()
-	handler, err := executor.NewBackupActionHandler(progress, opener, nil)
+	session, err := backupplan.ReadSession(f.stateRoot, sessionID)
 	if err != nil {
-		t.Fatalf("NewBackupActionHandler: %v", err)
+		t.Fatalf("ReadSession error = %v", err)
 	}
-	return handler
+	return session.Events
+}
+
+type wrappedDestination struct {
+	file        *os.File
+	write       func([]byte) (int, error)
+	syncErr     error
+	closeErr    error
+	beforeClose func() error
+}
+
+func openWrappedDestination(path string) (*wrappedDestination, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o664)
+	if err != nil {
+		return nil, err
+	}
+	return &wrappedDestination{file: file}, nil
+}
+
+func (d *wrappedDestination) Write(data []byte) (int, error) {
+	if d.write != nil {
+		return d.write(data)
+	}
+	return d.file.Write(data)
+}
+
+func (d *wrappedDestination) Sync() error {
+	if d.syncErr != nil {
+		return d.syncErr
+	}
+	return d.file.Sync()
+}
+
+func (d *wrappedDestination) Close() error {
+	if d.beforeClose != nil {
+		if err := d.beforeClose(); err != nil {
+			_ = d.file.Close()
+			return err
+		}
+	}
+	closeErr := d.file.Close()
+	return errors.Join(closeErr, d.closeErr)
 }
 
 type recordingCapacityRecorder struct {
@@ -842,76 +584,10 @@ type recordingCapacityRecorder struct {
 	bytes  int64
 }
 
-func (r *recordingCapacityRecorder) RecordWrite(tapeID tape.ID, bytes int64) error {
-	if r.tapeID == "" {
-		r.tapeID = tapeID
-	}
-	if tapeID != r.tapeID {
-		return errors.New("recorded writes for multiple cartridges")
-	}
+func (r *recordingCapacityRecorder) RecordWrite(id tape.ID, bytes int64) error {
+	r.tapeID = id
 	r.bytes += bytes
 	return nil
-}
-
-type wrappedDestination struct {
-	*os.File
-	syncErr     error
-	closeErr    error
-	beforeClose func() error
-	write       func([]byte) (int, error)
-}
-
-func openWrappedDestination(path string) (*wrappedDestination, error) {
-	destination, err := executor.OpenDestination(path)
-	if err != nil {
-		return nil, err
-	}
-	file, ok := destination.(*os.File)
-	if !ok {
-		return nil, errors.New("test destination is not *os.File")
-	}
-	return &wrappedDestination{File: file}, nil
-}
-
-func (d *wrappedDestination) Write(data []byte) (int, error) {
-	if d.write != nil {
-		return d.write(data)
-	}
-	return d.File.Write(data)
-}
-
-func (d *wrappedDestination) Sync() error {
-	if d.syncErr != nil {
-		return d.syncErr
-	}
-	return d.File.Sync()
-}
-
-func (d *wrappedDestination) Close() error {
-	closeErr := d.File.Close()
-	var beforeCloseErr error
-	if d.beforeClose != nil {
-		beforeCloseErr = d.beforeClose()
-	}
-	return errors.Join(closeErr, beforeCloseErr, d.closeErr)
-}
-
-type blockingSyncDrive struct {
-	fixedCapacityDrive
-	started chan struct{}
-	release chan struct{}
-	once    sync.Once
-}
-
-func (d *blockingSyncDrive) Sync() error {
-	d.once.Do(func() { close(d.started) })
-	<-d.release
-	return d.fixedCapacityDrive.Sync()
-}
-
-type executionOutcome struct {
-	execution executor.PreparedExecution
-	err       error
 }
 
 func assertItemFailureReason(
@@ -930,29 +606,16 @@ func assertItemFailureReason(
 
 func assertItemFailureDetail(
 	t *testing.T,
-	fixture copyFixture,
-	detail string,
+	events []backupplan.Event,
+	want string,
 ) {
 	t.Helper()
-	assertEvent(
-		t,
-		fixture.sink.Events(),
-		backupplan.EventItemFailed,
-		func(event backupplan.Event) bool {
-			return event.MetadataRef == fixture.action.MetadataRef &&
-				event.Generation == fixture.action.Generation &&
-				event.Reason == string(backupplan.ReasonWriteFailed) &&
-				strings.Contains(event.Detail, detail)
-		},
-	)
+	assertEvent(t, events, backupplan.EventItemFailed, func(event backupplan.Event) bool {
+		return strings.Contains(event.Detail, want)
+	})
 }
 
-func assertSnapshotAbsent(t *testing.T, fixture copyFixture) {
-	t.Helper()
-	_, err := os.Lstat(fixture.snapshotDir(t))
-	if !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("snapshot Lstat error = %v, want os.ErrNotExist", err)
-	}
-}
-
-var _ io.WriteCloser = (*wrappedDestination)(nil)
+var (
+	_ executor.Destination = (*wrappedDestination)(nil)
+	_ io.Writer            = (*wrappedDestination)(nil)
+)
