@@ -48,10 +48,10 @@ func TestStageRequestToWorkflowCopiesAttrs(t *testing.T) {
 		Episodes: []stageEpisode{{
 			Episode: "S01E01",
 			Media:   "inbox:ep1.mkv",
-			Attrs:   map[string]string{"origin": "takuhai"},
+			Attrs:   map[string]string{"origin": "indexer"},
 		}},
 	})
-	if got.Episodes[0].Attrs["origin"] != "takuhai" {
+	if got.Episodes[0].Attrs["origin"] != "indexer" {
 		t.Fatalf("Attrs = %#v", got.Episodes[0].Attrs)
 	}
 }

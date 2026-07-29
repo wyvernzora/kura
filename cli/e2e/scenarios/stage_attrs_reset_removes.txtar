@@ -3,8 +3,8 @@
 kura_add stub:1001
 kura_mkfile ep1.mp4
 
-kura_stage_attrs $KURA_LAST_REF S01E0001 ep1.mp4 origin=takuhai
-stdout '"attrs":{"origin":"takuhai"}'
+kura_stage_attrs $KURA_LAST_REF S01E0001 ep1.mp4 origin=indexer
+stdout '"attrs":{"origin":"indexer"}'
 
 kura_reset $KURA_LAST_REF S01E0001
 stdout '"record":'

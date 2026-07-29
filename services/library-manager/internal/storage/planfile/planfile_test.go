@@ -88,7 +88,7 @@ func TestWriteReadPlanPreservesOwnerRecords(t *testing.T) {
 		Companions: []reconcile.ReplacedCompanion{{
 			Path: "inbox:/incoming/Bookworm S01E01.en.srt", Role: "subtitle", Language: "en", Size: 12_345, MTime: mtime,
 		}},
-		Attrs: map[string]string{"origin": "takuhai"},
+		Attrs: map[string]string{"origin": "indexer"},
 	}
 	displacedRec := &reconcile.ReplacedRecord{
 		Path:       "Season 1/Bookworm - S01E01 (WebRip 1080p).mkv",
@@ -155,7 +155,7 @@ func TestWriteReadPlanPreservesOwnerRecords(t *testing.T) {
 	if len(gotEp.Companions) != 1 || gotEp.Companions[0].Role != "subtitle" || gotEp.Companions[0].Language != "en" {
 		t.Fatalf("StagedRecord companions mismatch: %#v", gotEp.Companions)
 	}
-	if gotEp.Attrs["origin"] != "takuhai" {
+	if gotEp.Attrs["origin"] != "indexer" {
 		t.Fatalf("StagedRecord attrs = %#v", gotEp.Attrs)
 	}
 	gotTrash := out.Steps[0].Owner.Record

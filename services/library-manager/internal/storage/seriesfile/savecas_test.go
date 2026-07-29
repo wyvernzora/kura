@@ -84,7 +84,7 @@ func TestSaveCASRoundtripPreservesMediaAttrs(t *testing.T) {
 		t.Fatal("fixture staged record missing")
 	}
 	staged.Attrs = media.Attrs{
-		"origin":        "takuhai",
+		"origin":        "indexer",
 		"release_group": "SubsPlease",
 	}
 	ep := model.Episodes[episode2]
@@ -99,7 +99,7 @@ func TestSaveCASRoundtripPreservesMediaAttrs(t *testing.T) {
 		t.Fatalf("reload: %v", err)
 	}
 	got := reloaded.Episodes[episode2].Staged.Attrs
-	if got["origin"] != "takuhai" || got["release_group"] != "SubsPlease" {
+	if got["origin"] != "indexer" || got["release_group"] != "SubsPlease" {
 		t.Fatalf("attrs = %#v", got)
 	}
 }

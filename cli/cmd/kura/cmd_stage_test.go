@@ -3,11 +3,11 @@ package main
 import "testing"
 
 func TestParseStageAttrs(t *testing.T) {
-	attrs, err := parseStageAttrs([]string{"origin=takuhai", "release_group=SubsPlease", "empty="})
+	attrs, err := parseStageAttrs([]string{"origin=indexer", "release_group=SubsPlease", "empty="})
 	if err != nil {
 		t.Fatalf("parseStageAttrs: %v", err)
 	}
-	if attrs["origin"] != "takuhai" || attrs["release_group"] != "SubsPlease" || attrs["empty"] != "" {
+	if attrs["origin"] != "indexer" || attrs["release_group"] != "SubsPlease" || attrs["empty"] != "" {
 		t.Fatalf("attrs = %#v", attrs)
 	}
 }
@@ -15,7 +15,7 @@ func TestParseStageAttrs(t *testing.T) {
 func TestParseStageAttrsRejectsMalformed(t *testing.T) {
 	tests := [][]string{
 		{"origin"},
-		{"=takuhai"},
+		{"=indexer"},
 		{"origin=one", "origin=two"},
 	}
 	for _, tc := range tests {

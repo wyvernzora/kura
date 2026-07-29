@@ -87,7 +87,7 @@ assert.deepEqual(
 							resolution: '1080p',
 							codec: 'HEVC',
 							attrs: {
-								origin: 'takuhai',
+								origin: 'indexer',
 								release_group: 'SubsPlease',
 							},
 							size: 123,
@@ -141,7 +141,7 @@ assert.deepEqual(
 							source: 'WebRip',
 							codec: 'HEVC',
 							attrs: {
-								origin: 'takuhai',
+								origin: 'indexer',
 								release_group: 'SubsPlease',
 							},
 							hasSubtitles: true,
