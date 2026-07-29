@@ -5,10 +5,16 @@ on:
     branches: [main]
     paths:
       - "services/release-indexer/**"
+      - "cli/**"
+      - "go.work"
+      - "go.work.sum"
       - ".github/workflows/ci-releases.yml"
   pull_request:
     paths:
       - "services/release-indexer/**"
+      - "cli/**"
+      - "go.work"
+      - "go.work.sum"
       - ".github/workflows/ci-releases.yml"
 
 concurrency:

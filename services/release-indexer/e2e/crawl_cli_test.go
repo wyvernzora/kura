@@ -53,93 +53,60 @@ func TestEndToEndWorkflowCrawlCLI(t *testing.T) {
 	bins := buildCrawlE2EBinaries(t, ctx)
 	now := time.Now()
 
-	t.Run("bounded chunk and idempotent replay", func(t *testing.T) {
+	t.Run("automatic crawl checkpoints and replays idempotently", func(t *testing.T) {
+		freshRows := crawlE2ERows(1001, 201, now.Add(-time.Hour))
 		h := startCrawlE2EHarness(t, ctx, bins, map[int]string{
-			1: fakeArchivePage(
-				crawlE2ERow(101, now.Add(-time.Hour)),
-				crawlE2ERow(102, now.Add(-2*time.Hour)),
-				crawlE2ERow(103, now.Add(-3*time.Hour)),
-			),
+			1: fakeArchivePage(freshRows...),
+			2: fakeArchivePage(crawlE2ERow(999, now.Add(-48*time.Hour))),
 		}, 0)
 
 		first := runCrawlCLI(t, ctx, bins.cli, h.baseURL,
-			"crawl", "dmhy", "--count", "2", "--lookback", crawlE2ELookback, "--json")
+			"crawl", "dmhy", crawlE2ELookback)
 		if first.err != nil {
 			t.Fatalf("first crawl: %v\nstderr:\n%s", first.err, first.stderr)
 		}
-		firstResults := decodeCrawlResults(t, first.stdout)
-		if len(firstResults) != 1 {
-			t.Fatalf("first results = %d, want 1; output=%q", len(firstResults), first.stdout)
+		if !strings.Contains(first.stdout, "checkpoint ") ||
+			!strings.Contains(first.stdout, "done: lookback boundary") {
+			t.Fatalf("first stdout = %q, want checkpoint and completed boundary", first.stdout)
 		}
-		got := firstResults[0]
-		if got.Posts != 2 || got.Batch.New != 2 || got.Batch.Duplicate != 0 ||
-			!got.HasMore || got.NextCursor == "" || got.StopReason != api.CrawlStopPageBudget {
-			t.Fatalf("first result = %+v, want 2 new posts and a resume cursor", got)
-		}
-		assertCrawlDatabase(t, ctx, h.dsn, 2, []string{"101", "102"})
+		wantIDs := crawlE2ESourceIDs(1001, 201)
+		assertCrawlDatabase(t, ctx, h.dsn, 201, wantIDs)
 
 		replay := runCrawlCLI(t, ctx, bins.cli, h.baseURL,
-			"crawl", "dmhy", "--count", "2", "--lookback", crawlE2ELookback, "--json")
+			"crawl", "dmhy", crawlE2ELookback, "--json")
 		if replay.err != nil {
 			t.Fatalf("replay crawl: %v\nstderr:\n%s", replay.err, replay.stderr)
 		}
 		replayResults := decodeCrawlResults(t, replay.stdout)
-		if len(replayResults) != 1 {
-			t.Fatalf("replay results = %d, want 1; output=%q", len(replayResults), replay.stdout)
+		if len(replayResults) != 2 {
+			t.Fatalf("replay results = %d, want 2; output=%q", len(replayResults), replay.stdout)
 		}
-		replayed := replayResults[0]
-		if replayed.Posts != 2 || replayed.Batch.New != 0 || replayed.Batch.Duplicate != 2 ||
-			replayed.NextCursor != got.NextCursor {
-			t.Fatalf("replay result = %+v, want 2 duplicates and the same cursor", replayed)
+		if got := replayResults[0]; got.Posts != 200 || got.Batch.New != 0 ||
+			got.Batch.Duplicate != 200 || !got.HasMore || got.NextCursor == "" ||
+			got.StopReason != api.CrawlStopPageBudget {
+			t.Fatalf("first replay result = %+v", got)
 		}
-		assertCrawlDatabase(t, ctx, h.dsn, 2, []string{"101", "102"})
-	})
-
-	t.Run("client loop reaches lookback boundary", func(t *testing.T) {
-		h := startCrawlE2EHarness(t, ctx, bins, map[int]string{
-			1: fakeArchivePage(
-				crawlE2ERow(201, now.Add(-time.Hour)),
-				crawlE2ERow(202, now.Add(-2*time.Hour)),
-				crawlE2ERow(203, now.Add(-3*time.Hour)),
-				crawlE2ERow(204, now.Add(-48*time.Hour)),
-			),
-		}, 0)
-
-		result := runCrawlCLI(t, ctx, bins.cli, h.baseURL,
-			"crawl", "dmhy", "--count", "2", "--lookback", crawlE2ELookback, "--loop", "--json")
-		if result.err != nil {
-			t.Fatalf("loop crawl: %v\nstderr:\n%s", result.err, result.stderr)
+		if got := replayResults[1]; got.Posts != 1 || got.Batch.New != 0 ||
+			got.Batch.Duplicate != 1 || got.HasMore || got.NextCursor != "" ||
+			got.StopReason != api.CrawlStopLookbackBoundary {
+			t.Fatalf("terminal replay result = %+v", got)
 		}
-		results := decodeCrawlResults(t, result.stdout)
-		if len(results) != 2 {
-			t.Fatalf("loop results = %d, want 2; output=%q", len(results), result.stdout)
-		}
-		if first := results[0]; first.Posts != 2 || first.Batch.New != 2 ||
-			!first.HasMore || first.NextCursor == "" || first.StopReason != api.CrawlStopPageBudget {
-			t.Fatalf("first loop result = %+v", first)
-		}
-		if last := results[1]; last.Posts != 1 || last.Batch.New != 1 ||
-			last.HasMore || last.NextCursor != "" || last.StopReason != api.CrawlStopLookbackBoundary {
-			t.Fatalf("terminal loop result = %+v", last)
-		}
-		assertCrawlDatabase(t, ctx, h.dsn, 3, []string{"201", "202", "203"})
+		assertCrawlDatabase(t, ctx, h.dsn, 201, wantIDs)
 	})
 
 	t.Run("failure reports cursor and resume completes", func(t *testing.T) {
+		firstPage := crawlE2ERows(2001, 200, now.Add(-time.Hour))
 		h := startCrawlE2EHarness(t, ctx, bins, map[int]string{
-			1: fakeArchivePage(
-				crawlE2ERow(301, now.Add(-time.Hour)),
-				crawlE2ERow(302, now.Add(-2*time.Hour)),
-			),
+			1: fakeArchivePage(firstPage...),
 			2: fakeArchivePage(
-				crawlE2ERow(303, now.Add(-3*time.Hour)),
-				crawlE2ERow(304, now.Add(-4*time.Hour)),
+				crawlE2ERow(2201, now.Add(-5*time.Hour)),
+				crawlE2ERow(2202, now.Add(-6*time.Hour)),
 			),
-			3: fakeArchivePage(crawlE2ERow(305, now.Add(-48*time.Hour))),
+			3: fakeArchivePage(crawlE2ERow(2203, now.Add(-48*time.Hour))),
 		}, 2)
 
 		failed := runCrawlCLI(t, ctx, bins.cli, h.baseURL,
-			"crawl", "dmhy", "--count", "2", "--lookback", crawlE2ELookback, "--loop", "--json")
+			"crawl", "dmhy", crawlE2ELookback, "--json")
 		if failed.err == nil {
 			t.Fatalf("failed loop exited successfully; stdout=%q", failed.stdout)
 		}
@@ -148,31 +115,23 @@ func TestEndToEndWorkflowCrawlCLI(t *testing.T) {
 			t.Fatalf("failed loop results = %+v, want one committed chunk with cursor", failedResults)
 		}
 		cursor := failedResults[0].NextCursor
-		resumeCommand := "kura crawl dmhy --count 2 --cursor " + cursor + " --lookback " + crawlE2ELookback
+		resumeCommand := "kura crawl dmhy " + crawlE2ELookback + " --cursor " + cursor
 		if !strings.Contains(failed.stderr, resumeCommand) {
 			t.Fatalf("stderr = %q, want resume command %q", failed.stderr, resumeCommand)
 		}
-		assertCrawlDatabase(t, ctx, h.dsn, 2, []string{"301", "302"})
+		assertCrawlDatabase(t, ctx, h.dsn, 200, crawlE2ESourceIDs(2001, 200))
 
 		h.source.failPage.Store(0)
-		resumed := runCrawlCLI(t, ctx, bins.cli, h.baseURL,
-			"crawl", "dmhy", "--count", "2", "--cursor", cursor,
-			"--lookback", crawlE2ELookback, "--loop", "--json")
+		resumeArgs := strings.Fields(strings.TrimPrefix(resumeCommand, "kura "))
+		resumed := runCrawlCLI(t, ctx, bins.cli, h.baseURL, resumeArgs...)
 		if resumed.err != nil {
 			t.Fatalf("resumed crawl: %v\nstderr:\n%s", resumed.err, resumed.stderr)
 		}
-		resumedResults := decodeCrawlResults(t, resumed.stdout)
-		if len(resumedResults) != 2 {
-			t.Fatalf("resumed results = %d, want 2; output=%q", len(resumedResults), resumed.stdout)
+		if !strings.Contains(resumed.stdout, "done: lookback boundary") {
+			t.Fatalf("resumed stdout = %q, want completed boundary", resumed.stdout)
 		}
-		if first := resumedResults[0]; first.Posts != 2 || first.Batch.New != 2 || !first.HasMore {
-			t.Fatalf("first resumed result = %+v", first)
-		}
-		if last := resumedResults[1]; last.Posts != 0 || last.HasMore ||
-			last.StopReason != api.CrawlStopLookbackBoundary {
-			t.Fatalf("terminal resumed result = %+v", last)
-		}
-		assertCrawlDatabase(t, ctx, h.dsn, 4, []string{"301", "302", "303", "304"})
+		wantIDs := append(crawlE2ESourceIDs(2001, 200), "2201", "2202")
+		assertCrawlDatabase(t, ctx, h.dsn, 202, wantIDs)
 	})
 }
 
@@ -429,6 +388,22 @@ func crawlE2ERow(sourceID int, publishedAt time.Time) string {
 		published,
 		"udp://tracker.example/announce",
 	)
+}
+
+func crawlE2ERows(firstID, count int, newest time.Time) []string {
+	rows := make([]string, count)
+	for i := range rows {
+		rows[i] = crawlE2ERow(firstID+i, newest.Add(-time.Duration(i)*time.Minute))
+	}
+	return rows
+}
+
+func crawlE2ESourceIDs(firstID, count int) []string {
+	ids := make([]string, count)
+	for i := range ids {
+		ids[i] = strconv.Itoa(firstID + i)
+	}
+	return ids
 }
 
 func crawlE2EFreeAddr(t *testing.T) string {
