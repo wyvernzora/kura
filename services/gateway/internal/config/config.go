@@ -29,7 +29,12 @@ const (
 
 // Config is the validated runtime configuration.
 type Config struct {
-	Address          string
+	Address string
+	// MetricsAddress serves /metrics only. Unlike Address it may (and
+	// should) bind the Pod network: exposition is read-only and the
+	// NetworkPolicy split mirrors the leaves' :9090 listeners. Caddy owns
+	// :9090 in this Pod, hence :9091.
+	MetricsAddress   string
 	RequestTimeout   time.Duration
 	ComponentTimeout time.Duration
 	MaxResponseBytes int64
@@ -43,6 +48,7 @@ type Config struct {
 func Defaults() Config {
 	return Config{
 		Address:          "127.0.0.1:8081",
+		MetricsAddress:   ":9091",
 		RequestTimeout:   30 * time.Second,
 		ComponentTimeout: time.Second,
 		MaxResponseBytes: 1 << 20,
@@ -52,7 +58,8 @@ func Defaults() Config {
 
 type fileConfig struct {
 	Server *struct {
-		Address *string `toml:"address"`
+		Address        *string `toml:"address"`
+		MetricsAddress *string `toml:"metrics_address"`
 	} `toml:"server"`
 	API *struct {
 		RequestTimeout   *string `toml:"request_timeout"`
@@ -99,8 +106,13 @@ func Load(path string, getenv func(string) string) (Config, error) {
 }
 
 func applyFile(cfg *Config, fc fileConfig) error {
-	if fc.Server != nil && fc.Server.Address != nil {
-		cfg.Address = *fc.Server.Address
+	if fc.Server != nil {
+		if fc.Server.Address != nil {
+			cfg.Address = *fc.Server.Address
+		}
+		if fc.Server.MetricsAddress != nil {
+			cfg.MetricsAddress = *fc.Server.MetricsAddress
+		}
 	}
 	if fc.API != nil {
 		for _, d := range []struct {
@@ -153,6 +165,12 @@ func (c Config) Validate() error {
 	}
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		return fmt.Errorf("server.address %q must bind a loopback address", c.Address)
+	}
+	if c.MetricsAddress == "" {
+		return fmt.Errorf("server.metrics_address must not be empty")
+	}
+	if _, _, err := net.SplitHostPort(c.MetricsAddress); err != nil {
+		return fmt.Errorf("server.metrics_address %q is not host:port: %w", c.MetricsAddress, err)
 	}
 	for _, d := range []struct {
 		v    time.Duration

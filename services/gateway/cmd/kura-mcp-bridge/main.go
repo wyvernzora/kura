@@ -24,6 +24,7 @@ import (
 	"github.com/wyvernzora/kura/services/gateway/internal/config"
 	"github.com/wyvernzora/kura/services/gateway/internal/health"
 	gwmcp "github.com/wyvernzora/kura/services/gateway/internal/mcp"
+	"github.com/wyvernzora/kura/services/gateway/internal/metrics"
 )
 
 // version is overridden at link time via -ldflags, as both leaves do. It is
@@ -69,7 +70,9 @@ func run() error {
 	}, cfg.ComponentTimeout)
 	healthz.Logger = logger.With("component", "health")
 
+	metricsSrv := metrics.New(version)
 	bridge := gwmcp.New(version, library, releases, logger.With("component", "mcp"))
+	bridge.Metrics = metricsSrv
 	mcpHandler := bridge.Handler(cfg.SessionTimeout)
 
 	mux := http.NewServeMux()
@@ -92,6 +95,24 @@ func run() error {
 		"library_upstream", cfg.LibraryUpstream,
 		"releases_upstream", cfg.ReleasesUpstream,
 	)
+
+	// /metrics on its own pod-reachable listener: Caddy owns :9090 in this
+	// Pod, and the loopback MCP listener must stay unreachable from the
+	// network, so exposition gets a third socket.
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", metricsSrv.Handler())
+	metricsHTTP := &http.Server{Handler: metricsMux}
+	metricsLn, err := net.Listen("tcp", cfg.MetricsAddress)
+	if err != nil {
+		return fmt.Errorf("bind metrics %s: %w", cfg.MetricsAddress, err)
+	}
+	logger.Info("bridge metrics listening", "addr", metricsLn.Addr().String())
+	go func() { _ = metricsHTTP.Serve(metricsLn) }()
+	defer func() {
+		shutCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+		defer cancel()
+		_ = metricsHTTP.Shutdown(shutCtx)
+	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

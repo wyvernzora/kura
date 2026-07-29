@@ -14,6 +14,10 @@
 # unauthenticated MCP endpoint reachable without passing Pomerium.
 address = "127.0.0.1:8081"
 
+# Prometheus exposition (kura_mcp_* tool metrics), read-only, on the Pod
+# network like the leaves' :9090 listeners. Caddy owns :9090 in this Pod.
+metrics_address = ":9091"
+
 [api]
 request_timeout = "30s"
 max_response_bytes = 1048576

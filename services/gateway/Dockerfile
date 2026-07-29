@@ -40,5 +40,5 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --from=go-build /out/kura-mcp-bridge /usr/local/bin/kura-mcp-bridge
 COPY --chown=65532:65532 --from=web-build /src/dist /srv
 USER 65532:65532
-EXPOSE 8080 9090
+EXPOSE 8080 9090 9091
 ENTRYPOINT ["/sbin/tini", "-g", "--", "/usr/local/bin/entrypoint.sh"]
