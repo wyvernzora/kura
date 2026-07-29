@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
@@ -83,6 +84,97 @@ func (c *Crawler) Crawl(ctx context.Context, limit int) ([]api.RawPost, error) {
 		}
 		posts = append(posts, pagePosts...)
 	}
+}
+
+// Page fetches and parses one 1-based listing page.
+func (c *Crawler) Page(ctx context.Context, page int) ([]api.RawPost, error) {
+	body, err := c.fetch(ctx, page)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w: %w", c.source, ErrCrawlFetch, err)
+	}
+	return c.parsePage(body, page)
+}
+
+const (
+	// plausibleGuardFactor bounds how far behind `oldest` a stamp may sit and
+	// still drive stop math: stamps older than guardFactor × (now − oldest)
+	// before now are treated as artifacts (epoch-zero renders, pinned ancient
+	// rows) rather than listing position.
+	plausibleGuardFactor = 10
+	// plausibleFutureSlack tolerates small clock skew; stamps further in the
+	// future never drive stop math (they would keep the walk from ever
+	// stopping), though their posts are still emitted.
+	plausibleFutureSlack = 5 * time.Minute
+)
+
+// ErrNoPlausibleDates marks a walk that kept finding posts whose dates are
+// all missing or implausible — parser or markup breakage, surfaced instead of
+// walking to the archive floor on every run.
+var ErrNoPlausibleDates = errors.New("crawl: no plausible dates")
+
+// CrawlSince walks listing pages newest-first, invoking emit for every parsed
+// page, until the listing is provably older than oldest or the source's
+// consecutive-empty archive floor is reached. Each page is emitted before the
+// stop rule is evaluated, so the boundary page is always delivered.
+//
+// The stop rule uses the page's NEWEST plausible stamp: a pinned/sticky old
+// row or an epoch-zero artifact can lower a page's minimum but never its
+// maximum, so a single anomalous row cannot terminate the walk early. Posts
+// with implausible stamps are still emitted — they just never drive the stop.
+func (c *Crawler) CrawlSince(ctx context.Context, oldest time.Time, emit func([]api.RawPost) error) error {
+	now := time.Now()
+	floor := oldest.Add(-plausibleGuardFactor * now.Sub(oldest))
+	ceil := now.Add(plausibleFutureSlack)
+
+	consecutiveEmpty := 0
+	consecutiveUndatable := 0
+	for page := 1; ; page++ {
+		pagePosts, err := c.Page(ctx, page)
+		if err != nil {
+			return err
+		}
+
+		if len(pagePosts) == 0 {
+			consecutiveEmpty++
+			if consecutiveEmpty >= c.threshold {
+				return nil
+			}
+			continue
+		}
+		consecutiveEmpty = 0
+
+		if err := emit(pagePosts); err != nil {
+			return fmt.Errorf("%s: emit page %d: %w", c.source, page, err)
+		}
+
+		newest := newestPlausible(pagePosts, floor, ceil)
+		if newest.IsZero() {
+			consecutiveUndatable++
+			if consecutiveUndatable >= c.threshold {
+				return fmt.Errorf("%s: %w: %d consecutive pages ending at page %d", c.source, ErrNoPlausibleDates, consecutiveUndatable, page)
+			}
+			continue
+		}
+		consecutiveUndatable = 0
+
+		if !newest.After(oldest) {
+			return nil
+		}
+	}
+}
+
+func newestPlausible(posts []api.RawPost, floor, ceil time.Time) time.Time {
+	var newest time.Time
+	for _, p := range posts {
+		t := p.PublishedAt
+		if t.Before(floor) || t.After(ceil) {
+			continue
+		}
+		if t.After(newest) {
+			newest = t
+		}
+	}
+	return newest
 }
 
 func (c *Crawler) parsePage(body []byte, page int) ([]api.RawPost, error) {

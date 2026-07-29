@@ -24,7 +24,7 @@ func TestArchivePageURLCategory(t *testing.T) {
 }
 
 func TestHTTPCrawlerUsesCategory(t *testing.T) {
-	crawler := NewHTTPCrawler("file:///nonexistent/dmhy-test", 31, 0, 0)
+	crawler := NewHTTPCrawler("file:///nonexistent/dmhy-test", 31, 0, 0, 0)
 
 	_, err := crawler.Crawl(context.Background(), 1)
 	if err == nil {

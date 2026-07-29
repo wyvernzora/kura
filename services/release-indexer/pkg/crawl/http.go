@@ -26,14 +26,23 @@ type HTTPFetcherConfig struct {
 	Source     string
 	BuildURL   func(page int) (string, error)
 	RatePerSec float64
-	Client     *http.Client
+	// RequestTimeout bounds one page fetch when no Client is injected.
+	// Deep-history pages on SQL-backed sources can exceed 60s (observed on
+	// DMHY), so sources configure this rather than inheriting the old
+	// hardcoded 30s. Zero keeps the 30s default.
+	RequestTimeout time.Duration
+	Client         *http.Client
 }
 
 // NewHTTPFetcher constructs a PageFetcher over HTTP and file:// URLs.
 func NewHTTPFetcher(cfg HTTPFetcherConfig) *HTTPFetcher {
 	client := cfg.Client
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		timeout := cfg.RequestTimeout
+		if timeout <= 0 {
+			timeout = 30 * time.Second
+		}
+		client = &http.Client{Timeout: timeout}
 	}
 	f := &HTTPFetcher{
 		source:   cfg.Source,

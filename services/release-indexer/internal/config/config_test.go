@@ -17,11 +17,13 @@ schema = "release_data"
 
 [sources.dmhy]
 interval = "5m"
+settle_window = "24h"
 
 [sources.nyaa]
 interval = "10m"
+settle_window = "2d"
 category = "1_2"
-max_rps = 0
+max_rps = 0.25
 `)
 
 	cfg, err := Load(path, testDatabaseURL)
@@ -40,11 +42,24 @@ max_rps = 0
 	if cfg.Sources.DMHY.Category != "2" || cfg.Sources.DMHY.URL != defaultDMHYURL {
 		t.Fatalf("DMHY defaults = %+v", cfg.Sources.DMHY)
 	}
+	if cfg.Sources.DMHY.SettleWindow != 24*time.Hour {
+		t.Fatalf("DMHY settle window = %v, want 24h", cfg.Sources.DMHY.SettleWindow)
+	}
+	// Timeouts default per source: DMHY deep pages are slow.
+	if cfg.Sources.DMHY.Timeout != defaultDMHYTimeout || cfg.Sources.DMHY.RequestTimeout != defaultDMHYRequestTimeout {
+		t.Fatalf("DMHY timeouts = %+v", cfg.Sources.DMHY)
+	}
 	if !cfg.Sources.Nyaa.Enabled || cfg.Sources.Nyaa.Interval != 10*time.Minute {
 		t.Fatalf("Nyaa = %+v", cfg.Sources.Nyaa)
 	}
-	if cfg.Sources.Nyaa.Category != "1_2" || cfg.Sources.Nyaa.MaxRPS != 0 {
+	if cfg.Sources.Nyaa.Category != "1_2" || cfg.Sources.Nyaa.MaxRPS != 0.25 {
 		t.Fatalf("Nyaa overrides = %+v", cfg.Sources.Nyaa)
+	}
+	if cfg.Sources.Nyaa.SettleWindow != 48*time.Hour {
+		t.Fatalf("Nyaa settle window = %v, want 48h from 2d", cfg.Sources.Nyaa.SettleWindow)
+	}
+	if cfg.Sources.Nyaa.Timeout != defaultNyaaTimeout || cfg.Sources.Nyaa.RequestTimeout != defaultNyaaRequestTimeout {
+		t.Fatalf("Nyaa timeouts = %+v", cfg.Sources.Nyaa)
 	}
 }
 
@@ -63,6 +78,30 @@ enabled = false
 	}
 	if cfg.DatabaseSchema != "releases" {
 		t.Fatalf("database schema = %q, want releases", cfg.DatabaseSchema)
+	}
+}
+
+func TestParseDurationDayWeekSuffixes(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want time.Duration
+	}{
+		{raw: "1d", want: 24 * time.Hour},
+		{raw: "30d", want: 30 * 24 * time.Hour},
+		{raw: "2w", want: 2 * 7 * 24 * time.Hour},
+		{raw: "36h", want: 36 * time.Hour},
+	}
+	for _, tt := range tests {
+		got, err := parseDuration("test", tt.raw)
+		if err != nil {
+			t.Fatalf("parseDuration(%q) error = %v", tt.raw, err)
+		}
+		if got != tt.want {
+			t.Fatalf("parseDuration(%q) = %v, want %v", tt.raw, got, tt.want)
+		}
+	}
+	if _, err := parseDuration("test", "5x"); err == nil {
+		t.Fatal("parseDuration(5x) accepted, want error")
 	}
 }
 
@@ -93,19 +132,44 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 			want: "sources.dmhy.interval is required",
 		},
 		{
+			name: "missing settle window",
+			body: "[sources.dmhy]\ninterval = \"5m\"\n",
+			want: "sources.dmhy.settle_window is required",
+		},
+		{
+			name: "zero settle window",
+			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"0s\"\n",
+			want: "settle_window is required and must be > 0",
+		},
+		{
 			name: "category must be string",
-			body: "[sources.dmhy]\ninterval = \"5m\"\ncategory = 2\n",
+			body: "[sources.dmhy]\ninterval = \"5m\"\nsettle_window = \"24h\"\ncategory = 2\n",
 			want: "cannot decode TOML integer into struct field",
 		},
 		{
 			name: "invalid DMHY category",
-			body: "[sources.dmhy]\ninterval = \"5m\"\ncategory = \"anime\"\n",
+			body: "[sources.dmhy]\ninterval = \"5m\"\nsettle_window = \"24h\"\ncategory = \"anime\"\n",
 			want: "non-negative integer string",
 		},
 		{
+			name: "zero rate",
+			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"24h\"\nmax_rps = 0\n",
+			want: "max_rps must be > 0",
+		},
+		{
 			name: "negative rate",
-			body: "[sources.nyaa]\ninterval = \"5m\"\nmax_rps = -1\n",
-			want: "max_rps must be >= 0",
+			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"24h\"\nmax_rps = -1\n",
+			want: "max_rps must be > 0",
+		},
+		{
+			name: "request timeout at or above run timeout",
+			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"24h\"\ntimeout = \"30s\"\nrequest_timeout = \"30s\"\n",
+			want: "must be greater than sources.nyaa.request_timeout",
+		},
+		{
+			name: "zero request timeout",
+			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"24h\"\nrequest_timeout = \"0s\"\n",
+			want: "request_timeout must be > 0",
 		},
 		{
 			name: "invalid duration",
@@ -130,6 +194,35 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 				t.Fatalf("Load() error = %v, want substring %q", err, tt.want)
 			}
 		})
+	}
+}
+
+// LoadCrawlTool serves the offline crawl subcommand: no database URL, and
+// source tables usable even when absent or disabled (defaults fill them in).
+func TestLoadCrawlTool(t *testing.T) {
+	cfg, err := LoadCrawlTool(writeConfig(t, `
+[sources.dmhy]
+enabled = false
+url = "http://dmhy.local"
+`))
+	if err != nil {
+		t.Fatalf("LoadCrawlTool() error = %v", err)
+	}
+	if cfg.DatabaseURL != "" {
+		t.Fatalf("database URL = %q, want empty", cfg.DatabaseURL)
+	}
+	if cfg.Sources.DMHY.URL != "http://dmhy.local" || cfg.Sources.DMHY.Enabled {
+		t.Fatalf("DMHY = %+v, want disabled with overridden URL", cfg.Sources.DMHY)
+	}
+	if cfg.Sources.Nyaa.URL != defaultNyaaURL || cfg.Sources.Nyaa.RequestTimeout != defaultNyaaRequestTimeout {
+		t.Fatalf("Nyaa defaults = %+v", cfg.Sources.Nyaa)
+	}
+
+	// Enabled sources are still validated so the scheduled loop's contract
+	// cannot be bypassed through the tool path.
+	if _, err := LoadCrawlTool(writeConfig(t, "[sources.nyaa]\ninterval = \"5m\"\n")); err == nil ||
+		!strings.Contains(err.Error(), "settle_window is required") {
+		t.Fatalf("LoadCrawlTool() error = %v, want settle_window requirement", err)
 	}
 }
 

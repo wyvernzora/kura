@@ -46,6 +46,15 @@ var (
 )
 
 func main() {
+	// The `crawl` subcommand is the offline page-mode tool for
+	// operator-scripted backfills; everything else is the serve path.
+	if len(os.Args) > 1 && os.Args[1] == "crawl" {
+		if err := runCrawlCommand(os.Args[2:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintln(os.Stderr, "takuhai:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "kura-release-indexer:", err)
 		os.Exit(1)
@@ -319,8 +328,6 @@ func parseLogLevel(s string) (slog.Level, error) {
 	}
 }
 
-const crawlPageSize = 200
-
 func newCrawlRunner(
 	cfg config.Config,
 	ingester *ingest.Processor,
@@ -333,24 +340,26 @@ func newCrawlRunner(
 		if err != nil {
 			return nil, fmt.Errorf("parse DMHY category: %w", err)
 		}
-		crawler := dmhy.NewHTTPCrawler(source.URL, category, source.MaxRPS, source.CacheTTL)
+		crawler := dmhy.NewHTTPCrawler(source.URL, category, source.MaxRPS, source.CacheTTL, source.RequestTimeout)
+		settle := source.SettleWindow
 		jobs = append(jobs, crawlrunner.Job{
 			Source:   api.SourceDMHY,
 			Interval: source.Interval,
 			Timeout:  source.Timeout,
-			Crawl: func(ctx context.Context) ([]api.RawPost, error) {
-				return crawler.Crawl(ctx, crawlPageSize)
+			Crawl: func(ctx context.Context, emit func([]api.RawPost) error) error {
+				return crawler.CrawlSince(ctx, time.Now().Add(-settle), emit)
 			},
 		})
 	}
 	if source := cfg.Sources.Nyaa; source.Enabled {
-		crawler := nyaa.NewHTTPCrawler(source.URL, source.Query, source.Category, source.Filter, source.MaxRPS)
+		crawler := nyaa.NewHTTPCrawler(source.URL, source.Query, source.Category, source.Filter, source.MaxRPS, source.RequestTimeout)
+		settle := source.SettleWindow
 		jobs = append(jobs, crawlrunner.Job{
 			Source:   api.SourceNyaa,
 			Interval: source.Interval,
 			Timeout:  source.Timeout,
-			Crawl: func(ctx context.Context) ([]api.RawPost, error) {
-				return crawler.Crawl(ctx, crawlPageSize)
+			Crawl: func(ctx context.Context, emit func([]api.RawPost) error) error {
+				return crawler.CrawlSince(ctx, time.Now().Add(-settle), emit)
 			},
 		})
 	}

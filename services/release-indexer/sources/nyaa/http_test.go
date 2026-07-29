@@ -36,7 +36,7 @@ func TestFetchPageRateLimiterHonorsCanceledContext(t *testing.T) {
 		t.Fatalf("write fixture: %v", err)
 	}
 
-	crawler := NewHTTPCrawler("file://"+dir, "", "", "", 0.01)
+	crawler := NewHTTPCrawler("file://"+dir, "", "", "", 0.01, 0)
 	if _, err := crawler.fetch(context.Background(), 1); err != nil {
 		t.Fatalf("first fetch: %v", err)
 	}
