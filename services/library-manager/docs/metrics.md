@@ -25,3 +25,8 @@ else, so granting Prometheus scrape access does not grant API access.
 | `kura_library_series_source` | gauge | `source` | Series with at least one active file from this source (`WebRip`, `BDRip`, …). Same multi-count caveat as resolution. |
 
 Go runtime and process metrics are exported alongside.
+
+A suite-wide example Grafana dashboard covering this service, the
+release-indexer, and the gateway lives at
+[`docs/grafana/kura-suite-overview.json`](../../../docs/grafana/kura-suite-overview.json)
+(uid `kura-suite-overview`, Prometheus datasource variable `datasource`).
