@@ -40,4 +40,6 @@ Go runtime and process metrics are exported by the single service.
 
 An example Grafana dashboard JSON is available at
 [`docs/grafana/release-indexer-dashboard.json`](grafana/release-indexer-dashboard.json). It uses a
-Prometheus datasource variable named `datasource`.
+Prometheus datasource variable named `datasource`. A suite-wide overview
+dashboard spanning all three services lives at the repo root:
+[`docs/grafana/kura-suite-overview.json`](../../../docs/grafana/kura-suite-overview.json).
