@@ -40,6 +40,17 @@ func TestMutatorAlphabetNeverPopulatesBothSets(t *testing.T) {
 		run  func() error
 	}{
 		{
+			name: "install volume",
+			run: func() error {
+				return tapecatalog.InstallVolume(
+					root,
+					firstVolumeID,
+					header,
+					validObserved(),
+				)
+			},
+		},
+		{
 			name: "save observed",
 			run: func() error {
 				return tapecatalog.SaveObserved(root, firstVolumeID, validObserved())
@@ -1552,6 +1563,122 @@ func TestPutVolumeHeaderStoresBytesAndChecksIdentity(t *testing.T) {
 	)
 }
 
+func TestInstallVolumeCreatesCompleteActiveEntry(t *testing.T) {
+	root := t.TempDir()
+	header := append(volumeHeaderBytes(t, firstVolumeID), ' ')
+	observed := validObserved()
+	mustSucceed(
+		t,
+		tapecatalog.InstallVolume(root, firstVolumeID, header, observed),
+	)
+
+	volumeDir := activeVolumeDir(root, firstVolumeID)
+	assertFileBytes(t, tapevolume.VolumeFile(volumeDir), header)
+	gotVolume, err := tapevolume.Read(volumeDir)
+	mustSucceed(t, err)
+	if gotVolume.VolumeID != firstVolumeID {
+		t.Fatalf("volumeID = %q, want %q", gotVolume.VolumeID, firstVolumeID)
+	}
+	gotObserved, err := tapecatalog.LoadObserved(root, firstVolumeID)
+	mustSucceed(t, err)
+	if !reflect.DeepEqual(gotObserved, observed) {
+		t.Fatalf("LoadObserved() = %#v, want %#v", gotObserved, observed)
+	}
+	snapshots, err := os.ReadDir(tapevolume.SnapshotsDir(volumeDir))
+	mustSucceed(t, err)
+	if len(snapshots) != 0 {
+		t.Fatalf("snapshots directory contains entries: %v", snapshots)
+	}
+	active, err := tapecatalog.ListActive(root)
+	mustSucceed(t, err)
+	if !reflect.DeepEqual(active, []volume.ID{firstVolumeID}) {
+		t.Fatalf("ListActive() = %v, want [%s]", active, firstVolumeID)
+	}
+}
+
+func TestInstallVolumeInterruptedTemporaryEntryIsInvisible(t *testing.T) {
+	root := t.TempDir()
+	activeDir := paths.ActiveVolumeCatalogDir(root)
+	mustSucceed(t, os.MkdirAll(activeDir, 0o775))
+	tempDir, err := os.MkdirTemp(activeDir, ".volume-")
+	mustSucceed(t, err)
+	header := volumeHeaderBytes(t, firstVolumeID)
+	mustSucceed(t, os.MkdirAll(tapevolume.ArchiveDir(tempDir), 0o775))
+	mustSucceed(t, os.WriteFile(tapevolume.VolumeFile(tempDir), header, 0o664))
+
+	active, err := tapecatalog.ListActive(root)
+	mustSucceed(t, err)
+	if !reflect.DeepEqual(active, []volume.ID{}) {
+		t.Fatalf("ListActive() = %v, want empty", active)
+	}
+	assertNotExist(t, activeVolumeDir(root, firstVolumeID))
+
+	mustSucceed(
+		t,
+		tapecatalog.InstallVolume(
+			root,
+			firstVolumeID,
+			header,
+			validObserved(),
+		),
+	)
+	active, err = tapecatalog.ListActive(root)
+	mustSucceed(t, err)
+	if !reflect.DeepEqual(active, []volume.ID{firstVolumeID}) {
+		t.Fatalf("ListActive() after retry = %v, want [%s]", active, firstVolumeID)
+	}
+}
+
+func TestInstallVolumeReplayIsByteIdentical(t *testing.T) {
+	root := t.TempDir()
+	header := append(volumeHeaderBytes(t, firstVolumeID), ' ')
+	observed := validObserved()
+	mustSucceed(
+		t,
+		tapecatalog.InstallVolume(root, firstVolumeID, header, observed),
+	)
+	volumeDir := activeVolumeDir(root, firstVolumeID)
+	observedPath := filepath.Join(volumeDir, "observed.json")
+	observedBytes, err := os.ReadFile(observedPath)
+	mustSucceed(t, err)
+
+	mustSucceed(
+		t,
+		tapecatalog.InstallVolume(root, firstVolumeID, header, observed),
+	)
+	assertFileBytes(t, tapevolume.VolumeFile(volumeDir), header)
+	assertFileBytes(t, observedPath, observedBytes)
+	snapshots, err := os.ReadDir(tapevolume.SnapshotsDir(volumeDir))
+	mustSucceed(t, err)
+	if len(snapshots) != 0 {
+		t.Fatalf("snapshots directory contains entries after replay: %v", snapshots)
+	}
+}
+
+func TestInstallVolumeRejectsHeaderVolumeIDMismatchWithoutEntry(t *testing.T) {
+	root := t.TempDir()
+	header := volumeHeaderBytes(t, secondVolumeID)
+	want := `tapecatalog: volumeID mismatch: catalog is "` +
+		string(firstVolumeID) + `", header contains "` + string(secondVolumeID) + `"`
+	assertExactError(
+		t,
+		tapecatalog.InstallVolume(
+			root,
+			firstVolumeID,
+			header,
+			validObserved(),
+		),
+		want,
+	)
+
+	assertNotExist(t, activeVolumeDir(root, firstVolumeID))
+	entries, err := os.ReadDir(paths.ActiveVolumeCatalogDir(root))
+	mustSucceed(t, err)
+	if len(entries) != 0 {
+		t.Fatalf("active directory contains temporary volume entries: %v", entries)
+	}
+}
+
 func TestListVolumeDirectories(t *testing.T) {
 	root := t.TempDir()
 	writeMarker(t, activeVolumeDir(root, secondVolumeID), "second")
@@ -1614,6 +1741,11 @@ func TestPathUnsafeVolumeIDsRejected(t *testing.T) {
 			_, err = tapecatalog.LoadObserved(root, id)
 			assertExactError(t, err, want)
 			assertExactError(t, tapecatalog.PutVolumeHeader(root, id, nil), want)
+			assertExactError(
+				t,
+				tapecatalog.InstallVolume(root, id, nil, validObserved()),
+				want,
+			)
 			assertExactError(
 				t,
 				tapecatalog.PutSnapshot(root, id, "snapshot", nil, nil),

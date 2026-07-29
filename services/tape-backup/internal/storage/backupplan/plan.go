@@ -1,8 +1,9 @@
 // Package backupplan owns immutable backup plans and forensic session logs.
 //
-// A plan must exist in exactly one of plans/draft, plans/ready, or plans/done
-// at any time. Lifecycle transitions move the unchanged plan file forward:
-// draft to ready to done. There is no reverse transition.
+// A plan must exist in exactly one of plans/draft, plans/ready, plans/done,
+// or plans/discarded at any time. Lifecycle transitions move the unchanged
+// plan file forward: draft to ready to done, or draft/ready to discarded.
+// There is no reverse transition.
 package backupplan
 
 import (
@@ -47,9 +48,10 @@ const (
 type planState string
 
 const (
-	stateDraft planState = "draft"
-	stateReady planState = "ready"
-	stateDone  planState = "done"
+	stateDraft     planState = "draft"
+	stateReady     planState = "ready"
+	stateDone      planState = "done"
+	stateDiscarded planState = "discarded"
 )
 
 var planMutationMu sync.Mutex
@@ -62,7 +64,8 @@ type Creator struct {
 
 // Target identifies the cartridge label the operator should load.
 type Target struct {
-	TapeID tape.ID
+	TapeID       tape.ID
+	MediumSerial string
 }
 
 // Action is one ordered operation or assertion against the loaded cartridge.
@@ -101,7 +104,8 @@ type creatorWire struct {
 }
 
 type targetWire struct {
-	TapeID string `json:"tapeID"`
+	TapeID       string `json:"tapeID"`
+	MediumSerial string `json:"mediumSerial,omitempty"`
 }
 
 type actionWire struct {
@@ -213,12 +217,91 @@ func validateDraftPreconditions(stateRoot string, plan Plan) error {
 
 // Approve atomically moves a plan from draft to ready.
 func Approve(stateRoot, planID string) error {
-	return movePlan(stateRoot, planID, "approve", stateDraft, stateReady, stateDone)
+	return movePlan(
+		stateRoot,
+		planID,
+		"approve",
+		stateDraft,
+		stateReady,
+		stateDone,
+		stateDiscarded,
+	)
 }
 
 // Complete atomically moves a plan from ready to done.
 func Complete(stateRoot, planID string) error {
-	return movePlan(stateRoot, planID, "complete", stateReady, stateDone, stateDraft)
+	return movePlan(
+		stateRoot,
+		planID,
+		"complete",
+		stateReady,
+		stateDone,
+		stateDraft,
+		stateDiscarded,
+	)
+}
+
+// Discard atomically moves a draft or ready plan to discarded.
+func Discard(stateRoot, planID string) error {
+	planMutationMu.Lock()
+	defer planMutationMu.Unlock()
+
+	if err := validateULID("planID", planID); err != nil {
+		return fmt.Errorf("backupplan: %w", err)
+	}
+	if err := ensurePlanStateDirectories(stateRoot); err != nil {
+		return err
+	}
+
+	present := make(map[planState]bool, 4)
+	for _, state := range allPlanStates() {
+		exists, err := regularFileExists(planFile(stateRoot, state, planID))
+		if err != nil {
+			return fmt.Errorf(
+				"backupplan: discard %s: inspect %s state: %w",
+				planID,
+				state,
+				err,
+			)
+		}
+		if exists {
+			present[state] = true
+		}
+	}
+
+	var source planState
+	switch {
+	case present[stateDraft]:
+		source = stateDraft
+	case present[stateReady]:
+		source = stateReady
+	case present[stateDone] && present[stateDiscarded]:
+		return fmt.Errorf(
+			"backupplan: plan %s exists in multiple states: done, discarded",
+			planID,
+		)
+	case present[stateDone]:
+		return fmt.Errorf("backupplan: discard %s: done plan cannot be discarded", planID)
+	case present[stateDiscarded]:
+		return fmt.Errorf("backupplan: discard %s: plan is already discarded", planID)
+	default:
+		return fmt.Errorf(
+			"backupplan: discard %s: draft or ready plan does not exist: %w",
+			planID,
+			os.ErrNotExist,
+		)
+	}
+
+	return movePlanLocked(
+		stateRoot,
+		planID,
+		"discard",
+		source,
+		stateDiscarded,
+		stateDraft,
+		stateReady,
+		stateDone,
+	)
 }
 
 // ReadDraft reads and validates one draft plan.
@@ -253,11 +336,27 @@ func ListDone(stateRoot string) ([]Plan, error) {
 
 func movePlan(
 	stateRoot, planID, action string,
-	sourceState, destinationState, otherState planState,
+	sourceState, destinationState planState,
+	otherStates ...planState,
 ) error {
 	planMutationMu.Lock()
 	defer planMutationMu.Unlock()
 
+	return movePlanLocked(
+		stateRoot,
+		planID,
+		action,
+		sourceState,
+		destinationState,
+		otherStates...,
+	)
+}
+
+func movePlanLocked(
+	stateRoot, planID, action string,
+	sourceState, destinationState planState,
+	otherStates ...planState,
+) error {
 	if err := validateULID("planID", planID); err != nil {
 		return fmt.Errorf("backupplan: %w", err)
 	}
@@ -301,16 +400,21 @@ func movePlan(
 			destinationState,
 		)
 	}
-	other := planFile(stateRoot, otherState, planID)
-	if exists, err := regularFileExists(other); err != nil {
-		return fmt.Errorf("backupplan: %s %s: inspect %s state: %w", action, planID, otherState, err)
-	} else if exists {
-		return fmt.Errorf(
-			"backupplan: plan %s exists in both %s and %s",
-			planID,
-			sourceState,
-			otherState,
-		)
+	for _, otherState := range otherStates {
+		if otherState == sourceState || otherState == destinationState {
+			continue
+		}
+		other := planFile(stateRoot, otherState, planID)
+		if exists, err := regularFileExists(other); err != nil {
+			return fmt.Errorf("backupplan: %s %s: inspect %s state: %w", action, planID, otherState, err)
+		} else if exists {
+			return fmt.Errorf(
+				"backupplan: plan %s exists in both %s and %s",
+				planID,
+				sourceState,
+				otherState,
+			)
+		}
 	}
 	if err := os.Rename(source, destination); err != nil {
 		return fmt.Errorf("backupplan: %s %s: rename: %w", action, planID, err)
@@ -364,7 +468,7 @@ func listPlanState(stateRoot string, state planState) ([]Plan, error) {
 }
 
 func ensurePlanAbsent(stateRoot, planID string) error {
-	for _, state := range []planState{stateDraft, stateReady, stateDone} {
+	for _, state := range allPlanStates() {
 		path := planFile(stateRoot, state, planID)
 		exists, err := regularFileExists(path)
 		if err != nil {
@@ -378,8 +482,8 @@ func ensurePlanAbsent(stateRoot, planID string) error {
 }
 
 func ensureOnlyPlanState(stateRoot, planID string, expected planState) error {
-	found := make([]planState, 0, 3)
-	for _, state := range []planState{stateDraft, stateReady, stateDone} {
+	found := make([]planState, 0, 4)
+	for _, state := range allPlanStates() {
 		exists, err := regularFileExists(planFile(stateRoot, state, planID))
 		if err != nil {
 			return fmt.Errorf("backupplan: inspect %s plan %s: %w", state, planID, err)
@@ -490,7 +594,13 @@ func validatePlan(plan Plan) error {
 	if err := validateTarget(plan.Target); err != nil {
 		return err
 	}
-	return validateActions(plan.Actions)
+	if err := validateActions(plan.Actions); err != nil {
+		return err
+	}
+	if planRequiresMediumSerial(plan.Actions) {
+		return validateText("target.mediumSerial", plan.Target.MediumSerial)
+	}
+	return nil
 }
 
 func validatePlanMetadata(plan Plan) error {
@@ -762,7 +872,8 @@ func toWire(plan Plan) planWire {
 			Host:    plan.CreatedBy.Host,
 		},
 		Target: targetWire{
-			TapeID: string(plan.Target.TapeID),
+			TapeID:       string(plan.Target.TapeID),
+			MediumSerial: plan.Target.MediumSerial,
 		},
 		Actions: actions,
 	}
@@ -793,7 +904,8 @@ func fromWire(wire planWire) (Plan, error) {
 			Host:    wire.CreatedBy.Host,
 		},
 		Target: Target{
-			TapeID: tape.ID(wire.Target.TapeID),
+			TapeID:       tape.ID(wire.Target.TapeID),
+			MediumSerial: wire.Target.MediumSerial,
 		},
 		Actions: actions,
 	}, nil
@@ -1019,7 +1131,7 @@ func regularFileExists(path string) (bool, error) {
 }
 
 func ensurePlanStateDirectories(stateRoot string) error {
-	for _, state := range []planState{stateDraft, stateReady, stateDone} {
+	for _, state := range allPlanStates() {
 		path := planStateDir(stateRoot, state)
 		info, err := os.Lstat(path)
 		if errors.Is(err, os.ErrNotExist) {
@@ -1057,6 +1169,19 @@ func planStateDir(stateRoot string, state planState) string {
 
 func planFile(stateRoot string, state planState, planID string) string {
 	return filepath.Join(planStateDir(stateRoot, state), planID+".json")
+}
+
+func allPlanStates() []planState {
+	return []planState{stateDraft, stateReady, stateDone, stateDiscarded}
+}
+
+func planRequiresMediumSerial(actions []Action) bool {
+	for _, action := range actions {
+		if action.Type == ActionReformat || action.Type == ActionAdmit {
+			return true
+		}
+	}
+	return false
 }
 
 func joinPlanStates(states []planState) string {

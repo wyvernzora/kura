@@ -66,11 +66,10 @@ func SaveObserved(stateRoot string, id volume.ID, observed Observed) error {
 	if err := validateObserved(observed); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(toWire(observed), "", "  ")
+	data, err := encodeObserved(id, observed)
 	if err != nil {
-		return fmt.Errorf("tapecatalog: encode observed %s: %w", id, err)
+		return err
 	}
-	data = append(data, '\n')
 	return mutateVolume(stateRoot, id, func(volumeDir string) error {
 		return writeObserved(volumeDir, id, data)
 	})
@@ -117,6 +116,36 @@ func PutVolumeHeader(stateRoot string, id volume.ID, header []byte) error {
 	}
 	return mutateVolume(stateRoot, id, func(volumeDir string) error {
 		return putVolumeHeader(volumeDir, id, header)
+	})
+}
+
+// InstallVolume atomically installs a complete active volume entry.
+// Replaying completion replaces an existing active entry with the same
+// header, observation, and empty snapshot namespace.
+func InstallVolume(stateRoot string, id volume.ID, header []byte, observed Observed) error {
+	mutationMu.Lock()
+	defer mutationMu.Unlock()
+	if err := validateVolumeID(id); err != nil {
+		return err
+	}
+	if err := validateObserved(observed); err != nil {
+		return err
+	}
+	observedData, err := encodeObserved(id, observed)
+	if err != nil {
+		return err
+	}
+	return createActiveVolume(stateRoot, id, true, func(volumeDir string) error {
+		if err := putVolumeHeader(volumeDir, id, header); err != nil {
+			return err
+		}
+		if err := writeObserved(volumeDir, id, observedData); err != nil {
+			return err
+		}
+		if err := os.MkdirAll(tapevolume.SnapshotsDir(volumeDir), 0o775); err != nil {
+			return fmt.Errorf("tapecatalog: create snapshots directory: %w", err)
+		}
+		return nil
 	})
 }
 
@@ -220,7 +249,12 @@ func directoryExists(path string) (bool, error) {
 	return true, nil
 }
 
-func createActiveVolume(stateRoot string, id volume.ID, populate func(string) error) (resultErr error) {
+func createActiveVolume(
+	stateRoot string,
+	id volume.ID,
+	replace bool,
+	populate func(string) error,
+) (resultErr error) {
 	parent := paths.ActiveVolumeCatalogDir(stateRoot)
 	if err := os.MkdirAll(parent, 0o775); err != nil {
 		return fmt.Errorf("tapecatalog: create active directory: %w", err)
@@ -243,17 +277,26 @@ func createActiveVolume(stateRoot string, id volume.ID, populate func(string) er
 	sibling := detachedVolumeDir(stateRoot, id)
 	// findVolume checked both paths under mutationMu. These repeated checks
 	// improve the error if another process raced that check; they do not make
-	// cross-process use safe. os.Rename would also refuse an existing destination
-	// directory; that check is belt-and-braces for error quality.
-	if exists, err := directoryExists(destination); err != nil {
+	// cross-process use safe.
+	destinationExists, err := directoryExists(destination)
+	if err != nil {
 		return fmt.Errorf("tapecatalog: inspect new volume destination: %w", err)
-	} else if exists {
+	}
+	if destinationExists && !replace {
 		return fmt.Errorf("tapecatalog: create volume %s: destination %q already exists", id, destination)
 	}
 	if exists, err := directoryExists(sibling); err != nil {
 		return fmt.Errorf("tapecatalog: inspect new volume sibling: %w", err)
 	} else if exists {
 		return fmt.Errorf("tapecatalog: create volume %s: sibling %q already exists", id, sibling)
+	}
+	if destinationExists {
+		// Portable os.Rename cannot replace a non-empty directory. The package
+		// mutex makes remove+rename one mutation to other mutators. A crash
+		// between them leaves the entry absent, so replay installs it normally.
+		if err := os.RemoveAll(destination); err != nil {
+			return fmt.Errorf("tapecatalog: replace volume %s: remove destination: %w", id, err)
+		}
 	}
 	if err := os.Rename(tempDir, destination); err != nil {
 		return fmt.Errorf("tapecatalog: create volume %s: rename: %w", id, err)
@@ -269,7 +312,15 @@ func mutateVolume(stateRoot string, id volume.ID, mutate func(string) error) err
 	if volumeDir != "" {
 		return mutate(volumeDir)
 	}
-	return createActiveVolume(stateRoot, id, mutate)
+	return createActiveVolume(stateRoot, id, false, mutate)
+}
+
+func encodeObserved(id volume.ID, observed Observed) ([]byte, error) {
+	data, err := json.MarshalIndent(toWire(observed), "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("tapecatalog: encode observed %s: %w", id, err)
+	}
+	return append(data, '\n'), nil
 }
 
 func writeObserved(volumeDir string, id volume.ID, data []byte) error {

@@ -17,13 +17,14 @@ import (
 )
 
 const (
-	testPlanID      = "01JAY7M2K8Q3V5N0X2W4Z6B8D1"
-	secondPlanID    = "01JAY8B4N1R6X8Q0Z2C4E6G8J3"
-	testSessionID   = "01JAYC3P5R7T9W1Y3A5C7E9G2K"
-	testVolumeID    = "01J8ZQ7W5TWHA6R6J8X4QZ9Y7V"
-	testSnapshot    = "OR3GIYR2GM3TAMBXGA.g7"
-	secondSnapshot  = "MFSGIYTONRSGSZDBOI.g2"
-	testFingerprint = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testPlanID       = "01JAY7M2K8Q3V5N0X2W4Z6B8D1"
+	secondPlanID     = "01JAY8B4N1R6X8Q0Z2C4E6G8J3"
+	testSessionID    = "01JAYC3P5R7T9W1Y3A5C7E9G2K"
+	testVolumeID     = "01J8ZQ7W5TWHA6R6J8X4QZ9Y7V"
+	testSnapshot     = "OR3GIYR2GM3TAMBXGA.g7"
+	secondSnapshot   = "MFSGIYTONRSGSZDBOI.g2"
+	testFingerprint  = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testMediumSerial = "MAM-ABC123-0001"
 )
 
 func TestPlanRoundTripAndLifecycle(t *testing.T) {
@@ -90,6 +91,9 @@ func TestActionTypesClosedEnum(t *testing.T) {
 		t.Run(string(action.Type), func(t *testing.T) {
 			plan := validPlan()
 			plan.Actions = []Action{action}
+			if planRequiresMediumSerial(plan.Actions) {
+				plan.Target.MediumSerial = testMediumSerial
+			}
 			if err := Draft(t.TempDir(), plan); err != nil {
 				t.Fatalf("Draft: %v", err)
 			}
@@ -226,6 +230,222 @@ func TestPlanMetadataValidationOnEncodeAndDecode(t *testing.T) {
 			)
 		})
 	}
+}
+
+func TestReformatBearingPlanWithoutTargetMediumSerialIsRefusedByDraftAndReadDraft(
+	t *testing.T,
+) {
+	plan := validPlan()
+	plan.Actions = []Action{{Type: ActionReformat}}
+	const want = "backupplan: target.mediumSerial is required"
+	assertExactError(t, Draft(t.TempDir(), plan), want)
+
+	for _, variant := range []string{"absent", "null", "empty"} {
+		t.Run("ReadDraft/"+variant, func(t *testing.T) {
+			root := t.TempDir()
+			wire := toWire(plan)
+			data, err := json.Marshal(wire)
+			if err != nil {
+				t.Fatalf("Marshal plan: %v", err)
+			}
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal(data, &fields); err != nil {
+				t.Fatalf("Unmarshal plan fields: %v", err)
+			}
+			var target map[string]json.RawMessage
+			if err := json.Unmarshal(fields["target"], &target); err != nil {
+				t.Fatalf("Unmarshal target fields: %v", err)
+			}
+			switch variant {
+			case "absent":
+				delete(target, "mediumSerial")
+			case "null":
+				target["mediumSerial"] = json.RawMessage("null")
+			case "empty":
+				target["mediumSerial"] = json.RawMessage(`""`)
+			}
+			fields["target"], err = json.Marshal(target)
+			if err != nil {
+				t.Fatalf("Marshal target fields: %v", err)
+			}
+			data, err = json.Marshal(fields)
+			if err != nil {
+				t.Fatalf("Marshal plan fields: %v", err)
+			}
+			draftPath := planFile(root, stateDraft, plan.PlanID)
+			if err := os.MkdirAll(filepath.Dir(draftPath), 0o775); err != nil {
+				t.Fatalf("MkdirAll draft: %v", err)
+			}
+			if err := os.WriteFile(draftPath, data, 0o664); err != nil {
+				t.Fatalf("WriteFile draft: %v", err)
+			}
+
+			_, err = ReadDraft(root, plan.PlanID)
+			assertExactError(t, err, want)
+		})
+	}
+}
+
+func TestAdmitBearingPlanRequiresTargetMediumSerial(t *testing.T) {
+	plan := validPlan()
+	plan.Actions = []Action{{
+		Type:     ActionAdmit,
+		VolumeID: volume.ID(testVolumeID),
+	}}
+	const want = "backupplan: target.mediumSerial is required"
+	assertExactError(t, Draft(t.TempDir(), plan), want)
+
+	data, err := json.Marshal(toWire(plan))
+	if err != nil {
+		t.Fatalf("Marshal plan: %v", err)
+	}
+	_, err = decodePlan(data, plan.PlanID)
+	assertExactError(t, err, want)
+}
+
+func TestTargetMediumSerialRoundTripsForInitPlan(t *testing.T) {
+	root := t.TempDir()
+	plan := validPlan()
+	plan.Target.MediumSerial = testMediumSerial
+	plan.Actions = []Action{
+		{Type: ActionReformat},
+		{Type: ActionAdmit, VolumeID: volume.ID(testVolumeID)},
+	}
+	if err := Draft(root, plan); err != nil {
+		t.Fatalf("Draft: %v", err)
+	}
+	got, err := ReadDraft(root, plan.PlanID)
+	if err != nil {
+		t.Fatalf("ReadDraft: %v", err)
+	}
+	if !reflect.DeepEqual(got, plan) {
+		t.Fatalf("ReadDraft = %#v, want %#v", got, plan)
+	}
+
+	data, err := os.ReadFile(planFile(root, stateDraft, plan.PlanID))
+	if err != nil {
+		t.Fatalf("ReadFile draft: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatalf("Unmarshal plan: %v", err)
+	}
+	var target map[string]json.RawMessage
+	if err := json.Unmarshal(fields["target"], &target); err != nil {
+		t.Fatalf("Unmarshal target: %v", err)
+	}
+	if got, want := string(target["mediumSerial"]), `"`+testMediumSerial+`"`; got != want {
+		t.Fatalf("target.mediumSerial = %s, want %s", got, want)
+	}
+	if got, want := string(fields["schemaVersion"]), "1"; got != want {
+		t.Fatalf("schemaVersion = %s, want %s", got, want)
+	}
+}
+
+func TestFillPlanMayOmitOrCarryTargetMediumSerial(t *testing.T) {
+	tests := []struct {
+		name   string
+		serial string
+	}{
+		{name: "omitted"},
+		{name: "carried", serial: testMediumSerial},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			plan := validPlan()
+			plan.Target.MediumSerial = test.serial
+			if err := Draft(root, plan); err != nil {
+				t.Fatalf("Draft: %v", err)
+			}
+			got, err := ReadDraft(root, plan.PlanID)
+			if err != nil {
+				t.Fatalf("ReadDraft: %v", err)
+			}
+			if got.Target.MediumSerial != test.serial {
+				t.Fatalf(
+					"ReadDraft Target.mediumSerial = %q, want %q",
+					got.Target.MediumSerial,
+					test.serial,
+				)
+			}
+		})
+	}
+}
+
+func TestTargetMediumSerialKeepsPermissiveDecodeBoundary(t *testing.T) {
+	plan := validPlan()
+	plan.Target.MediumSerial = testMediumSerial
+	data, err := json.Marshal(toWire(plan))
+	if err != nil {
+		t.Fatalf("Marshal plan: %v", err)
+	}
+
+	t.Run("case-folded known field matches", func(t *testing.T) {
+		mutated := bytes.Replace(
+			data,
+			[]byte(`"mediumSerial":"`+testMediumSerial+`"`),
+			[]byte(`"MediumSerial":"`+testMediumSerial+`"`),
+			1,
+		)
+		if bytes.Equal(mutated, data) {
+			t.Fatal("mediumSerial mutation did not change plan")
+		}
+		got, err := decodePlan(mutated, plan.PlanID)
+		if err != nil {
+			t.Fatalf("decodePlan: %v", err)
+		}
+		if got.Target.MediumSerial != testMediumSerial {
+			t.Fatalf(
+				"Target.mediumSerial = %q, want %q",
+				got.Target.MediumSerial,
+				testMediumSerial,
+			)
+		}
+	})
+
+	t.Run("unknown target field is dropped", func(t *testing.T) {
+		mutated := bytes.Replace(
+			data,
+			[]byte(`"mediumSerial":"`+testMediumSerial+`"`),
+			[]byte(`"mediumSerial":"`+testMediumSerial+`","futureField":true`),
+			1,
+		)
+		if bytes.Equal(mutated, data) {
+			t.Fatal("unknown target field mutation did not change plan")
+		}
+		got, err := decodePlan(mutated, plan.PlanID)
+		if err != nil {
+			t.Fatalf("decodePlan: %v", err)
+		}
+		if !reflect.DeepEqual(got, plan) {
+			t.Fatalf("decodePlan = %#v, want %#v", got, plan)
+		}
+	})
+
+	t.Run("case-folded duplicate is refused", func(t *testing.T) {
+		mutated := bytes.Replace(
+			data,
+			[]byte(`"mediumSerial":"`+testMediumSerial+`"`),
+			[]byte(
+				`"mediumSerial":"`+testMediumSerial+
+					`","MediumSerial":"other"`,
+			),
+			1,
+		)
+		if bytes.Equal(mutated, data) {
+			t.Fatal("duplicate mediumSerial mutation did not change plan")
+		}
+		_, err := decodePlan(mutated, plan.PlanID)
+		want := fmt.Sprintf(
+			"backupplan: decode plan %s: duplicate case-folded JSON fields "+
+				"at target.mediumSerial: %q and %q",
+			plan.PlanID,
+			"MediumSerial",
+			"mediumSerial",
+		)
+		assertExactError(t, err, want)
+	})
 }
 
 func TestBackupActionValidationOnEncodeAndDecode(t *testing.T) {
@@ -642,6 +862,9 @@ func TestActionForbiddenFieldsRejectNonzeroZeroAndNull(t *testing.T) {
 				field.set(&invalid)
 				plan := validPlan()
 				plan.Actions = []Action{invalid}
+				if planRequiresMediumSerial(plan.Actions) {
+					plan.Target.MediumSerial = testMediumSerial
+				}
 				err := Draft(t.TempDir(), plan)
 				want := fmt.Sprintf(
 					"backupplan: %s action must not contain %s",
@@ -848,6 +1071,109 @@ func TestCompletedPlanDoesNotBlockNewPlanForTape(t *testing.T) {
 	}
 }
 
+func TestDiscardMovesDraftAndReadyPlansWithoutDecoding(t *testing.T) {
+	for _, sourceState := range []planState{stateDraft, stateReady} {
+		t.Run(string(sourceState), func(t *testing.T) {
+			root := t.TempDir()
+			source := planFile(root, sourceState, testPlanID)
+			if err := os.MkdirAll(filepath.Dir(source), 0o775); err != nil {
+				t.Fatalf("MkdirAll source: %v", err)
+			}
+			data := []byte("{not-json\n")
+			if err := os.WriteFile(source, data, 0o664); err != nil {
+				t.Fatalf("WriteFile source: %v", err)
+			}
+
+			if err := Discard(root, testPlanID); err != nil {
+				t.Fatalf("Discard: %v", err)
+			}
+			assertFileBytes(t, planFile(root, stateDiscarded, testPlanID), data)
+			assertNotExist(t, source)
+		})
+	}
+}
+
+func TestDiscardRefusesDoneDiscardedAndAbsentPlans(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(*testing.T, string)
+		want  string
+	}{
+		{
+			name: "done",
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+				plan := validPlan()
+				if err := Draft(root, plan); err != nil {
+					t.Fatalf("Draft: %v", err)
+				}
+				if err := Approve(root, plan.PlanID); err != nil {
+					t.Fatalf("Approve: %v", err)
+				}
+				if err := Complete(root, plan.PlanID); err != nil {
+					t.Fatalf("Complete: %v", err)
+				}
+			},
+			want: "backupplan: discard " + testPlanID +
+				": done plan cannot be discarded",
+		},
+		{
+			name: "discarded",
+			setup: func(t *testing.T, root string) {
+				t.Helper()
+				if err := Draft(root, validPlan()); err != nil {
+					t.Fatalf("Draft: %v", err)
+				}
+				if err := Discard(root, testPlanID); err != nil {
+					t.Fatalf("Discard: %v", err)
+				}
+			},
+			want: "backupplan: discard " + testPlanID +
+				": plan is already discarded",
+		},
+		{
+			name:  "absent",
+			setup: func(*testing.T, string) {},
+			want: "backupplan: discard " + testPlanID +
+				": draft or ready plan does not exist: file does not exist",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			test.setup(t, root)
+			assertExactError(t, Discard(root, testPlanID), test.want)
+		})
+	}
+}
+
+func TestDiscardedPlanDoesNotBlockNewPlanForTape(t *testing.T) {
+	for _, sourceState := range []planState{stateDraft, stateReady} {
+		t.Run(string(sourceState), func(t *testing.T) {
+			root := t.TempDir()
+			first := validPlan()
+			if err := Draft(root, first); err != nil {
+				t.Fatalf("Draft first: %v", err)
+			}
+			if sourceState == stateReady {
+				if err := Approve(root, first.PlanID); err != nil {
+					t.Fatalf("Approve first: %v", err)
+				}
+			}
+			if err := Discard(root, first.PlanID); err != nil {
+				t.Fatalf("Discard first: %v", err)
+			}
+
+			second := validPlan()
+			second.PlanID = secondPlanID
+			if err := Draft(root, second); err != nil {
+				t.Fatalf("Draft second: %v", err)
+			}
+		})
+	}
+}
+
 func TestDraftSkipsNonPlanJSONWhileCheckingLiveVolumes(t *testing.T) {
 	root := t.TempDir()
 	draftDir := planStateDir(root, stateDraft)
@@ -968,6 +1294,10 @@ func TestCompleteRefusesOccupiedFileDestinationWithoutReplacingIt(t *testing.T) 
 	testMoveRefusesOccupiedDestination(t, stateReady, stateDone, Complete)
 }
 
+func TestDiscardRefusesOccupiedFileDestinationWithoutReplacingIt(t *testing.T) {
+	testMoveRefusesOccupiedDestination(t, stateDraft, stateDiscarded, Discard)
+}
+
 func TestMoveRefusesThirdStateDuplicate(t *testing.T) {
 	root := t.TempDir()
 	plan := validPlan()
@@ -1027,6 +1357,7 @@ func TestPlanPathsRejectInvalidIDsBeforeIO(t *testing.T) {
 	for name, move := range map[string]func(string, string) error{
 		"Approve":  Approve,
 		"Complete": Complete,
+		"Discard":  Discard,
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := move(root, hostile)
@@ -1163,7 +1494,9 @@ func decodePlanWithActionFields(
 
 func decodePlanWithActionJSON(t *testing.T, actionData []byte) (Plan, error) {
 	t.Helper()
-	data, err := json.Marshal(toWire(validPlan()))
+	plan := validPlan()
+	plan.Target.MediumSerial = testMediumSerial
+	data, err := json.Marshal(toWire(plan))
 	if err != nil {
 		t.Fatalf("Marshal plan: %v", err)
 	}
@@ -1257,6 +1590,9 @@ func testMoveRefusesOccupiedDestination(
 	if sourceState == stateReady {
 		action = "complete"
 	}
+	if destinationState == stateDiscarded {
+		action = "discard"
+	}
 	want := fmt.Sprintf(
 		"backupplan: %s %s: cannot move from %q to %q: %s plan already exists",
 		action,
@@ -1294,7 +1630,7 @@ func assertPlanLists(t *testing.T, root string, drafts, ready, done int) {
 
 func assertPlanOnlyAt(t *testing.T, root, planID string, want planState) {
 	t.Helper()
-	for _, state := range []planState{stateDraft, stateReady, stateDone} {
+	for _, state := range allPlanStates() {
 		_, err := os.Stat(planFile(root, state, planID))
 		if state == want {
 			if err != nil {
