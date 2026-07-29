@@ -341,6 +341,10 @@ corrects your approach, append a one-line, concrete rule here before ending the 
   not affect matching semantics.
 - Keep every source `category` as a TOML string; DMHY maps that string to its existing
   `sort_id` semantics internally.
+- Prefer a stateless time-bounded loop plus operator-scripted CLI/ingest primitives
+  over durable crawl bookkeeping (cursor/journal/queue): the owner rejected fully
+  designed coverage-journal and interval-queue approaches because durable progress
+  state can lie and defending it dominates design cost (2026-07).
 
 ---
 
