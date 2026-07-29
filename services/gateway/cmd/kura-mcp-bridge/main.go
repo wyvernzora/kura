@@ -67,6 +67,7 @@ func run() error {
 		{Name: "libraryManager", URL: library.HealthURL()},
 		{Name: "releaseIndexer", URL: releases.HealthURL()},
 	}, cfg.ComponentTimeout)
+	healthz.Logger = logger.With("component", "health")
 
 	bridge := gwmcp.New(version, library, releases, logger.With("component", "mcp"))
 	mcpHandler := bridge.Handler(cfg.SessionTimeout)

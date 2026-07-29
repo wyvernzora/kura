@@ -5,7 +5,9 @@ package health
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -54,6 +56,11 @@ type Handler struct {
 	leaves     []Leaf
 	timeout    time.Duration
 	httpClient *http.Client
+
+	// Logger, when non-nil, records why a probe degraded. The wire
+	// deliberately hides the cause (hostnames, driver text); the log
+	// is where the operator finds it.
+	Logger *slog.Logger
 }
 
 // New builds the handler. timeout bounds each component probe individually —
@@ -94,7 +101,11 @@ func (h *Handler) System(w http.ResponseWriter, r *http.Request) {
 	results := make(chan result, len(h.leaves))
 	for _, leaf := range h.leaves {
 		go func(ctx context.Context, leaf Leaf) {
-			results <- result{name: leaf.Name, comp: h.probe(ctx, leaf)}
+			comp, err := h.probe(ctx, leaf)
+			if err != nil && h.Logger != nil {
+				h.Logger.Warn("leaf health probe degraded", "component", leaf.Name, "url", leaf.URL, "err", err)
+			}
+			results <- result{name: leaf.Name, comp: comp}
 		}(ctx, leaf)
 	}
 	for range h.leaves {
@@ -112,37 +123,40 @@ func (h *Handler) System(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, status, out)
 }
 
-// probe reports a leaf's status. It never surfaces the underlying error: those
-// carry hostnames, connection strings, and driver text, none of which belong
-// on a product endpoint.
-func (h *Handler) probe(ctx context.Context, leaf Leaf) Component {
+// probe reports a leaf's status. The returned error never reaches the wire —
+// it carries hostnames, connection strings, and driver text, none of which
+// belong on a product endpoint — but the caller logs it.
+func (h *Handler) probe(ctx context.Context, leaf Leaf) (Component, error) {
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, leaf.URL, http.NoBody)
 	if err != nil {
-		return Component{Status: StatusDegraded}
+		return Component{Status: StatusDegraded}, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
-		return Component{Status: StatusDegraded}
+		return Component{Status: StatusDegraded}, fmt.Errorf("probe: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Component{Status: StatusDegraded}
+		return Component{Status: StatusDegraded}, fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 	// The body is small by contract; cap it anyway so a misrouted response
 	// cannot be read unbounded into the health path.
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if err != nil {
-		return Component{Status: StatusDegraded}
+		return Component{Status: StatusDegraded}, fmt.Errorf("read body: %w", err)
 	}
 	var body leafHealth
-	if err := json.Unmarshal(raw, &body); err != nil || !body.Ok {
-		return Component{Status: StatusDegraded}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return Component{Status: StatusDegraded}, fmt.Errorf("decode body: %w", err)
 	}
-	return Component{Status: StatusOK, Version: body.Version}
+	if !body.Ok {
+		return Component{Status: StatusDegraded}, fmt.Errorf("leaf reports ok=false")
+	}
+	return Component{Status: StatusOK, Version: body.Version}, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
