@@ -74,7 +74,9 @@ func runServer(
 	go runShutdownSignalLoop(ctx, sigCh, cancel, logger)
 
 	deps.Index.Watch(ctx, watch)
-	metricsSrv.ObserveIndex(deps.Index.Rebuilding, func() int { return len(deps.Index.Rows()) })
+	metricsSrv.ObserveIndex(deps.Index.Rebuilding, func() []metrics.SeriesFacts {
+		return indexSeriesFacts(deps.Index)
+	})
 
 	var restSrv *restserver.Server
 	if cfg.Server.RESTAddr != "" {
@@ -222,6 +224,22 @@ func serverTransports(cfg config.Server) []string {
 		out = append(out, "rest="+cfg.RESTAddr)
 	}
 	out = append(out, "metrics="+cfg.MetricsAddr)
+	return out
+}
+
+// indexSeriesFacts projects the in-memory index rows into the shape
+// the metrics collector consumes, at scrape time.
+func indexSeriesFacts(index *indexfile.Index) []metrics.SeriesFacts {
+	rows := index.Rows()
+	out := make([]metrics.SeriesFacts, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, metrics.SeriesFacts{
+			Status:      string(row.Status),
+			Airing:      row.IsAiring,
+			Resolutions: row.Resolutions,
+			Sources:     row.Sources,
+		})
+	}
 	return out
 }
 

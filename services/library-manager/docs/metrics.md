@@ -16,5 +16,9 @@ else, so granting Prometheus scrape access does not grant API access.
 | `kura_library_jobs_duration_seconds` | histogram | `kind` | Async job wall-clock duration. |
 | `kura_library_index_rebuilding` | gauge | none | `1` while the library index is rebuilding, else `0`. Rebuilds are when `server_not_ready` (HTTP 503) responses occur. |
 | `kura_library_index_series` | gauge | none | Series currently tracked in the library index. |
+| `kura_library_series_status` | gauge | `status` | Series by rolled-up list status (`untracked`, `complete`, `incomplete`, `error`). All four statuses are always exported. |
+| `kura_library_series_airing` | gauge | none | Series currently observed as airing (independent of status). |
+| `kura_library_series_resolution` | gauge | `resolution` | Series with at least one active file at this resolution (`1080p`, `4K`, …). A series counts once per distinct resolution, so the sum can exceed the series total. |
+| `kura_library_series_source` | gauge | `source` | Series with at least one active file from this source (`WebRip`, `BDRip`, …). Same multi-count caveat as resolution. |
 
 Go runtime and process metrics are exported alongside.

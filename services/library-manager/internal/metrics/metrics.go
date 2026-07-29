@@ -15,6 +15,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
 const namespace = "kura_library"
@@ -136,30 +138,104 @@ func (m *Metrics) JobTerminal(kind, state string, elapsed time.Duration) {
 	m.jobDuration.WithLabelValues(kind).Observe(elapsed.Seconds())
 }
 
-// ObserveIndex registers gauges computed from the live index at scrape
-// time. Called once at wiring after the index exists.
-func (m *Metrics) ObserveIndex(rebuilding func() bool, series func() int) {
+// SeriesFacts is the slice of one index row the scrape-time collector
+// needs. Local shape so this package doesn't couple to the index's
+// storage types.
+type SeriesFacts struct {
+	Status      string
+	Airing      bool
+	Resolutions []string
+	Sources     []string
+}
+
+// ObserveIndex registers gauges computed from the live in-memory index
+// at scrape time — no disk I/O. Called once at wiring after the index
+// exists.
+func (m *Metrics) ObserveIndex(rebuilding func() bool, rows func() []SeriesFacts) {
 	if m == nil {
 		return
 	}
-	auto := promauto.With(m.reg)
-	auto.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Subsystem: "index",
-		Name:      "rebuilding",
-		Help:      "1 while the library index is rebuilding, else 0.",
-	}, func() float64 {
-		if rebuilding() {
-			return 1
+	m.reg.MustRegister(&indexCollector{rebuilding: rebuilding, rows: rows})
+}
+
+type indexCollector struct {
+	rebuilding func() bool
+	rows       func() []SeriesFacts
+}
+
+var (
+	indexRebuildingDesc = prometheus.NewDesc(namespace+"_index_rebuilding",
+		"1 while the library index is rebuilding, else 0.", nil, nil)
+	indexSeriesDesc = prometheus.NewDesc(namespace+"_index_series",
+		"Series currently tracked in the library index.", nil, nil)
+	seriesStatusDesc = prometheus.NewDesc(namespace+"_series_status",
+		"Series by rolled-up list status.", []string{"status"}, nil)
+	seriesAiringDesc = prometheus.NewDesc(namespace+"_series_airing",
+		"Series currently observed as airing (independent of status).", nil, nil)
+	seriesResolutionDesc = prometheus.NewDesc(namespace+"_series_resolution",
+		"Series with at least one active file at this resolution. A series counts once per distinct resolution, so the sum can exceed the series total.",
+		[]string{"resolution"}, nil)
+	seriesSourceDesc = prometheus.NewDesc(namespace+"_series_source",
+		"Series with at least one active file from this source. A series counts once per distinct source, so the sum can exceed the series total.",
+		[]string{"source"}, nil)
+)
+
+func (c *indexCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- indexRebuildingDesc
+	ch <- indexSeriesDesc
+	ch <- seriesStatusDesc
+	ch <- seriesAiringDesc
+	ch <- seriesResolutionDesc
+	ch <- seriesSourceDesc
+}
+
+func (c *indexCollector) Collect(ch chan<- prometheus.Metric) {
+	rebuilding := 0.0
+	if c.rebuilding() {
+		rebuilding = 1
+	}
+	ch <- prometheus.MustNewConstMetric(indexRebuildingDesc, prometheus.GaugeValue, rebuilding)
+
+	rows := c.rows()
+	ch <- prometheus.MustNewConstMetric(indexSeriesDesc, prometheus.GaugeValue, float64(len(rows)))
+
+	// Pre-seed the closed status enum so absent statuses read 0
+	// instead of vanishing between scrapes.
+	statuses := map[string]int{
+		string(api.ListStatusUntracked):  0,
+		string(api.ListStatusComplete):   0,
+		string(api.ListStatusIncomplete): 0,
+		string(api.ListStatusError):      0,
+	}
+	airing := 0
+	resolutions := map[string]int{}
+	sources := map[string]int{}
+	for _, row := range rows {
+		statuses[row.Status]++
+		if row.Airing {
+			airing++
 		}
-		return 0
-	})
-	auto.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: namespace,
-		Subsystem: "index",
-		Name:      "series",
-		Help:      "Series currently tracked in the library index.",
-	}, func() float64 { return float64(series()) })
+		for _, r := range row.Resolutions {
+			if r != "" {
+				resolutions[r]++
+			}
+		}
+		for _, s := range row.Sources {
+			if s != "" {
+				sources[s]++
+			}
+		}
+	}
+	for status, n := range statuses {
+		ch <- prometheus.MustNewConstMetric(seriesStatusDesc, prometheus.GaugeValue, float64(n), status)
+	}
+	ch <- prometheus.MustNewConstMetric(seriesAiringDesc, prometheus.GaugeValue, float64(airing))
+	for resolution, n := range resolutions {
+		ch <- prometheus.MustNewConstMetric(seriesResolutionDesc, prometheus.GaugeValue, float64(n), resolution)
+	}
+	for source, n := range sources {
+		ch <- prometheus.MustNewConstMetric(seriesSourceDesc, prometheus.GaugeValue, float64(n), source)
+	}
 }
 
 // statusWriter captures the response status for the metric labels.

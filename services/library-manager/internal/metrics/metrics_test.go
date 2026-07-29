@@ -60,11 +60,43 @@ func TestJobHooksTrackRunningAndTerminal(t *testing.T) {
 	}
 }
 
+func TestObserveIndexBreakdowns(t *testing.T) {
+	m := New("v")
+	m.ObserveIndex(
+		func() bool { return true },
+		func() []SeriesFacts {
+			return []SeriesFacts{
+				{Status: "complete", Resolutions: []string{"1080p", "4K"}, Sources: []string{"BDRip"}},
+				{Status: "incomplete", Airing: true, Resolutions: []string{"1080p"}, Sources: []string{"WebRip"}},
+			}
+		},
+	)
+
+	body := scrape(t, m)
+	for _, want := range []string{
+		"kura_library_index_rebuilding 1",
+		"kura_library_index_series 2",
+		`kura_library_series_status{status="complete"} 1`,
+		`kura_library_series_status{status="incomplete"} 1`,
+		`kura_library_series_status{status="untracked"} 0`,
+		`kura_library_series_status{status="error"} 0`,
+		"kura_library_series_airing 1",
+		`kura_library_series_resolution{resolution="1080p"} 2`,
+		`kura_library_series_resolution{resolution="4K"} 1`,
+		`kura_library_series_source{source="BDRip"} 1`,
+		`kura_library_series_source{source="WebRip"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape missing %q", want)
+		}
+	}
+}
+
 func TestNilMetricsIsNoOp(t *testing.T) {
 	var m *Metrics
 	m.JobStarted("scan")
 	m.JobTerminal("scan", "succeeded", time.Second)
-	m.ObserveIndex(func() bool { return false }, func() int { return 0 })
+	m.ObserveIndex(func() bool { return false }, func() []SeriesFacts { return nil })
 	h := m.WrapHTTP(http.NotFoundHandler())
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", http.NoBody))
 }
