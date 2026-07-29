@@ -22,6 +22,8 @@ go test -tags=conformance ./...
 | Migrations and the runtime pool land every migrated table, the goose version table, and the `match_status` enum in the configured `database.schema` and nothing in `public` | `TestConfiguredSchemaOwnsMigrationObjects` |
 | DMHY fixtures, parser output, newest-200 bound, empty-floor threshold, and transient/parse failures | `sources/dmhy` conformance suite |
 | Nyaa live fixtures, parser output, newest-window bound, empty-floor threshold, and transient failures | `sources/nyaa` conformance suite |
+| Time-bounded scheduled walk: full >200-post backlog in one run, newest-plausible-stamp stop rule (sticky/epoch/future stamps), per-page emit with progress kept on failure, archive-floor and undatable-page termination | `pkg/crawl` `TestCrawlSince*` (unit) |
+| `crawl` subcommand: ingest-ready JSONL per line, `next_page` cursor on stderr, empty-page exit 0, argument validation, works without a database on a disabled source | `cmd/kura-release-indexer` `TestRunCrawlCommand*` (unit) |
 
 The real-binary smoke test covers startup migrations, `/healthz`, `/api/v1/releases/ingest`,
 `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`, `/api/v1/releases/queue/claim`, `/api/v1/releases/queue/submit`, `/api/v1/releases/queue/stats`

@@ -16,12 +16,12 @@ The release-indexer exposes Prometheus metrics at `/metrics`.
 | `kura_indexer_build_info` | gauge | `version`, `commit` | Build metadata; value is always `1`. |
 | `kura_indexer_http_requests_total` | counter | `method`, `path`, `status` | HTTP requests by routed path. Unknown paths use `path="other"`. |
 | `kura_indexer_http_request_duration_seconds` | histogram | `method`, `path` | HTTP request duration. |
-| `kura_indexer_ingest_batches_total` | counter | `result` | Ingest batches by `ok` or `error`. |
+| `kura_indexer_ingest_batches_total` | counter | `result` | Ingest batches by `ok` or `error`. Scheduled crawls ingest per listing page, so one run emits one batch per page (≤ ~80 posts) rather than one batch per run. |
 | `kura_indexer_ingest_posts_total` | counter | `source`, `result` | Ingested posts by source and outcome. Results include `new`, `updated`, `duplicate`, `conflict`, `skipped`, and `error`. |
-| `kura_indexer_ingest_batch_size` | histogram | none | Posts per ingest batch. |
-| `kura_indexer_source_crawls_total` | counter | `source`, `result` | Scheduled crawls by source and `ok`, `crawl_error`, or `ingest_error`. |
+| `kura_indexer_ingest_batch_size` | histogram | none | Posts per ingest batch (per listing page for scheduled crawls). |
+| `kura_indexer_source_crawls_total` | counter | `source`, `result` | Scheduled crawls by source and `ok`, `crawl_error`, or `ingest_error`. A non-`ok` run may still have ingested pages: progress persists per page. |
 | `kura_indexer_source_crawl_duration_seconds` | histogram | `source` | End-to-end scheduled crawl and ingest duration. |
-| `kura_indexer_source_crawl_posts_total` | counter | `source` | Posts returned by scheduled crawls. |
+| `kura_indexer_source_crawl_posts_total` | counter | `source` | Posts emitted by scheduled crawls (all walked pages). |
 | `kura_indexer_source_last_success_timestamp_seconds` | gauge | `source` | Unix time of the last fully successful scheduled crawl+ingest. The series is absent until a source's first success since boot (and always absent for disabled sources), so pair the `time() - gauge` staleness panel/alert with an `absent()`-aware expression and a `for:` window longer than one crawl interval. |
 | `kura_indexer_queue_items` | gauge | `state` | Current release queue/status counts. States are `claimable`, `leased`, `unmatched`, `matched`, `suppressed`, and `exhausted`. |
 | `kura_indexer_queue_stats_scrape_ok` | gauge | none | `1` when queue stats were readable during scrape, otherwise `0`. |

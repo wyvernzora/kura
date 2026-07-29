@@ -31,14 +31,20 @@ The only runtime secret is required separately:
 | `KURA_RELEASES_DATABASE_URL` | PostgreSQL connection URL |
 
 Source tables are optional. An absent table disables that source. A present table
-defaults `enabled` to true and requires `interval`. Each enabled source runs once
-after the HTTP listener binds and then at its configured interval. Runs for one
-source never overlap; `timeout` cancels the crawl and ingest together.
+defaults `enabled` to true and requires `interval` and `settle_window`. Each
+enabled source runs once after the HTTP listener binds and then at its configured
+interval. Runs for one source never overlap; `timeout` bounds each run, and
+`request_timeout` bounds each page fetch (`timeout` must exceed it — DMHY's
+deep-history pages have been observed above 60s, hence its larger per-source
+defaults of `10m`/`180s`).
 
-Each normal run starts at the newest listing and reads at most 200 posts. There is
-no cursor, bootstrap, or overlap state. Replayed posts are harmless because
-ingestion is idempotent. A gap larger than the recent window is an explicit
-backfill; an external producer can still post batches to `/api/v1/releases/ingest`.
+Each run walks the listing from page 1 and ingests, page by page, everything
+newer than `now − settle_window` — however many pages that is. There is no
+cursor, bootstrap, or overlap state; posts older than the settle window are
+assumed immutable, and replayed posts are harmless because ingestion is
+idempotent. A run that fails mid-walk keeps every page already ingested. A gap
+older than the settle window (extended downtime, deep history) is an explicit
+backfill — see below.
 
 The container includes a safe example file with sources disabled. Deployments
 mount their environment-specific file at `/etc/kura/release-indexer.toml`, normally
@@ -85,6 +91,46 @@ consumer agent            -> gateway MCP list_releases / get_release / get_magne
 ```
 
 `/api/v1/releases/queue/stats.exhausted` is the operator intervention signal for matcher work.
+
+## Backfill
+
+Deep or catch-up backfill is operator-scripted, not automated: the binary's
+`crawl` subcommand fetches **one listing page per invocation** with the same
+config, fetchers, and parsers as the service, and prints ingest-ready JSONL —
+each stdout line is exactly the element `POST /api/v1/releases/ingest` accepts
+in `posts[]`. The resume cursor (`next_page=N`) goes to stderr so stdout stays
+pipeline-pure; an empty page (archive floor / past the end) prints nothing and
+exits 0.
+
+```sh
+kura-release-indexer crawl -config /etc/kura/release-indexer.toml -source nyaa -page 3
+```
+
+A full catch-up is a shell loop — resumable at any page, paced by its own
+`sleep`, with live progress from the ingest response counters:
+
+```sh
+KURA="http://127.0.0.1:8080"
+page=1
+while :; do
+  kura-release-indexer crawl -config cfg.toml -source nyaa -page "$page" > batch.jsonl
+  [ -s batch.jsonl ] || break                                   # archive floor
+  jq -s '{posts:.}' batch.jsonl \
+    | curl -sS -XPOST "$KURA/api/v1/releases/ingest" -d @- | jq -c .batch
+  oldest=$(jq -rs 'map(.publishedAt) | min' batch.jsonl)
+  [ "$oldest" \< "2026-05-01" ] && break                        # your cutoff
+  page=$((page+1)); sleep 2                                     # politeness
+done
+```
+
+Every step is idempotent: re-running a page, overlapping ranges, or restarting
+the loop mid-way is always safe. Run it after any outage longer than the
+settle window ("was the crawler down for more than N? run the catch-up loop"),
+and for one-time deep history imports pick the cutoff accordingly — on DMHY,
+deep pages are slow on the source side, which paces the loop naturally. The
+subcommand needs no database access and works on a configured-but-disabled
+source; politeness is your loop's `sleep` plus the source's `max_rps` cap on
+the fetch itself.
 
 ## Security
 
