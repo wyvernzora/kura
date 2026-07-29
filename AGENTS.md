@@ -53,6 +53,23 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - Hooks install via `lefthook install` (root `lefthook.yml`); run once
   per checkout.
 
+## Documentation policy (enforced by review)
+
+- Process documentation never lands in a final commit. No design/RFC
+  documents, review ledgers, phase plans, decision logs, checkpoint
+  notes, or any other development-process record — polished or not —
+  anywhere in the tree. If a document describes how a change came to be
+  rather than what the system is, it stays out of the commit.
+- Committed documentation is deployment- and operations-focused,
+  written as a description of the system as it exists: each service's
+  canonical architecture reference (`design.md`), configuration and
+  runbooks (`operations.md`), metrics contracts, and spec→test maps.
+- Rationale worth keeping is condensed into those docs as brief
+  current-state notes (e.g. a short rejected-alternative paragraph in a
+  service `design.md`) and into commit messages and PR bodies. Working
+  design docs live in `scratch/` (gitignored) while the work is in
+  flight and are purged before the final commit.
+
 ## Versioning and artifacts
 
 - Repo-wide versioning: one `vX.Y.Z` tag line for the whole monorepo,
