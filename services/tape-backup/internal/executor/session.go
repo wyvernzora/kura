@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wyvernzora/kura/services/tape-backup/internal/planner"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/seriesmeta"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
@@ -36,8 +38,8 @@ var sessionRegistry struct {
 	active bool
 }
 
-// PreparedPlan is one fill plan whose loaded cartridge and recorded pre-state
-// have been validated. DebrisSnapshots is forensic session state only.
+// PreparedPlan is one plan whose loaded cartridge and recorded pre-state have
+// been validated. DebrisSnapshots is forensic session state only.
 type PreparedPlan struct {
 	Drive              Drive
 	Journal            *backupplan.Writer
@@ -49,6 +51,7 @@ type PreparedPlan struct {
 	CatalogSnapshots   map[string]struct{}
 	DebrisSnapshots    map[string]struct{}
 	CatalogObservation tapecatalog.Observed
+	actionOffset       int
 }
 
 // SessionOptions controls the polling loop and per-snapshot commit policy.
@@ -64,9 +67,18 @@ type SessionOptions struct {
 type admittedPlan struct {
 	plan backupplan.Plan
 	pin  volume.ID
+	kind planKind
 }
 
-// RunSession executes ready fill plans synchronously as cartridges are swapped.
+type planKind uint8
+
+const (
+	planKindFill planKind = iota + 1
+	planKindInit
+)
+
+// RunSession executes ready fill and init plans synchronously as cartridges
+// are swapped.
 // Each plan leaves the live set: success completes it and any execution failure
 // discards it after recording the halt.
 func RunSession(
@@ -169,7 +181,8 @@ func runAdmittedPlans(
 		}
 
 		selected := pending[index]
-		prepared, err := prepareFillCartridge(
+		prepared, err := prepareCartridge(
+			ctx,
 			drive,
 			identity,
 			selected,
@@ -215,6 +228,20 @@ func runAdmittedPlans(
 		reason = "plans_failed"
 	}
 	return appendTerminal(journal, reason, plansCompleted)
+}
+
+func prepareCartridge(
+	ctx context.Context,
+	drive Drive,
+	identity LoadedIdentity,
+	admitted admittedPlan,
+	journal *backupplan.Writer,
+	options SessionOptions,
+) (PreparedPlan, error) {
+	if admitted.kind == planKindInit {
+		return prepareInitCartridge(ctx, drive, identity, admitted, journal, options)
+	}
+	return prepareFillCartridge(drive, identity, admitted, journal, options)
 }
 
 func validateRunSession(
@@ -281,8 +308,11 @@ func waitForCandidate(
 					)
 				}
 			}
-		case identity.State == LoadedIdentityNone,
-			identity.State == LoadedIdentityUnidentified:
+		case identity.State == LoadedIdentityUnidentified:
+			if index := matchingInitPlan(plans, identity.MediumSerial); index >= 0 {
+				return index, identity, nil
+			}
+		case identity.State == LoadedIdentityNone:
 		default:
 			return -1, LoadedIdentity{}, fmt.Errorf(
 				"executor: identify loaded cartridge: unknown identity state %q",
@@ -320,7 +350,7 @@ func prepareFillCartridge(
 	}); err != nil {
 		return PreparedPlan{}, err
 	}
-	if err := verifyFillEncryption(drive, journal, plan.PlanID); err != nil {
+	if err := verifyEncryption(drive, journal, plan.PlanID); err != nil {
 		return PreparedPlan{}, err
 	}
 
@@ -364,7 +394,461 @@ func prepareFillCartridge(
 	}, nil
 }
 
-func verifyFillEncryption(
+func prepareInitCartridge(
+	ctx context.Context,
+	drive Drive,
+	identity LoadedIdentity,
+	admitted admittedPlan,
+	journal *backupplan.Writer,
+	options SessionOptions,
+) (PreparedPlan, error) {
+	plan := admitted.plan
+	if err := appendSessionEvent(journal, backupplan.Event{
+		Type:   backupplan.EventPlanStarted,
+		PlanID: plan.PlanID,
+	}); err != nil {
+		return PreparedPlan{}, err
+	}
+	if err := validateInitPreFormat(
+		drive,
+		identity,
+		admitted,
+		journal,
+		options,
+	); err != nil {
+		return PreparedPlan{}, err
+	}
+	if err := formatAndStampInitMedia(
+		ctx,
+		drive,
+		identity,
+		admitted,
+		journal,
+		options,
+	); err != nil {
+		return PreparedPlan{}, err
+	}
+	stamped, entry, err := installInitializedVolume(
+		drive,
+		identity.Cartridge.Root,
+		admitted,
+		options.StateRoot,
+	)
+	if err != nil {
+		return PreparedPlan{}, err
+	}
+	if err := appendSessionEvent(journal, backupplan.Event{
+		Type:     backupplan.EventTapeLoaded,
+		TapeID:   stamped.TapeID,
+		VolumeID: stamped.VolumeID,
+	}); err != nil {
+		return PreparedPlan{}, err
+	}
+
+	return PreparedPlan{
+		Drive:              drive,
+		Journal:            journal,
+		Cartridge:          Cartridge{TapeID: plan.Target.TapeID, Root: identity.Cartridge.Root},
+		Volume:             stamped,
+		Plan:               plan,
+		StateRoot:          options.StateRoot,
+		LibraryRoot:        options.LibraryRoot,
+		CatalogSnapshots:   entry.snapshots,
+		DebrisSnapshots:    make(map[string]struct{}),
+		CatalogObservation: entry.observed,
+		actionOffset:       2,
+	}, nil
+}
+
+func validateInitPreFormat(
+	drive Drive,
+	identity LoadedIdentity,
+	admitted admittedPlan,
+	journal *backupplan.Writer,
+	options SessionOptions,
+) error {
+	plan := admitted.plan
+	if err := validateInitIdentity(identity, admitted, options.StateRoot); err != nil {
+		return err
+	}
+	if identity.MediumSerial != plan.Target.MediumSerial {
+		return fmt.Errorf(
+			"executor: plan %s pre-state mismatch: loaded medium serial %q, want %q",
+			plan.PlanID,
+			identity.MediumSerial,
+			plan.Target.MediumSerial,
+		)
+	}
+	if err := verifyEncryption(drive, journal, plan.PlanID); err != nil {
+		return err
+	}
+	return preflightInitBackups(
+		options.LibraryRoot,
+		plan,
+		options.FreeSpaceMargin,
+	)
+}
+
+func formatAndStampInitMedia(
+	ctx context.Context,
+	drive Drive,
+	identity LoadedIdentity,
+	admitted admittedPlan,
+	journal *backupplan.Writer,
+	options SessionOptions,
+) error {
+	plan := admitted.plan
+	if identity.State == LoadedIdentityIdentified {
+		if err := waitForMountState(
+			ctx,
+			drive,
+			journal,
+			plan.Target.TapeID,
+			false,
+			options.PollInterval,
+			options.IdleTimeout,
+		); err != nil {
+			return err
+		}
+	}
+	if err := drive.Format(plan.Target.TapeID); err != nil {
+		return fmt.Errorf("executor: format tape %s: %w", plan.Target.TapeID, err)
+	}
+	if err := waitForMountState(
+		ctx,
+		drive,
+		journal,
+		plan.Target.TapeID,
+		true,
+		options.PollInterval,
+		options.IdleTimeout,
+	); err != nil {
+		return err
+	}
+	if err := verifyEncryption(drive, journal, plan.PlanID); err != nil {
+		return err
+	}
+	if err := drive.StampIdentity(admitted.pin, plan.Target.TapeID); err != nil {
+		return fmt.Errorf(
+			"executor: stamp tape %s identity: %w",
+			plan.Target.TapeID,
+			err,
+		)
+	}
+	return nil
+}
+
+func installInitializedVolume(
+	drive Drive,
+	cartridgeRoot string,
+	admitted admittedPlan,
+	stateRoot string,
+) (tapevolume.Volume, catalogEntry, error) {
+	plan := admitted.plan
+	stamped, err := tapevolume.Read(cartridgeRoot)
+	if err != nil {
+		return tapevolume.Volume{}, catalogEntry{}, fmt.Errorf(
+			"executor: read stamped tape %s identity: %w",
+			plan.Target.TapeID,
+			err,
+		)
+	}
+	if stamped.VolumeID != admitted.pin || stamped.TapeID != plan.Target.TapeID {
+		return tapevolume.Volume{}, catalogEntry{}, fmt.Errorf(
+			"executor: plan %s stamped identity mismatch: got volume %s on tape %s, want volume %s on tape %s",
+			plan.PlanID,
+			stamped.VolumeID,
+			stamped.TapeID,
+			admitted.pin,
+			plan.Target.TapeID,
+		)
+	}
+	if err := drive.Sync(); err != nil {
+		return tapevolume.Volume{}, catalogEntry{}, fmt.Errorf(
+			"executor: sync stamped tape identity: %w",
+			err,
+		)
+	}
+	observed, header, err := readInitializedVolumeFacts(
+		drive,
+		cartridgeRoot,
+		plan.Target.TapeID,
+	)
+	if err != nil {
+		return tapevolume.Volume{}, catalogEntry{}, err
+	}
+	if err := tapecatalog.InstallVolume(
+		stateRoot,
+		admitted.pin,
+		header,
+		observed,
+	); err != nil {
+		return tapevolume.Volume{}, catalogEntry{}, fmt.Errorf(
+			"executor: install initialized volume %s: %w",
+			admitted.pin,
+			err,
+		)
+	}
+	entry, err := loadCatalogEntry(stateRoot, admitted.pin)
+	if err != nil {
+		return tapevolume.Volume{}, catalogEntry{}, fmt.Errorf(
+			"executor: verify installed volume %s: %w",
+			admitted.pin,
+			err,
+		)
+	}
+	if entry.volume.VolumeID != admitted.pin ||
+		entry.volume.TapeID != plan.Target.TapeID {
+		return tapevolume.Volume{}, catalogEntry{}, fmt.Errorf(
+			"executor: plan %s installed identity mismatch: got volume %s on tape %s, want volume %s on tape %s",
+			plan.PlanID,
+			entry.volume.VolumeID,
+			entry.volume.TapeID,
+			admitted.pin,
+			plan.Target.TapeID,
+		)
+	}
+	return stamped, entry, nil
+}
+
+func readInitializedVolumeFacts(
+	drive Drive,
+	cartridgeRoot string,
+	tapeID tape.ID,
+) (tapecatalog.Observed, []byte, error) {
+	total, free, err := drive.Capacity()
+	if err != nil {
+		return tapecatalog.Observed{}, nil, fmt.Errorf(
+			"executor: observe initialized tape capacity: %w",
+			err,
+		)
+	}
+	header, err := os.ReadFile(tapevolume.VolumeFile(cartridgeRoot))
+	if err != nil {
+		return tapecatalog.Observed{}, nil, fmt.Errorf(
+			"executor: read stamped tape header: %w",
+			err,
+		)
+	}
+	return tapecatalog.Observed{
+		TapeID:        tapeID,
+		ObservedAt:    time.Now().UTC().Truncate(time.Second),
+		CapacityBytes: total,
+		FreeBytes:     free,
+	}, header, nil
+}
+
+func validateInitIdentity(
+	identity LoadedIdentity,
+	admitted admittedPlan,
+	stateRoot string,
+) error {
+	plan := admitted.plan
+	switch identity.State {
+	case LoadedIdentityUnidentified:
+		return nil
+	case LoadedIdentityIdentified:
+		if identity.Volume.TapeID != plan.Target.TapeID {
+			return fmt.Errorf(
+				"executor: plan %s pre-state mismatch: loaded volume %s is on tape %s, want tape %s",
+				plan.PlanID,
+				identity.Volume.VolumeID,
+				identity.Volume.TapeID,
+				plan.Target.TapeID,
+			)
+		}
+	default:
+		return fmt.Errorf(
+			"executor: plan %s pre-state mismatch: loaded identity state is %q, want unidentified or identified healthy-empty media",
+			plan.PlanID,
+			identity.State,
+		)
+	}
+
+	observedVolumeID := identity.Volume.VolumeID
+	active, err := tapecatalog.ListActive(stateRoot)
+	if err != nil {
+		return fmt.Errorf(
+			"executor: plan %s inspect init catalog recognition: %w",
+			plan.PlanID,
+			err,
+		)
+	}
+	recognized := slices.Contains(active, observedVolumeID)
+	reason := "adoption_deferred"
+	if recognized {
+		reason = "divergence_deferred"
+		entry, err := loadCatalogEntry(stateRoot, observedVolumeID)
+		if err != nil {
+			return fmt.Errorf(
+				"executor: plan %s %s: recognized volume %s catalog entry is not complete: %w",
+				plan.PlanID,
+				reason,
+				observedVolumeID,
+				err,
+			)
+		}
+		if entry.volume.VolumeID != observedVolumeID ||
+			entry.volume.TapeID != plan.Target.TapeID {
+			return fmt.Errorf(
+				"executor: plan %s %s: loaded volume %s on tape %s does not match catalog volume %s on tape %s",
+				plan.PlanID,
+				reason,
+				observedVolumeID,
+				plan.Target.TapeID,
+				entry.volume.VolumeID,
+				entry.volume.TapeID,
+			)
+		}
+		if len(entry.snapshots) != 0 {
+			return fmt.Errorf(
+				"executor: plan %s %s: recognized volume %s catalog records %d committed snapshots",
+				plan.PlanID,
+				reason,
+				observedVolumeID,
+				len(entry.snapshots),
+			)
+		}
+	}
+
+	committed, err := inspectInitWitness(identity.Cartridge.Root)
+	if err != nil {
+		return fmt.Errorf(
+			"executor: plan %s %s: volume %s healthy-empty witness: %w",
+			plan.PlanID,
+			reason,
+			observedVolumeID,
+			err,
+		)
+	}
+	if committed != 0 {
+		return fmt.Errorf(
+			"executor: plan %s %s: volume %s has %d committed snapshots",
+			plan.PlanID,
+			reason,
+			observedVolumeID,
+			committed,
+		)
+	}
+	return nil
+}
+
+func inspectInitWitness(root string) (int, error) {
+	snapshotsDir := tapevolume.SnapshotsDir(root)
+	info, err := os.Lstat(snapshotsDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return 0, errors.New("snapshots namespace is absent")
+	}
+	if err != nil {
+		return 0, fmt.Errorf("inspect snapshots namespace: %w", err)
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return 0, errors.New("snapshots namespace is not a real directory")
+	}
+	entries, err := os.ReadDir(snapshotsDir)
+	if err != nil {
+		return 0, fmt.Errorf("enumerate snapshots namespace: %w", err)
+	}
+	committed := 0
+	for _, entry := range entries {
+		marker, err := os.Lstat(filepath.Join(snapshotsDir, entry.Name(), "complete.json"))
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			continue
+		case err != nil:
+			return 0, fmt.Errorf(
+				"inspect snapshot %q completion marker: %w",
+				entry.Name(),
+				err,
+			)
+		case marker.Mode().IsRegular() && marker.Mode()&os.ModeSymlink == 0:
+			committed++
+		}
+	}
+	return committed, nil
+}
+
+func preflightInitBackups(
+	libraryRoot string,
+	plan backupplan.Plan,
+	freeSpaceMargin int64,
+) error {
+	var totalBytes int64
+	for _, action := range plan.Actions[2 : len(plan.Actions)-1] {
+		if reason, detail := preflightBackup(libraryRoot, action); reason != "" {
+			return fmt.Errorf(
+				"executor: init backup action (%q, %d) failed preflight: %s: %s",
+				action.MetadataRef,
+				action.Generation,
+				reason,
+				detail,
+			)
+		}
+		if action.Bytes > math.MaxInt64-totalBytes {
+			return errors.New("executor: init fill set byte total overflows int64")
+		}
+		totalBytes += action.Bytes
+	}
+	nominalCapacity, err := planner.NominalCapacity(plan.Target.TapeID)
+	if err != nil {
+		return fmt.Errorf("executor: inspect init nominal capacity: %w", err)
+	}
+	available := nominalCapacity - freeSpaceMargin
+	if available < 0 || totalBytes > available {
+		return fmt.Errorf(
+			"executor: init fill set needs %d bytes; %d-byte margin, %d bytes nominal capacity",
+			totalBytes,
+			freeSpaceMargin,
+			nominalCapacity,
+		)
+	}
+	return nil
+}
+
+func waitForMountState(
+	ctx context.Context,
+	drive Drive,
+	journal *backupplan.Writer,
+	tapeID tape.ID,
+	wantMounted bool,
+	pollInterval time.Duration,
+	idleTimeout time.Duration,
+) error {
+	if err := appendSessionEvent(journal, backupplan.Event{
+		Type:       backupplan.EventWaitingForTape,
+		Candidates: []tape.ID{tapeID},
+	}); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(idleTimeout)
+	for {
+		_, _, err := drive.Capacity()
+		switch {
+		case wantMounted && err == nil:
+			return nil
+		case !wantMounted && errors.Is(err, ErrNotMounted):
+			return nil
+		case err != nil && !errors.Is(err, ErrNotMounted):
+			return fmt.Errorf("executor: inspect tape mount state: %w", err)
+		}
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return errIdleTimeout
+		}
+		timer := time.NewTimer(min(pollInterval, remaining))
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func verifyEncryption(
 	drive Drive,
 	journal *backupplan.Writer,
 	planID string,
@@ -621,25 +1105,112 @@ func admitPlans(stateRoot string, plans []backupplan.Plan) ([]admittedPlan, erro
 				plan.PlanID,
 			)
 		}
-		pin, err := admitFillPlan(plan)
+		admittedPlan, err := admitPlan(plan)
 		if err != nil {
 			return nil, err
 		}
-		admitted = append(admitted, admittedPlan{plan: plan, pin: pin})
+		admitted = append(admitted, admittedPlan)
 	}
 	return admitted, nil
+}
+
+func admitPlan(plan backupplan.Plan) (admittedPlan, error) {
+	for _, action := range plan.Actions {
+		if action.Type == backupplan.ActionImport ||
+			action.Type == backupplan.ActionVerify {
+			return admittedPlan{}, fmt.Errorf(
+				"executor: plan %s contains deferred action %q",
+				plan.PlanID,
+				action.Type,
+			)
+		}
+	}
+	if planContainsInitAction(plan) {
+		pin, err := admitInitPlan(plan)
+		if err != nil {
+			return admittedPlan{}, err
+		}
+		return admittedPlan{
+			plan: plan,
+			pin:  pin,
+			kind: planKindInit,
+		}, nil
+	}
+
+	pin, err := admitFillPlan(plan)
+	if err != nil {
+		return admittedPlan{}, err
+	}
+	return admittedPlan{
+		plan: plan,
+		pin:  pin,
+		kind: planKindFill,
+	}, nil
+}
+
+func planContainsInitAction(plan backupplan.Plan) bool {
+	for _, action := range plan.Actions {
+		if action.Type == backupplan.ActionReformat ||
+			action.Type == backupplan.ActionAdmit {
+			return true
+		}
+	}
+	return false
+}
+
+func admitInitPlan(plan backupplan.Plan) (volume.ID, error) {
+	if plan.Target.MediumSerial == "" {
+		return "", fmt.Errorf(
+			"executor: plan %s init target medium serial is required",
+			plan.PlanID,
+		)
+	}
+	if len(plan.Actions) < 3 ||
+		plan.Actions[0].Type != backupplan.ActionReformat ||
+		plan.Actions[1].Type != backupplan.ActionAdmit ||
+		plan.Actions[len(plan.Actions)-1].Type != backupplan.ActionAssertInventory {
+		return "", fmt.Errorf(
+			"executor: plan %s reformat/admit actions do not match the init plan shape",
+			plan.PlanID,
+		)
+	}
+
+	expected := make([]string, 0, len(plan.Actions)-3)
+	for _, action := range plan.Actions[2 : len(plan.Actions)-1] {
+		if action.Type != backupplan.ActionBackup {
+			return "", fmt.Errorf(
+				"executor: plan %s reformat/admit actions do not match the init plan shape",
+				plan.PlanID,
+			)
+		}
+		name, err := tapevolume.SnapshotName(action.MetadataRef, action.Generation)
+		if err != nil {
+			return "", fmt.Errorf(
+				"executor: plan %s name init backup target: %w",
+				plan.PlanID,
+				err,
+			)
+		}
+		expected = append(expected, name)
+	}
+	slices.Sort(expected)
+	trailing := slices.Clone(plan.Actions[len(plan.Actions)-1].Snapshots)
+	slices.Sort(trailing)
+	if !slices.Equal(expected, trailing) {
+		return "", fmt.Errorf(
+			"executor: plan %s trailing init inventory %v does not match backups %v",
+			plan.PlanID,
+			trailing,
+			expected,
+		)
+	}
+	return plan.Actions[1].VolumeID, nil
 }
 
 func admitFillPlan(plan backupplan.Plan) (volume.ID, error) {
 	var pin volume.ID
 	for _, action := range plan.Actions {
 		switch action.Type {
-		case backupplan.ActionReformat, backupplan.ActionAdmit:
-			return "", fmt.Errorf(
-				"executor: plan %s contains init action %q; init sessions are not implemented",
-				plan.PlanID,
-				action.Type,
-			)
 		case backupplan.ActionImport, backupplan.ActionVerify:
 			return "", fmt.Errorf(
 				"executor: plan %s contains deferred action %q",
@@ -781,6 +1352,27 @@ func matchingPlan(plans []admittedPlan, tapeID tape.ID) int {
 		if plan.plan.Target.TapeID == tapeID {
 			return index
 		}
+	}
+	return -1
+}
+
+func matchingInitPlan(plans []admittedPlan, mediumSerial string) int {
+	onlyInit := -1
+	for index, plan := range plans {
+		if plan.kind != planKindInit {
+			continue
+		}
+		if onlyInit == -1 {
+			onlyInit = index
+		} else {
+			onlyInit = -2
+		}
+		if plan.plan.Target.MediumSerial == mediumSerial {
+			return index
+		}
+	}
+	if onlyInit >= 0 {
+		return onlyInit
 	}
 	return -1
 }

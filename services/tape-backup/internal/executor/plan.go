@@ -63,7 +63,10 @@ func ExecutePreparedPlan(
 		return err
 	}
 
-	leadingInventoryIndex, err := findLeadingInventory(prepared.Plan)
+	leadingInventoryIndex, err := findLeadingInventory(
+		prepared.Plan,
+		prepared.actionOffset,
+	)
 	if err != nil {
 		return planFailure(err)
 	}
@@ -98,7 +101,8 @@ type fillExecution struct {
 }
 
 func (e *fillExecution) run(ctx context.Context) error {
-	for index, action := range e.prepared.Plan.Actions {
+	for index := e.prepared.actionOffset; index < len(e.prepared.Plan.Actions); index++ {
+		action := e.prepared.Plan.Actions[index]
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -212,11 +216,21 @@ func validatePreparedPlan(
 	if backup == nil {
 		return errors.New("executor: backup action handler is required")
 	}
-	return validateExecutionActionTypes(prepared.Plan)
+	if prepared.actionOffset < 0 ||
+		prepared.actionOffset > len(prepared.Plan.Actions) {
+		return errors.New("executor: prepared plan action offset is invalid")
+	}
+	return validateExecutionActionTypes(
+		prepared.Plan,
+		prepared.Plan.Actions[prepared.actionOffset:],
+	)
 }
 
-func validateExecutionActionTypes(plan backupplan.Plan) error {
-	for _, action := range plan.Actions {
+func validateExecutionActionTypes(
+	plan backupplan.Plan,
+	actions []backupplan.Action,
+) error {
+	for _, action := range actions {
 		switch action.Type {
 		case backupplan.ActionBackup,
 			backupplan.ActionAssertVolume,
@@ -246,7 +260,10 @@ func validateExecutionActionTypes(plan backupplan.Plan) error {
 	return nil
 }
 
-func findLeadingInventory(plan backupplan.Plan) (int, error) {
+func findLeadingInventory(plan backupplan.Plan, actionOffset int) (int, error) {
+	if actionOffset > 0 {
+		return -1, nil
+	}
 	for index, action := range plan.Actions {
 		if action.Type == backupplan.ActionBackup {
 			break
