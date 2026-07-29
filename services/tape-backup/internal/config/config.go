@@ -19,6 +19,7 @@ const (
 	defaultLogLevel              = "info"
 	defaultLTFSRoot              = "/mnt/ltfs"
 	defaultDriveDevice           = "/dev/nst0"
+	defaultTokenPath             = "/var/lib/kura/token"
 	defaultFreeSpaceMargin int64 = 1 << 30
 	defaultIdleTimeout           = 30 * time.Minute
 	defaultFlushCadence          = 1
@@ -32,12 +33,20 @@ type Config struct {
 	Library Library
 	State   State
 	Tape    Tape
+	Auth    Auth
 }
 
 // Server configures the long-lived control plane.
 type Server struct {
 	Addr     string
 	LogLevel string
+}
+
+// Auth configures the bearer-token gate. The token itself remains outside
+// TOML and is supplied through KURA_TOKEN or the token file.
+type Auth struct {
+	Disabled  bool
+	TokenPath string
 }
 
 // Library configures read-only library access and its manager endpoint.
@@ -66,6 +75,9 @@ func Defaults() Config {
 		Server: Server{
 			Addr:     defaultAddr,
 			LogLevel: defaultLogLevel,
+		},
+		Auth: Auth{
+			TokenPath: defaultTokenPath,
 		},
 		Tape: Tape{
 			LTFSRoot:        defaultLTFSRoot,
@@ -112,6 +124,9 @@ func (c Config) Validate() error {
 			validLogLevels,
 		)
 	}
+	if strings.TrimSpace(c.Auth.TokenPath) == "" {
+		return fmt.Errorf("auth.token_path must not be empty")
+	}
 	if err := requiredAbsolutePath("library.root", c.Library.Root); err != nil {
 		return err
 	}
@@ -154,6 +169,7 @@ type fileConfig struct {
 	Library *fileLibrary `toml:"library"`
 	State   *fileState   `toml:"state"`
 	Tape    *fileTape    `toml:"tape"`
+	Auth    *fileAuth    `toml:"auth"`
 }
 
 type fileServer struct {
@@ -168,6 +184,11 @@ type fileLibrary struct {
 
 type fileState struct {
 	Root *string `toml:"root"`
+}
+
+type fileAuth struct {
+	Disabled  *bool   `toml:"disabled"`
+	TokenPath *string `toml:"token_path"`
 }
 
 type fileTape struct {
@@ -190,6 +211,10 @@ func (r fileConfig) resolve() (Config, error) {
 	}
 	if r.State != nil {
 		setString(&cfg.State.Root, r.State.Root)
+	}
+	if r.Auth != nil {
+		setBool(&cfg.Auth.Disabled, r.Auth.Disabled)
+		setString(&cfg.Auth.TokenPath, r.Auth.TokenPath)
 	}
 	if r.Tape != nil {
 		setString(&cfg.Tape.LTFSRoot, r.Tape.LTFSRoot)
@@ -222,6 +247,12 @@ func setInt64(dst *int64, src *int64) {
 }
 
 func setInt(dst *int, src *int) {
+	if src != nil {
+		*dst = *src
+	}
+}
+
+func setBool(dst *bool, src *bool) {
 	if src != nil {
 		*dst = *src
 	}

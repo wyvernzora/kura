@@ -46,6 +46,10 @@ func TestLoadAllFields(t *testing.T) {
 addr = "127.0.0.1:9000"
 log_level = "debug"
 
+[auth]
+disabled = true
+token_path = "/run/secrets/kura-tape-token"
+
 [library]
 root = "/library"
 url = "https://library.example"
@@ -65,6 +69,9 @@ flush_cadence = 4
 	}
 	if cfg.Server.Addr != "127.0.0.1:9000" || cfg.Server.LogLevel != "debug" {
 		t.Fatalf("Server = %+v", cfg.Server)
+	}
+	if !cfg.Auth.Disabled || cfg.Auth.TokenPath != "/run/secrets/kura-tape-token" {
+		t.Fatalf("Auth = %+v", cfg.Auth)
 	}
 	if cfg.Library.Root != "/library" || cfg.Library.URL != "https://library.example" {
 		t.Fatalf("Library = %+v", cfg.Library)
@@ -121,6 +128,11 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 			name: "invalid log level",
 			body: validConfig() + "\n[server]\nlog_level = \"trace\"\n",
 			want: "server.log_level",
+		},
+		{
+			name: "empty auth token path",
+			body: validConfig() + "\n[auth]\ntoken_path = \"\"\n",
+			want: "auth.token_path must not be empty",
 		},
 		{
 			name: "missing library root",
@@ -186,6 +198,19 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 				t.Fatalf("Load() error = %v, want substring %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestValidateRejectsEmptyAuthTokenPathExactly(t *testing.T) {
+	cfg := Defaults()
+	cfg.Auth.TokenPath = ""
+	cfg.Library.Root = "/library"
+	cfg.Library.URL = "http://library"
+	cfg.State.Root = "/state"
+
+	err := cfg.Validate()
+	if err == nil || err.Error() != "auth.token_path must not be empty" {
+		t.Fatalf("Validate() error = %v, want %q", err, "auth.token_path must not be empty")
 	}
 }
 

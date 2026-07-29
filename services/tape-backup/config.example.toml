@@ -8,6 +8,19 @@ addr = ":8080"
 log_level = "info"
 
 
+# This table and all its fields are optional. The bearer token itself never
+# belongs in TOML: KURA_TOKEN overrides the token file.
+[auth]
+
+# Optional. Set true only when an authenticating proxy provides the gate.
+# Default = false.
+disabled = false
+
+# Optional. Existing tokens are read from this path; when absent, a token is
+# generated here with mode 0600. Default = "/var/lib/kura/token".
+token_path = "/var/lib/kura/token"
+
+
 # This table and both fields are required. The library is mounted read-only.
 [library]
 
@@ -29,11 +42,11 @@ root = "/var/lib/kura/backup"
 # This table and all its fields are optional.
 [tape]
 
-# Optional; executor only. Default = "/mnt/ltfs".
+# Optional; tape sessions only. Default = "/mnt/ltfs".
 ltfs_root = "/mnt/ltfs"
 
-# Optional; executor only. Default = "/dev/nst0". An empty value means this pod
-# has no drive.
+# Optional; tape sessions only. Default = "/dev/nst0". An empty value means
+# this pod has no drive.
 drive_device = "/dev/nst0"
 
 # Optional; executor only. Bytes reserved beyond the planned payload.

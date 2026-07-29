@@ -1,0 +1,97 @@
+package rest
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"os"
+
+	"github.com/wyvernzora/kura/services/tape-backup/internal/service"
+)
+
+const maxInternalMessage = 512
+
+type errorEnvelope struct {
+	Kind     string `json:"kind"`
+	Category string `json:"category"`
+	Message  string `json:"message"`
+}
+
+type validationError struct {
+	message string
+}
+
+func (e *validationError) Error() string {
+	return e.message
+}
+
+type internalError struct {
+	message string
+}
+
+func (e *internalError) Error() string {
+	return e.message
+}
+
+func writeError(w http.ResponseWriter, err error) {
+	status, envelope := encodeError(err)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(envelope)
+}
+
+func encodeError(err error) (int, errorEnvelope) {
+	if refusal, ok := errors.AsType[*service.Refusal](err); ok {
+		return http.StatusConflict, errorEnvelope{
+			Kind:     refusal.Code,
+			Category: "invalid_params",
+			Message:  refusal.Message,
+		}
+	}
+	if validation, ok := errors.AsType[*validationError](err); ok {
+		return http.StatusBadRequest, errorEnvelope{
+			Kind:     "invalid_ref",
+			Category: "invalid_params",
+			Message:  validation.Error(),
+		}
+	}
+	if internal, ok := errors.AsType[*internalError](err); ok {
+		return http.StatusInternalServerError, errorEnvelope{
+			Kind:     "internal",
+			Category: "internal_error",
+			Message:  internal.Error(),
+		}
+	}
+	switch {
+	case errors.Is(err, service.ErrSessionActive):
+		return conflictEnvelope("busy", err)
+	case errors.Is(err, service.ErrApprovalRequired):
+		return conflictEnvelope("approval_required", err)
+	case errors.Is(err, service.ErrNoWork):
+		return conflictEnvelope("no_work", err)
+	case errors.Is(err, os.ErrNotExist):
+		return http.StatusNotFound, errorEnvelope{
+			Kind:     "not_found",
+			Category: "invalid_params",
+			Message:  "resource not found",
+		}
+	}
+	message := err.Error()
+	if len(message) > maxInternalMessage {
+		message = message[:maxInternalMessage]
+	}
+	return http.StatusInternalServerError, errorEnvelope{
+		Kind:     "internal",
+		Category: "internal_error",
+		Message:  message,
+	}
+}
+
+func conflictEnvelope(kind string, err error) (int, errorEnvelope) {
+	return http.StatusConflict, errorEnvelope{
+		Kind:     kind,
+		Category: "invalid_params",
+		Message:  err.Error(),
+	}
+}
