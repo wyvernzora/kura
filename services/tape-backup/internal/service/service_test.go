@@ -37,7 +37,11 @@ func TestRunExecutesValidatedBeliefDraftVerbatimAfterPendingChanges(t *testing.T
 	}
 
 	f.addSeries(t, "D", "tvdb:d", 64)
-	assertNoError(t, f.service.Run(t.Context(), PlanRequest{}))
+	run, err := f.service.Run(t.Context(), PlanRequest{})
+	assertNoError(t, err)
+	if run.Classification != "fill" || run.Plan.PlanID != consult.Drafts[0].PlanID {
+		t.Fatalf("Run() = %+v, want exact consulted fill plan", run)
+	}
 
 	catalog, err := planner.ReadCatalogSnapshot(f.stateRoot)
 	assertNoError(t, err)
@@ -58,7 +62,11 @@ func TestRunValidatedBeliefDraftSurvivesDebrisAppearingAfterConsult(t *testing.T
 	f.addSeries(t, "B", "tvdb:b", 64)
 	debrisName := writeMarked(t, f.driveRoot(t), "tvdb:b", 1)
 
-	assertNoError(t, f.service.Run(t.Context(), PlanRequest{}))
+	run, err := f.service.Run(t.Context(), PlanRequest{})
+	assertNoError(t, err)
+	if run.Classification != "fill" || run.Plan.PlanID != consult.Drafts[0].PlanID {
+		t.Fatalf("Run() = %+v, want exact consulted fill plan", run)
+	}
 
 	catalog, err := planner.ReadCatalogSnapshot(f.stateRoot)
 	assertNoError(t, err)
@@ -147,7 +155,8 @@ func TestServiceMutexSerializesPromotionAgainstConsultSweep(t *testing.T) {
 	}
 	runDone := make(chan error, 1)
 	go func() {
-		runDone <- f.service.Run(context.Background(), PlanRequest{})
+		_, runErr := f.service.Run(context.Background(), PlanRequest{})
+		runDone <- runErr
 	}()
 	<-entered
 	consultDone := make(chan error, 1)
@@ -232,7 +241,7 @@ func TestRunMootsMismatchedBeliefDraftBeforeStubRefusal(t *testing.T) {
 	assertNoError(t, err)
 	foreignName := writeMarked(t, f.driveRoot(t), "tvdb:foreign", 1)
 
-	err = f.service.Run(t.Context(), PlanRequest{})
+	_, err = f.service.Run(t.Context(), PlanRequest{})
 	want := "divergence_deferred: tape's contents diverge from the catalog " +
 		"(missing=[] extra=[" + foreignName + "]); divergence handling is deferred"
 	assertError(t, err, want)
@@ -269,7 +278,7 @@ func TestStubOperationsRefuseWithExactCodes(t *testing.T) {
 		t.Run(test.operation, func(t *testing.T) {
 			_, err := f.service.Plan(PlanRequest{Operation: test.operation})
 			assertError(t, err, test.want)
-			err = f.service.Run(t.Context(), PlanRequest{Operation: test.operation})
+			_, err = f.service.Run(t.Context(), PlanRequest{Operation: test.operation})
 			assertError(t, err, test.want)
 		})
 	}
@@ -281,7 +290,8 @@ func TestDecisionTreeRefusesIdentityAdoptionAndDivergence(t *testing.T) {
 		_, err := f.service.Plan(PlanRequest{})
 		want := "identity_unconfirmed: unidentified media requires the declared cartridge label"
 		assertError(t, err, want)
-		assertError(t, f.service.Run(t.Context(), PlanRequest{}), want)
+		_, err = f.service.Run(t.Context(), PlanRequest{})
+		assertError(t, err, want)
 	})
 	t.Run("adoption", func(t *testing.T) {
 		const unknown volume.ID = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
@@ -292,7 +302,8 @@ func TestDecisionTreeRefusesIdentityAdoptionAndDivergence(t *testing.T) {
 		want := "adoption_deferred: cartridge carries volume " + string(unknown) +
 			", not in the catalog, with 1 committed snapshots; adoption/reformat of non-blank tapes is deferred"
 		assertError(t, err, want)
-		assertError(t, f.service.Run(t.Context(), PlanRequest{}), want)
+		_, err = f.service.Run(t.Context(), PlanRequest{})
+		assertError(t, err, want)
 	})
 	t.Run("divergence", func(t *testing.T) {
 		cartridge := identifiedCartridge(t, testTape, testVolume, true)
@@ -304,7 +315,8 @@ func TestDecisionTreeRefusesIdentityAdoptionAndDivergence(t *testing.T) {
 		want := "divergence_deferred: tape's contents diverge from the catalog " +
 			"(missing=[] extra=[" + name + "]); divergence handling is deferred"
 		assertError(t, err, want)
-		assertError(t, f.service.Run(t.Context(), PlanRequest{}), want)
+		_, err = f.service.Run(t.Context(), PlanRequest{})
+		assertError(t, err, want)
 	})
 }
 

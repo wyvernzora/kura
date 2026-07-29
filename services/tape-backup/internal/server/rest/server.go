@@ -26,7 +26,7 @@ type TapeService interface {
 	Status() (service.StatusResult, error)
 	Consult([]planner.Blank) (service.ConsultResult, error)
 	Plan(service.PlanRequest) (service.PlanResult, error)
-	Run(context.Context, service.PlanRequest) error
+	Run(context.Context, service.PlanRequest) (service.RunResult, error)
 	Approve(string) error
 	Discard(string) error
 }

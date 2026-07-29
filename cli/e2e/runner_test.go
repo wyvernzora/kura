@@ -81,7 +81,12 @@ func runScenario(t *testing.T, path string) {
 
 	libRoot := t.TempDir()
 	inboxRoot := t.TempDir()
-	b := startDaemon(t, libRoot, inboxRoot, config.umask)
+	var b *e2eBinary
+	if config.server == "tape" {
+		b = startTapeDaemon(t, libRoot, inboxRoot)
+	} else {
+		b = startDaemon(t, libRoot, inboxRoot, config.umask)
+	}
 	eng := newEngine(t, b)
 
 	workdir := inboxRoot
@@ -101,6 +106,9 @@ func runScenario(t *testing.T, path string) {
 		"KURA_LIB_ROOT="+libRoot,
 		"KURA_SERVER_URL="+b.url,
 	)
+	if b.token != "" {
+		scriptEnv = append(scriptEnv, "KURA_TOKEN="+b.token)
+	}
 	state, err := script.NewState(t.Context(), workdir, scriptEnv)
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +136,7 @@ func runScenario(t *testing.T, path string) {
 
 type scenarioConfig struct {
 	umask    string
+	server   string
 	unixOnly bool
 }
 
@@ -145,13 +154,28 @@ func parseScenarioConfig(scriptBody string) (scenarioConfig, error) {
 		}
 		entry := strings.TrimSpace(strings.TrimPrefix(line, configPrefix))
 		key, value, ok := strings.Cut(entry, "=")
-		if !ok || strings.TrimSpace(key) != "server.umask" || strings.TrimSpace(value) == "" {
+		if !ok || strings.TrimSpace(value) == "" {
 			return scenarioConfig{}, fmt.Errorf("invalid kura_e2e_config directive %q", line)
 		}
-		if config.umask != "" {
-			return scenarioConfig{}, fmt.Errorf("duplicate server.umask directive")
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		switch key {
+		case "server.umask":
+			if config.umask != "" {
+				return scenarioConfig{}, fmt.Errorf("duplicate server.umask directive")
+			}
+			config.umask = value
+		case "server":
+			if config.server != "" {
+				return scenarioConfig{}, fmt.Errorf("duplicate server directive")
+			}
+			if value != "tape" {
+				return scenarioConfig{}, fmt.Errorf("unsupported scenario server %q", value)
+			}
+			config.server = value
+		default:
+			return scenarioConfig{}, fmt.Errorf("invalid kura_e2e_config directive %q", line)
 		}
-		config.umask = strings.TrimSpace(value)
 	}
 	if err := scanner.Err(); err != nil {
 		return scenarioConfig{}, err

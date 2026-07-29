@@ -15,13 +15,14 @@ import (
 	"github.com/wyvernzora/kura/services/tape-backup/internal/server/auth"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/service"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
+	tapeapi "github.com/wyvernzora/kura/services/tape-backup/pkg/api"
 )
 
 type fakeTapeService struct {
 	statusFunc  func() (service.StatusResult, error)
 	consultFunc func([]planner.Blank) (service.ConsultResult, error)
 	planFunc    func(service.PlanRequest) (service.PlanResult, error)
-	runFunc     func(context.Context, service.PlanRequest) error
+	runFunc     func(context.Context, service.PlanRequest) (service.RunResult, error)
 	approveFunc func(string) error
 	discardFunc func(string) error
 }
@@ -47,9 +48,12 @@ func (f *fakeTapeService) Plan(request service.PlanRequest) (service.PlanResult,
 	return f.planFunc(request)
 }
 
-func (f *fakeTapeService) Run(ctx context.Context, request service.PlanRequest) error {
+func (f *fakeTapeService) Run(
+	ctx context.Context,
+	request service.PlanRequest,
+) (service.RunResult, error) {
 	if f.runFunc == nil {
-		return nil
+		return service.RunResult{}, nil
 	}
 	return f.runFunc(ctx, request)
 }
@@ -170,15 +174,25 @@ func TestHandlersMapSixVerbs(t *testing.T) {
 
 	t.Run("run", func(t *testing.T) {
 		wantRequest := service.PlanRequest{TapeID: "ABC123L6"}
+		wantResult := service.RunResult{
+			Classification: "fill",
+			Plan: backupplan.Plan{
+				PlanID: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+				Target: backupplan.Target{TapeID: "ABC123L6"},
+			},
+		}
 		fake := &fakeTapeService{
-			runFunc: func(ctx context.Context, request service.PlanRequest) error {
+			runFunc: func(
+				ctx context.Context,
+				request service.PlanRequest,
+			) (service.RunResult, error) {
 				if ctx == nil {
 					t.Fatal("Run() context is nil")
 				}
 				if request != wantRequest {
 					t.Fatalf("Run() request = %+v, want %+v", request, wantRequest)
 				}
-				return nil
+				return wantResult, nil
 			},
 		}
 		response := serveRequest(
@@ -188,8 +202,16 @@ func TestHandlersMapSixVerbs(t *testing.T) {
 			"/api/tape/run",
 			[]byte(`{"tapeID":"ABC123L6"}`),
 		)
-		if response.Code != http.StatusNoContent {
-			t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+		if response.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+		}
+		var got tapeapi.RunResult
+		if err := json.Unmarshal(response.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if got.Classification != wantResult.Classification ||
+			got.Plan.PlanID != wantResult.Plan.PlanID {
+			t.Fatalf("response = %+v, want classification and plan ID from %+v", got, wantResult)
 		}
 	})
 
@@ -336,7 +358,12 @@ func TestStatusHandlerIsReadOnly(t *testing.T) {
 		planFunc: func(service.PlanRequest) (service.PlanResult, error) {
 			return service.PlanResult{}, unexpected
 		},
-		runFunc:     func(context.Context, service.PlanRequest) error { return unexpected },
+		runFunc: func(
+			context.Context,
+			service.PlanRequest,
+		) (service.RunResult, error) {
+			return service.RunResult{}, unexpected
+		},
 		approveFunc: func(string) error { return unexpected },
 		discardFunc: func(string) error { return unexpected },
 	}
@@ -353,11 +380,14 @@ func TestStatusHandlerIsReadOnly(t *testing.T) {
 
 func TestRunHandlerPropagatesRequestCancellation(t *testing.T) {
 	fake := &fakeTapeService{
-		runFunc: func(ctx context.Context, _ service.PlanRequest) error {
+		runFunc: func(
+			ctx context.Context,
+			_ service.PlanRequest,
+		) (service.RunResult, error) {
 			if !errors.Is(ctx.Err(), context.Canceled) {
 				t.Fatalf("Run() context error = %v, want context.Canceled", ctx.Err())
 			}
-			return context.Canceled
+			return service.RunResult{}, context.Canceled
 		},
 	}
 	server, err := NewServer(Deps{

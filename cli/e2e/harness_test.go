@@ -36,6 +36,24 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 	t.Helper()
 	cmds := script.DefaultCmds()
 
+	cmds["kura_tape"] = script.Command(
+		script.CmdUsage{Summary: "invoke a kura tape verb", Args: "<verb> [args...]"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) == 0 {
+				return nil, fmt.Errorf("kura_tape: expected a tape verb")
+			}
+			expanded := make([]string, len(args)+1)
+			expanded[0] = "tape"
+			for i, arg := range args {
+				expanded[i+1] = s.ExpandEnv(arg, false)
+			}
+			out, errOut, runErr := b.run(s.Context(), expanded...)
+			return func(*script.State) (string, string, error) {
+				return out, errOut, runErr
+			}, nil
+		},
+	)
+
 	// ── kura_add ──────────────────────────────────────────────────────────
 	cmds["kura_add"] = script.Command(
 		script.CmdUsage{Summary: "add a series by metadata ref", Args: "<metadata_ref>"},

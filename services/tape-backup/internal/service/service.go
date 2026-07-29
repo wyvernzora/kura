@@ -60,6 +60,12 @@ type PlanResult struct {
 	Debris         []string        `json:"debris"`
 }
 
+// RunResult identifies the exact plan selected and executed by Run.
+type RunResult struct {
+	Classification string          `json:"classification"`
+	Plan           backupplan.Plan `json:"plan"`
+}
+
 // ConsultResult is the persisted R19 report and R20 draft roster.
 type ConsultResult struct {
 	SchemaVersion int               `json:"schemaVersion"`
@@ -294,24 +300,24 @@ func (s *Service) Discard(planID string) error {
 
 // Run validates or freshly drafts, promotes, and registers under one critical
 // section. The multi-hour executor call runs after releasing the mutex.
-func (s *Service) Run(ctx context.Context, request PlanRequest) error {
+func (s *Service) Run(ctx context.Context, request PlanRequest) (RunResult, error) {
 	if err := refuseStubOperation(request.Operation); err != nil {
-		return err
+		return RunResult{}, err
 	}
 	s.mu.Lock()
 	if len(s.live) > 0 {
 		s.mu.Unlock()
-		return ErrSessionActive
+		return RunResult{}, ErrSessionActive
 	}
 	inspection, err := s.inspectLoaded(request.TapeID)
 	if err != nil {
 		s.mu.Unlock()
-		return err
+		return RunResult{}, err
 	}
 	plan, err := s.selectRunPlanLocked(inspection)
 	if err != nil {
 		s.mu.Unlock()
-		return err
+		return RunResult{}, err
 	}
 	if s.beforePromote != nil {
 		s.beforePromote()
@@ -319,7 +325,7 @@ func (s *Service) Run(ctx context.Context, request PlanRequest) error {
 	if _, err := backupplan.ReadReady(s.deps.StateRoot, plan.PlanID); err != nil {
 		if err := backupplan.Approve(s.deps.StateRoot, plan.PlanID); err != nil {
 			s.mu.Unlock()
-			return err
+			return RunResult{}, err
 		}
 	}
 	sessionID := s.deps.NewID()
@@ -332,7 +338,7 @@ func (s *Service) Run(ctx context.Context, request PlanRequest) error {
 	if err != nil {
 		discardErr := backupplan.Discard(s.deps.StateRoot, plan.PlanID)
 		s.mu.Unlock()
-		return errors.Join(
+		return RunResult{}, errors.Join(
 			fmt.Errorf("tape service: create session: %w", err),
 			discardErr,
 		)
@@ -370,7 +376,14 @@ func (s *Service) Run(ctx context.Context, request PlanRequest) error {
 			runErr = errors.Join(runErr, backupplan.Discard(s.deps.StateRoot, plan.PlanID))
 		}
 	}
-	return runErr
+	if runErr != nil {
+		return RunResult{}, runErr
+	}
+	classification := "fill"
+	if isInitPlan(plan) {
+		classification = "init"
+	}
+	return RunResult{Classification: classification, Plan: plan}, nil
 }
 
 type inspection struct {

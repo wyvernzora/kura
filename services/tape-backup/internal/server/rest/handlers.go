@@ -65,11 +65,12 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if err := s.deps.Service.Run(r.Context(), request); err != nil {
+	result, err := s.deps.Service.Run(r.Context(), request)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleApprove(w http.ResponseWriter, r *http.Request) {

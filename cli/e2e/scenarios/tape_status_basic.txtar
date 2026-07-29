@@ -1,0 +1,10 @@
+# tape_status_basic: status renders the one-shot drive state and the persisted
+# draft roster without mutating either.
+# kura_e2e_config server=tape
+
+kura_tape status
+stdout 'Drive: idle — ready'
+stdout 'Live sessions: none'
+stdout 'Roster:'
+stdout 'ABC123L6: 01BX5ZZKBKACTAV9WEVGEMMVRZ — tvdb:alpha, tvdb:beta'
+stdout 'Init drafts awaiting approval: none'
