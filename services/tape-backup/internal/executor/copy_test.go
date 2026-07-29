@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -146,50 +147,26 @@ func TestCopyRejectsNonNFCEntryBeforeOpeningDestination(t *testing.T) {
 	fixture.assertSnapshotAbsent(t)
 }
 
-func TestCopyDurabilityBarrierRejectsEachFailure(t *testing.T) {
-	tests := []struct {
-		name string
-		open func(string) (*wrappedDestination, error)
-		want string
-	}{
-		{
-			name: "sync",
-			open: func(path string) (*wrappedDestination, error) {
-				destination, err := openWrappedDestination(path)
-				if destination != nil && strings.HasSuffix(path, "episode.mkv") {
-					destination.syncErr = errors.New("injected destination sync failure")
-				}
-				return destination, err
-			},
-			want: "injected destination sync failure",
-		},
-		{
-			name: "close",
-			open: func(path string) (*wrappedDestination, error) {
-				destination, err := openWrappedDestination(path)
-				if destination != nil && strings.HasSuffix(path, "episode.mkv") {
-					destination.closeErr = errors.New("injected destination close failure")
-				}
-				return destination, err
-			},
-			want: "injected destination close failure",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			fixture := newCopyFixture(t, nil)
-			handler := fixture.handler(t, func(path string) (executor.Destination, error) {
-				return test.open(path)
-			})
+func TestCopyDurabilityBarrierRejectsCloseFailure(t *testing.T) {
+	fixture := newCopyFixture(t, nil)
+	handler := fixture.handler(t, func(path string) (executor.Destination, error) {
+		destination, err := openWrappedDestination(path)
+		if destination != nil && strings.HasSuffix(path, "episode.mkv") {
+			destination.closeErr = errors.New("injected destination close failure")
+		}
+		return destination, err
+	})
 
-			err := fixture.execute(t, handler)
-			if !errors.Is(err, executor.ErrPlanFailed) {
-				t.Fatalf("ExecutePreparedPlan error = %v, want ErrPlanFailed", err)
-			}
-			assertItemFailureDetail(t, fixture.events(t), test.want)
-			fixture.assertSnapshotAbsent(t)
-		})
+	err := fixture.execute(t, handler)
+	if !errors.Is(err, executor.ErrPlanFailed) {
+		t.Fatalf("ExecutePreparedPlan error = %v, want ErrPlanFailed", err)
 	}
+	assertItemFailureDetail(
+		t,
+		fixture.events(t),
+		"executor: durability barrier: injected destination close failure",
+	)
+	fixture.assertSnapshotAbsent(t)
 }
 
 func TestCopyDurabilityBarrierRejectsByteCountMismatch(t *testing.T) {
@@ -224,7 +201,15 @@ func TestCopyDurabilityBarrierRejectsByteCountMismatch(t *testing.T) {
 	if !errors.Is(err, executor.ErrPlanFailed) {
 		t.Fatalf("ExecutePreparedPlan error = %v, want ErrPlanFailed", err)
 	}
-	assertItemFailureDetail(t, fixture.events(t), "want source size")
+	assertItemFailureDetail(
+		t,
+		fixture.events(t),
+		fmt.Sprintf(
+			"executor: durability barrier: wrote %d bytes, want source size %d",
+			len(sourceBytes)/2,
+			len(sourceBytes),
+		),
+	)
 	fixture.assertSnapshotAbsent(t)
 }
 
@@ -541,7 +526,6 @@ func (f *copyFixture) events(t *testing.T) []backupplan.Event {
 type wrappedDestination struct {
 	file        *os.File
 	write       func([]byte) (int, error)
-	syncErr     error
 	closeErr    error
 	beforeClose func() error
 }
@@ -559,13 +543,6 @@ func (d *wrappedDestination) Write(data []byte) (int, error) {
 		return d.write(data)
 	}
 	return d.file.Write(data)
-}
-
-func (d *wrappedDestination) Sync() error {
-	if d.syncErr != nil {
-		return d.syncErr
-	}
-	return d.file.Sync()
 }
 
 func (d *wrappedDestination) Close() error {
@@ -611,7 +588,7 @@ func assertItemFailureDetail(
 ) {
 	t.Helper()
 	assertEvent(t, events, backupplan.EventItemFailed, func(event backupplan.Event) bool {
-		return strings.Contains(event.Detail, want)
+		return event.Detail == want
 	})
 }
 

@@ -23,10 +23,9 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// Destination is the write, sync, and close contract for one copied file.
+// Destination is the write and close contract for one copied file.
 type Destination interface {
 	io.Writer
-	Sync() error
 	Close() error
 }
 
@@ -544,7 +543,11 @@ func copyFile(
 		io.TeeReader(&contextReader{ctx: ctx, reader: source}, hasher),
 	)
 
-	syncErr := target.Sync()
+	// Per-file fsync is deliberately omitted. Durability is carried by the
+	// per-snapshot Drive.Sync boundary flush before the catalog append (P3).
+	// On real LTFS, flushing every episode risks a drive back-hitch with no
+	// gain: a crash before the covering flush loses the whole snapshot either
+	// way, and the next plan re-copies it.
 	closeErr := target.Close()
 	var countErr error
 	if written != file.size {
@@ -554,7 +557,7 @@ func copyFile(
 			file.size,
 		)
 	}
-	if barrierErr := errors.Join(copyErr, syncErr, closeErr, countErr); barrierErr != nil {
+	if barrierErr := errors.Join(copyErr, closeErr, countErr); barrierErr != nil {
 		if errors.Is(barrierErr, context.Canceled) {
 			return "", written, context.Canceled
 		}
