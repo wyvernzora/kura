@@ -34,3 +34,7 @@ startup, an in-process scheduled Nyaa crawl, direct ingest, and bounded shutdown
 The Docker e2e runs the consolidated release-indexer against fake DMHY and PostgreSQL,
 then exercises the full claim, submit, and query workflow over those scheduled
 releases.
+The CLI crawl e2e builds the real `kura` and `kura-release-indexer` binaries, runs
+them against stub DMHY and PostgreSQL, and covers bounded ingestion, idempotent
+replay, client-driven cursor looping to a lookback boundary, and failure/resume
+without gaps.
