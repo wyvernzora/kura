@@ -22,6 +22,9 @@ type Config struct {
 	Parse             PageParser
 	Threshold         int
 	ParseErrorContext func(page int) string
+	// Now is the injectable clock the lookback cutoff reads; nil means
+	// time.Now.
+	Now func() time.Time
 }
 
 // Crawler walks a source from its newest page until it fills the requested
@@ -32,16 +35,22 @@ type Crawler struct {
 	parse             PageParser
 	threshold         int
 	parseErrorContext func(page int) string
+	now               func() time.Time
 }
 
 // NewCrawler constructs a crawler over a page fetcher and parser.
 func NewCrawler(cfg Config) *Crawler {
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
 	return &Crawler{
 		source:            cfg.Source,
 		fetch:             cfg.Fetch,
 		parse:             cfg.Parse,
 		threshold:         cfg.Threshold,
 		parseErrorContext: cfg.ParseErrorContext,
+		now:               now,
 	}
 }
 

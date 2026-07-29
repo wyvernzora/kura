@@ -11,7 +11,7 @@ KURA_RELEASES_DATABASE_URL=postgres://… \
   ./bin/kura-release-indexer --config ./config.example.toml
 ```
 
-One process serves `/api/v1/releases/ingest`, `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`,
+One process serves `/api/v1/releases/ingest`, `/api/v1/sources/{source}/crawl`, `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`,
 `/api/v1/releases/queue/claim`, `/api/v1/releases/queue/stats`, `/api/v1/releases/queue/submit`, and `/healthz` on
 `server.addr`, and runs every enabled source crawler. `/metrics` is served on a
 second listener, `server.metrics_addr`, and is the only thing on it.
@@ -30,13 +30,15 @@ The only runtime secret is required separately:
 | --- | --- |
 | `KURA_RELEASES_DATABASE_URL` | PostgreSQL connection URL |
 
-Source tables are optional. An absent table disables that source. A present table
-defaults `enabled` to true and requires `interval` and `settle_window`. Each
-enabled source runs once after the HTTP listener binds and then at its configured
-interval. Runs for one source never overlap; `timeout` bounds each run, and
-`request_timeout` bounds each page fetch (`timeout` must exceed it — DMHY's
-deep-history pages have been observed above 60s, hence its larger per-source
-defaults of `10m`/`180s`).
+Source tables are optional. An absent table disables that source's scheduled
+loop; its on-demand crawl endpoint remains available with defaults. A present
+table defaults `enabled` to true and requires `interval` and `settle_window`.
+Each enabled source runs once after the HTTP listener binds and then at its
+configured interval. Runs for one source never overlap; `timeout` bounds each
+run, and `request_timeout` bounds each page fetch (`timeout` must exceed it —
+DMHY's deep-history pages have been observed above 60s, hence its larger
+per-source defaults of `10m`/`180s`). The URL, request timeout, rate limit, and
+cache settings also govern on-demand crawls when `enabled = false`.
 
 Each run walks the listing from page 1 and ingests, page by page, everything
 newer than `now − settle_window` — however many pages that is. There is no
@@ -94,86 +96,62 @@ consumer agent            -> gateway MCP list_releases / get_release / get_magne
 
 ## Backfill
 
-Deep or catch-up backfill is operator-scripted, not automated: the binary's
-`crawl` subcommand fetches **one listing page per invocation** with the same
-config, fetchers, and parsers as the service, and prints ingest-ready JSONL —
-each stdout line is exactly the element `POST /api/v1/releases/ingest` accepts
-in `posts[]`. The resume cursor (`next_page=N`) goes to stderr so stdout stays
-pipeline-pure; an empty page prints nothing and exits 0, and the loop below
-requires two consecutive empty pages before confirming the archive floor.
+Deep or catch-up backfill restores the standalone crawlers' stateless
+count-and-cursor contract, but performs ingestion inside the indexer:
+
+```json
+POST /api/v1/sources/dmhy/crawl
+{"pageSize":100,"cursor":"","lookback":"260w"}
+```
+
+The service walks listing pages until it consumes exactly `pageSize` in-window
+posts (default and maximum 200), ingests them, and returns `nextCursor`,
+`hasMore`, `stopReason`, timestamp bounds, ingest counters, and queue counts.
+The cursor encodes the listing page and row offset but is opaque to clients.
+When a 100-post request consumes page 1's 80 rows and page 2's first 20, the
+next cursor resumes page 2 at offset 20. The page cache normally reuses the
+same page-2 snapshot for the next request.
+
+The CLI exposes both one-chunk and loop forms:
 
 ```sh
-kura-release-indexer crawl -config /etc/kura/release-indexer.toml -source nyaa -page 3
+# One bounded chunk; print the cursor for manual continuation.
+KURA_SERVER_URL=https://kura.example.test kura crawl dmhy --count 100
+
+# Continue the next bounded chunk.
+kura crawl dmhy --count 100 --cursor eyJzb3VyY2UiOiJkbWh5Iiw…
+
+# Client-side loop. Each HTTP request remains one bounded chunk; the CLI
+# threads cursors until the lookback boundary or archive floor.
+kura crawl dmhy --count 200 --lookback 260w --loop
 ```
 
-A full catch-up is a shell loop — resumable at any page, paced by its own
-`sleep`, with live progress from the ingest response counters:
+`--json` prints the raw terminal object for one chunk; with `--loop` it emits
+one JSON object per chunk (JSONL). A loop failure exits non-zero and prints the
+cursor to resume. Pages already ingested remain committed, and retrying the
+same cursor is safe because ingestion is idempotent.
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+The server resolves a source's consecutive-empty threshold inside a request,
+so a cursor is never parked in an unresolved empty run. `hasMore=false` and an
+empty cursor mean the lookback boundary or archive floor was positively
+observed; `stopReason` says which. A count budget that lands exactly at a page
+boundary returns `hasMore=true` because the next page was not fetched; the next
+chunk may immediately confirm the floor.
 
-KURA="http://127.0.0.1:8080"
-CUTOFF="2026-05-01"                                             # your cutoff
-page=1
-empty_pages=0
-while :; do
-  # Empty stdout means the archive floor ONLY when the crawl succeeded; a
-  # failed fetch/parse also writes nothing, so branch on exit status first.
-  if ! kura-release-indexer crawl -config cfg.toml -source nyaa -page "$page" > batch.jsonl; then
-    echo "crawl failed on page $page; fix the cause, then resume at page=$page" >&2
-    exit 1
-  fi
-  if [ ! -s batch.jsonl ]; then
-    # The in-process walk requires TWO consecutive empty pages before calling
-    # the archive floor; a single empty page can be a listing artifact.
-    empty_pages=$((empty_pages+1))
-    if (( empty_pages >= 2 )); then
-      echo "archive floor confirmed by empty pages $((page-1)) and $page" >&2
-      break
-    fi
-    echo "empty page at $page — fetching page $((page+1)) to confirm" >&2
-    page=$((page+1)); sleep 2
-    continue
-  fi
-  empty_pages=0
-  # --fail-with-body + pipefail: an ingest error envelope must stop the loop
-  # rather than silently advancing past an unpersisted page.
-  if ! jq -s '{posts:.}' batch.jsonl \
-      | curl -sS --fail-with-body -XPOST "$KURA/api/v1/releases/ingest" -d @- \
-      | jq -c .batch; then
-    echo "ingest failed for page $page; resume at page=$page" >&2
-    exit 1
-  fi
-  # Cutoff on the batch MAXIMUM: stop only when even the newest post on the
-  # page is past the cutoff. A minimum would let one pinned/epoch-dated row
-  # end a deep backfill after page 1.
-  newest=$(jq -rs 'map(.publishedAt) | max' batch.jsonl)
-  if [[ "$newest" < "$CUTOFF" ]]; then break; fi
-  page=$((page+1)); sleep 2                                     # politeness
-done
-```
-
-The exit-status branches are load-bearing: this loop is the only backfill
-mechanism, and a 503, a request timeout, or a markup change all produce the
-same empty stdout as a genuine archive floor. Without them a truncated
-backfill reports itself as a clean completion.
-
-Every step is idempotent: re-running a page, overlapping ranges, or restarting
-the loop mid-way is always safe. Run it after any outage longer than the
-settle window ("was the crawler down for more than N? run the catch-up loop"),
-and for one-time deep history imports pick the cutoff accordingly — on DMHY,
-deep pages are slow on the source side, which paces the loop naturally. The
-subcommand needs no database access and works on a configured-but-disabled
-source. Politeness is your loop's `sleep` — the subcommand makes exactly one
-upstream request per invocation, so `max_rps` never has a second request to
-delay; do not drop the sleep or fan invocations out in parallel.
+New posts can shift listing rows while a long backfill is running. Within
+`cache_ttl`, an adjacent mid-page continuation uses the same snapshot. After
+expiry, boundary posts may replay as pages drift; duplicate ingestion is
+expected and harmless. The scheduled settle-window crawl heals recent
+deletion-driven movement. Do not run parallel cursor chains for one source:
+the service's shared `max_rps` limiter is the pacing backstop, but parallel
+walks add no useful coverage.
 
 ## Security
 
 The service has no application-level auth. Restrict write surfaces by
-infrastructure. The pod needs egress to PostgreSQL, DNS, and every enabled source
-URL. Consumer agents reach this service only through the gateway.
+infrastructure. The pod needs egress to PostgreSQL and DNS. Permit each source
+URL that operators may target through either its scheduled loop or on-demand
+crawl endpoint. Consumer agents reach this service only through the gateway.
 
 This repo does not ship Kubernetes manifests. Platform policy and the mounted
 ConfigMap/Secret belong to the deployment repository.

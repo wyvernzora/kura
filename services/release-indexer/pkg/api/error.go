@@ -35,5 +35,9 @@ const (
 	KindStaleLease         = "stale_lease"
 	KindBackendUnavailable = "backend_unavailable"
 	KindServerNotReady     = "server_not_ready"
-	KindInternal           = "internal"
+	// KindUpstreamError marks a server-side crawl whose upstream page fetch
+	// or parse failed (HTTP 502): the request was fine, the source was not.
+	// Retryable by the caller.
+	KindUpstreamError = "upstream_error"
+	KindInternal      = "internal"
 )

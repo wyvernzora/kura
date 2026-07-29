@@ -26,7 +26,7 @@ const (
 	defaultMaxRPS           = 0.5
 	defaultDMHYURL          = "https://share.dmhy.org"
 	defaultDMHYCategory     = "2"
-	defaultDMHYCacheTTL     = 10 * time.Minute
+	defaultCacheTTL         = 5 * time.Minute
 	defaultNyaaURL          = "https://nyaa.si"
 	defaultNyaaCategory     = "1_4"
 	defaultNyaaFilter       = "0"
@@ -93,6 +93,7 @@ type SourceNyaa struct {
 	Category       string
 	Filter         string
 	MaxRPS         float64
+	CacheTTL       time.Duration
 }
 
 // Defaults returns the non-secret defaults with all sources disabled.
@@ -111,7 +112,7 @@ func Defaults(databaseURL string) Config {
 				URL:            defaultDMHYURL,
 				Category:       defaultDMHYCategory,
 				MaxRPS:         defaultMaxRPS,
-				CacheTTL:       defaultDMHYCacheTTL,
+				CacheTTL:       defaultCacheTTL,
 			},
 			Nyaa: SourceNyaa{
 				Timeout:        defaultNyaaTimeout,
@@ -120,6 +121,7 @@ func Defaults(databaseURL string) Config {
 				Category:       defaultNyaaCategory,
 				Filter:         defaultNyaaFilter,
 				MaxRPS:         defaultMaxRPS,
+				CacheTTL:       defaultCacheTTL,
 			},
 		},
 	}
@@ -137,32 +139,6 @@ func Load(path, databaseURL string) (Config, error) {
 		return Config{}, fmt.Errorf("config: %w", err)
 	}
 	return cfg, nil
-}
-
-// LoadCrawlTool loads source definitions for the offline `crawl` subcommand,
-// which fetches listing pages but never touches the database or listeners.
-// It validates the selected source's page-mode fields even when disabled,
-// without requiring scheduler-only interval or settle-window fields.
-func LoadCrawlTool(path, source string) (Config, error) {
-	cfg, err := decode(path, "", false)
-	if err != nil {
-		return Config{}, err
-	}
-	if err := cfg.validateCrawlSource(source); err != nil {
-		return Config{}, fmt.Errorf("config: %w", err)
-	}
-	return cfg, nil
-}
-
-func (c Config) validateCrawlSource(source string) error {
-	switch source {
-	case "dmhy":
-		return validateCrawlDMHY(c.Sources.DMHY)
-	case "nyaa":
-		return validateCrawlNyaa(c.Sources.Nyaa)
-	default:
-		return fmt.Errorf("crawl source %q is invalid", source)
-	}
 }
 
 func decode(path, databaseURL string, requireSchedule bool) (Config, error) {
@@ -246,18 +222,7 @@ func addrsCollide(a, b string) bool {
 }
 
 func validateDMHY(c SourceDMHY) error {
-	if !c.Enabled {
-		return nil
-	}
-	if err := validateSource(sourceTimings{
-		name:           "sources.dmhy",
-		interval:       c.Interval,
-		timeout:        c.Timeout,
-		settleWindow:   c.SettleWindow,
-		requestTimeout: c.RequestTimeout,
-		url:            c.URL,
-		maxRPS:         c.MaxRPS,
-	}); err != nil {
+	if err := validateCrawlFields("sources.dmhy", c.RequestTimeout, c.URL, c.MaxRPS); err != nil {
 		return err
 	}
 	if err := validateDMHYCategory(c.Category); err != nil {
@@ -266,14 +231,16 @@ func validateDMHY(c SourceDMHY) error {
 	if c.CacheTTL < 0 {
 		return fmt.Errorf("sources.dmhy.cache_ttl must be >= 0")
 	}
-	return nil
-}
-
-func validateCrawlDMHY(c SourceDMHY) error {
-	if err := validateCrawlFields("sources.dmhy", c.RequestTimeout, c.URL, c.MaxRPS); err != nil {
-		return err
+	if !c.Enabled {
+		return nil
 	}
-	return validateDMHYCategory(c.Category)
+	return validateSourceSchedule(sourceTimings{
+		name:           "sources.dmhy",
+		interval:       c.Interval,
+		timeout:        c.Timeout,
+		settleWindow:   c.SettleWindow,
+		requestTimeout: c.RequestTimeout,
+	})
 }
 
 func validateDMHYCategory(raw string) error {
@@ -285,22 +252,22 @@ func validateDMHYCategory(raw string) error {
 }
 
 func validateNyaa(c SourceNyaa) error {
+	if err := validateCrawlFields("sources.nyaa", c.RequestTimeout, c.URL, c.MaxRPS); err != nil {
+		return err
+	}
+	if c.CacheTTL < 0 {
+		return fmt.Errorf("sources.nyaa.cache_ttl must be >= 0")
+	}
 	if !c.Enabled {
 		return nil
 	}
-	return validateSource(sourceTimings{
+	return validateSourceSchedule(sourceTimings{
 		name:           "sources.nyaa",
 		interval:       c.Interval,
 		timeout:        c.Timeout,
 		settleWindow:   c.SettleWindow,
 		requestTimeout: c.RequestTimeout,
-		url:            c.URL,
-		maxRPS:         c.MaxRPS,
 	})
-}
-
-func validateCrawlNyaa(c SourceNyaa) error {
-	return validateCrawlFields("sources.nyaa", c.RequestTimeout, c.URL, c.MaxRPS)
 }
 
 type sourceTimings struct {
@@ -309,11 +276,9 @@ type sourceTimings struct {
 	timeout        time.Duration
 	settleWindow   time.Duration
 	requestTimeout time.Duration
-	url            string
-	maxRPS         float64
 }
 
-func validateSource(t sourceTimings) error {
+func validateSourceSchedule(t sourceTimings) error {
 	if t.interval <= 0 {
 		return fmt.Errorf("%s.interval is required and must be > 0", t.name)
 	}
@@ -328,7 +293,7 @@ func validateSource(t sourceTimings) error {
 	if t.timeout <= t.requestTimeout {
 		return fmt.Errorf("%s.timeout (%s) must be greater than %s.request_timeout (%s)", t.name, t.timeout, t.name, t.requestTimeout)
 	}
-	return validateCrawlFields(t.name, t.requestTimeout, t.url, t.maxRPS)
+	return nil
 }
 
 func validateCrawlFields(name string, requestTimeout time.Duration, url string, maxRPS float64) error {
@@ -338,8 +303,8 @@ func validateCrawlFields(name string, requestTimeout time.Duration, url string, 
 	if strings.TrimSpace(url) == "" {
 		return fmt.Errorf("%s.url must not be empty", name)
 	}
-	// The rate cap is load-bearing politeness; the former `0 = no limiter`
-	// opt-out is retired for enabled and operator-crawled sources.
+	// Every source remains remotely crawlable when its scheduled loop is
+	// disabled, so the politeness cap applies in both modes.
 	if maxRPS <= 0 {
 		return fmt.Errorf("%s.max_rps must be > 0", name)
 	}
@@ -395,6 +360,7 @@ type fileNyaa struct {
 	Category       *string  `toml:"category"`
 	Filter         *string  `toml:"filter"`
 	MaxRPS         *float64 `toml:"max_rps"`
+	CacheTTL       *string  `toml:"cache_ttl"`
 }
 
 func (r fileConfig) resolve(databaseURL string, requireSchedule bool) (Config, error) {
@@ -469,6 +435,9 @@ func resolveNyaa(dst *SourceNyaa, src *fileNyaa, requireSchedule bool) error {
 		return err
 	}
 	if dst.RequestTimeout, err = optionalDuration("sources.nyaa.request_timeout", src.RequestTimeout, dst.RequestTimeout); err != nil {
+		return err
+	}
+	if dst.CacheTTL, err = optionalDuration("sources.nyaa.cache_ttl", src.CacheTTL, dst.CacheTTL); err != nil {
 		return err
 	}
 	return nil

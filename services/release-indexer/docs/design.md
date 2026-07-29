@@ -21,7 +21,9 @@ consumer agent list matched releases with optional canonical-ref filtering.
   reads safe.
 - `POST /api/v1/releases/ingest` remains the external-producer surface; sources still emit the
   same `RawPost` contract and do not import indexer storage. The sanctioned backfill
-  producer is the binary's own `crawl` page mode piped into this endpoint.
+  path is `POST /api/v1/sources/{source}/crawl`: a stateless count-and-cursor
+  chunk that uses the scheduled loop's crawler instance and ingests directly.
+  The client owns the cursor; the indexer persists no crawl position.
 - Queue claims are fenced by `claim_token`; stale submits must not overwrite newer
   claims.
 - The indexer stores the full crawler-provided magnet link. It does not normalize,
@@ -54,6 +56,7 @@ or matcher attributes exist in this pass.
 | --- | --- | --- |
 | `GET` | `/api/v1/releases` | List matched releases, newest first; optionally narrowed to one ref. |
 | `POST` | `/api/v1/releases/ingest` | Accept a batch of crawler posts. |
+| `POST` | `/api/v1/sources/{source}/crawl` | Consume one count-and-cursor source chunk and ingest it directly (operator backfill). |
 | `GET` | `/api/v1/releases/{infohash}/magnet` | Get the stored magnet URI for one release. |
 | `GET` | `/api/v1/releases/{infohash}` | Get one release detail, raw source evidence, and match history. |
 | `POST` | `/api/v1/releases/queue/claim` | Lease claimable unmatched releases. |
@@ -107,9 +110,16 @@ consecutive-empty floor). The stop rule uses the newest plausible stamp so a
 pinned row or an unparseable-date artifact cannot end the walk early, and a run
 that fails mid-walk keeps every page already ingested. This is a steady-state
 freshness loop, not a backfill engine: after downtime longer than the settle
-window, the operator runs the binary's `crawl` page mode — one listing page per
-invocation, ingest-ready JSONL out — and pipes it into
-`POST /api/v1/releases/ingest` (see operations.md for the recipe).
+window, the operator drives `POST /api/v1/sources/{source}/crawl`. Each request
+consumes an exact post budget (up to 200), may cross listing-page boundaries,
+ingests directly, and returns an opaque `(page, offset)` cursor. The client
+threads that cursor until the requested lookback boundary or the confirmed
+archive floor; `kura crawl --loop` owns this loop without adding server-side
+state (see operations.md). Requests share the scheduled loop's crawler
+instances, so `max_rps` caps combined upstream traffic. A short per-source
+page cache lets adjacent chunks that split a listing page reuse the same
+snapshot; after it expires, ordinary listing drift can replay boundary posts,
+which idempotent ingestion absorbs.
 
 ## Queue Semantics
 

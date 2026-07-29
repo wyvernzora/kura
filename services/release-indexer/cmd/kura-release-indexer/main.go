@@ -31,6 +31,7 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/internal/rest"
 	"github.com/wyvernzora/kura/services/release-indexer/internal/store/postgres"
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
+	"github.com/wyvernzora/kura/services/release-indexer/pkg/crawl"
 	"github.com/wyvernzora/kura/services/release-indexer/sources/dmhy"
 	"github.com/wyvernzora/kura/services/release-indexer/sources/nyaa"
 
@@ -47,15 +48,6 @@ var (
 )
 
 func main() {
-	// The `crawl` subcommand is the offline page-mode tool for
-	// operator-scripted backfills; everything else is the serve path.
-	if len(os.Args) > 1 && os.Args[1] == "crawl" {
-		if err := runCrawlCommand(os.Args[2:], os.Stdout, os.Stderr); err != nil {
-			writeCommandError(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
-	}
 	if err := run(); err != nil {
 		writeCommandError(os.Stderr, err)
 		os.Exit(1)
@@ -116,10 +108,8 @@ func run() error {
 	healthz := health.NewHandlerWithLogger(st, logger.With("component", "health"), version)
 	metricsSrv := metrics.New(version, commit, st)
 	ingester := ingest.New(st, metricsSrv)
-	crawls, err := newCrawlRunner(cfg, ingester, metricsSrv, logger.With("component", "crawler"))
-	if err != nil {
-		return err
-	}
+	crawlers := buildSourceCrawlers(cfg, logger.With("component", "crawler"))
+	crawls := newCrawlRunner(cfg, crawlers, ingester, metricsSrv, logger.With("component", "crawler"))
 
 	logger.Info("release-indexer starting",
 		"version", version,
@@ -128,7 +118,7 @@ func run() error {
 		"nyaa_enabled", cfg.Sources.Nyaa.Enabled,
 	)
 
-	return runHTTP(ctx, logger, cfg.Addr, cfg.MetricsAddr, st, healthz, metricsSrv, crawls)
+	return runHTTP(ctx, logger, cfg.Addr, cfg.MetricsAddr, st, healthz, metricsSrv, crawls, crawlers)
 }
 
 // runHTTP mounts the API routes under /api/v1/releases plus /healthz on one
@@ -142,13 +132,18 @@ func runHTTP(
 	healthz http.Handler,
 	metricsSrv *metrics.Metrics,
 	crawls *crawlrunner.Runner,
+	crawlers map[string]sourceCrawler,
 ) error {
 	mux := http.NewServeMux()
 	mux.Handle("/healthz", healthz)
-	// The REST push-ingestion and match-loop surfaces.
+	// The REST push-ingestion, match-loop, and server-side crawl surfaces.
 	restAPI := rest.NewWithMetricsAndLogger(st, metricsSrv, logger.With("component", "rest"))
+	for source, crawler := range crawlers {
+		restAPI.RegisterCrawler(source, crawler)
+	}
 	mux.Handle("/api/v1/releases", restAPI)
 	mux.Handle("/api/v1/releases/", restAPI)
+	mux.Handle("/api/v1/sources/", restAPI)
 
 	srv := &http.Server{Addr: addr, Handler: logHTTP(logger, metricsSrv.HTTP, suiteHeaders(version, metricsSrv.HTTP.Wrap(mux)))}
 
@@ -333,50 +328,66 @@ func parseLogLevel(s string) (slog.Level, error) {
 	}
 }
 
+// sourceCrawler is what both consumers of a crawler need: the scheduled loop
+// walks it by time, and POST /api/v1/sources/{source}/crawl consumes
+// cursor-addressed chunks.
+type sourceCrawler interface {
+	CrawlChunk(ctx context.Context, pageSize int, cursor string, lookback time.Duration) (crawl.CrawlResponse, error)
+	CrawlSince(ctx context.Context, oldest time.Time, emit func([]api.RawPost) error) error
+}
+
+// buildSourceCrawlers constructs one crawler per configured source — enabled
+// or not, since backfill may target a source whose scheduled loop is off.
+// The instances are shared by the scheduled loop and the REST crawl endpoint,
+// so each source's rate limiter caps their combined upstream traffic.
+func buildSourceCrawlers(cfg config.Config, logger *slog.Logger) map[string]sourceCrawler {
+	crawlers := make(map[string]sourceCrawler, 2)
+	dm := cfg.Sources.DMHY
+	// Config validation guarantees a non-negative numeric category.
+	if category, err := strconv.Atoi(dm.Category); err == nil && category >= 0 {
+		crawlers[api.SourceDMHY] = dmhy.NewHTTPCrawler(dm.URL, category, dm.MaxRPS, dm.CacheTTL, dm.RequestTimeout)
+	} else {
+		logger.Warn("DMHY not crawlable: invalid category", "category", dm.Category)
+	}
+	ny := cfg.Sources.Nyaa
+	crawlers[api.SourceNyaa] = nyaa.NewHTTPCrawler(ny.URL, ny.Query, ny.Category, ny.Filter, ny.MaxRPS, ny.RequestTimeout, ny.CacheTTL)
+	return crawlers
+}
+
 func newCrawlRunner(
 	cfg config.Config,
+	crawlers map[string]sourceCrawler,
 	ingester *ingest.Processor,
 	metricsSrv *metrics.Metrics,
 	logger *slog.Logger,
-) (*crawlrunner.Runner, error) {
+) *crawlrunner.Runner {
 	var jobs []crawlrunner.Job
-	if source := cfg.Sources.DMHY; source.Enabled {
-		category, err := strconv.Atoi(source.Category)
-		if err != nil {
-			return nil, fmt.Errorf("parse DMHY category: %w", err)
-		}
-		crawler := dmhy.NewHTTPCrawler(source.URL, category, source.MaxRPS, source.CacheTTL, source.RequestTimeout)
-		settle := source.SettleWindow
-		jobs = append(jobs, crawlrunner.Job{
-			Source:   api.SourceDMHY,
-			Interval: source.Interval,
-			Timeout:  source.Timeout,
-			Crawl: func(ctx context.Context, emit func([]api.RawPost) error) error {
-				return crawler.CrawlSince(ctx, time.Now().Add(-settle), emit)
-			},
-		})
+	if source := cfg.Sources.DMHY; source.Enabled && crawlers[api.SourceDMHY] != nil {
+		jobs = append(jobs, settleJob(api.SourceDMHY, source.Interval, source.Timeout, source.SettleWindow, crawlers[api.SourceDMHY]))
 	}
-	if source := cfg.Sources.Nyaa; source.Enabled {
-		crawler := nyaa.NewHTTPCrawler(source.URL, source.Query, source.Category, source.Filter, source.MaxRPS, source.RequestTimeout)
-		settle := source.SettleWindow
-		jobs = append(jobs, crawlrunner.Job{
-			Source:   api.SourceNyaa,
-			Interval: source.Interval,
-			Timeout:  source.Timeout,
-			Crawl: func(ctx context.Context, emit func([]api.RawPost) error) error {
-				return crawler.CrawlSince(ctx, time.Now().Add(-settle), emit)
-			},
-		})
+	if source := cfg.Sources.Nyaa; source.Enabled && crawlers[api.SourceNyaa] != nil {
+		jobs = append(jobs, settleJob(api.SourceNyaa, source.Interval, source.Timeout, source.SettleWindow, crawlers[api.SourceNyaa]))
 	}
 	if len(jobs) == 0 {
-		return nil, nil
+		return nil
 	}
 	return &crawlrunner.Runner{
 		Jobs:    jobs,
 		Ingest:  ingester.Batch,
 		Metrics: metricsSrv,
 		Logger:  logger,
-	}, nil
+	}
+}
+
+func settleJob(source string, interval, timeout, settle time.Duration, crawler sourceCrawler) crawlrunner.Job {
+	return crawlrunner.Job{
+		Source:   source,
+		Interval: interval,
+		Timeout:  timeout,
+		Crawl: func(ctx context.Context, emit func([]api.RawPost) error) error {
+			return crawler.CrawlSince(ctx, time.Now().Add(-settle), emit)
+		},
+	}
 }
 
 func loadConfig() (cfg config.Config, showVersion bool, err error) {

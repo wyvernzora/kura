@@ -35,9 +35,10 @@ func (c *Crawler) CrawlSince(ctx context.Context, oldest time.Time, emit func([]
 	return c.shared().CrawlSince(ctx, oldest, emit)
 }
 
-// Page fetches and parses one 1-based DMHY archive page.
-func (c *Crawler) Page(ctx context.Context, page int) ([]api.RawPost, error) {
-	return c.shared().Page(ctx, page)
+// CrawlChunk consumes exactly pageSize posts from the cursor's resume point,
+// per the chunked backfill contract behind POST /api/v1/sources/dmhy/crawl.
+func (c *Crawler) CrawlChunk(ctx context.Context, pageSize int, cursor string, lookback time.Duration) (crawl.CrawlResponse, error) {
+	return c.shared().CrawlChunk(ctx, pageSize, cursor, lookback)
 }
 
 func (c *Crawler) shared() *crawl.Crawler {

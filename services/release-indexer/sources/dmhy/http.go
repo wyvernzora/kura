@@ -30,10 +30,10 @@ func NewHTTPCrawler(baseURL string, category int, maxRPS float64, cacheTTL, requ
 		RatePerSec:     maxRPS,
 		RequestTimeout: requestTimeout,
 	})
-	fetch := PageFetcher(fetcher.FetchPage)
+	fetch := crawl.PageFetcher(fetcher.FetchPage)
 	if cacheTTL > 0 {
-		fetch = newPageCache(cacheTTL).wrap(fetch)
+		fetch = crawl.NewPageCache(cacheTTL).Wrap(fetch)
 	}
-	c.fetch = fetch
+	c.fetch = PageFetcher(fetch)
 	return c
 }

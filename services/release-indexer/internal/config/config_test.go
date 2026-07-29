@@ -49,6 +49,9 @@ max_rps = 0.25
 	if cfg.Sources.DMHY.Timeout != defaultDMHYTimeout || cfg.Sources.DMHY.RequestTimeout != defaultDMHYRequestTimeout {
 		t.Fatalf("DMHY timeouts = %+v", cfg.Sources.DMHY)
 	}
+	if cfg.Sources.DMHY.CacheTTL != defaultCacheTTL {
+		t.Fatalf("DMHY cache TTL = %v, want %v", cfg.Sources.DMHY.CacheTTL, defaultCacheTTL)
+	}
 	if !cfg.Sources.Nyaa.Enabled || cfg.Sources.Nyaa.Interval != 10*time.Minute {
 		t.Fatalf("Nyaa = %+v", cfg.Sources.Nyaa)
 	}
@@ -60,6 +63,9 @@ max_rps = 0.25
 	}
 	if cfg.Sources.Nyaa.Timeout != defaultNyaaTimeout || cfg.Sources.Nyaa.RequestTimeout != defaultNyaaRequestTimeout {
 		t.Fatalf("Nyaa timeouts = %+v", cfg.Sources.Nyaa)
+	}
+	if cfg.Sources.Nyaa.CacheTTL != defaultCacheTTL {
+		t.Fatalf("Nyaa cache TTL = %v, want %v", cfg.Sources.Nyaa.CacheTTL, defaultCacheTTL)
 	}
 }
 
@@ -102,6 +108,9 @@ func TestParseDurationDayWeekSuffixes(t *testing.T) {
 	}
 	if _, err := parseDuration("test", "5x"); err == nil {
 		t.Fatal("parseDuration(5x) accepted, want error")
+	}
+	if _, err := parseDuration("test", "999999999999999999d"); err == nil {
+		t.Fatal("parseDuration overflow accepted, want error")
 	}
 }
 
@@ -180,6 +189,11 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 			want: "max_rps must be > 0",
 		},
 		{
+			name: "disabled source still validates crawl fields",
+			body: "[sources.nyaa]\nenabled = false\nmax_rps = 0\n",
+			want: "max_rps must be > 0",
+		},
+		{
 			name: "request timeout at or above run timeout",
 			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"24h\"\ntimeout = \"30s\"\nrequest_timeout = \"30s\"\n",
 			want: "must be greater than sources.nyaa.request_timeout",
@@ -188,6 +202,11 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 			name: "zero request timeout",
 			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"24h\"\nrequest_timeout = \"0s\"\n",
 			want: "request_timeout must be > 0",
+		},
+		{
+			name: "negative Nyaa cache TTL",
+			body: "[sources.nyaa]\ninterval = \"5m\"\nsettle_window = \"24h\"\ncache_ttl = \"-1s\"\n",
+			want: "sources.nyaa.cache_ttl must be >= 0",
 		},
 		{
 			name: "invalid duration",
@@ -212,95 +231,6 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 				t.Fatalf("Load() error = %v, want substring %q", err, tt.want)
 			}
 		})
-	}
-}
-
-// LoadCrawlTool serves the offline crawl subcommand: no database URL, and
-// source tables usable even when absent or disabled (defaults fill them in).
-func TestLoadCrawlTool(t *testing.T) {
-	cfg, err := LoadCrawlTool(writeConfig(t, `
-[sources.dmhy]
-enabled = false
-url = "http://dmhy.local"
-`), "dmhy")
-	if err != nil {
-		t.Fatalf("LoadCrawlTool() error = %v", err)
-	}
-	if cfg.DatabaseURL != "" {
-		t.Fatalf("database URL = %q, want empty", cfg.DatabaseURL)
-	}
-	if cfg.Sources.DMHY.URL != "http://dmhy.local" || cfg.Sources.DMHY.Enabled {
-		t.Fatalf("DMHY = %+v, want disabled with overridden URL", cfg.Sources.DMHY)
-	}
-	if cfg.Sources.Nyaa.URL != defaultNyaaURL || cfg.Sources.Nyaa.RequestTimeout != defaultNyaaRequestTimeout {
-		t.Fatalf("Nyaa defaults = %+v", cfg.Sources.Nyaa)
-	}
-
-	cfg, err = LoadCrawlTool(writeConfig(t, `
-[sources.nyaa]
-url = "http://nyaa.local"
-`), "nyaa")
-	if err != nil {
-		t.Fatalf("LoadCrawlTool(enabled without schedule) error = %v", err)
-	}
-	if !cfg.Sources.Nyaa.Enabled || cfg.Sources.Nyaa.Interval != 0 || cfg.Sources.Nyaa.SettleWindow != 0 {
-		t.Fatalf("Nyaa = %+v, want enabled page config without scheduler fields", cfg.Sources.Nyaa)
-	}
-}
-
-func TestLoadCrawlToolValidatesSelectedSourceWhenDisabled(t *testing.T) {
-	tests := []struct {
-		name   string
-		source string
-		body   string
-		want   string
-	}{
-		{
-			name:   "negative DMHY category",
-			source: "dmhy",
-			body:   "[sources.dmhy]\nenabled = false\ncategory = \"-1\"\n",
-			want:   "non-negative integer string",
-		},
-		{
-			name:   "empty Nyaa URL",
-			source: "nyaa",
-			body:   "[sources.nyaa]\nenabled = false\nurl = \"\"\n",
-			want:   "url must not be empty",
-		},
-		{
-			name:   "zero request timeout",
-			source: "nyaa",
-			body:   "[sources.nyaa]\nenabled = false\nrequest_timeout = \"0s\"\n",
-			want:   "request_timeout must be > 0",
-		},
-		{
-			name:   "zero rate limit",
-			source: "nyaa",
-			body:   "[sources.nyaa]\nenabled = false\nmax_rps = 0\n",
-			want:   "max_rps must be > 0",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := LoadCrawlTool(writeConfig(t, tt.body), tt.source)
-			if err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("LoadCrawlTool() error = %v, want substring %q", err, tt.want)
-			}
-		})
-	}
-}
-
-func TestLoadCrawlToolValidatesOnlySelectedSourcePageFields(t *testing.T) {
-	path := writeConfig(t, `
-[sources.dmhy]
-enabled = false
-category = "-1"
-
-[sources.nyaa]
-enabled = false
-`)
-	if _, err := LoadCrawlTool(path, "nyaa"); err != nil {
-		t.Fatalf("LoadCrawlTool(select nyaa) error = %v, want unselected DMHY ignored", err)
 	}
 }
 

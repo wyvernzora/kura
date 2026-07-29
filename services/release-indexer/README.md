@@ -38,9 +38,12 @@ The release-indexer runs DMHY and Nyaa crawls on configured intervals and ingest
 their posts directly. Each run starts at the newest listing and ingests, page by
 page, everything newer than the source's configured settle window; durable
 ingestion makes replay harmless.
-`POST /api/v1/releases/ingest` remains the external-producer surface, and the
-binary's `crawl` subcommand emits ingest-ready JSONL one page at a time for
-operator-scripted backfills (see docs/operations.md).
+`POST /api/v1/releases/ingest` remains the external-producer surface.
+`POST /api/v1/sources/{source}/crawl` restores the original stateless
+count-and-cursor crawler contract for backfills, except the indexer now ingests
+each chunk directly instead of returning posts for an out-of-process shuffle.
+The `kura crawl` client can run one chunk or own the cursor loop (see
+docs/operations.md).
 n8n drives only the **match loop** over the queue
 REST API; a stateless matcher resolves each release. Consumers read the catalog over
 a REST API under `/api/v1/releases`. Postgres is both
