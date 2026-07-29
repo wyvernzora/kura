@@ -232,6 +232,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Treat LTO as operator-assisted homelab archival for valuable-but-replaceable data; prefer visible manual recovery conflicts and operator-approved risk over high-availability protocols or automatic conflict resolution.
 - Keep library-manager serve settings in strict TOML; reserve environment variables for the TVDB secret, stable host identity, client discovery, and the local `path` command.
 - For deployment-shaped E2E, reproduce known load-bearing topology including client placement, Service DNS and HTTP Host through proxy hops, TLS/auth boundaries, and network reachability; production containers reached through host loopback are not cluster-network proof.
+- When adjudicating a defect or design issue, first propose the removal/restatement that makes the defective state unrepresentable; fix inside the existing mechanism only when a named requirement blocks removal. ("If a question only produces bad answers, the question is bad — restate it or make it moot.")
 
 ---
 
