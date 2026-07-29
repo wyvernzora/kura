@@ -182,7 +182,7 @@ func newestPlausible(posts []api.RawPost, ceil time.Time) time.Time {
 	var newest time.Time
 	for _, p := range posts {
 		t := p.PublishedAt
-		if !t.After(plausibleEpochFloor) || t.After(ceil) {
+		if !plausibleDate(t, ceil) {
 			continue
 		}
 		if t.After(newest) {
@@ -190,6 +190,10 @@ func newestPlausible(posts []api.RawPost, ceil time.Time) time.Time {
 		}
 	}
 	return newest
+}
+
+func plausibleDate(t, ceil time.Time) bool {
+	return t.After(plausibleEpochFloor) && !t.After(ceil)
 }
 
 func (c *Crawler) parsePage(body []byte, page int) ([]api.RawPost, error) {

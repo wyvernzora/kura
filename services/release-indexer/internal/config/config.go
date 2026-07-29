@@ -131,7 +131,7 @@ func Defaults(databaseURL string) Config {
 // the result. DatabaseURL remains outside TOML so deployments can inject it
 // from a Secret.
 func Load(path, databaseURL string) (Config, error) {
-	cfg, err := decode(path, databaseURL, true)
+	cfg, err := decode(path, databaseURL)
 	if err != nil {
 		return Config{}, err
 	}
@@ -141,7 +141,7 @@ func Load(path, databaseURL string) (Config, error) {
 	return cfg, nil
 }
 
-func decode(path, databaseURL string, requireSchedule bool) (Config, error) {
+func decode(path, databaseURL string) (Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("config: open %s: %w", path, err)
@@ -153,7 +153,7 @@ func decode(path, databaseURL string, requireSchedule bool) (Config, error) {
 		return Config{}, fmt.Errorf("config: decode %s: %w", path, err)
 	}
 
-	cfg, err := raw.resolve(databaseURL, requireSchedule)
+	cfg, err := raw.resolve(databaseURL)
 	if err != nil {
 		return Config{}, fmt.Errorf("config: %w", err)
 	}
@@ -363,7 +363,7 @@ type fileNyaa struct {
 	CacheTTL       *string  `toml:"cache_ttl"`
 }
 
-func (r fileConfig) resolve(databaseURL string, requireSchedule bool) (Config, error) {
+func (r fileConfig) resolve(databaseURL string) (Config, error) {
 	cfg := Defaults(databaseURL)
 	if r.Database != nil {
 		setString(&cfg.DatabaseSchema, r.Database.Schema)
@@ -377,19 +377,19 @@ func (r fileConfig) resolve(databaseURL string, requireSchedule bool) (Config, e
 		cfg.QueueMaxAttempts = *r.Queue.MaxAttempts
 	}
 	if r.Sources != nil && r.Sources.DMHY != nil {
-		if err := resolveDMHY(&cfg.Sources.DMHY, r.Sources.DMHY, requireSchedule); err != nil {
+		if err := resolveDMHY(&cfg.Sources.DMHY, r.Sources.DMHY); err != nil {
 			return Config{}, err
 		}
 	}
 	if r.Sources != nil && r.Sources.Nyaa != nil {
-		if err := resolveNyaa(&cfg.Sources.Nyaa, r.Sources.Nyaa, requireSchedule); err != nil {
+		if err := resolveNyaa(&cfg.Sources.Nyaa, r.Sources.Nyaa); err != nil {
 			return Config{}, err
 		}
 	}
 	return cfg, nil
 }
 
-func resolveDMHY(dst *SourceDMHY, src *fileDMHY, requireSchedule bool) error {
+func resolveDMHY(dst *SourceDMHY, src *fileDMHY) error {
 	dst.Enabled = true
 	setBool(&dst.Enabled, src.Enabled)
 	setString(&dst.URL, src.URL)
@@ -397,10 +397,10 @@ func resolveDMHY(dst *SourceDMHY, src *fileDMHY, requireSchedule bool) error {
 	setFloat(&dst.MaxRPS, src.MaxRPS)
 
 	var err error
-	if dst.Interval, err = requiredDuration("sources.dmhy.interval", src.Interval, dst.Enabled && requireSchedule); err != nil {
+	if dst.Interval, err = requiredDuration("sources.dmhy.interval", src.Interval, dst.Enabled); err != nil {
 		return err
 	}
-	if dst.SettleWindow, err = requiredDuration("sources.dmhy.settle_window", src.SettleWindow, dst.Enabled && requireSchedule); err != nil {
+	if dst.SettleWindow, err = requiredDuration("sources.dmhy.settle_window", src.SettleWindow, dst.Enabled); err != nil {
 		return err
 	}
 	if dst.Timeout, err = optionalDuration("sources.dmhy.timeout", src.Timeout, dst.Timeout); err != nil {
@@ -415,7 +415,7 @@ func resolveDMHY(dst *SourceDMHY, src *fileDMHY, requireSchedule bool) error {
 	return nil
 }
 
-func resolveNyaa(dst *SourceNyaa, src *fileNyaa, requireSchedule bool) error {
+func resolveNyaa(dst *SourceNyaa, src *fileNyaa) error {
 	dst.Enabled = true
 	setBool(&dst.Enabled, src.Enabled)
 	setString(&dst.URL, src.URL)
@@ -425,10 +425,10 @@ func resolveNyaa(dst *SourceNyaa, src *fileNyaa, requireSchedule bool) error {
 	setFloat(&dst.MaxRPS, src.MaxRPS)
 
 	var err error
-	if dst.Interval, err = requiredDuration("sources.nyaa.interval", src.Interval, dst.Enabled && requireSchedule); err != nil {
+	if dst.Interval, err = requiredDuration("sources.nyaa.interval", src.Interval, dst.Enabled); err != nil {
 		return err
 	}
-	if dst.SettleWindow, err = requiredDuration("sources.nyaa.settle_window", src.SettleWindow, dst.Enabled && requireSchedule); err != nil {
+	if dst.SettleWindow, err = requiredDuration("sources.nyaa.settle_window", src.SettleWindow, dst.Enabled); err != nil {
 		return err
 	}
 	if dst.Timeout, err = optionalDuration("sources.nyaa.timeout", src.Timeout, dst.Timeout); err != nil {

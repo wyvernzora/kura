@@ -19,13 +19,13 @@ import (
 const (
 	// StopPageBudget: the pageSize budget filled and more in-window posts
 	// remain — thread NextCursor into the next call.
-	StopPageBudget = "page_budget"
+	StopPageBudget = api.CrawlStopPageBudget
 	// StopLookbackBoundary: the walk reached posts older than the lookback
 	// window; the caller's loop is done.
-	StopLookbackBoundary = "lookback_boundary"
+	StopLookbackBoundary = api.CrawlStopLookbackBoundary
 	// StopArchiveFloor: the source's consecutive-empty floor was confirmed;
 	// there is nothing further back.
-	StopArchiveFloor = "archive_floor"
+	StopArchiveFloor = api.CrawlStopArchiveFloor
 )
 
 // CrawlResponse is one chunk's outcome: the consumed posts (newest → oldest)
@@ -89,11 +89,11 @@ func FormatCursor(source string, page, offset int) string {
 //     fetch targets page 1. An offset > 0 cursor resumes ON its page (rows
 //     remain — the short-TTL page cache absorbs the re-fetch); offset == 0
 //     means that page is fully consumed, so the walk starts at page+1.
-//   - lookback cutoff: a post older than now − lookback is out-of-window.
-//     The walk is newest → oldest, so the first out-of-window post ends the
-//     loop with HasMore=false. Posts with a zero/unparseable publishedAt are
-//     KEPT in-window — a parse glitch must not truncate the walk. lookback
-//     <= 0 means no limit.
+//   - lookback cutoff: plausible posts older than now − lookback are skipped.
+//     A page ends the walk only when its remaining rows have plausible dates
+//     but none are in-window, so a pinned old row cannot hide newer rows
+//     later on the same page. Zero, epoch-artifact, and implausibly-future
+//     stamps are kept but never drive the stop. lookback <= 0 means no limit.
 //   - The consecutive-empty counter is per-walk, never persisted: a chunk
 //     resolves any empty run it enters (content or the floor) before
 //     parking a cursor — it never parks inside an unresolved empty run.
@@ -114,11 +114,13 @@ func (c *Crawler) CrawlChunk(ctx context.Context, pageSize int, cursor string, l
 
 	// cutoff is the lookback boundary; zero lookback means no row is ever
 	// out-of-window. Computed once off the injectable clock.
+	now := c.now()
 	var cutoff time.Time
 	hasCutoff := lookback > 0
 	if hasCutoff {
-		cutoff = c.now().Add(-lookback)
+		cutoff = now.Add(-lookback)
 	}
+	plausibleCeiling := now.Add(plausibleFutureSlack)
 
 	var (
 		posts            []api.RawPost
@@ -165,29 +167,13 @@ func (c *Crawler) CrawlChunk(ctx context.Context, pageSize int, cursor string, l
 			pageStart = len(pagePosts)
 		}
 
-		for i := pageStart; i < len(pagePosts); i++ {
-			p := pagePosts[i]
-			if outOfWindow(p.PublishedAt, cutoff, hasCutoff) {
-				// Newest → oldest: the first out-of-window post means all
-				// following are too.
-				return chunkResponse(posts, "", false, StopLookbackBoundary, pagesFetched, lastPage), nil
-			}
-			posts = append(posts, p)
-
-			if len(posts) < pageSize {
-				continue
-			}
-
-			// Budget filled. Resolve HasMore against rows already in hand
-			// before parking a cursor.
-			if i+1 < len(pagePosts) {
-				if outOfWindow(pagePosts[i+1].PublishedAt, cutoff, hasCutoff) {
-					// The boundary lands exactly at the budget edge.
-					return chunkResponse(posts, "", false, StopLookbackBoundary, pagesFetched, lastPage), nil
-				}
-				// Resume mid-page at offset i+1: the count of this page's
-				// rows now returned.
-				return chunkResponse(posts, FormatCursor(c.source, page, i+1), true, StopPageBudget, pagesFetched, lastPage), nil
+		selected := selectChunkPage(pagePosts, pageStart, pageSize-len(posts), cutoff, plausibleCeiling, hasCutoff)
+		posts = append(posts, selected.posts...)
+		if selected.budgetFilled {
+			// Budget filled. Park after the last inspected row, including
+			// any preceding out-of-window rows skipped on this page.
+			if selected.nextOffset < len(pagePosts) {
+				return chunkResponse(posts, FormatCursor(c.source, page, selected.nextOffset), true, StopPageBudget, pagesFetched, lastPage), nil
 			}
 			// Budget filled exactly at the page's last row. Park (page, 0):
 			// decode treats offset==0 as "page fully consumed → page+1",
@@ -196,9 +182,54 @@ func (c *Crawler) CrawlChunk(ctx context.Context, pageSize int, cursor string, l
 			return chunkResponse(posts, FormatCursor(c.source, page, 0), true, StopPageBudget, pagesFetched, lastPage), nil
 		}
 
-		// Page exhausted without filling the budget — walk deeper.
+		// A page with plausible dates but no in-window row positively
+		// establishes the lookback boundary. Implausible rows encountered on
+		// that page were still retained above.
+		if selected.lookbackBoundary {
+			return chunkResponse(posts, "", false, StopLookbackBoundary, pagesFetched, lastPage), nil
+		}
+
+		// Page exhausted without filling the budget or proving the boundary.
 		page++
 	}
+}
+
+type chunkPageSelection struct {
+	posts            []api.RawPost
+	nextOffset       int
+	budgetFilled     bool
+	lookbackBoundary bool
+}
+
+func selectChunkPage(
+	pagePosts []api.RawPost,
+	start int,
+	budget int,
+	cutoff time.Time,
+	plausibleCeiling time.Time,
+	hasCutoff bool,
+) chunkPageSelection {
+	selected := chunkPageSelection{nextOffset: start}
+	pageHadPlausible := false
+	pageHadInWindow := false
+	for i := start; i < len(pagePosts); i++ {
+		selected.nextOffset = i + 1
+		post := pagePosts[i]
+		if hasCutoff && plausibleDate(post.PublishedAt, plausibleCeiling) {
+			pageHadPlausible = true
+			if outOfWindow(post.PublishedAt, cutoff, hasCutoff) {
+				continue
+			}
+			pageHadInWindow = true
+		}
+		selected.posts = append(selected.posts, post)
+		if len(selected.posts) == budget {
+			selected.budgetFilled = true
+			return selected
+		}
+	}
+	selected.lookbackBoundary = hasCutoff && pageHadPlausible && !pageHadInWindow
+	return selected
 }
 
 func chunkResponse(posts []api.RawPost, nextCursor string, hasMore bool, stopReason string, pagesFetched, lastPage int) CrawlResponse {
@@ -212,12 +243,12 @@ func chunkResponse(posts []api.RawPost, nextCursor string, hasMore bool, stopRea
 	}
 }
 
-// outOfWindow reports whether a post's publishedAt falls before the lookback
-// cutoff. A zero timestamp is KEPT in-window: a parse glitch must not
-// truncate the walk.
+// outOfWindow reports whether a plausible post's publishedAt falls before the
+// lookback cutoff. Callers keep zero and implausible stamps in-window so they
+// never silently truncate a crawl.
 func outOfWindow(publishedAt, cutoff time.Time, hasCutoff bool) bool {
 	if !hasCutoff {
 		return false
 	}
-	return !publishedAt.IsZero() && publishedAt.Before(cutoff)
+	return publishedAt.After(plausibleEpochFloor) && publishedAt.Before(cutoff)
 }

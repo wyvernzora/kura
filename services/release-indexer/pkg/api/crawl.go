@@ -4,10 +4,9 @@ import "time"
 
 // CrawlRequest is the POST /api/v1/sources/{source}/crawl body: consume
 // exactly pageSize posts from the cursor's resume point, ingest them
-// directly, and return the next cursor. The caller owns the loop — chunk
-// size, pacing, and when to stop all live client-side; the server holds no
-// crawl state between requests. This resurrects the standalone crawlers'
-// POST /crawl contract, with direct ingestion replacing the returned posts.
+// directly, and return the next cursor. The API remains one bounded chunk per
+// request and holds no crawl state between requests; the kura CLI threads
+// chunks automatically and exposes the cursor as a recovery checkpoint.
 type CrawlRequest struct {
 	// PageSize is the exact number of posts to consume, from 1 through 200.
 	// Zero means 200.
@@ -15,9 +14,9 @@ type CrawlRequest struct {
 	// Cursor is the opaque resume point from a previous response; empty
 	// starts at the newest listing.
 	Cursor string `json:"cursor,omitempty"`
-	// Lookback is an extended Go duration (12h, 30d, 2w, 2w12h); posts older
-	// than now − lookback end the walk with hasMore=false. Empty means no
-	// limit — the walk runs to the archive floor.
+	// Lookback is an extended Go duration (12h, 30d, 2w, 2w12h); pages with
+	// no plausible in-window date end the walk with hasMore=false. Empty
+	// means no limit — the walk runs to the archive floor.
 	Lookback string `json:"lookback,omitempty"`
 }
 

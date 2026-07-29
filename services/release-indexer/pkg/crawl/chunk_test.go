@@ -94,7 +94,7 @@ func TestCrawlChunkReturnsPartialChunkAtConfirmedFloor(t *testing.T) {
 	}
 }
 
-func TestCrawlChunkStopsAtLookbackBoundaryAtBudgetEdge(t *testing.T) {
+func TestCrawlChunkConfirmsLookbackBoundaryAfterBudgetEdge(t *testing.T) {
 	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
 	c := testChunkCrawlerWithNow(map[int][]api.RawPost{
 		1: {
@@ -104,13 +104,67 @@ func TestCrawlChunkStopsAtLookbackBoundaryAtBudgetEdge(t *testing.T) {
 		},
 	}, 2, now)
 
-	got, err := c.CrawlChunk(t.Context(), 2, "", 24*time.Hour)
+	first, err := c.CrawlChunk(t.Context(), 2, "", 24*time.Hour)
 	if err != nil {
 		t.Fatalf("CrawlChunk() error = %v", err)
 	}
-	if len(got.Posts) != 2 || got.HasMore || got.NextCursor != "" ||
-		got.StopReason != StopLookbackBoundary {
+	if len(first.Posts) != 2 || !first.HasMore || first.NextCursor == "" ||
+		first.StopReason != StopPageBudget {
+		t.Fatalf("first result = %+v", first)
+	}
+
+	second, err := c.CrawlChunk(t.Context(), 2, first.NextCursor, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("resumed CrawlChunk() error = %v", err)
+	}
+	if len(second.Posts) != 0 || second.HasMore || second.NextCursor != "" ||
+		second.StopReason != StopLookbackBoundary {
+		t.Fatalf("second result = %+v", second)
+	}
+}
+
+func TestCrawlChunkEpochArtifactDoesNotEndLookback(t *testing.T) {
+	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
+	c := testChunkCrawlerWithNow(map[int][]api.RawPost{
+		1: {
+			{SourceID: "epoch", PublishedAt: time.Unix(0, 0).UTC()},
+			{SourceID: "fresh", PublishedAt: now.Add(-time.Hour)},
+		},
+		2: {{SourceID: "old", PublishedAt: now.Add(-25 * time.Hour)}},
+	}, 2, now)
+
+	got, err := c.CrawlChunk(t.Context(), 10, "", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("CrawlChunk() error = %v", err)
+	}
+	if got.HasMore || got.StopReason != StopLookbackBoundary {
 		t.Fatalf("result = %+v", got)
+	}
+	if ids := sourceIDs(got.Posts); !reflect.DeepEqual(ids, []string{"epoch", "fresh"}) {
+		t.Fatalf("posts = %v, want epoch artifact and fresh row", ids)
+	}
+}
+
+func TestCrawlChunkPinnedOldRowDoesNotHideFreshRows(t *testing.T) {
+	now := time.Date(2026, 7, 29, 12, 0, 0, 0, time.UTC)
+	c := testChunkCrawlerWithNow(map[int][]api.RawPost{
+		1: {
+			{SourceID: "pinned-old", PublishedAt: now.Add(-30 * 24 * time.Hour)},
+			{SourceID: "fresh-one", PublishedAt: now.Add(-time.Hour)},
+			{SourceID: "fresh-two", PublishedAt: now.Add(-2 * time.Hour)},
+		},
+		2: {{SourceID: "old", PublishedAt: now.Add(-25 * time.Hour)}},
+	}, 2, now)
+
+	got, err := c.CrawlChunk(t.Context(), 10, "", 24*time.Hour)
+	if err != nil {
+		t.Fatalf("CrawlChunk() error = %v", err)
+	}
+	if got.HasMore || got.StopReason != StopLookbackBoundary {
+		t.Fatalf("result = %+v", got)
+	}
+	if ids := sourceIDs(got.Posts); !reflect.DeepEqual(ids, []string{"fresh-one", "fresh-two"}) {
+		t.Fatalf("posts = %v, want both fresh rows", ids)
 	}
 }
 
@@ -187,4 +241,12 @@ func numberedPosts(prefix string, count int) []api.RawPost {
 		posts[i].SourceID = fmt.Sprintf("%s-%d", prefix, i)
 	}
 	return posts
+}
+
+func sourceIDs(posts []api.RawPost) []string {
+	ids := make([]string, len(posts))
+	for i := range posts {
+		ids[i] = posts[i].SourceID
+	}
+	return ids
 }
