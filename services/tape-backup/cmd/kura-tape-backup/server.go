@@ -112,7 +112,7 @@ func logTokenStatus(logger *slog.Logger, result auth.Result, tokenPath string) {
 		logger.Info(
 			"kura tape backup generated bearer token",
 			"path", tokenPath,
-			"hint", "set KURA_TOKEN="+result.Token+" on clients (or read the token file)",
+			"hint", "read the token file and set KURA_TOKEN on clients",
 		)
 	default:
 		logger.Info("kura tape backup bearer token loaded", "source", result.Source)

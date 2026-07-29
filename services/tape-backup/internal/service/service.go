@@ -33,6 +33,8 @@ var (
 	ErrApprovalRequired = errors.New("tape service: init plan is awaiting approval")
 	// ErrNoWork reports a targeted fill with no pending snapshots.
 	ErrNoWork = errors.New("tape service: no pending snapshots for loaded tape")
+	// ErrApprovalNotAllowed reports an attempt to approve a non-init draft.
+	ErrApprovalNotAllowed = errors.New("tape service: only init drafts can be approved")
 )
 
 // Refusal is a normal named v1 refusal.
@@ -56,8 +58,20 @@ type PlanRequest struct {
 type PlanResult struct {
 	Classification string          `json:"classification"`
 	Plan           backupplan.Plan `json:"plan"`
+	Target         PlanTarget      `json:"target"`
 	Persisted      bool            `json:"persisted"`
 	Debris         []string        `json:"debris"`
+}
+
+// PlanTarget is the observed cartridge state used for the operator
+// attestation. It is response-only and is not part of the immutable plan.
+type PlanTarget struct {
+	TapeID        tape.ID   `json:"tapeID"`
+	MediumSerial  string    `json:"mediumSerial"`
+	VolumeID      volume.ID `json:"volumeID,omitempty"`
+	UsedBytes     int64     `json:"usedBytes"`
+	FreeBytes     int64     `json:"freeBytes"`
+	CapacityBytes int64     `json:"capacityBytes"`
 }
 
 // RunResult identifies the exact plan selected and executed by Run.
@@ -278,7 +292,7 @@ func (s *Service) Approve(planID string) error {
 		return err
 	}
 	if !isInitPlan(plan) {
-		return errors.New("tape service: only init drafts can be approved")
+		return ErrApprovalNotAllowed
 	}
 	return backupplan.Approve(s.deps.StateRoot, planID)
 }
@@ -300,55 +314,30 @@ func (s *Service) Discard(planID string) error {
 
 // Run validates or freshly drafts, promotes, and registers under one critical
 // section. The multi-hour executor call runs after releasing the mutex.
-func (s *Service) Run(ctx context.Context, request PlanRequest) (RunResult, error) {
+func (s *Service) Run(
+	ctx context.Context,
+	request PlanRequest,
+) (result RunResult, resultErr error) {
 	if err := refuseStubOperation(request.Operation); err != nil {
 		return RunResult{}, err
 	}
-	s.mu.Lock()
-	if len(s.live) > 0 {
-		s.mu.Unlock()
-		return RunResult{}, ErrSessionActive
-	}
-	inspection, err := s.inspectLoaded(request.TapeID)
+	plan, sessionID, journal, err := s.beginRun(request)
 	if err != nil {
-		s.mu.Unlock()
 		return RunResult{}, err
 	}
-	plan, err := s.selectRunPlanLocked(inspection)
-	if err != nil {
-		s.mu.Unlock()
-		return RunResult{}, err
-	}
-	if s.beforePromote != nil {
-		s.beforePromote()
-	}
-	if _, err := backupplan.ReadReady(s.deps.StateRoot, plan.PlanID); err != nil {
-		if err := backupplan.Approve(s.deps.StateRoot, plan.PlanID); err != nil {
-			s.mu.Unlock()
-			return RunResult{}, err
+	defer func() {
+		func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			delete(s.live, sessionID)
+		}()
+		if closeErr := journal.Close(); closeErr != nil {
+			resultErr = errors.Join(
+				resultErr,
+				fmt.Errorf("tape service: close session journal: %w", closeErr),
+			)
 		}
-	}
-	sessionID := s.deps.NewID()
-	journal, err := backupplan.CreateSession(s.deps.StateRoot, backupplan.Header{
-		SessionID:  sessionID,
-		Executor:   s.deps.Creator,
-		StartedAt:  s.now(),
-		ReadyPlans: []string{plan.PlanID},
-	})
-	if err != nil {
-		discardErr := backupplan.Discard(s.deps.StateRoot, plan.PlanID)
-		s.mu.Unlock()
-		return RunResult{}, errors.Join(
-			fmt.Errorf("tape service: create session: %w", err),
-			discardErr,
-		)
-	}
-	s.live[sessionID] = LiveSession{
-		SessionID: sessionID,
-		StartedAt: s.now(),
-		Plans:     []LivePlan{{PlanID: plan.PlanID, TapeID: plan.Target.TapeID}},
-	}
-	s.mu.Unlock()
+	}()
 
 	runErr := executor.RunSession(
 		ctx,
@@ -365,12 +354,6 @@ func (s *Service) Run(ctx context.Context, request PlanRequest) (RunResult, erro
 			FlushCadence:    s.deps.FlushCadence,
 		},
 	)
-	s.mu.Lock()
-	delete(s.live, sessionID)
-	s.mu.Unlock()
-	if closeErr := journal.Close(); closeErr != nil {
-		runErr = errors.Join(runErr, fmt.Errorf("tape service: close session journal: %w", closeErr))
-	}
 	if runErr != nil {
 		if _, readyErr := backupplan.ReadReady(s.deps.StateRoot, plan.PlanID); readyErr == nil {
 			runErr = errors.Join(runErr, backupplan.Discard(s.deps.StateRoot, plan.PlanID))
@@ -384,6 +367,52 @@ func (s *Service) Run(ctx context.Context, request PlanRequest) (RunResult, erro
 		classification = "init"
 	}
 	return RunResult{Classification: classification, Plan: plan}, nil
+}
+
+func (s *Service) beginRun(
+	request PlanRequest,
+) (backupplan.Plan, string, *backupplan.Writer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.live) > 0 {
+		return backupplan.Plan{}, "", nil, ErrSessionActive
+	}
+	inspection, err := s.inspectLoaded(request.TapeID)
+	if err != nil {
+		return backupplan.Plan{}, "", nil, err
+	}
+	plan, err := s.selectRunPlanLocked(inspection)
+	if err != nil {
+		return backupplan.Plan{}, "", nil, err
+	}
+	if s.beforePromote != nil {
+		s.beforePromote()
+	}
+	if _, err := backupplan.ReadReady(s.deps.StateRoot, plan.PlanID); err != nil {
+		if err := backupplan.Approve(s.deps.StateRoot, plan.PlanID); err != nil {
+			return backupplan.Plan{}, "", nil, err
+		}
+	}
+	sessionID := s.deps.NewID()
+	journal, err := backupplan.CreateSession(s.deps.StateRoot, backupplan.Header{
+		SessionID:  sessionID,
+		Executor:   s.deps.Creator,
+		StartedAt:  s.now(),
+		ReadyPlans: []string{plan.PlanID},
+	})
+	if err != nil {
+		discardErr := backupplan.Discard(s.deps.StateRoot, plan.PlanID)
+		return backupplan.Plan{}, "", nil, errors.Join(
+			fmt.Errorf("tape service: create session: %w", err),
+			discardErr,
+		)
+	}
+	s.live[sessionID] = LiveSession{
+		SessionID: sessionID,
+		StartedAt: s.now(),
+		Plans:     []LivePlan{{PlanID: plan.PlanID, TapeID: plan.Target.TapeID}},
+	}
+	return plan, sessionID, journal, nil
 }
 
 type inspection struct {
@@ -532,6 +561,7 @@ func (s *Service) planFromInspection(in inspection, persistInit bool) (PlanResul
 	if !ok {
 		return PlanResult{
 			Classification: "fill",
+			Target:         observedPlanTarget(in),
 			Debris:         debris,
 		}, nil
 	}
@@ -542,6 +572,7 @@ func (s *Service) planFromInspection(in inspection, persistInit bool) (PlanResul
 	return PlanResult{
 		Classification: "fill",
 		Plan:           plan,
+		Target:         observedPlanTarget(in),
 		Persisted:      false,
 		Debris:         debris,
 	}, nil
@@ -582,9 +613,25 @@ func (s *Service) initPlan(in inspection, persist bool) (PlanResult, error) {
 	return PlanResult{
 		Classification: "init",
 		Plan:           plan,
+		Target:         observedPlanTarget(in),
 		Persisted:      persist,
 		Debris:         []string{},
 	}, nil
+}
+
+func observedPlanTarget(in inspection) PlanTarget {
+	var volumeID volume.ID
+	if in.identity.State == executor.LoadedIdentityIdentified {
+		volumeID = in.identity.Volume.VolumeID
+	}
+	return PlanTarget{
+		TapeID:        in.identity.Cartridge.TapeID,
+		MediumSerial:  in.identity.MediumSerial,
+		VolumeID:      volumeID,
+		UsedBytes:     in.total - in.free,
+		FreeBytes:     in.free,
+		CapacityBytes: in.total,
+	}
 }
 
 func (s *Service) selectRunPlanLocked(in inspection) (backupplan.Plan, error) {

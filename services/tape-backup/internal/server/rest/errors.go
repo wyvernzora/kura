@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/wyvernzora/kura/services/tape-backup/internal/service"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 )
 
 const maxInternalMessage = 512
@@ -70,6 +71,30 @@ func encodeError(err error) (int, errorEnvelope) {
 		return conflictEnvelope("approval_required", err)
 	case errors.Is(err, service.ErrNoWork):
 		return conflictEnvelope("no_work", err)
+	case errors.Is(err, service.ErrApprovalNotAllowed):
+		return http.StatusConflict, errorEnvelope{
+			Kind:     "approval_not_allowed",
+			Category: "invalid_params",
+			Message:  "only init drafts can be approved",
+		}
+	case errors.Is(err, backupplan.ErrInvalidPlanID):
+		return http.StatusBadRequest, errorEnvelope{
+			Kind:     "invalid_ref",
+			Category: "invalid_params",
+			Message:  "plan ID must be a canonical ULID",
+		}
+	case errors.Is(err, backupplan.ErrPlanDone):
+		return http.StatusConflict, errorEnvelope{
+			Kind:     "plan_done",
+			Category: "invalid_params",
+			Message:  "done plan cannot be discarded",
+		}
+	case errors.Is(err, backupplan.ErrPlanDiscarded):
+		return http.StatusConflict, errorEnvelope{
+			Kind:     "plan_discarded",
+			Category: "invalid_params",
+			Message:  "plan is already discarded",
+		}
 	case errors.Is(err, os.ErrNotExist):
 		return http.StatusNotFound, errorEnvelope{
 			Kind:     "not_found",

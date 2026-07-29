@@ -41,7 +41,18 @@ func (c *Client) TapeRun(
 	request tapeapi.PlanRequest,
 ) (tapeapi.RunResult, error) {
 	var out tapeapi.RunResult
-	err := c.Do(ctx, http.MethodPost, "/api/tape/run", nil, request, &out)
+	// A run spans the operator tape-load wait, bounded by the server's
+	// IdleTimeout, plus a potentially multi-hour copy. A client timeout would
+	// disconnect, cancel r.Context(), and make R18 retire and discard the plan.
+	// Ctrl-C still cancels ctx and produces that clean retirement deliberately.
+	err := c.WithoutTimeout().Do(
+		ctx,
+		http.MethodPost,
+		"/api/tape/run",
+		nil,
+		request,
+		&out,
+	)
 	return out, err
 }
 

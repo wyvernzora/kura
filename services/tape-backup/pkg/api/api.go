@@ -96,8 +96,12 @@ type Creator struct {
 
 // PlanTarget identifies the cartridge named by a plan.
 type PlanTarget struct {
-	TapeID       string `json:"tapeID"`
-	MediumSerial string `json:"mediumSerial,omitempty"`
+	TapeID        string `json:"tapeID,omitempty"`
+	MediumSerial  string `json:"mediumSerial,omitempty"`
+	VolumeID      string `json:"volumeID,omitempty"`
+	UsedBytes     int64  `json:"usedBytes,omitempty"`
+	FreeBytes     int64  `json:"freeBytes,omitempty"`
+	CapacityBytes int64  `json:"capacityBytes,omitempty"`
 }
 
 // Action is one ordered operation or assertion in a plan.
@@ -159,10 +163,11 @@ type StatusResult struct {
 
 // PlanResult is a targeted decision-tree preview.
 type PlanResult struct {
-	Classification string   `json:"classification"`
-	Plan           Plan     `json:"plan"`
-	Persisted      bool     `json:"persisted"`
-	Debris         []string `json:"debris"`
+	Classification string     `json:"classification"`
+	Plan           Plan       `json:"plan"`
+	Target         PlanTarget `json:"target"`
+	Persisted      bool       `json:"persisted"`
+	Debris         []string   `json:"debris"`
 }
 
 // RunResult identifies the exact plan executed by a run request.

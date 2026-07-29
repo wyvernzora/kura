@@ -1120,9 +1120,10 @@ func TestDiscardMovesDraftAndReadyPlansWithoutDecoding(t *testing.T) {
 
 func TestDiscardRefusesDoneDiscardedAndAbsentPlans(t *testing.T) {
 	tests := []struct {
-		name  string
-		setup func(*testing.T, string)
-		want  string
+		name         string
+		setup        func(*testing.T, string)
+		want         string
+		wantSentinel error
 	}{
 		{
 			name: "done",
@@ -1141,6 +1142,7 @@ func TestDiscardRefusesDoneDiscardedAndAbsentPlans(t *testing.T) {
 			},
 			want: "backupplan: discard " + testPlanID +
 				": done plan cannot be discarded",
+			wantSentinel: ErrPlanDone,
 		},
 		{
 			name: "discarded",
@@ -1155,6 +1157,7 @@ func TestDiscardRefusesDoneDiscardedAndAbsentPlans(t *testing.T) {
 			},
 			want: "backupplan: discard " + testPlanID +
 				": plan is already discarded",
+			wantSentinel: ErrPlanDiscarded,
 		},
 		{
 			name:  "absent",
@@ -1168,8 +1171,21 @@ func TestDiscardRefusesDoneDiscardedAndAbsentPlans(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			root := t.TempDir()
 			test.setup(t, root)
-			assertExactError(t, Discard(root, testPlanID), test.want)
+			err := Discard(root, testPlanID)
+			assertExactError(t, err, test.want)
+			if test.wantSentinel != nil && !errors.Is(err, test.wantSentinel) {
+				t.Fatalf("Discard() error = %v, want errors.Is(_, %v)", err, test.wantSentinel)
+			}
 		})
+	}
+}
+
+func TestDiscardMalformedPlanIDIsClassifiable(t *testing.T) {
+	err := Discard(t.TempDir(), "not-a-ulid")
+	const want = `backupplan: planID "not-a-ulid" must be a 26-character uppercase Crockford base32 ULID`
+	assertExactError(t, err, want)
+	if !errors.Is(err, ErrInvalidPlanID) {
+		t.Fatalf("Discard() error = %v, want ErrInvalidPlanID", err)
 	}
 }
 

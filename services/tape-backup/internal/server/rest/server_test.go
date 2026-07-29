@@ -145,6 +145,13 @@ func TestHandlersMapSixVerbs(t *testing.T) {
 						Target:  backupplan.Target{TapeID: "ABC123L6"},
 						Actions: []backupplan.Action{},
 					},
+					Target: service.PlanTarget{
+						TapeID:        "ABC123L6",
+						VolumeID:      "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+						UsedBytes:     25,
+						FreeBytes:     75,
+						CapacityBytes: 100,
+					},
 					Debris: []string{},
 				}, nil
 			},
@@ -169,6 +176,20 @@ func TestHandlersMapSixVerbs(t *testing.T) {
 		}
 		if string(plan["schemaVersion"]) != "1" {
 			t.Fatalf("plan schemaVersion = %s, want 1", plan["schemaVersion"])
+		}
+		var result tapeapi.PlanResult
+		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+			t.Fatalf("decode public plan result: %v", err)
+		}
+		wantTarget := tapeapi.PlanTarget{
+			TapeID:        "ABC123L6",
+			VolumeID:      "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+			UsedBytes:     25,
+			FreeBytes:     75,
+			CapacityBytes: 100,
+		}
+		if result.Target != wantTarget {
+			t.Fatalf("plan target = %+v, want %+v", result.Target, wantTarget)
 		}
 	})
 
@@ -339,6 +360,78 @@ func TestRefusalCodesPassThroughExactly(t *testing.T) {
 			want := `{"kind":"` + code + `","category":"invalid_params","message":"refused"}` + "\n"
 			if response.Body.String() != want {
 				t.Fatalf("body = %q, want %q", response.Body.String(), want)
+			}
+		})
+	}
+}
+
+func TestHandlersMapPlanClientErrorsExactly(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		service    *fakeTapeService
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:   "malformed plan ULID",
+			method: http.MethodPost,
+			path:   "/api/tape/approve/not-a-ulid",
+			service: &fakeTapeService{
+				approveFunc: func(string) error {
+					return backupplan.ErrInvalidPlanID
+				},
+			},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "{\"kind\":\"invalid_ref\",\"category\":\"invalid_params\",\"message\":\"plan ID must be a canonical ULID\"}\n",
+		},
+		{
+			name:   "done plan",
+			method: http.MethodPost,
+			path:   "/api/tape/discard/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+			service: &fakeTapeService{
+				discardFunc: func(string) error {
+					return backupplan.ErrPlanDone
+				},
+			},
+			wantStatus: http.StatusConflict,
+			wantBody:   "{\"kind\":\"plan_done\",\"category\":\"invalid_params\",\"message\":\"done plan cannot be discarded\"}\n",
+		},
+		{
+			name:   "discarded plan",
+			method: http.MethodPost,
+			path:   "/api/tape/discard/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+			service: &fakeTapeService{
+				discardFunc: func(string) error {
+					return backupplan.ErrPlanDiscarded
+				},
+			},
+			wantStatus: http.StatusConflict,
+			wantBody:   "{\"kind\":\"plan_discarded\",\"category\":\"invalid_params\",\"message\":\"plan is already discarded\"}\n",
+		},
+		{
+			name:   "non-init approval",
+			method: http.MethodPost,
+			path:   "/api/tape/approve/01ARZ3NDEKTSV4RRFFQ69G5FAV",
+			service: &fakeTapeService{
+				approveFunc: func(string) error {
+					return service.ErrApprovalNotAllowed
+				},
+			},
+			wantStatus: http.StatusConflict,
+			wantBody:   "{\"kind\":\"approval_not_allowed\",\"category\":\"invalid_params\",\"message\":\"only init drafts can be approved\"}\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := serveRequest(t, test.service, test.method, test.path, nil)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+			if response.Body.String() != test.wantBody {
+				t.Fatalf("body = %q, want %q", response.Body.String(), test.wantBody)
 			}
 		})
 	}

@@ -80,6 +80,33 @@ func TestStubBlankWalkthroughAndFillCeremony(t *testing.T) {
 	}
 }
 
+func TestStubHeaderedInitAttestationFacts(t *testing.T) {
+	handler := (&stubState{}).handler("e2e-token")
+	response := request(
+		t,
+		handler,
+		http.MethodPost,
+		"/api/tape/plan",
+		`{"tapeID":"HDR001L6"}`,
+	)
+	if response.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, want %d", response.Code, http.StatusOK)
+	}
+	var result tapeapi.PlanResult
+	decodeRecorder(t, response, &result)
+	want := tapeapi.PlanTarget{
+		TapeID:        "HDR001L6",
+		MediumSerial:  "MAM-SERIAL-HEADERED-001",
+		VolumeID:      "01BX5ZZKBKACTAV9WEVGEMMVS2",
+		UsedBytes:     12 * gib,
+		FreeBytes:     88 * gib,
+		CapacityBytes: 100 * gib,
+	}
+	if result.Classification != "init" || result.Target != want {
+		t.Fatalf("plan result = %+v, want init target %+v", result, want)
+	}
+}
+
 func TestStubRefusalCodesExact(t *testing.T) {
 	handler := (&stubState{}).handler("e2e-token")
 	tests := []struct {

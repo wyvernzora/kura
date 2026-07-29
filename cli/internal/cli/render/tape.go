@@ -165,7 +165,20 @@ func TapePlan(w io.Writer, result tapeapi.PlanResult, asJSON bool) error {
 	if result.Classification == "init" {
 		if _, err := fmt.Fprintf(
 			w,
-			"Attestation: no readable identity, serial %s; init will format this cartridge.\n",
+			"Media: %s in use, %s capacity.\n",
+			formatBytes(result.Target.UsedBytes),
+			formatBytes(result.Target.CapacityBytes),
+		); err != nil {
+			return err
+		}
+		identity := "no readable identity"
+		if result.Target.VolumeID != "" {
+			identity = "observed volume " + result.Target.VolumeID
+		}
+		if _, err := fmt.Fprintf(
+			w,
+			"Attestation: %s, serial %s; init will format this cartridge.\n",
+			identity,
 			result.Plan.Target.MediumSerial,
 		); err != nil {
 			return err

@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/wyvernzora/kura/cli/internal/cli/client"
 	"github.com/wyvernzora/kura/cli/internal/cli/render"
@@ -106,6 +107,9 @@ func (cmd *tapeDiscardCmd) Run(rt *runContext) error {
 func tapeError(err error) error {
 	var envelope *client.ErrorEnvelope
 	if !errors.As(err, &envelope) {
+		return err
+	}
+	if envelope.Status == http.StatusUnauthorized {
 		return err
 	}
 	if envelope.Message == "" {

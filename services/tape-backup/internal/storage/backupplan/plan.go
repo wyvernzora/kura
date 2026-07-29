@@ -54,7 +54,28 @@ const (
 	stateDiscarded planState = "discarded"
 )
 
-var planMutationMu sync.Mutex
+var (
+	planMutationMu sync.Mutex
+
+	// ErrInvalidPlanID classifies a planID that is not a canonical ULID.
+	ErrInvalidPlanID = errors.New("backupplan: invalid plan ID")
+	// ErrPlanDone classifies an attempt to discard a completed plan.
+	ErrPlanDone = errors.New("done plan cannot be discarded")
+	// ErrPlanDiscarded classifies an attempt to discard an already discarded plan.
+	ErrPlanDiscarded = errors.New("plan is already discarded")
+)
+
+type invalidPlanIDError struct {
+	message string
+}
+
+func (e *invalidPlanIDError) Error() string {
+	return e.message
+}
+
+func (e *invalidPlanIDError) Is(target error) bool {
+	return target == ErrInvalidPlanID
+}
 
 // Creator records the build and host that authored a plan.
 type Creator struct {
@@ -310,9 +331,9 @@ func Discard(stateRoot, planID string) error {
 			planID,
 		)
 	case present[stateDone]:
-		return fmt.Errorf("backupplan: discard %s: done plan cannot be discarded", planID)
+		return fmt.Errorf("backupplan: discard %s: %w", planID, ErrPlanDone)
 	case present[stateDiscarded]:
-		return fmt.Errorf("backupplan: discard %s: plan is already discarded", planID)
+		return fmt.Errorf("backupplan: discard %s: %w", planID, ErrPlanDiscarded)
 	default:
 		return fmt.Errorf(
 			"backupplan: discard %s: draft or ready plan does not exist: %w",
@@ -826,17 +847,25 @@ func actionFieldJSONName(name string) string {
 
 func validateULID(field, value string) error {
 	if value == "" {
-		return fmt.Errorf("%s is required", field)
+		return newULIDValidationError(field, field+" is required")
 	}
 	parsed, err := ulid.ParseStrict(value)
 	if err != nil || parsed.String() != value {
-		return fmt.Errorf(
+		message := fmt.Sprintf(
 			"%s %q must be a 26-character uppercase Crockford base32 ULID",
 			field,
 			value,
 		)
+		return newULIDValidationError(field, message)
 	}
 	return nil
+}
+
+func newULIDValidationError(field, message string) error {
+	if field == "planID" {
+		return &invalidPlanIDError{message: message}
+	}
+	return errors.New(message)
 }
 
 func validateTime(field string, value time.Time) error {

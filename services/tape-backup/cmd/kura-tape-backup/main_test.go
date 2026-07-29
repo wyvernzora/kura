@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/wyvernzora/kura/services/tape-backup/internal/executor"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/server/auth"
 )
 
 func TestRunVersion(t *testing.T) {
@@ -89,6 +90,31 @@ func TestRunRejectsDeletedRunEntrypoint(t *testing.T) {
 	err := run(context.Background(), []string{"run"}, os.Getenv, &stdout, &stderr)
 	if err == nil || err.Error() != "expected subcommand serve" {
 		t.Fatalf("run() error = %v, want %q", err, "expected subcommand serve")
+	}
+}
+
+func TestLogTokenStatusGeneratedDoesNotLogSecret(t *testing.T) {
+	var output bytes.Buffer
+	const (
+		token     = "generated-secret-token"
+		tokenPath = "/state/token"
+	)
+	logTokenStatus(
+		newLogger(&output, "info"),
+		auth.Result{Token: token, Generated: true},
+		tokenPath,
+	)
+
+	logged := output.String()
+	if strings.Contains(logged, token) {
+		t.Fatalf("generated-token log contains bearer token: %q", logged)
+	}
+	if !strings.Contains(logged, `"path":"`+tokenPath+`"`) {
+		t.Fatalf("generated-token log = %q, want token file path", logged)
+	}
+	const hint = `"hint":"read the token file and set KURA_TOKEN on clients"`
+	if !strings.Contains(logged, hint) {
+		t.Fatalf("generated-token log = %q, want %s", logged, hint)
 	}
 }
 

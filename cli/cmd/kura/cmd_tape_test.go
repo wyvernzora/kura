@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/wyvernzora/kura/cli/internal/cli/client"
@@ -24,5 +26,22 @@ func TestTapeErrorLeavesTransportErrorsUnchanged(t *testing.T) {
 	transportErr := errors.New("transport failed")
 	if got := tapeError(transportErr); !errors.Is(got, transportErr) {
 		t.Fatalf("tapeError() = %v, want original transport error", got)
+	}
+}
+
+func TestTapeErrorPreservesUnauthorizedBearerTokenHint(t *testing.T) {
+	envelope := &client.ErrorEnvelope{
+		Status:   http.StatusUnauthorized,
+		Kind:     "unauthorized",
+		Category: "invalid_params",
+		Message:  "missing or invalid bearer token",
+	}
+	const hint = "kura server requires a bearer token; set KURA_TOKEN"
+	withHint := fmt.Errorf("%w\n  hint: %s", envelope, hint)
+
+	got := tapeError(withHint)
+	const want = "missing or invalid bearer token\n  hint: " + hint
+	if got == nil || got.Error() != want {
+		t.Fatalf("tapeError() = %v, want %q", got, want)
 	}
 }

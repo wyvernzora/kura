@@ -26,6 +26,7 @@ import (
 const (
 	initPlanID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 	fillPlanID = "01BX5ZZKBKACTAV9WEVGEMMVRZ"
+	gib        = int64(1024 * 1024 * 1024)
 )
 
 var fixedTime = time.Date(2026, time.July, 29, 12, 0, 0, 0, time.UTC)
@@ -185,8 +186,30 @@ func (s *stubState) plan(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, tapeapi.PlanResult{
 			Classification: "init",
 			Plan:           initPlan(),
-			Persisted:      true,
-			Debris:         []string{},
+			Target: tapeapi.PlanTarget{
+				TapeID:        "BLK001L6",
+				MediumSerial:  "MAM-SERIAL-BLANK-001",
+				UsedBytes:     20 * gib,
+				FreeBytes:     80 * gib,
+				CapacityBytes: 100 * gib,
+			},
+			Persisted: true,
+			Debris:    []string{},
+		})
+	case "HDR001L6":
+		writeJSON(w, http.StatusOK, tapeapi.PlanResult{
+			Classification: "init",
+			Plan:           headeredInitPlan(),
+			Target: tapeapi.PlanTarget{
+				TapeID:        "HDR001L6",
+				MediumSerial:  "MAM-SERIAL-HEADERED-001",
+				VolumeID:      "01BX5ZZKBKACTAV9WEVGEMMVS2",
+				UsedBytes:     12 * gib,
+				FreeBytes:     88 * gib,
+				CapacityBytes: 100 * gib,
+			},
+			Persisted: true,
+			Debris:    []string{},
 		})
 	case "FILL01L6", "ABC123L6":
 		writeJSON(w, http.StatusOK, tapeapi.PlanResult{
@@ -265,7 +288,6 @@ func (s *stubState) discard(w http.ResponseWriter, _ *http.Request) {
 }
 
 func initialConsult() *tapeapi.ConsultResult {
-	const gib = int64(1024 * 1024 * 1024)
 	assignmentSeries := []tapeapi.Series{
 		{
 			MetadataRef:        "tvdb:alpha",
@@ -352,6 +374,13 @@ func initPlan() tapeapi.Plan {
 			{Type: "assert_inventory", Snapshots: &snapshots},
 		},
 	}
+}
+
+func headeredInitPlan() tapeapi.Plan {
+	plan := initPlan()
+	plan.Target.TapeID = "HDR001L6"
+	plan.Target.MediumSerial = "MAM-SERIAL-HEADERED-001"
+	return plan
 }
 
 func fillPlan(tapeID string) tapeapi.Plan {

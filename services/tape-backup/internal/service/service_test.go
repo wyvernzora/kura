@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -178,6 +179,48 @@ func TestServiceMutexSerializesPromotionAgainstConsultSweep(t *testing.T) {
 		consultErr = <-consultDone
 	}
 	assertNoError(t, consultErr)
+}
+
+func TestRunPanicReleasesLiveSessionAndJournal(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	_, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	f.service.deps.Backup = func(context.Context, executor.BackupActionRequest) error {
+		panic("faulting backup handler")
+	}
+
+	var recovered any
+	func() {
+		defer func() {
+			recovered = recover()
+		}()
+		_, _ = f.service.Run(t.Context(), PlanRequest{})
+	}()
+	if recovered != "faulting backup handler" {
+		t.Fatalf("recovered panic = %v, want %q", recovered, "faulting backup handler")
+	}
+
+	statusResult := make(chan StatusResult, 1)
+	statusErr := make(chan error, 1)
+	go func() {
+		status, statusCallErr := f.service.Status()
+		statusResult <- status
+		statusErr <- statusCallErr
+	}()
+	select {
+	case status := <-statusResult:
+		assertNoError(t, <-statusErr)
+		if len(status.LiveSessions) != 0 {
+			t.Fatalf("live sessions = %+v, want empty after panic", status.LiveSessions)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Status() blocked after Run panic")
+	}
+
+	journal, err := backupplan.OpenSession(f.stateRoot, f.lastSessionID())
+	assertNoError(t, err)
+	assertNoError(t, journal.Close())
 }
 
 func TestTargetedPlanKeepsCollidingDebrisPending(t *testing.T) {
@@ -378,6 +421,42 @@ func TestTargetedPlanLifecycleKeepsFillsEphemeralAndInitCeremonial(t *testing.T)
 			t.Fatalf("ready plans after discard = %d, want 0", len(ready))
 		}
 	})
+}
+
+func TestApproveNonInitDraftIsClassifiable(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	consult, err := f.service.Consult(nil)
+	assertNoError(t, err)
+
+	err = f.service.Approve(consult.Drafts[0].PlanID)
+	const want = "tape service: only init drafts can be approved"
+	assertError(t, err, want)
+	if !errors.Is(err, ErrApprovalNotAllowed) {
+		t.Fatalf("Approve() error = %v, want ErrApprovalNotAllowed", err)
+	}
+}
+
+func TestTargetedInitPlanReturnsObservedMediaAttestation(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, false))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	total, free, err := f.drive.Capacity()
+	assertNoError(t, err)
+
+	result, err := f.service.Plan(PlanRequest{})
+	assertNoError(t, err)
+
+	want := PlanTarget{
+		TapeID:        testTape,
+		MediumSerial:  "SERIAL-UNKNOWN",
+		VolumeID:      testVolume,
+		UsedBytes:     total - free,
+		FreeBytes:     free,
+		CapacityBytes: total,
+	}
+	if result.Classification != "init" || result.Target != want {
+		t.Fatalf("Plan() = %+v, want init target %+v", result, want)
+	}
 }
 
 type fixture struct {
