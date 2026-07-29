@@ -9,9 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
 )
 
 var (
@@ -19,6 +22,9 @@ var (
 	ErrNoCartridge = errors.New("executor: no cartridge loaded")
 	// ErrNotMounted reports that the loaded cartridge has no usable LTFS mount.
 	ErrNotMounted = errors.New("executor: loaded cartridge is not mounted")
+	// ErrStillMounted reports that an operation requiring the raw device found
+	// the loaded cartridge still mounted.
+	ErrStillMounted = errors.New("executor: loaded cartridge is still mounted")
 )
 
 // Cartridge describes the cartridge selected in the drive and its fake mount.
@@ -27,12 +33,38 @@ type Cartridge struct {
 	Root   string
 }
 
+// LoadedIdentityState is the three-valued cartridge identity observation.
+type LoadedIdentityState string
+
+const (
+	// LoadedIdentityNone means no cartridge is present.
+	LoadedIdentityNone LoadedIdentityState = "none"
+	// LoadedIdentityUnidentified means media is present but has no readable Kura
+	// identity. MediumSerial still identifies the physical cartridge.
+	LoadedIdentityUnidentified LoadedIdentityState = "unidentified"
+	// LoadedIdentityIdentified means media, its Kura volume header, and its MAM
+	// medium serial are all readable.
+	LoadedIdentityIdentified LoadedIdentityState = "identified"
+)
+
+// LoadedIdentity is one read of cartridge presence and identity.
+type LoadedIdentity struct {
+	State        LoadedIdentityState
+	MediumSerial string
+	Cartridge    Cartridge
+	Volume       tapevolume.Volume
+}
+
 // Drive is the executor's boundary across the drive device and LTFS mount.
 type Drive interface {
-	Loaded() (Cartridge, error)
+	Open() error
+	Close() error
+	LoadedIdentity() (LoadedIdentity, error)
 	EncryptionActive() (bool, error)
 	Capacity() (total, free int64, err error)
 	Sync() error
+	Format(tapeID tape.ID) error
+	StampIdentity(volumeID volume.ID, tapeID tape.ID) error
 }
 
 // DirectoryCartridge configures one cartridge in a DirectoryDrive.
@@ -40,16 +72,22 @@ type DirectoryCartridge struct {
 	TapeID           tape.ID
 	Root             string
 	Mounted          bool
+	IdentityState    LoadedIdentityState
+	MediumSerial     string
 	EncryptionActive bool
 	Capacity         int64
 }
 
 // DriveFaults injects failures at each Drive method boundary.
 type DriveFaults struct {
-	Loaded           error
+	Open             error
+	Close            error
+	LoadedIdentity   error
 	EncryptionActive error
 	Capacity         error
 	Sync             error
+	Format           error
+	StampIdentity    error
 }
 
 // DirectoryDrive is a directory-backed fake Drive with a mutable loaded
@@ -59,12 +97,15 @@ type DirectoryDrive struct {
 	mu         sync.Mutex
 	cartridges map[tape.ID]*directoryCartridge
 	loaded     tape.ID
+	open       bool
 	faults     DriveFaults
 }
 
 type directoryCartridge struct {
 	root             string
 	mounted          bool
+	identityState    LoadedIdentityState
+	mediumSerial     string
 	encryptionActive bool
 	capacity         int64
 	consumed         int64
@@ -117,6 +158,19 @@ func (d *DirectoryDrive) add(cartridge DirectoryCartridge) error {
 			parsedTapeID,
 		)
 	}
+	if cartridge.IdentityState != LoadedIdentityUnidentified &&
+		cartridge.IdentityState != LoadedIdentityIdentified {
+		return fmt.Errorf(
+			"executor: directory cartridge %s identity state must be unidentified or identified",
+			parsedTapeID,
+		)
+	}
+	if cartridge.MediumSerial == "" {
+		return fmt.Errorf(
+			"executor: directory cartridge %s medium serial is required",
+			parsedTapeID,
+		)
+	}
 	if err := os.MkdirAll(tapevolume.ArchiveDir(cartridge.Root), 0o775); err != nil {
 		return fmt.Errorf(
 			"executor: create directory cartridge %s archive: %w",
@@ -131,6 +185,8 @@ func (d *DirectoryDrive) add(cartridge DirectoryCartridge) error {
 	d.cartridges[parsedTapeID] = &directoryCartridge{
 		root:             cartridge.Root,
 		mounted:          cartridge.Mounted,
+		identityState:    cartridge.IdentityState,
+		mediumSerial:     cartridge.MediumSerial,
 		encryptionActive: cartridge.EncryptionActive,
 		capacity:         cartridge.Capacity,
 		consumed:         consumed,
@@ -175,6 +231,13 @@ func (d *DirectoryDrive) SetFaults(faults DriveFaults) {
 	d.faults = faults
 }
 
+// IsOpen reports whether the fake drive currently has session custody.
+func (d *DirectoryDrive) IsOpen() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.open
+}
+
 // RecordWrite adds bytes written to a cartridge even when a failed copy removes
 // its destination.
 func (d *DirectoryDrive) RecordWrite(tapeID tape.ID, bytes int64) error {
@@ -202,21 +265,64 @@ func (d *DirectoryDrive) WasSynced(tapeID tape.ID) bool {
 	return exists && cartridge.synced
 }
 
-// Loaded reports the selected cartridge's drive-device identity.
-func (d *DirectoryDrive) Loaded() (Cartridge, error) {
+// Open acquires exclusive fake drive custody.
+func (d *DirectoryDrive) Open() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.faults.Loaded != nil {
-		return Cartridge{}, d.faults.Loaded
+	if d.faults.Open != nil {
+		return d.faults.Open
+	}
+	if d.open {
+		return syscall.EBUSY
+	}
+	d.open = true
+	return nil
+}
+
+// Close releases fake drive custody. A close fault models process death: the
+// kernel still releases custody even though the call did not report success.
+func (d *DirectoryDrive) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.open {
+		return nil
+	}
+	d.open = false
+	return d.faults.Close
+}
+
+// LoadedIdentity reports cartridge presence, MAM serial, and readable Kura
+// identity as three distinct states.
+func (d *DirectoryDrive) LoadedIdentity() (LoadedIdentity, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.faults.LoadedIdentity != nil {
+		return LoadedIdentity{}, d.faults.LoadedIdentity
+	}
+	if d.loaded == "" {
+		return LoadedIdentity{State: LoadedIdentityNone}, nil
 	}
 	cartridge, err := d.loadedCartridge()
 	if err != nil {
-		return Cartridge{}, err
+		return LoadedIdentity{}, err
 	}
-	return Cartridge{
-		TapeID: d.loaded,
-		Root:   cartridge.root,
-	}, nil
+	identity := LoadedIdentity{
+		State:        cartridge.identityState,
+		MediumSerial: cartridge.mediumSerial,
+		Cartridge: Cartridge{
+			Root: cartridge.root,
+		},
+	}
+	if cartridge.identityState == LoadedIdentityUnidentified {
+		return identity, nil
+	}
+	header, err := tapevolume.Read(cartridge.root)
+	if err != nil {
+		return LoadedIdentity{}, fmt.Errorf("executor: read directory cartridge identity: %w", err)
+	}
+	identity.Cartridge.TapeID = header.TapeID
+	identity.Volume = header
+	return identity, nil
 }
 
 // EncryptionActive reports the fake drive-device encryption state.
@@ -268,6 +374,59 @@ func (d *DirectoryDrive) Sync() error {
 	return nil
 }
 
+// Format models mkltfs: it destroys the mounted contents, leaves the medium
+// unmounted and unidentified, and preserves its immutable MAM serial. The
+// injected fault fires after that crash-shaped state has been established.
+func (d *DirectoryDrive) Format(tapeID tape.ID) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cartridge, err := d.loadedCartridgeForTape(tapeID)
+	if err != nil {
+		return err
+	}
+	if cartridge.mounted {
+		return ErrStillMounted
+	}
+	cartridge.identityState = LoadedIdentityUnidentified
+	cartridge.synced = false
+	if err := clearDirectory(cartridge.root); err != nil {
+		return fmt.Errorf("executor: format directory cartridge %s: %w", tapeID, err)
+	}
+	cartridge.consumed = 0
+	return d.faults.Format
+}
+
+// StampIdentity writes the Kura volume header and establishes the empty
+// snapshots namespace. The injected fault fires before the fake MAM identity
+// becomes readable, leaving the row-7 header-without-MAM crash state.
+func (d *DirectoryDrive) StampIdentity(volumeID volume.ID, tapeID tape.ID) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cartridge, err := d.loadedCartridgeForTape(tapeID)
+	if err != nil {
+		return err
+	}
+	if !cartridge.mounted {
+		return ErrNotMounted
+	}
+	if err := tapevolume.Write(cartridge.root, tapevolume.Volume{
+		VolumeID:  volumeID,
+		TapeID:    tapeID,
+		CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		return fmt.Errorf("executor: stamp directory cartridge identity: %w", err)
+	}
+	if err := os.MkdirAll(tapevolume.SnapshotsDir(cartridge.root), 0o775); err != nil {
+		return fmt.Errorf("executor: create stamped snapshots namespace: %w", err)
+	}
+	if d.faults.StampIdentity != nil {
+		cartridge.identityState = LoadedIdentityUnidentified
+		return d.faults.StampIdentity
+	}
+	cartridge.identityState = LoadedIdentityIdentified
+	return nil
+}
+
 func (d *DirectoryDrive) loadedCartridge() (*directoryCartridge, error) {
 	if d.loaded == "" {
 		return nil, ErrNoCartridge
@@ -275,6 +434,21 @@ func (d *DirectoryDrive) loadedCartridge() (*directoryCartridge, error) {
 	cartridge, exists := d.cartridges[d.loaded]
 	if !exists {
 		return nil, ErrNoCartridge
+	}
+	return cartridge, nil
+}
+
+func (d *DirectoryDrive) loadedCartridgeForTape(tapeID tape.ID) (*directoryCartridge, error) {
+	cartridge, err := d.loadedCartridge()
+	if err != nil {
+		return nil, err
+	}
+	if d.loaded != tapeID {
+		return nil, fmt.Errorf(
+			"executor: loaded directory cartridge is %s, want %s",
+			d.loaded,
+			tapeID,
+		)
 	}
 	return cartridge, nil
 }
@@ -309,4 +483,17 @@ func directoryBytes(root string) (int64, error) {
 		return nil
 	})
 	return total, err
+}
+
+func clearDirectory(root string) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }

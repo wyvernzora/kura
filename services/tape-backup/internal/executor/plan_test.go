@@ -17,6 +17,8 @@ import (
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapemanifest"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
 )
 
 func TestRunSessionPassesExecutionDependenciesAndPostSweepCommittedSet(t *testing.T) {
@@ -1397,8 +1399,16 @@ type fixedCapacityDrive struct {
 	syncCalls     int
 }
 
-func (d *fixedCapacityDrive) Loaded() (executor.Cartridge, error) {
-	return executor.Cartridge{}, errors.New("Loaded must not be called")
+func (*fixedCapacityDrive) Open() error {
+	return errors.New("Open must not be called")
+}
+
+func (*fixedCapacityDrive) Close() error {
+	return errors.New("Close must not be called")
+}
+
+func (*fixedCapacityDrive) LoadedIdentity() (executor.LoadedIdentity, error) {
+	return executor.LoadedIdentity{}, errors.New("LoadedIdentity must not be called")
 }
 
 func (d *fixedCapacityDrive) EncryptionActive() (bool, error) {
@@ -1416,6 +1426,14 @@ func (d *fixedCapacityDrive) Capacity() (total, free int64, err error) {
 func (d *fixedCapacityDrive) Sync() error {
 	d.syncCalls++
 	return d.syncErr
+}
+
+func (*fixedCapacityDrive) Format(tape.ID) error {
+	return errors.New("Format must not be called")
+}
+
+func (*fixedCapacityDrive) StampIdentity(volume.ID, tape.ID) error {
+	return errors.New("StampIdentity must not be called")
 }
 
 type seriesMetadata struct {

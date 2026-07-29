@@ -596,9 +596,12 @@ func TestDirectoryDriveRefusesWhenNothingLoaded(t *testing.T) {
 		Capacity:         100,
 	}}, "")
 
-	_, loadedErr := drive.Loaded()
-	if !errors.Is(loadedErr, executor.ErrNoCartridge) {
-		t.Fatalf("Loaded error = %v, want ErrNoCartridge", loadedErr)
+	identity, loadedErr := drive.LoadedIdentity()
+	if loadedErr != nil {
+		t.Fatalf("LoadedIdentity: %v", loadedErr)
+	}
+	if identity.State != executor.LoadedIdentityNone {
+		t.Fatalf("LoadedIdentity state = %q, want none", identity.State)
 	}
 	_, encryptionErr := drive.EncryptionActive()
 	if !errors.Is(encryptionErr, executor.ErrNoCartridge) {
@@ -1231,10 +1234,10 @@ func TestDirectoryDriveFaultInjection(t *testing.T) {
 	}}, "ABC123L6")
 	sentinel := errors.New("injected")
 
-	drive.SetFaults(executor.DriveFaults{Loaded: sentinel})
-	_, err := drive.Loaded()
+	drive.SetFaults(executor.DriveFaults{LoadedIdentity: sentinel})
+	_, err := drive.LoadedIdentity()
 	if !errors.Is(err, sentinel) {
-		t.Fatalf("Loaded error = %v, want injected", err)
+		t.Fatalf("LoadedIdentity error = %v, want injected", err)
 	}
 	drive.SetFaults(executor.DriveFaults{EncryptionActive: sentinel})
 	_, err = drive.EncryptionActive()
@@ -1315,12 +1318,22 @@ type faultDrive struct {
 	err error
 }
 
-func (d faultDrive) Loaded() (executor.Cartridge, error) { return executor.Cartridge{}, d.err }
-func (faultDrive) EncryptionActive() (bool, error)       { return false, nil }
+func (d faultDrive) Open() error { return d.err }
+func (faultDrive) Close() error  { return nil }
+func (d faultDrive) LoadedIdentity() (executor.LoadedIdentity, error) {
+	return executor.LoadedIdentity{}, d.err
+}
+func (faultDrive) EncryptionActive() (bool, error) { return false, nil }
 func (faultDrive) Capacity() (total, free int64, err error) {
 	return 0, 0, nil
 }
 func (faultDrive) Sync() error { return nil }
+func (faultDrive) Format(tape.ID) error {
+	return nil
+}
+func (faultDrive) StampIdentity(volume.ID, tape.ID) error {
+	return nil
+}
 
 type switchingDrive struct {
 	*executor.DirectoryDrive
@@ -1329,14 +1342,14 @@ type switchingDrive struct {
 	switchOnLoad int
 }
 
-func (d *switchingDrive) Loaded() (executor.Cartridge, error) {
+func (d *switchingDrive) LoadedIdentity() (executor.LoadedIdentity, error) {
 	d.loads++
 	if d.loads == d.switchOnLoad {
 		if err := d.SelectLoaded(d.next); err != nil {
-			return executor.Cartridge{}, err
+			return executor.LoadedIdentity{}, err
 		}
 	}
-	return d.DirectoryDrive.Loaded()
+	return d.DirectoryDrive.LoadedIdentity()
 }
 
 type scheduledDrive struct {
@@ -1348,21 +1361,21 @@ type scheduledDrive struct {
 	secondAt time.Duration
 }
 
-func (d *scheduledDrive) Loaded() (executor.Cartridge, error) {
+func (d *scheduledDrive) LoadedIdentity() (executor.LoadedIdentity, error) {
 	elapsed := time.Since(d.started)
 	switch {
 	case elapsed < d.firstAt:
 		d.ClearLoaded()
 	case elapsed < d.secondAt:
 		if err := d.SelectLoaded(d.first); err != nil {
-			return executor.Cartridge{}, err
+			return executor.LoadedIdentity{}, err
 		}
 	default:
 		if err := d.SelectLoaded(d.second); err != nil {
-			return executor.Cartridge{}, err
+			return executor.LoadedIdentity{}, err
 		}
 	}
-	return d.DirectoryDrive.Loaded()
+	return d.DirectoryDrive.LoadedIdentity()
 }
 
 type collectingSink struct {
@@ -1491,6 +1504,14 @@ func newDrive(
 	loaded tape.ID,
 ) *executor.DirectoryDrive {
 	t.Helper()
+	for index := range cartridges {
+		if cartridges[index].IdentityState == "" {
+			cartridges[index].IdentityState = executor.LoadedIdentityIdentified
+		}
+		if cartridges[index].MediumSerial == "" {
+			cartridges[index].MediumSerial = "MAM-" + string(cartridges[index].TapeID)
+		}
+	}
 	drive, err := executor.NewDirectoryDrive(cartridges)
 	if err != nil {
 		t.Fatalf("NewDirectoryDrive: %v", err)

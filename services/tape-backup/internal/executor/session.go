@@ -242,7 +242,7 @@ func RunSession(
 	events *EventOutbox,
 	handle PreparedPlanHandler,
 	options SessionOptions,
-) error {
+) (resultErr error) {
 	if err := validateRunSession(drive, events, handle, options); err != nil {
 		return err
 	}
@@ -253,7 +253,26 @@ func RunSession(
 	if len(pending) == 0 {
 		return ErrNoReadyPlans
 	}
+	if err := drive.Open(); err != nil {
+		return fmt.Errorf("executor: open drive: %w", err)
+	}
+	defer func() {
+		if err := drive.Close(); err != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("executor: close drive: %w", err))
+		}
+	}()
 
+	return runAdmittedPlans(ctx, drive, pending, events, handle, options)
+}
+
+func runAdmittedPlans(
+	ctx context.Context,
+	drive Drive,
+	pending []admittedPlan,
+	events *EventOutbox,
+	handle PreparedPlanHandler,
+	options SessionOptions,
+) error {
 	plansAdmitted := len(pending)
 	plansCompleted := 0
 	idleDeadline := time.Now().Add(options.IdleTimeout)
@@ -370,9 +389,12 @@ func waitForCandidate(
 	idleDeadline time.Time,
 ) (int, Cartridge, error) {
 	for {
-		cartridge, err := drive.Loaded()
+		identity, err := drive.LoadedIdentity()
 		switch {
-		case err == nil:
+		case err != nil:
+			return -1, Cartridge{}, fmt.Errorf("executor: identify loaded cartridge: %w", err)
+		case identity.State == LoadedIdentityIdentified:
+			cartridge := identity.Cartridge
 			if index := matchingPlan(plans, cartridge.TapeID); index >= 0 {
 				if _, _, capacityErr := drive.Capacity(); capacityErr == nil {
 					return index, cartridge, nil
@@ -383,9 +405,13 @@ func waitForCandidate(
 					)
 				}
 			}
-		case errors.Is(err, ErrNoCartridge):
+		case identity.State == LoadedIdentityNone,
+			identity.State == LoadedIdentityUnidentified:
 		default:
-			return -1, Cartridge{}, fmt.Errorf("executor: identify loaded cartridge: %w", err)
+			return -1, Cartridge{}, fmt.Errorf(
+				"executor: identify loaded cartridge: unknown identity state %q",
+				identity.State,
+			)
 		}
 
 		remaining := time.Until(idleDeadline)
