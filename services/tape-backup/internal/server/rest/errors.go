@@ -66,11 +66,11 @@ func encodeError(err error) (int, errorEnvelope) {
 	}
 	switch {
 	case errors.Is(err, service.ErrSessionActive):
-		return conflictEnvelope("busy", err)
+		return conflictEnvelope("busy", "session is already active")
 	case errors.Is(err, service.ErrApprovalRequired):
-		return conflictEnvelope("approval_required", err)
+		return conflictEnvelope("approval_required", "init plan is awaiting approval")
 	case errors.Is(err, service.ErrNoWork):
-		return conflictEnvelope("no_work", err)
+		return conflictEnvelope("no_work", "no pending snapshots for loaded tape")
 	case errors.Is(err, service.ErrApprovalNotAllowed):
 		return http.StatusConflict, errorEnvelope{
 			Kind:     "approval_not_allowed",
@@ -113,10 +113,10 @@ func encodeError(err error) (int, errorEnvelope) {
 	}
 }
 
-func conflictEnvelope(kind string, err error) (int, errorEnvelope) {
+func conflictEnvelope(kind string, message string) (int, errorEnvelope) {
 	return http.StatusConflict, errorEnvelope{
 		Kind:     kind,
 		Category: "invalid_params",
-		Message:  err.Error(),
+		Message:  message,
 	}
 }
