@@ -99,8 +99,8 @@ Deep or catch-up backfill is operator-scripted, not automated: the binary's
 config, fetchers, and parsers as the service, and prints ingest-ready JSONL —
 each stdout line is exactly the element `POST /api/v1/releases/ingest` accepts
 in `posts[]`. The resume cursor (`next_page=N`) goes to stderr so stdout stays
-pipeline-pure; an empty page (archive floor / past the end) prints nothing and
-exits 0.
+pipeline-pure; an empty page prints nothing and exits 0, and the loop below
+requires two consecutive empty pages before confirming the archive floor.
 
 ```sh
 kura-release-indexer crawl -config /etc/kura/release-indexer.toml -source nyaa -page 3
@@ -116,6 +116,7 @@ set -euo pipefail
 KURA="http://127.0.0.1:8080"
 CUTOFF="2026-05-01"                                             # your cutoff
 page=1
+empty_pages=0
 while :; do
   # Empty stdout means the archive floor ONLY when the crawl succeeded; a
   # failed fetch/parse also writes nothing, so branch on exit status first.
@@ -125,11 +126,17 @@ while :; do
   fi
   if [ ! -s batch.jsonl ]; then
     # The in-process walk requires TWO consecutive empty pages before calling
-    # the archive floor; a single empty page can be a listing artifact. Fetch
-    # one more page to confirm before trusting a first empty.
-    echo "empty page at $page — likely the archive floor; confirm with page $((page+1)) if in doubt" >&2
-    break
+    # the archive floor; a single empty page can be a listing artifact.
+    empty_pages=$((empty_pages+1))
+    if (( empty_pages >= 2 )); then
+      echo "archive floor confirmed by empty pages $((page-1)) and $page" >&2
+      break
+    fi
+    echo "empty page at $page — fetching page $((page+1)) to confirm" >&2
+    page=$((page+1)); sleep 2
+    continue
   fi
+  empty_pages=0
   # --fail-with-body + pipefail: an ingest error envelope must stop the loop
   # rather than silently advancing past an unpersisted page.
   if ! jq -s '{posts:.}' batch.jsonl \

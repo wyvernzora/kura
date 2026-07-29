@@ -141,6 +141,7 @@ func (c *Crawler) CrawlSince(ctx context.Context, oldest time.Time, emit func([]
 
 		if len(pagePosts) == 0 {
 			consecutiveEmpty++
+			consecutiveUndatable = 0
 			if consecutiveEmpty >= c.threshold {
 				return nil
 			}

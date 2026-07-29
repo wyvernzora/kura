@@ -41,10 +41,13 @@ func runCrawlCommand(args []string, stdout, stderr io.Writer) error {
 	if *page < 1 {
 		return fmt.Errorf("crawl: -page must be >= 1")
 	}
+	if *source != api.SourceDMHY && *source != api.SourceNyaa {
+		return fmt.Errorf("crawl: -source must be %q or %q", api.SourceDMHY, api.SourceNyaa)
+	}
 
 	// LoadCrawlTool needs no database URL and permits crawling a
 	// configured-but-disabled source: this is an operator command.
-	cfg, err := config.LoadCrawlTool(*configPath)
+	cfg, err := config.LoadCrawlTool(*configPath, *source)
 	if err != nil {
 		return err
 	}
@@ -73,8 +76,6 @@ func runCrawlCommand(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-	default:
-		return fmt.Errorf("crawl: -source must be %q or %q", api.SourceDMHY, api.SourceNyaa)
 	}
 
 	if len(posts) == 0 {

@@ -81,6 +81,23 @@ func TestRunCrawlCommandRejectsBadArguments(t *testing.T) {
 	}
 }
 
+func TestRunCrawlCommandRejectsInvalidDisabledSource(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "release-indexer.toml")
+	config := "[sources.dmhy]\nenabled = false\ncategory = \"-1\"\n"
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err := runCrawlCommand([]string{"-config", configPath, "-source", "dmhy"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "category must be a non-negative integer string") {
+		t.Fatalf("runCrawlCommand() error = %v, want invalid category error", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want no posts for invalid source config", stdout.String())
+	}
+}
+
 func copyFixture(t *testing.T, src, dst string) {
 	t.Helper()
 	body, err := os.ReadFile(src)

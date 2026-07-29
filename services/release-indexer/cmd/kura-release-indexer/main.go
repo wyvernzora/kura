@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -50,15 +51,19 @@ func main() {
 	// operator-scripted backfills; everything else is the serve path.
 	if len(os.Args) > 1 && os.Args[1] == "crawl" {
 		if err := runCrawlCommand(os.Args[2:], os.Stdout, os.Stderr); err != nil {
-			fmt.Fprintln(os.Stderr, "takuhai:", err)
+			writeCommandError(os.Stderr, err)
 			os.Exit(1)
 		}
 		return
 	}
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "kura-release-indexer:", err)
+		writeCommandError(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func writeCommandError(w io.Writer, err error) {
+	fmt.Fprintln(w, "kura-release-indexer:", err)
 }
 
 func run() error {

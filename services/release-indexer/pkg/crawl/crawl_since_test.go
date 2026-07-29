@@ -209,6 +209,28 @@ func TestCrawlSinceFailsOnConsecutiveUndatablePages(t *testing.T) {
 	}
 }
 
+func TestCrawlSinceEmptyPageResetsUndatableSequence(t *testing.T) {
+	now := time.Now()
+	epoch := -now.Sub(time.Unix(0, 0))
+	fixture := &sinceFixture{now: now, pages: [][]time.Duration{
+		{epoch},
+		{},
+		{epoch},
+	}}
+
+	pages := 0
+	err := fixture.crawler().CrawlSince(t.Context(), now.Add(-24*time.Hour), func([]api.RawPost) error {
+		pages++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("CrawlSince() error = %v, want separated undatable pages accepted", err)
+	}
+	if pages != 2 {
+		t.Fatalf("emitted %d pages, want 2 undatable content pages separated by empty", pages)
+	}
+}
+
 // The archive floor (consecutive empty pages) ends the walk cleanly when the
 // listing runs out before the time bound is reached.
 func TestCrawlSinceStopsAtArchiveFloor(t *testing.T) {

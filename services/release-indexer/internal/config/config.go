@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"regexp"
@@ -128,7 +129,7 @@ func Defaults(databaseURL string) Config {
 // the result. DatabaseURL remains outside TOML so deployments can inject it
 // from a Secret.
 func Load(path, databaseURL string) (Config, error) {
-	cfg, err := decode(path, databaseURL)
+	cfg, err := decode(path, databaseURL, true)
 	if err != nil {
 		return Config{}, err
 	}
@@ -140,20 +141,31 @@ func Load(path, databaseURL string) (Config, error) {
 
 // LoadCrawlTool loads source definitions for the offline `crawl` subcommand,
 // which fetches listing pages but never touches the database or listeners.
-// Only the source tables are validated, and only when enabled — the tool may
-// crawl a configured-but-disabled source.
-func LoadCrawlTool(path string) (Config, error) {
-	cfg, err := decode(path, "")
+// It validates the selected source's page-mode fields even when disabled,
+// without requiring scheduler-only interval or settle-window fields.
+func LoadCrawlTool(path, source string) (Config, error) {
+	cfg, err := decode(path, "", false)
 	if err != nil {
 		return Config{}, err
 	}
-	if err := cfg.validateSources(); err != nil {
+	if err := cfg.validateCrawlSource(source); err != nil {
 		return Config{}, fmt.Errorf("config: %w", err)
 	}
 	return cfg, nil
 }
 
-func decode(path, databaseURL string) (Config, error) {
+func (c Config) validateCrawlSource(source string) error {
+	switch source {
+	case "dmhy":
+		return validateCrawlDMHY(c.Sources.DMHY)
+	case "nyaa":
+		return validateCrawlNyaa(c.Sources.Nyaa)
+	default:
+		return fmt.Errorf("crawl source %q is invalid", source)
+	}
+}
+
+func decode(path, databaseURL string, requireSchedule bool) (Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("config: open %s: %w", path, err)
@@ -165,7 +177,7 @@ func decode(path, databaseURL string) (Config, error) {
 		return Config{}, fmt.Errorf("config: decode %s: %w", path, err)
 	}
 
-	cfg, err := raw.resolve(databaseURL)
+	cfg, err := raw.resolve(databaseURL, requireSchedule)
 	if err != nil {
 		return Config{}, fmt.Errorf("config: %w", err)
 	}
@@ -248,12 +260,26 @@ func validateDMHY(c SourceDMHY) error {
 	}); err != nil {
 		return err
 	}
-	category, err := strconv.Atoi(c.Category)
-	if err != nil || category < 0 {
-		return fmt.Errorf("sources.dmhy.category must be a non-negative integer string")
+	if err := validateDMHYCategory(c.Category); err != nil {
+		return err
 	}
 	if c.CacheTTL < 0 {
 		return fmt.Errorf("sources.dmhy.cache_ttl must be >= 0")
+	}
+	return nil
+}
+
+func validateCrawlDMHY(c SourceDMHY) error {
+	if err := validateCrawlFields("sources.dmhy", c.RequestTimeout, c.URL, c.MaxRPS); err != nil {
+		return err
+	}
+	return validateDMHYCategory(c.Category)
+}
+
+func validateDMHYCategory(raw string) error {
+	category, err := strconv.Atoi(raw)
+	if err != nil || category < 0 {
+		return fmt.Errorf("sources.dmhy.category must be a non-negative integer string")
 	}
 	return nil
 }
@@ -271,6 +297,10 @@ func validateNyaa(c SourceNyaa) error {
 		url:            c.URL,
 		maxRPS:         c.MaxRPS,
 	})
+}
+
+func validateCrawlNyaa(c SourceNyaa) error {
+	return validateCrawlFields("sources.nyaa", c.RequestTimeout, c.URL, c.MaxRPS)
 }
 
 type sourceTimings struct {
@@ -293,21 +323,25 @@ func validateSource(t sourceTimings) error {
 	if t.timeout <= 0 {
 		return fmt.Errorf("%s.timeout must be > 0", t.name)
 	}
-	if t.requestTimeout <= 0 {
-		return fmt.Errorf("%s.request_timeout must be > 0", t.name)
-	}
 	// A page slower than the run slice could never land: the walk would be
 	// killed by the run deadline on every attempt.
 	if t.timeout <= t.requestTimeout {
 		return fmt.Errorf("%s.timeout (%s) must be greater than %s.request_timeout (%s)", t.name, t.timeout, t.name, t.requestTimeout)
 	}
-	if strings.TrimSpace(t.url) == "" {
-		return fmt.Errorf("%s.url must not be empty", t.name)
+	return validateCrawlFields(t.name, t.requestTimeout, t.url, t.maxRPS)
+}
+
+func validateCrawlFields(name string, requestTimeout time.Duration, url string, maxRPS float64) error {
+	if requestTimeout <= 0 {
+		return fmt.Errorf("%s.request_timeout must be > 0", name)
+	}
+	if strings.TrimSpace(url) == "" {
+		return fmt.Errorf("%s.url must not be empty", name)
 	}
 	// The rate cap is load-bearing politeness; the former `0 = no limiter`
-	// opt-out is retired for enabled sources.
-	if t.maxRPS <= 0 {
-		return fmt.Errorf("%s.max_rps must be > 0", t.name)
+	// opt-out is retired for enabled and operator-crawled sources.
+	if maxRPS <= 0 {
+		return fmt.Errorf("%s.max_rps must be > 0", name)
 	}
 	return nil
 }
@@ -363,7 +397,7 @@ type fileNyaa struct {
 	MaxRPS         *float64 `toml:"max_rps"`
 }
 
-func (r fileConfig) resolve(databaseURL string) (Config, error) {
+func (r fileConfig) resolve(databaseURL string, requireSchedule bool) (Config, error) {
 	cfg := Defaults(databaseURL)
 	if r.Database != nil {
 		setString(&cfg.DatabaseSchema, r.Database.Schema)
@@ -377,19 +411,19 @@ func (r fileConfig) resolve(databaseURL string) (Config, error) {
 		cfg.QueueMaxAttempts = *r.Queue.MaxAttempts
 	}
 	if r.Sources != nil && r.Sources.DMHY != nil {
-		if err := resolveDMHY(&cfg.Sources.DMHY, r.Sources.DMHY); err != nil {
+		if err := resolveDMHY(&cfg.Sources.DMHY, r.Sources.DMHY, requireSchedule); err != nil {
 			return Config{}, err
 		}
 	}
 	if r.Sources != nil && r.Sources.Nyaa != nil {
-		if err := resolveNyaa(&cfg.Sources.Nyaa, r.Sources.Nyaa); err != nil {
+		if err := resolveNyaa(&cfg.Sources.Nyaa, r.Sources.Nyaa, requireSchedule); err != nil {
 			return Config{}, err
 		}
 	}
 	return cfg, nil
 }
 
-func resolveDMHY(dst *SourceDMHY, src *fileDMHY) error {
+func resolveDMHY(dst *SourceDMHY, src *fileDMHY, requireSchedule bool) error {
 	dst.Enabled = true
 	setBool(&dst.Enabled, src.Enabled)
 	setString(&dst.URL, src.URL)
@@ -397,10 +431,10 @@ func resolveDMHY(dst *SourceDMHY, src *fileDMHY) error {
 	setFloat(&dst.MaxRPS, src.MaxRPS)
 
 	var err error
-	if dst.Interval, err = requiredDuration("sources.dmhy.interval", src.Interval, dst.Enabled); err != nil {
+	if dst.Interval, err = requiredDuration("sources.dmhy.interval", src.Interval, dst.Enabled && requireSchedule); err != nil {
 		return err
 	}
-	if dst.SettleWindow, err = requiredDuration("sources.dmhy.settle_window", src.SettleWindow, dst.Enabled); err != nil {
+	if dst.SettleWindow, err = requiredDuration("sources.dmhy.settle_window", src.SettleWindow, dst.Enabled && requireSchedule); err != nil {
 		return err
 	}
 	if dst.Timeout, err = optionalDuration("sources.dmhy.timeout", src.Timeout, dst.Timeout); err != nil {
@@ -415,7 +449,7 @@ func resolveDMHY(dst *SourceDMHY, src *fileDMHY) error {
 	return nil
 }
 
-func resolveNyaa(dst *SourceNyaa, src *fileNyaa) error {
+func resolveNyaa(dst *SourceNyaa, src *fileNyaa, requireSchedule bool) error {
 	dst.Enabled = true
 	setBool(&dst.Enabled, src.Enabled)
 	setString(&dst.URL, src.URL)
@@ -425,10 +459,10 @@ func resolveNyaa(dst *SourceNyaa, src *fileNyaa) error {
 	setFloat(&dst.MaxRPS, src.MaxRPS)
 
 	var err error
-	if dst.Interval, err = requiredDuration("sources.nyaa.interval", src.Interval, dst.Enabled); err != nil {
+	if dst.Interval, err = requiredDuration("sources.nyaa.interval", src.Interval, dst.Enabled && requireSchedule); err != nil {
 		return err
 	}
-	if dst.SettleWindow, err = requiredDuration("sources.nyaa.settle_window", src.SettleWindow, dst.Enabled); err != nil {
+	if dst.SettleWindow, err = requiredDuration("sources.nyaa.settle_window", src.SettleWindow, dst.Enabled && requireSchedule); err != nil {
 		return err
 	}
 	if dst.Timeout, err = optionalDuration("sources.nyaa.timeout", src.Timeout, dst.Timeout); err != nil {
@@ -469,6 +503,9 @@ func parseDuration(name, raw string) (time.Duration, error) {
 		unit := 24 * time.Hour
 		if m[2] == "w" {
 			unit = 7 * 24 * time.Hour
+		}
+		if int64(n) > math.MaxInt64/int64(unit) {
+			return 0, fmt.Errorf("%s %q is invalid: overflows time.Duration", name, raw)
 		}
 		return time.Duration(n) * unit, nil
 	}

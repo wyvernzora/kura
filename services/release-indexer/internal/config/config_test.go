@@ -105,6 +105,24 @@ func TestParseDurationDayWeekSuffixes(t *testing.T) {
 	}
 }
 
+func TestParseDurationRejectsDayWeekOverflow(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+	}{
+		{name: "days", raw: "300000d"},
+		{name: "weeks", raw: "50000w"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseDuration("test", tt.raw)
+			if err == nil || !strings.Contains(err.Error(), "overflows time.Duration") {
+				t.Fatalf("parseDuration(%q) error = %v, want overflow error", tt.raw, err)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsInvalidConfig(t *testing.T) {
 	tests := []struct {
 		name string
@@ -204,7 +222,7 @@ func TestLoadCrawlTool(t *testing.T) {
 [sources.dmhy]
 enabled = false
 url = "http://dmhy.local"
-`))
+`), "dmhy")
 	if err != nil {
 		t.Fatalf("LoadCrawlTool() error = %v", err)
 	}
@@ -218,11 +236,71 @@ url = "http://dmhy.local"
 		t.Fatalf("Nyaa defaults = %+v", cfg.Sources.Nyaa)
 	}
 
-	// Enabled sources are still validated so the scheduled loop's contract
-	// cannot be bypassed through the tool path.
-	if _, err := LoadCrawlTool(writeConfig(t, "[sources.nyaa]\ninterval = \"5m\"\n")); err == nil ||
-		!strings.Contains(err.Error(), "settle_window is required") {
-		t.Fatalf("LoadCrawlTool() error = %v, want settle_window requirement", err)
+	cfg, err = LoadCrawlTool(writeConfig(t, `
+[sources.nyaa]
+url = "http://nyaa.local"
+`), "nyaa")
+	if err != nil {
+		t.Fatalf("LoadCrawlTool(enabled without schedule) error = %v", err)
+	}
+	if !cfg.Sources.Nyaa.Enabled || cfg.Sources.Nyaa.Interval != 0 || cfg.Sources.Nyaa.SettleWindow != 0 {
+		t.Fatalf("Nyaa = %+v, want enabled page config without scheduler fields", cfg.Sources.Nyaa)
+	}
+}
+
+func TestLoadCrawlToolValidatesSelectedSourceWhenDisabled(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		body   string
+		want   string
+	}{
+		{
+			name:   "negative DMHY category",
+			source: "dmhy",
+			body:   "[sources.dmhy]\nenabled = false\ncategory = \"-1\"\n",
+			want:   "non-negative integer string",
+		},
+		{
+			name:   "empty Nyaa URL",
+			source: "nyaa",
+			body:   "[sources.nyaa]\nenabled = false\nurl = \"\"\n",
+			want:   "url must not be empty",
+		},
+		{
+			name:   "zero request timeout",
+			source: "nyaa",
+			body:   "[sources.nyaa]\nenabled = false\nrequest_timeout = \"0s\"\n",
+			want:   "request_timeout must be > 0",
+		},
+		{
+			name:   "zero rate limit",
+			source: "nyaa",
+			body:   "[sources.nyaa]\nenabled = false\nmax_rps = 0\n",
+			want:   "max_rps must be > 0",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := LoadCrawlTool(writeConfig(t, tt.body), tt.source)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("LoadCrawlTool() error = %v, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadCrawlToolValidatesOnlySelectedSourcePageFields(t *testing.T) {
+	path := writeConfig(t, `
+[sources.dmhy]
+enabled = false
+category = "-1"
+
+[sources.nyaa]
+enabled = false
+`)
+	if _, err := LoadCrawlTool(path, "nyaa"); err != nil {
+		t.Fatalf("LoadCrawlTool(select nyaa) error = %v, want unselected DMHY ignored", err)
 	}
 }
 
