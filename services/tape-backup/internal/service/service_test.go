@@ -1,0 +1,406 @@
+package service
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/wyvernzora/kura/services/tape-backup/internal/executor"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/planner"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/snapshotname"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
+)
+
+const (
+	testTape   tape.ID   = "ABC123L6"
+	secondTape tape.ID   = "DEF456L6"
+	testVolume volume.ID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+)
+
+func TestRunExecutesValidatedBeliefDraftVerbatimAfterPendingChanges(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	consult, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	if got := backupRefs(consult.Drafts[0]); !reflect.DeepEqual(got, []string{"tvdb:a"}) {
+		t.Fatalf("consult backups = %v, want [tvdb:a]", got)
+	}
+
+	f.addSeries(t, "D", "tvdb:d", 64)
+	assertNoError(t, f.service.Run(t.Context(), PlanRequest{}))
+
+	catalog, err := planner.ReadCatalogSnapshot(f.stateRoot)
+	assertNoError(t, err)
+	got := make([]string, 0)
+	for _, snapshot := range catalog.Volumes[0].Snapshots {
+		got = append(got, snapshot.MetadataRef)
+	}
+	if !reflect.DeepEqual(got, []string{"tvdb:a"}) {
+		t.Fatalf("executed backups = %v, want verbatim [tvdb:a]", got)
+	}
+}
+
+func TestConsultDampsAndPreservesInitDraft(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	f.addSeries(t, "B", "tvdb:b", 16)
+	first, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	second, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	if !reflect.DeepEqual(first.Drafts[0].Target, second.Drafts[0].Target) ||
+		!reflect.DeepEqual(first.Drafts[0].Actions, second.Drafts[0].Actions) {
+		t.Fatalf("re-consult changed target/actions")
+	}
+
+	init := f.initDraft(t, secondTape, "SERIAL-2", "tvdb:held")
+	assertNoError(t, backupplan.Draft(f.stateRoot, init))
+	third, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	preserved, err := backupplan.ReadDraft(f.stateRoot, init.PlanID)
+	assertNoError(t, err)
+	if preserved.PlanID != init.PlanID {
+		t.Fatalf("preserved init planID = %q, want %q", preserved.PlanID, init.PlanID)
+	}
+	if len(third.Report.InitPlansAwaitingApproval) != 1 ||
+		len(third.Report.InitPlansAwaitingApproval[0].Claimed) != 1 {
+		t.Fatalf("init status = %+v, want one held claim", third.Report.InitPlansAwaitingApproval)
+	}
+}
+
+func TestServiceMutexSerializesPromotionAgainstConsultSweep(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	_, err := f.service.Consult(nil)
+	assertNoError(t, err)
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	f.service.beforePromote = func() {
+		close(entered)
+		<-release
+	}
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- f.service.Run(context.Background(), PlanRequest{})
+	}()
+	<-entered
+	consultDone := make(chan error, 1)
+	go func() {
+		_, err := f.service.Consult(nil)
+		consultDone <- err
+	}()
+	var consultErr error
+	consultCrossed := false
+	select {
+	case err := <-consultDone:
+		consultErr = err
+		consultCrossed = true
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	assertNoError(t, <-runDone)
+	if !consultCrossed {
+		consultErr = <-consultDone
+	}
+	assertNoError(t, consultErr)
+}
+
+func TestStubOperationsRefuseWithExactCodes(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	tests := []struct {
+		operation string
+		want      string
+	}{
+		{"compaction", "compaction_deferred: compaction is deferred"},
+		{"sync", "sync_deferred: sync-to-catalog is deferred"},
+		{"recovery", "recovery_deferred: recovery is deferred"},
+	}
+	for _, test := range tests {
+		t.Run(test.operation, func(t *testing.T) {
+			_, err := f.service.Plan(PlanRequest{Operation: test.operation})
+			assertError(t, err, test.want)
+			err = f.service.Run(t.Context(), PlanRequest{Operation: test.operation})
+			assertError(t, err, test.want)
+		})
+	}
+}
+
+func TestDecisionTreeRefusesIdentityAdoptionAndDivergence(t *testing.T) {
+	t.Run("identity", func(t *testing.T) {
+		f := newFixture(t, unidentifiedCartridge(t, testTape))
+		_, err := f.service.Plan(PlanRequest{})
+		want := "identity_unconfirmed: unidentified media requires the declared cartridge label"
+		assertError(t, err, want)
+		assertError(t, f.service.Run(t.Context(), PlanRequest{}), want)
+	})
+	t.Run("adoption", func(t *testing.T) {
+		const unknown volume.ID = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+		cartridge := identifiedCartridge(t, testTape, unknown, false)
+		writeMarked(t, cartridge.Root, "tvdb:foreign", 1)
+		f := newFixture(t, cartridge)
+		_, err := f.service.Plan(PlanRequest{})
+		want := "adoption_deferred: cartridge carries volume " + string(unknown) +
+			", not in the catalog, with 1 committed snapshots; adoption/reformat of non-blank tapes is deferred"
+		assertError(t, err, want)
+		assertError(t, f.service.Run(t.Context(), PlanRequest{}), want)
+	})
+	t.Run("divergence", func(t *testing.T) {
+		cartridge := identifiedCartridge(t, testTape, testVolume, true)
+		writeMarked(t, cartridge.Root, "tvdb:foreign", 1)
+		f := newFixture(t, cartridge)
+		_, err := f.service.Plan(PlanRequest{})
+		name, parseErr := snapshotname.Format("tvdb:foreign", 1)
+		assertNoError(t, parseErr)
+		want := "divergence_deferred: tape's contents diverge from the catalog " +
+			"(missing=[] extra=[" + name + "]); divergence handling is deferred"
+		assertError(t, err, want)
+		assertError(t, f.service.Run(t.Context(), PlanRequest{}), want)
+	})
+}
+
+func TestStatusSurfacesDraftInitPlanWithoutMutatingIt(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	init := f.initDraft(t, secondTape, "SERIAL-2", "tvdb:held")
+	assertNoError(t, backupplan.Draft(f.stateRoot, init))
+	_, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	status, err := f.service.Status()
+	assertNoError(t, err)
+	if len(status.InitDrafts) != 1 ||
+		status.InitDrafts[0].PlanID != init.PlanID ||
+		len(status.InitDrafts[0].Claimed) != 1 {
+		t.Fatalf("Status().InitDrafts = %+v", status.InitDrafts)
+	}
+	if status.Consult == nil || status.Consult.SchemaVersion != reportSchemaVersion {
+		t.Fatalf("Status().Consult = %+v, want persisted report", status.Consult)
+	}
+	_, err = backupplan.ReadDraft(f.stateRoot, init.PlanID)
+	assertNoError(t, err)
+}
+
+func TestTargetedPlanLifecycleKeepsFillsEphemeralAndInitCeremonial(t *testing.T) {
+	t.Run("fill is ephemeral", func(t *testing.T) {
+		f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+		f.addSeries(t, "A", "tvdb:a", 8)
+		result, err := f.service.Plan(PlanRequest{})
+		assertNoError(t, err)
+		if result.Classification != "fill" || result.Persisted {
+			t.Fatalf("Plan() = %+v, want ephemeral fill", result)
+		}
+		drafts, err := backupplan.ListDraft(f.stateRoot)
+		assertNoError(t, err)
+		if len(drafts) != 0 {
+			t.Fatalf("draft plans = %d, want 0", len(drafts))
+		}
+	})
+
+	t.Run("init awaits approve and can be discarded", func(t *testing.T) {
+		f := newFixture(t, unidentifiedCartridge(t, testTape))
+		f.addSeries(t, "A", "tvdb:a", 8)
+		result, err := f.service.Plan(PlanRequest{TapeID: testTape})
+		assertNoError(t, err)
+		if result.Classification != "init" || !result.Persisted {
+			t.Fatalf("Plan() = %+v, want persisted init", result)
+		}
+		assertNoError(t, f.service.Approve(result.Plan.PlanID))
+		ready, err := backupplan.ListReady(f.stateRoot)
+		assertNoError(t, err)
+		if len(ready) != 1 {
+			t.Fatalf("ready plans = %d, want 1", len(ready))
+		}
+		assertNoError(t, f.service.Discard(result.Plan.PlanID))
+		ready, err = backupplan.ListReady(f.stateRoot)
+		assertNoError(t, err)
+		if len(ready) != 0 {
+			t.Fatalf("ready plans after discard = %d, want 0", len(ready))
+		}
+	})
+}
+
+type fixture struct {
+	service     *Service
+	drive       *executor.DirectoryDrive
+	stateRoot   string
+	libraryRoot string
+	ids         []string
+}
+
+func newFixture(t *testing.T, cartridge executor.DirectoryCartridge) *fixture {
+	t.Helper()
+	stateRoot := t.TempDir()
+	libraryRoot := t.TempDir()
+	drive, err := executor.NewDirectoryDrive([]executor.DirectoryCartridge{cartridge})
+	assertNoError(t, err)
+	assertNoError(t, drive.SelectLoaded(cartridge.TapeID))
+	if cartridge.IdentityState == executor.LoadedIdentityIdentified &&
+		cartridge.TapeID == testTape &&
+		cartridge.Root != "" &&
+		cartridge.MediumSerial == "SERIAL-KNOWN" {
+		header, readErr := os.ReadFile(tapevolume.VolumeFile(cartridge.Root))
+		assertNoError(t, readErr)
+		assertNoError(t, tapecatalog.InstallVolume(
+			stateRoot,
+			testVolume,
+			header,
+			tapecatalog.Observed{
+				TapeID:        testTape,
+				ObservedAt:    time.Unix(1, 0).UTC(),
+				CapacityBytes: cartridge.Capacity,
+				FreeBytes:     cartridge.Capacity,
+			},
+		))
+	}
+	handler, err := executor.NewBackupActionHandler(nil, executor.OpenDestination, drive)
+	assertNoError(t, err)
+	f := &fixture{
+		drive: drive, stateRoot: stateRoot, libraryRoot: libraryRoot,
+		ids: []string{
+			"01ARZ3NDEKTSV4RRFFQ69G5FAX",
+			"01ARZ3NDEKTSV4RRFFQ69G5FAY",
+			"01ARZ3NDEKTSV4RRFFQ69G5FAZ",
+			"01ARZ3NDEKTSV4RRFFQ69G5FB0",
+			"01ARZ3NDEKTSV4RRFFQ69G5FB1",
+			"01ARZ3NDEKTSV4RRFFQ69G5FB2",
+			"01ARZ3NDEKTSV4RRFFQ69G5FB3",
+			"01ARZ3NDEKTSV4RRFFQ69G5FB4",
+		},
+	}
+	service, err := New(Deps{
+		StateRoot: stateRoot, LibraryRoot: libraryRoot, Drive: drive, Backup: handler,
+		Creator:         backupplan.Creator{Version: "test", Host: "test-host"},
+		FreeSpaceMargin: 0, FlushCadence: 1,
+		PollInterval: time.Millisecond, IdleTimeout: time.Second,
+		Now: func() time.Time { return time.Unix(100, 0).UTC() },
+		NewID: func() string {
+			id := f.ids[0]
+			f.ids = f.ids[1:]
+			return id
+		},
+	})
+	assertNoError(t, err)
+	f.service = service
+	return f
+}
+
+func identifiedCartridge(
+	t *testing.T,
+	tapeID tape.ID,
+	volumeID volume.ID,
+	known bool,
+) executor.DirectoryCartridge {
+	t.Helper()
+	root := t.TempDir()
+	assertNoError(t, tapevolume.Write(root, tapevolume.Volume{
+		VolumeID: volumeID, TapeID: tapeID, CreatedAt: time.Unix(1, 0).UTC(),
+	}))
+	assertNoError(t, os.MkdirAll(tapevolume.SnapshotsDir(root), 0o775))
+	serial := "SERIAL-UNKNOWN"
+	if known {
+		serial = "SERIAL-KNOWN"
+	}
+	return executor.DirectoryCartridge{
+		TapeID: tapeID, Root: root, Mounted: true,
+		IdentityState: executor.LoadedIdentityIdentified,
+		MediumSerial:  serial, EncryptionActive: true, Capacity: 1 << 30,
+	}
+}
+
+func unidentifiedCartridge(t *testing.T, tapeID tape.ID) executor.DirectoryCartridge {
+	t.Helper()
+	return executor.DirectoryCartridge{
+		TapeID: tapeID, Root: t.TempDir(), Mounted: true,
+		IdentityState: executor.LoadedIdentityUnidentified,
+		MediumSerial:  "SERIAL-1", EncryptionActive: true, Capacity: 1 << 30,
+	}
+}
+
+func (f *fixture) addSeries(
+	t *testing.T,
+	dir, metadataRef string,
+	payloadBytes int,
+) {
+	t.Helper()
+	root := filepath.Join(f.libraryRoot, dir)
+	assertNoError(t, os.MkdirAll(filepath.Join(root, ".kura"), 0o775))
+	metadata := `{"schemaVersion":3,"generation":1,"metadataRef":"` +
+		metadataRef + `","episodes":{},"stagedTrash":[],"stagedExtras":[]}`
+	assertNoError(t, os.WriteFile(
+		filepath.Join(root, ".kura", "series.json"),
+		[]byte(metadata),
+		0o664,
+	))
+	assertNoError(t, os.WriteFile(
+		filepath.Join(root, "payload.mkv"),
+		make([]byte, payloadBytes),
+		0o664,
+	))
+}
+
+func (f *fixture) initDraft(
+	t *testing.T,
+	tapeID tape.ID,
+	serial, metadataRef string,
+) backupplan.Plan {
+	t.Helper()
+	name, err := snapshotname.Format(metadataRef, 1)
+	assertNoError(t, err)
+	planID := f.ids[0]
+	f.ids = f.ids[1:]
+	return backupplan.Plan{
+		PlanID: planID, CreatedAt: time.Unix(90, 0).UTC(),
+		CreatedBy: backupplan.Creator{Version: "test", Host: "test-host"},
+		Target:    backupplan.Target{TapeID: tapeID, MediumSerial: serial},
+		Actions: []backupplan.Action{
+			{Type: backupplan.ActionReformat},
+			{Type: backupplan.ActionAdmit, VolumeID: "01ARZ3NDEKTSV4RRFFQ69G5FAV"},
+			{
+				Type: backupplan.ActionBackup, MetadataRef: metadataRef,
+				RootPath: "A", Generation: 1,
+				PayloadFingerprint: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+			{Type: backupplan.ActionAssertInventory, Snapshots: []string{name}},
+		},
+	}
+}
+
+func writeMarked(t *testing.T, root, metadataRef string, generation int) {
+	t.Helper()
+	name, err := snapshotname.Format(metadataRef, generation)
+	assertNoError(t, err)
+	dir := filepath.Join(tapevolume.SnapshotsDir(root), name)
+	assertNoError(t, os.MkdirAll(dir, 0o775))
+	assertNoError(t, os.WriteFile(filepath.Join(dir, "complete.json"), []byte("{}"), 0o664))
+}
+
+func backupRefs(plan backupplan.Plan) []string {
+	refs := make([]string, 0)
+	for _, action := range plan.Actions {
+		if action.Type == backupplan.ActionBackup {
+			refs = append(refs, action.MetadataRef)
+		}
+	}
+	return refs
+}
+
+func assertNoError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("error = %v, want nil", err)
+	}
+}
+
+func assertError(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v, want %q", err, want)
+	}
+}

@@ -89,6 +89,35 @@ type Plan struct {
 	Actions   []Action
 }
 
+// MarshalJSON exposes the permanent plan wire shape to service transports and
+// reports without duplicating it outside this package.
+func (p Plan) MarshalJSON() ([]byte, error) {
+	return json.Marshal(toWire(p))
+}
+
+// UnmarshalJSON accepts the same permanent wire shape MarshalJSON emits.
+func (p *Plan) UnmarshalJSON(data []byte) error {
+	var wire planWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire.SchemaVersion != schemaVersion {
+		return fmt.Errorf(
+			"backupplan: unsupported plan schemaVersion %d",
+			wire.SchemaVersion,
+		)
+	}
+	plan, err := fromWire(wire)
+	if err != nil {
+		return err
+	}
+	if err := validatePlan(plan); err != nil {
+		return err
+	}
+	*p = plan
+	return nil
+}
+
 type planWire struct {
 	SchemaVersion int          `json:"schemaVersion"`
 	PlanID        string       `json:"planID"`

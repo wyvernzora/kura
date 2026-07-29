@@ -90,6 +90,72 @@ func Consult(
 	return report, nil
 }
 
+// ConsultTarget computes the pending set and assigns only to target. Catalog
+// protection is still evaluated globally.
+func ConsultTarget(
+	library LibrarySnapshot,
+	catalog CatalogSnapshot,
+	target Target,
+	freeSpaceMargin int64,
+) (Report, error) {
+	report, err := Consult(library, catalog, nil, freeSpaceMargin)
+	if err != nil {
+		return Report{}, err
+	}
+
+	var volumes []Volume
+	var blanks []Blank
+	switch target.Kind {
+	case TargetKnown:
+		for _, candidate := range catalog.Volumes {
+			if candidate.VolumeID == target.VolumeID &&
+				candidate.TapeID == target.TapeID {
+				volumes = []Volume{candidate}
+				break
+			}
+		}
+		if len(volumes) == 0 {
+			return Report{}, fmt.Errorf(
+				"planner: target volume %s on tape %s is not in the catalog",
+				target.VolumeID,
+				target.TapeID,
+			)
+		}
+	case TargetBlank:
+		if _, err := tape.ParseID(string(target.TapeID)); err != nil {
+			return Report{}, fmt.Errorf("planner: target blank: %w", err)
+		}
+		for _, candidate := range catalog.Volumes {
+			if candidate.TapeID == target.TapeID {
+				return Report{}, fmt.Errorf(
+					"planner: target blank tape %s is known as volume %s",
+					target.TapeID,
+					candidate.VolumeID,
+				)
+			}
+		}
+		blanks = []Blank{{TapeID: target.TapeID}}
+	default:
+		return Report{}, fmt.Errorf("planner: unsupported target kind %q", target.Kind)
+	}
+
+	report.Assignments, report.Shortfall = allocate(
+		report.Pending,
+		volumes,
+		blanks,
+		freeSpaceMargin,
+	)
+	report.Sizing = sizeReport(
+		report.Pending,
+		report.Assignments,
+		report.Shortfall,
+		volumes,
+		blanks,
+		freeSpaceMargin,
+	)
+	return report, nil
+}
+
 func validateInputs(
 	library LibrarySnapshot,
 	catalog CatalogSnapshot,
