@@ -151,6 +151,32 @@ func setDuration(raw *string, dst *time.Duration, name string) error {
 	return nil
 }
 
+// addrsCollide reports whether two listen addresses would contend for
+// the same socket: same non-zero port with equal hosts, or either side
+// binding the wildcard. Colliding listeners would otherwise surface as
+// a raw bind-time "address in use". Mirrors the library-manager's
+// config check.
+//
+// Deliberately best-effort and textual: it catches the realistic
+// footgun (same or default port twice) with a clear config error;
+// exotic spellings and mixed-family nuances are left to net.Listen's
+// bind-time failure, which still aborts startup fast.
+func addrsCollide(a, b string) bool {
+	ah, ap, aerr := net.SplitHostPort(a)
+	bh, bp, berr := net.SplitHostPort(b)
+	if aerr != nil || berr != nil {
+		return a == b
+	}
+	if ap == "0" || bp == "0" || ap != bp {
+		return false
+	}
+	if ah == bh {
+		return true
+	}
+	wild := func(h string) bool { return h == "" || h == "0.0.0.0" || h == "::" }
+	return wild(ah) || wild(bh)
+}
+
 // Validate rejects configuration the bridge cannot run on.
 func (c Config) Validate() error {
 	if c.Address == "" {
@@ -171,6 +197,9 @@ func (c Config) Validate() error {
 	}
 	if _, _, err := net.SplitHostPort(c.MetricsAddress); err != nil {
 		return fmt.Errorf("server.metrics_address %q is not host:port: %w", c.MetricsAddress, err)
+	}
+	if addrsCollide(c.MetricsAddress, c.Address) {
+		return fmt.Errorf("server.metrics_address %q collides with server.address %q", c.MetricsAddress, c.Address)
 	}
 	for _, d := range []struct {
 		v    time.Duration

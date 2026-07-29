@@ -350,7 +350,11 @@ One origin for the whole suite: Caddy fronting the SPA, the leaf REST
 APIs, and the MCP bridge. `web/` holds the SPA (React + Vite); the
 Caddyfile, bridge, and image live at the top of the directory. Leaf
 addresses come from `KURA_LIBRARY_UPSTREAM` and `KURA_RELEASES_UPSTREAM`,
-declared once on the Pod and read by both Caddy and the bridge. See
+declared once on the Pod and read by both Caddy and the bridge.
+Observability: Caddy writes JSON access logs to stderr (credential
+headers scrubbed) and exposes `caddy_http_*` metrics on `:9090`; the
+bridge's `internal/metrics` exposes `kura_mcp_*` per-tool metrics on
+`server.metrics_address` (default `:9091` — Caddy owns `:9090` in-Pod). See
 `services/gateway/web/README.md` for the SPA's structure and commands
 (`make check` = lint + typecheck + test + build).
 

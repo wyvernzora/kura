@@ -55,7 +55,11 @@ func run() error {
 		return fmt.Errorf("config: %w", err)
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("component", "bridge")
+	// Each subsystem stamps its own "component" on a shared base —
+	// deriving them from a base that already carries component=bridge
+	// would emit duplicate JSON keys (slog does not dedupe).
+	baseLogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	logger := baseLogger.With("component", "bridge")
 
 	opts := client.Options{
 		RequestTimeout:   cfg.RequestTimeout,
@@ -68,10 +72,10 @@ func run() error {
 		{Name: "libraryManager", URL: library.HealthURL()},
 		{Name: "releaseIndexer", URL: releases.HealthURL()},
 	}, cfg.ComponentTimeout)
-	healthz.Logger = logger.With("component", "health")
+	healthz.Logger = baseLogger.With("component", "health")
 
 	metricsSrv := metrics.New(version)
-	bridge := gwmcp.New(version, library, releases, logger.With("component", "mcp"))
+	bridge := gwmcp.New(version, library, releases, baseLogger.With("component", "mcp"))
 	bridge.Metrics = metricsSrv
 	mcpHandler := bridge.Handler(cfg.SessionTimeout)
 

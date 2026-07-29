@@ -12,14 +12,19 @@
 	grace_period 10s
 	# Per-request metrics collection (caddy_http_*). Exposed on the
 	# dedicated :9090 listener below, never on the public origin.
+	# Caveat: long-lived MCP streaming GETs land in the same
+	# caddy_http_request_duration_seconds histogram as API traffic and
+	# inflate its upper percentiles — read MCP latency from the bridge's
+	# kura_mcp_tool_duration_seconds instead.
 	metrics
 }
 
 :8080 {
 	# One JSON access-log line per request to stderr, alongside the
-	# bridge's logs. The incoming Authorization header is Pomerium's
-	# credential — drop it (and cookies) before the line is written;
-	# everything else about a request is fair game.
+	# bridge's logs. Credential-bearing headers — Pomerium's upstream
+	# Authorization, cookies, and its identity JWT assertion — are
+	# dropped before the line is written; everything else about a
+	# request is fair game.
 	log {
 		output stderr
 		format filter {
@@ -27,6 +32,7 @@
 			fields {
 				request>headers>Authorization delete
 				request>headers>Cookie delete
+				request>headers>X-Pomerium-Jwt-Assertion delete
 			}
 		}
 	}

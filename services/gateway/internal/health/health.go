@@ -103,7 +103,9 @@ func (h *Handler) System(w http.ResponseWriter, r *http.Request) {
 		go func(ctx context.Context, leaf Leaf) {
 			comp, err := h.probe(ctx, leaf)
 			if err != nil && h.Logger != nil {
-				h.Logger.Warn("leaf health probe degraded", "component", leaf.Name, "url", leaf.URL, "err", err)
+				// "leaf", not "component" — the logger already carries
+				// component=health, and slog would emit both keys.
+				h.Logger.Warn("leaf health probe degraded", "leaf", leaf.Name, "url", leaf.URL, "err", err)
 			}
 			results <- result{name: leaf.Name, comp: comp}
 		}(ctx, leaf)

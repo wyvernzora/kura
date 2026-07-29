@@ -90,3 +90,49 @@ func TestValidateRequiresLoopback(t *testing.T) {
 		}
 	}
 }
+
+func TestMetricsAddressDefaultAndOverride(t *testing.T) {
+	cfg, err := Load(filepath.Join(t.TempDir(), "nope.toml"), env(map[string]string{
+		EnvLibraryUpstream:  "lib:8080",
+		EnvReleasesUpstream: "rel:8080",
+	}))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.MetricsAddress != ":9091" {
+		t.Fatalf("default metrics_address = %q, want :9091", cfg.MetricsAddress)
+	}
+
+	path := filepath.Join(t.TempDir(), "gateway.toml")
+	if err := os.WriteFile(path, []byte("[server]\nmetrics_address = \":9191\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(path, env(map[string]string{
+		EnvLibraryUpstream:  "lib:8080",
+		EnvReleasesUpstream: "rel:8080",
+	}))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.MetricsAddress != ":9191" {
+		t.Fatalf("metrics_address = %q, want :9191", cfg.MetricsAddress)
+	}
+}
+
+func TestValidateRejectsMetricsAddressCollision(t *testing.T) {
+	for name, metrics := range map[string]string{
+		"identical": "127.0.0.1:8081",
+		"wildcard":  ":8081",
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := Defaults()
+			cfg.MetricsAddress = metrics
+			cfg.LibraryUpstream = "lib:8080"
+			cfg.ReleasesUpstream = "rel:8080"
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "collides") {
+				t.Fatalf("Validate = %v, want collision error", err)
+			}
+		})
+	}
+}
