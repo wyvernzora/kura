@@ -14,7 +14,7 @@ func TestValidateAttrs(t *testing.T) {
 		ok    bool
 	}{
 		{name: "empty", attrs: nil, ok: true},
-		{name: "valid", attrs: media.Attrs{"origin": "takuhai", "takuhai.infohash": "abc"}, ok: true},
+		{name: "valid", attrs: media.Attrs{"origin": "indexer", "indexer.infohash": "abc"}, ok: true},
 		{name: "too many", attrs: func() media.Attrs {
 			out := media.Attrs{}
 			for i := range media.MaxAttrs + 1 {
@@ -43,10 +43,10 @@ func TestValidateAttrs(t *testing.T) {
 }
 
 func TestCloneRecordCopiesAttrs(t *testing.T) {
-	original := media.Record{Attrs: media.Attrs{"origin": "takuhai"}}
+	original := media.Record{Attrs: media.Attrs{"origin": "indexer"}}
 	cloned := media.CloneRecord(original)
 	cloned.Attrs["origin"] = "other"
-	if original.Attrs["origin"] != "takuhai" {
+	if original.Attrs["origin"] != "indexer" {
 		t.Fatalf("original attr mutated to %q", original.Attrs["origin"])
 	}
 }

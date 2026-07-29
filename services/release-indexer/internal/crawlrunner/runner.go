@@ -17,6 +17,7 @@ type IngestFunc func(ctx context.Context, posts []api.RawPost) (api.IngestBatch,
 type Metrics interface {
 	IngestBatch(size int, result string)
 	SourceCrawl(source, result string, posts int, duration time.Duration)
+	SourceCrawlSuccess(source string)
 }
 
 type Job struct {
@@ -97,6 +98,7 @@ func (r Runner) runOnce(ctx context.Context, job Job) {
 	r.record(job.Source, "ok", len(posts), time.Since(start))
 	if r.Metrics != nil {
 		r.Metrics.IngestBatch(len(posts), "ok")
+		r.Metrics.SourceCrawlSuccess(job.Source)
 	}
 	r.log(runCtx, slog.LevelInfo, "scheduled crawl completed",
 		"source", job.Source,

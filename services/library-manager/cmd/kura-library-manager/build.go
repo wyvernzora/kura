@@ -36,6 +36,7 @@ func buildDepsAsyncIndex(
 	cfg config.Config,
 	coordinator coord.Coordinator,
 	logger *slog.Logger,
+	onRebuild func(time.Duration),
 ) (workflow.Deps, error) {
 	libRoot := cfg.Library.Root
 	if err := validateLibraryRoot(libRoot); err != nil {
@@ -43,7 +44,7 @@ func buildDepsAsyncIndex(
 	}
 	rowBuildOptions := indexfile.DefaultBuildOptions()
 	rowBuildOptions.AiringTailDays = cfg.Library.AiringTailDays
-	index, err := loadOrRebuildIndex(ctx, libRoot, rowBuildOptions, coordinator.WithIndex, logger)
+	index, err := loadOrRebuildIndex(ctx, libRoot, rowBuildOptions, coordinator.WithIndex, logger, onRebuild)
 	if err != nil {
 		return workflow.Deps{}, err
 	}
@@ -163,8 +164,11 @@ func hasPathPrefix(child, parent string) bool {
 // synchronously and returned ready. If absent or unreadable, a fresh Index is
 // returned with a background rebuild already triggered; early list requests
 // see server_not_ready until the rebuild publishes entries.
-func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.BuildOptions, guard indexfile.GuardFunc, logger *slog.Logger) (*indexfile.Index, error) {
-	cfg := indexfile.Config{BuildOptions: opts, Guard: guard}
+func loadOrRebuildIndex(ctx context.Context, libRoot string, opts indexfile.BuildOptions, guard indexfile.GuardFunc, logger *slog.Logger, onRebuild func(time.Duration)) (*indexfile.Index, error) {
+	// OnRebuild rides in the constructor config because TriggerRebuild
+	// below may spawn the rebuild goroutine before the caller regains
+	// control — a post-construction assignment would race it.
+	cfg := indexfile.Config{BuildOptions: opts, Guard: guard, OnRebuild: onRebuild}
 	if logger != nil {
 		// Assign inside a nil check: a nil *slog.Logger stored in the
 		// interface field would pass indexfile's nil test and panic.

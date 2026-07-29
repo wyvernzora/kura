@@ -63,6 +63,11 @@ type Config struct {
 	// construction and immutable afterwards so background rebuild
 	// goroutines never race a later assignment.
 	Logger Logger
+	// OnRebuild, when non-nil, observes the wall-clock duration of each
+	// successful RebuildNow (metrics hook). Construction-time only, for
+	// the same reason as Logger: a cold-start rebuild goroutine may be
+	// running before the constructor's caller regains control.
+	OnRebuild func(time.Duration)
 }
 
 // Entry is one source-data index entry. Model means tracked; Error means a
@@ -92,6 +97,9 @@ type Index struct {
 	order   []refs.Series
 
 	rebuilding atomic.Bool
+
+	// onRebuild is Config.OnRebuild, fixed at construction.
+	onRebuild func(time.Duration)
 
 	libRootRebuildTimer *time.Timer
 	libRootDebounce     time.Duration
@@ -128,6 +136,7 @@ func New(root string, cfg Config) *Index {
 		guard:        guard,
 		builder:      diskEntryBuilder,
 		log:          log,
+		onRebuild:    cfg.OnRebuild,
 	}
 }
 
@@ -260,7 +269,8 @@ func (i *Index) WaitReady(ctx context.Context) error {
 
 // RebuildNow walks the library, swaps the in-memory entries, and persists.
 func (i *Index) RebuildNow(ctx context.Context, op string) error {
-	return i.guard(ctx, func() error {
+	started := time.Now()
+	err := i.guard(ctx, func() error {
 		entries, err := i.buildEntries(ctx)
 		if err != nil {
 			return err
@@ -270,6 +280,10 @@ func (i *Index) RebuildNow(ctx context.Context, op string) error {
 		}
 		return i.persist(coord.NewMutator(op))
 	})
+	if err == nil && i.onRebuild != nil {
+		i.onRebuild(time.Since(started))
+	}
+	return err
 }
 
 // TriggerRebuild kicks off an idempotent background rebuild.

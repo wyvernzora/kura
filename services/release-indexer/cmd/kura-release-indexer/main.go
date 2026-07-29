@@ -47,7 +47,7 @@ var (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintln(os.Stderr, "takuhai:", err)
+		fmt.Fprintln(os.Stderr, "kura-release-indexer:", err)
 		os.Exit(1)
 	}
 }
@@ -100,14 +100,14 @@ func run() error {
 
 	// The single mountable /healthz handler (DB ping only — design §10).
 	healthz := health.NewHandlerWithLogger(st, logger.With("component", "health"), version)
-	metricsSrv := metrics.NewTakuhai(version, commit, st)
+	metricsSrv := metrics.New(version, commit, st)
 	ingester := ingest.New(st, metricsSrv)
 	crawls, err := newCrawlRunner(cfg, ingester, metricsSrv, logger.With("component", "crawler"))
 	if err != nil {
 		return err
 	}
 
-	logger.Info("takuhai starting",
+	logger.Info("release-indexer starting",
 		"version", version,
 		"addr", cfg.Addr,
 		"dmhy_enabled", cfg.Sources.DMHY.Enabled,
@@ -126,7 +126,7 @@ func runHTTP(
 	metricsAddr string,
 	st *postgres.Store,
 	healthz http.Handler,
-	metricsSrv *metrics.Takuhai,
+	metricsSrv *metrics.Metrics,
 	crawls *crawlrunner.Runner,
 ) error {
 	mux := http.NewServeMux()
@@ -149,7 +149,7 @@ func runHTTP(
 	if err != nil {
 		return fmt.Errorf("bind metrics %s: %w", metricsAddr, err)
 	}
-	logger.Info("takuhai metrics listening", "addr", metricsLn.Addr().String())
+	logger.Info("metrics listening", "addr", metricsLn.Addr().String())
 	go func() { _ = metricsSrvHTTP.Serve(metricsLn) }()
 	defer func() {
 		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), drainTimeout)
@@ -165,7 +165,7 @@ func runHTTP(
 	if err != nil {
 		return fmt.Errorf("bind %s: %w", addr, err)
 	}
-	logger.Info("takuhai listening", "addr", ln.Addr().String())
+	logger.Info("release-indexer listening", "addr", ln.Addr().String())
 
 	crawlCtx, cancelCrawls := context.WithCancel(ctx)
 	var crawlsDone chan struct{}
@@ -191,7 +191,7 @@ func runHTTP(
 
 	select {
 	case <-ctx.Done():
-		logger.Info("takuhai shutting down")
+		logger.Info("release-indexer shutting down")
 		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), drainTimeout)
 		defer cancel()
 		if err := srv.Shutdown(shutCtx); err != nil {
@@ -202,7 +202,7 @@ func runHTTP(
 			logger.Error("server stopped with error", "err", err)
 			return err
 		}
-		logger.Info("takuhai stopped")
+		logger.Info("release-indexer stopped")
 		return nil
 	case err := <-serveErr:
 		if err != nil && err != http.ErrServerClosed {
@@ -324,7 +324,7 @@ const crawlPageSize = 200
 func newCrawlRunner(
 	cfg config.Config,
 	ingester *ingest.Processor,
-	metricsSrv *metrics.Takuhai,
+	metricsSrv *metrics.Metrics,
 	logger *slog.Logger,
 ) (*crawlrunner.Runner, error) {
 	var jobs []crawlrunner.Job

@@ -13,7 +13,7 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
-var ErrInvalidInput = errors.New("takuhai/dispatch: invalid input")
+var ErrInvalidInput = errors.New("indexer/dispatch: invalid input")
 
 type Dispatcher struct {
 	store store.Store

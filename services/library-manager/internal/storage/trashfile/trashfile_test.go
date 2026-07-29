@@ -33,7 +33,7 @@ func TestWriteReadList(t *testing.T) {
 			Size:       123,
 			MTime:      now,
 			Companions: []trashfile.Companion{},
-			Attrs:      map[string]string{"origin": "takuhai"},
+			Attrs:      map[string]string{"origin": "indexer"},
 		},
 	}
 	if err := trashfile.Write(root, seriesRef, in); err != nil {
@@ -47,7 +47,7 @@ func TestWriteReadList(t *testing.T) {
 	if read.ID != id || read.Record.Path != in.Record.Path {
 		t.Fatalf("Read = %#v", read)
 	}
-	if read.Record.Attrs["origin"] != "takuhai" {
+	if read.Record.Attrs["origin"] != "indexer" {
 		t.Fatalf("Read attrs = %#v", read.Record.Attrs)
 	}
 

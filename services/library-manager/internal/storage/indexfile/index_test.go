@@ -51,7 +51,7 @@ func TestIndexSaveModelStripsMediaAttrs(t *testing.T) {
 			Path:       "/library/Honzuki/Season 1/e1.mkv",
 			Source:     media.SourceBluRay,
 			Companions: []media.Companion{},
-			Attrs:      media.Attrs{"origin": "takuhai"},
+			Attrs:      media.Attrs{"origin": "indexer"},
 		},
 	}
 	if err := idx.SaveModel(context.Background(), model, coord.NewMutator("test")); err != nil {
@@ -61,10 +61,10 @@ func TestIndexSaveModelStripsMediaAttrs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), `"attrs"`) || strings.Contains(string(data), "takuhai") {
+	if strings.Contains(string(data), `"attrs"`) || strings.Contains(string(data), "indexer") {
 		t.Fatalf("index snapshot leaked attrs:\n%s", data)
 	}
-	if model.Episodes[ep].Active.Attrs["origin"] != "takuhai" {
+	if model.Episodes[ep].Active.Attrs["origin"] != "indexer" {
 		t.Fatalf("SaveModel mutated caller attrs: %#v", model.Episodes[ep].Active.Attrs)
 	}
 }

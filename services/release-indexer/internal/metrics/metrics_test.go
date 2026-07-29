@@ -48,12 +48,12 @@ func TestHTTPWrapRecordsRouteAndStatus(t *testing.T) {
 
 func TestConstructorsUseIndependentRegistries(t *testing.T) {
 	q := fakeQueueStats{}
-	_ = NewTakuhai("v", "c", q)
-	_ = NewTakuhai("v", "c", q)
+	_ = New("v", "c", q)
+	_ = New("v", "c", q)
 }
 
 func TestSubmitConfidenceRecordsMatchedAndSuppressed(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{})
+	m := New("v", "c", fakeQueueStats{})
 
 	matched := 0.94
 	suppressed := 0.73
@@ -68,7 +68,7 @@ func TestSubmitConfidenceRecordsMatchedAndSuppressed(t *testing.T) {
 }
 
 func TestQueueStatsErrorDoesNotFailScrape(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{err: errors.New("boom")})
+	m := New("v", "c", fakeQueueStats{err: errors.New("boom")})
 	rec := httptest.NewRecorder()
 
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
@@ -81,13 +81,13 @@ func TestQueueStatsErrorDoesNotFailScrape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read /metrics: %v", err)
 	}
-	if !strings.Contains(string(body), "takuhai_queue_stats_scrape_ok 0") {
+	if !strings.Contains(string(body), "kura_indexer_queue_stats_scrape_ok 0") {
 		t.Fatalf("/metrics missing queue scrape failure gauge:\n%s", body)
 	}
 }
 
-func TestTakuhaiPrecreatesIngestPostCounters(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{})
+func TestMetricsPrecreatesIngestPostCounters(t *testing.T) {
+	m := New("v", "c", fakeQueueStats{})
 	rec := httptest.NewRecorder()
 
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
@@ -98,7 +98,7 @@ func TestTakuhaiPrecreatesIngestPostCounters(t *testing.T) {
 	text := string(body)
 	for _, source := range api.Sources() {
 		for _, result := range []string{"new", "updated", "duplicate", "conflict", "skipped", "error"} {
-			want := `takuhai_ingest_posts_total{result="` + result + `",source="` + source + `"} 0`
+			want := `kura_indexer_ingest_posts_total{result="` + result + `",source="` + source + `"} 0`
 			if !strings.Contains(text, want) {
 				t.Fatalf("/metrics missing %q:\n%s", want, text)
 			}
@@ -107,7 +107,7 @@ func TestTakuhaiPrecreatesIngestPostCounters(t *testing.T) {
 }
 
 func TestCatalogStatsScrape(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{
+	m := New("v", "c", fakeQueueStats{
 		catalog: store.CatalogStats{RawPosts: 7, Infohashes: 3, Refs: 2},
 	})
 	rec := httptest.NewRecorder()
@@ -119,10 +119,10 @@ func TestCatalogStatsScrape(t *testing.T) {
 	}
 	text := string(body)
 	for _, want := range []string{
-		"takuhai_catalog_raw_posts 7",
-		"takuhai_catalog_infohashes 3",
-		"takuhai_catalog_refs 2",
-		"takuhai_catalog_stats_scrape_ok 1",
+		"kura_indexer_catalog_raw_posts 7",
+		"kura_indexer_catalog_infohashes 3",
+		"kura_indexer_catalog_refs 2",
+		"kura_indexer_catalog_stats_scrape_ok 1",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("/metrics missing %q:\n%s", want, text)
@@ -153,4 +153,50 @@ func assertHistogram(t *testing.T, metric prometheus.Observer, count uint64, sum
 	if h.GetSampleCount() != count || h.GetSampleSum() != sum {
 		t.Fatalf("histogram = count %d sum %v, want count %d sum %v", h.GetSampleCount(), h.GetSampleSum(), count, sum)
 	}
+}
+
+func TestUnmatchedReasonNormalizesFreeText(t *testing.T) {
+	m := New("v", "c", fakeQueueStats{})
+	m.UnmatchedReason("unmatched", "no_candidate")
+	m.UnmatchedReason("unmatched", "  Parse_Failure ")
+	m.UnmatchedReason("unmatched", "the moon was in the wrong phase")
+	m.UnmatchedReason("unmatched", "")
+	m.UnmatchedReason("matched", "no_candidate") // wrong status: ignored
+
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
+	body := rec.Body.String()
+	for _, want := range []string{
+		`kura_indexer_submit_unmatched_reasons_total{reason="no_candidate"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="parse_failure"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="other"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="none"} 1`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="ambiguous"} 0`,
+		`kura_indexer_submit_unmatched_reasons_total{reason="low_confidence"} 0`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("scrape missing %q", want)
+		}
+	}
+}
+
+func TestSourceCrawlSuccessStampsGauge(t *testing.T) {
+	m := New("v", "c", fakeQueueStats{})
+	m.SourceCrawlSuccess("dmhy")
+
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
+	body := rec.Body.String()
+	if strings.Contains(body, `kura_indexer_source_last_success_timestamp_seconds{source="nyaa"}`) {
+		t.Errorf("nyaa gauge should be absent before its first success (disabled sources must export nothing)")
+	}
+	for _, line := range strings.Split(body, "\n") {
+		if strings.HasPrefix(line, `kura_indexer_source_last_success_timestamp_seconds{source="dmhy"} `) {
+			if strings.HasSuffix(line, " 0") {
+				t.Errorf("dmhy gauge not stamped: %s", line)
+			}
+			return
+		}
+	}
+	t.Errorf("dmhy gauge missing from scrape")
 }

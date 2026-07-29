@@ -41,6 +41,10 @@ type Row struct {
 	// builder.go:summarizeSeries for the per-season rule.
 	IsAiring bool `json:"isAiring,omitempty"`
 	Staged   bool `json:"staged,omitempty"`
+	// StagedWork widens Staged with series-level staged trash/extras.
+	// Metrics-only view — excluded from serialization so the wire
+	// Staged contract is untouched.
+	StagedWork bool `json:"-"`
 
 	// Counts: SeasonsAvailable / EpisodesAvailable count slots backed
 	// by an active record. SeasonCount / EpisodeCount are the
@@ -51,7 +55,11 @@ type Row struct {
 	SeasonsAvailable  int `json:"seasonsAvailable,omitempty"`
 	SeasonCount       int `json:"seasonCount,omitempty"`
 	EpisodesAvailable int `json:"episodesAvailable,omitempty"`
-	EpisodeCount      int `json:"episodeCount,omitempty"`
+	// EpisodesStaged counts slots with a staged record and no active
+	// one (pending reconcile apply). Rows are derived live from the
+	// in-memory model, so this is always current.
+	EpisodesStaged int `json:"episodesStaged,omitempty"`
+	EpisodeCount   int `json:"episodeCount,omitempty"`
 
 	Resolutions []string `json:"resolutions,omitempty"`
 	Sources     []string `json:"sources,omitempty"`

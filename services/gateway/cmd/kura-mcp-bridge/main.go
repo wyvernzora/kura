@@ -24,6 +24,7 @@ import (
 	"github.com/wyvernzora/kura/services/gateway/internal/config"
 	"github.com/wyvernzora/kura/services/gateway/internal/health"
 	gwmcp "github.com/wyvernzora/kura/services/gateway/internal/mcp"
+	"github.com/wyvernzora/kura/services/gateway/internal/metrics"
 )
 
 // version is overridden at link time via -ldflags, as both leaves do. It is
@@ -54,7 +55,11 @@ func run() error {
 		return fmt.Errorf("config: %w", err)
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With("component", "bridge")
+	// Each subsystem stamps its own "component" on a shared base —
+	// deriving them from a base that already carries component=bridge
+	// would emit duplicate JSON keys (slog does not dedupe).
+	baseLogger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	logger := baseLogger.With("component", "bridge")
 
 	opts := client.Options{
 		RequestTimeout:   cfg.RequestTimeout,
@@ -67,8 +72,11 @@ func run() error {
 		{Name: "libraryManager", URL: library.HealthURL()},
 		{Name: "releaseIndexer", URL: releases.HealthURL()},
 	}, cfg.ComponentTimeout)
+	healthz.Logger = baseLogger.With("component", "health")
 
-	bridge := gwmcp.New(version, library, releases, logger.With("component", "mcp"))
+	metricsSrv := metrics.New(version)
+	bridge := gwmcp.New(version, library, releases, baseLogger.With("component", "mcp"))
+	bridge.Metrics = metricsSrv
 	mcpHandler := bridge.Handler(cfg.SessionTimeout)
 
 	mux := http.NewServeMux()
@@ -91,6 +99,24 @@ func run() error {
 		"library_upstream", cfg.LibraryUpstream,
 		"releases_upstream", cfg.ReleasesUpstream,
 	)
+
+	// /metrics on its own pod-reachable listener: Caddy owns :9090 in this
+	// Pod, and the loopback MCP listener must stay unreachable from the
+	// network, so exposition gets a third socket.
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", metricsSrv.Handler())
+	metricsHTTP := &http.Server{Handler: metricsMux}
+	metricsLn, err := net.Listen("tcp", cfg.MetricsAddress)
+	if err != nil {
+		return fmt.Errorf("bind metrics %s: %w", cfg.MetricsAddress, err)
+	}
+	logger.Info("bridge metrics listening", "addr", metricsLn.Addr().String())
+	go func() { _ = metricsHTTP.Serve(metricsLn) }()
+	defer func() {
+		shutCtx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+		defer cancel()
+		_ = metricsHTTP.Shutdown(shutCtx)
+	}()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

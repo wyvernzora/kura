@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +16,7 @@ import (
 
 const (
 	defaultRESTAddr             = ":8080"
+	defaultMetricsAddr          = ":9090"
 	defaultLogLevel             = "info"
 	defaultShutdownTimeout      = 10 * time.Second
 	defaultMediaInfoCommand     = "mediainfo"
@@ -47,6 +49,10 @@ type Server struct {
 	RESTAddr        string
 	RESTCORSOrigins []string
 	RESTPortFile    string
+	// MetricsAddr is a separate listener serving /metrics only, so a
+	// NetworkPolicy that permits a Prometheus scrape does not also
+	// permit API calls. Same split as the release-indexer.
+	MetricsAddr     string
 	LogLevel        string
 	ShutdownTimeout time.Duration
 	Umask           string
@@ -96,6 +102,7 @@ func Defaults() Config {
 	return Config{
 		Server: Server{
 			RESTAddr:        defaultRESTAddr,
+			MetricsAddr:     defaultMetricsAddr,
 			LogLevel:        defaultLogLevel,
 			ShutdownTimeout: defaultShutdownTimeout,
 		},
@@ -165,6 +172,14 @@ func (c Config) Validate() error {
 func (c Server) validate() error {
 	if c.RESTAddr == "" {
 		return fmt.Errorf("server.rest must not be empty")
+	}
+	if c.MetricsAddr == "" {
+		return fmt.Errorf("server.metrics must not be empty")
+	}
+	// Colliding listeners would fail at bind time with a raw "address
+	// in use" — reject at config time instead.
+	if addrsCollide(c.MetricsAddr, c.RESTAddr) {
+		return fmt.Errorf("server.metrics %q collides with server.rest %q", c.MetricsAddr, c.RESTAddr)
 	}
 	if !slices.Contains(validLogLevels, c.LogLevel) {
 		return fmt.Errorf("server.log_level %q is invalid (want one of %v)", c.LogLevel, validLogLevels)
@@ -244,6 +259,32 @@ func (c Coordination) validate() error {
 	return nil
 }
 
+// addrsCollide reports whether two listen addresses would contend for
+// the same socket: same non-zero port with equal hosts, or either side
+// binding the wildcard. Port 0 never collides (two ephemeral binds —
+// test harnesses).
+//
+// Deliberately best-effort and textual: it exists to catch the
+// realistic footgun (same or default port twice) with a clear config
+// error. Exotic spellings — non-canonical ports, long-form IPv6,
+// mixed-family wildcard nuances — are left to net.Listen, whose
+// bind-time "address in use" still fails startup fast.
+func addrsCollide(a, b string) bool {
+	ah, ap, aerr := net.SplitHostPort(a)
+	bh, bp, berr := net.SplitHostPort(b)
+	if aerr != nil || berr != nil {
+		return a == b
+	}
+	if ap == "0" || bp == "0" || ap != bp {
+		return false
+	}
+	if ah == bh {
+		return true
+	}
+	wild := func(h string) bool { return h == "" || h == "0.0.0.0" || h == "::" }
+	return wild(ah) || wild(bh)
+}
+
 func validateUmask(raw string) error {
 	if raw == "" {
 		return nil
@@ -269,6 +310,7 @@ type fileServer struct {
 	RESTAddr        *string  `toml:"rest"`
 	RESTCORSOrigins []string `toml:"rest_cors_origins"`
 	RESTPortFile    *string  `toml:"rest_port_file"`
+	MetricsAddr     *string  `toml:"metrics"`
 	LogLevel        *string  `toml:"log_level"`
 	ShutdownTimeout *string  `toml:"shutdown_timeout"`
 	Umask           *string  `toml:"umask"`
@@ -341,6 +383,7 @@ func (r *fileServer) resolve(dst *Server) error {
 		dst.RESTCORSOrigins = slices.Clone(r.RESTCORSOrigins)
 	}
 	setString(&dst.RESTPortFile, r.RESTPortFile)
+	setString(&dst.MetricsAddr, r.MetricsAddr)
 	setString(&dst.LogLevel, r.LogLevel)
 	setString(&dst.Umask, r.Umask)
 	var err error

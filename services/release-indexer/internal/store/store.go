@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	ErrNoSuchRelease = errors.New("takuhai: no such release")
-	ErrNoActiveLease = errors.New("takuhai: no active lease")
-	ErrStaleLease    = errors.New("takuhai: stale lease")
+	ErrNoSuchRelease = errors.New("indexer: no such release")
+	ErrNoActiveLease = errors.New("indexer: no active lease")
+	ErrStaleLease    = errors.New("indexer: stale lease")
 )
 
 type Clock interface {

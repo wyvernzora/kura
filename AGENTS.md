@@ -124,7 +124,7 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 - **Inbox:** `internal/inbox` walks the configured `library.inbox` tree on demand (NFC-normalized entries; dotfiles and download-in-flight markers like `.partial`/`.!qB` hidden by default). Selector primitives live in `internal/domain/selector`.
 - **Search keys:** `internal/searchkey` computes the per-series fuzzy-search blob shipped on `ListRow` — flattened, deduplicated alias lines fed to client-side fuse.js. Never user-facing.
 - **Transports:** `kura-library-manager --config=...` hosts `internal/server/rest` (REST API under `/api/*`, unauthenticated — the deployment's fronting proxy is the only gate). REST is the only transport: the suite MCP surface belongs to `services/gateway`. Servers depend on `internal/workflow` for behavior. The CLI lives in `/cli`; binary `kura` is a pure REST client discovered through `KURA_SERVER_URL` (default `http://127.0.0.1:8080`).
-- **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (strict TOML loading, defaults, validation, metadata-source construction), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `pkg/api` (wire response shapes plus public `refs`, `selector`, and `media` vocabulary facades).
+- **Cross-cutting:** `internal/progress` (ctx-routed reporter), `internal/textnorm` (NFC), `internal/fsop` (atomic filesystem moves), `internal/mediainfo` (mediainfo binding), `internal/config` (strict TOML loading, defaults, validation, metadata-source construction), `internal/errkind` (typed error categorization), `internal/sweep` (periodic background work), `internal/metrics` (Prometheus registry, `kura_library_*`; exposed on the `server.metrics` listener, default `:9090` — see `docs/metrics.md`), `pkg/api` (wire response shapes plus public `refs`, `selector`, and `media` vocabulary facades).
 - **Container:** Docker, single-binary image.
 
 ### Commands
@@ -350,7 +350,11 @@ One origin for the whole suite: Caddy fronting the SPA, the leaf REST
 APIs, and the MCP bridge. `web/` holds the SPA (React + Vite); the
 Caddyfile, bridge, and image live at the top of the directory. Leaf
 addresses come from `KURA_LIBRARY_UPSTREAM` and `KURA_RELEASES_UPSTREAM`,
-declared once on the Pod and read by both Caddy and the bridge. See
+declared once on the Pod and read by both Caddy and the bridge.
+Observability: Caddy writes JSON access logs to stderr (credential
+headers scrubbed) and exposes `caddy_http_*` metrics on `:9090`; the
+bridge's `internal/metrics` exposes `kura_mcp_*` per-tool metrics on
+`server.metrics_address` (default `:9091` — Caddy owns `:9090` in-Pod). See
 `services/gateway/web/README.md` for the SPA's structure and commands
 (`make check` = lint + typecheck + test + build).
 

@@ -107,8 +107,10 @@ func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts Buil
 	row.SeasonsAvailable = summary.seasonsActive
 	row.SeasonCount = summary.seasons
 	row.EpisodesAvailable = summary.episodesActive
+	row.EpisodesStaged = summary.episodesStaged
 	row.EpisodeCount = summary.episodes
 	row.Staged = summary.hasStaged
+	row.StagedWork = summary.hasStagedWork
 	row.Status = listStatusFor(summary)
 	row.IsAiring = summary.airing
 	if summary.lastAired.IsValid() {
@@ -142,11 +144,19 @@ type seriesSummary struct {
 	seasonsActive  int
 	episodes       int
 	episodesActive int
+	// episodesStaged counts slots with a staged record and no active one
+	// — content in hand awaiting reconcile apply. Staged upgrades over an
+	// existing active record count as active, not staged.
+	episodesStaged int
 	missing        int
 	pending        int
 	hasStaged      bool
-	airing         bool
-	lastAired      civil.Date
+	// hasStagedWork additionally counts series-level staged trash and
+	// staged extras. Feeds the metrics view only; the wire Staged flag
+	// keeps its historical episode-staging meaning.
+	hasStagedWork bool
+	airing        bool
+	lastAired     civil.Date
 }
 
 // seasonAirDates holds the valid AirDates for one non-special season.
@@ -160,8 +170,15 @@ func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) ser
 	today := civil.DateOf(now)
 	seasons := map[int]struct{}{}
 	seasonsActive := map[int]struct{}{}
+	stagedSpecial := false
 	for episodeRef, episode := range model.Episodes {
 		if episodeRef.IsSpecial() {
+			// Specials stay out of every counter and out of the wire
+			// hasStaged flag, but a staged special is still reconcile
+			// work — remember it for the metrics-only rollup below.
+			if episode.Staged != nil {
+				stagedSpecial = true
+			}
 			continue
 		}
 		sn := episodeRef.Season()
@@ -195,6 +212,7 @@ func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) ser
 			continue
 		}
 		if episode.Staged != nil {
+			s.episodesStaged++
 			continue
 		}
 		s.missing++
@@ -202,7 +220,16 @@ func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) ser
 	s.seasons = len(seasons)
 	s.seasonsActive = len(seasonsActive)
 	s.airing = len(AiringSeasons(model, now, opts)) > 0
+	s.hasStagedWork = stagedWork(model, s.hasStaged, stagedSpecial)
 	return s
+}
+
+// stagedWork widens episode staging with everything else awaiting
+// reconcile apply: staged specials, staged trash, and staged extras are
+// reconcile work too, even when no regular episode is staged.
+func stagedWork(model *series.Series, hasStaged, stagedSpecial bool) bool {
+	return hasStaged || stagedSpecial ||
+		len(model.StagedTrash) > 0 || len(model.StagedExtras) > 0
 }
 
 // AiringSeasons returns non-special seasons whose current cour is

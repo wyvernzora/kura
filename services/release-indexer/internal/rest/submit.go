@@ -43,6 +43,7 @@ func (h *Handler) handleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.metrics.Submit(string(req.Status), "ok", req.Confidence)
+	h.metrics.UnmatchedReason(string(req.Status), req.Reason)
 	h.log(r, slog.LevelInfo, "submit completed",
 		"infohash", req.Infohash,
 		"claim_token", req.ClaimToken,

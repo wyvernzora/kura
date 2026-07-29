@@ -20,6 +20,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/wyvernzora/kura/services/library-manager/internal/metrics"
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
@@ -56,6 +57,10 @@ type Deps struct {
 	Logger         *slog.Logger
 	AllowedOrigins []string
 	BearerToken    string
+
+	// Metrics, when non-nil, records per-request count + duration.
+	// Exposition lives on the cmd-owned metrics listener, not here.
+	Metrics *metrics.Metrics
 
 	// Version surfaces on /healthz and the X-Kura-Version response
 	// header. Empty falls back to defaultServerVersion. cmd/kura-library-manager sets

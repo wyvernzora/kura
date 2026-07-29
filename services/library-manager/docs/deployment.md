@@ -47,9 +47,12 @@ busybox shell + coreutils stay in the image so operators can
 
 `ENTRYPOINT` is `kura-library-manager`; `CMD` defaults to
 `["--config=/etc/kura/library-manager.toml"]`, so a pod or `docker run`
-invocation with no `args:` / `command:` starts REST on `:8080` using the
-bundled config. It uses `EXPOSE 8080`. Mount a ConfigMap or file at
-`/etc/kura/library-manager.toml` to change settings.
+invocation with no `args:` / `command:` starts REST on `:8080` and the
+Prometheus `/metrics` listener on `:9090` using the bundled config. It
+uses `EXPOSE 8080 9090`. A NetworkPolicy that lets Prometheus scrape
+`:9090` grants no API access — the metrics listener serves `/metrics`
+and nothing else (see [metrics.md](metrics.md)). Mount a ConfigMap or
+file at `/etc/kura/library-manager.toml` to change settings.
 
 The image is serve-only. CLI verbs live in the separate top-level `cli/`
 module, whose `kura` binary is a pure REST client configured through

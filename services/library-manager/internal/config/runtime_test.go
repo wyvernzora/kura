@@ -190,6 +190,16 @@ func TestLoadRuntimeRejectsInvalidValues(t *testing.T) {
 			body: "[library]\nroot = \"/library\"\ninbox = \"/inbox\"\n[server]\nrest = \"\"\n",
 			want: "server.rest must not be empty",
 		},
+		{
+			name: "metrics collides with rest",
+			body: "[library]\nroot = \"/library\"\ninbox = \"/inbox\"\n[server]\nrest = \":9090\"\nmetrics = \":9090\"\n",
+			want: "server.metrics",
+		},
+		{
+			name: "metrics wildcard collides with rest loopback",
+			body: "[library]\nroot = \"/library\"\ninbox = \"/inbox\"\n[server]\nrest = \"127.0.0.1:9090\"\nmetrics = \"0.0.0.0:9090\"\n",
+			want: "server.metrics",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

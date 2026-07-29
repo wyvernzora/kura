@@ -135,7 +135,7 @@ func TestStage_EpisodeAttrsPersistAndSurface(t *testing.T) {
 			Episode: e1,
 			Media:   sel,
 			Attrs: media.Attrs{
-				"origin":        "takuhai",
+				"origin":        "indexer",
 				"release_group": "SubsPlease",
 			},
 		}},
@@ -151,7 +151,7 @@ func TestStage_EpisodeAttrsPersistAndSurface(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := model.Episodes[e1].Staged.Attrs["origin"]; got != "takuhai" {
+	if got := model.Episodes[e1].Staged.Attrs["origin"]; got != "indexer" {
 		t.Fatalf("persisted origin = %q", got)
 	}
 }

@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"regexp"
 	"slices"
@@ -143,8 +144,8 @@ func (c Config) Validate() error {
 	if c.MetricsAddr == "" {
 		return fmt.Errorf("server.metrics_addr must not be empty")
 	}
-	if c.MetricsAddr == c.Addr {
-		return fmt.Errorf("server.metrics_addr must differ from server.addr (%q)", c.Addr)
+	if addrsCollide(c.MetricsAddr, c.Addr) {
+		return fmt.Errorf("server.metrics_addr %q collides with server.addr %q", c.MetricsAddr, c.Addr)
 	}
 	if !slices.Contains(validLogLevels, c.LogLevel) {
 		return fmt.Errorf("server.log_level %q is invalid (want one of %v)", c.LogLevel, validLogLevels)
@@ -159,6 +160,31 @@ func (c Config) Validate() error {
 		return err
 	}
 	return nil
+}
+
+// addrsCollide reports whether two listen addresses would contend for
+// the same socket: same non-zero port with equal hosts, or either side
+// binding the wildcard. Mirrors the library-manager and gateway config
+// checks so all three dual-listener services fail the same way.
+//
+// Deliberately best-effort and textual: it catches the realistic
+// footgun (same or default port twice) with a clear config error;
+// exotic spellings and mixed-family nuances are left to net.Listen's
+// bind-time failure, which still aborts startup fast.
+func addrsCollide(a, b string) bool {
+	ah, ap, aerr := net.SplitHostPort(a)
+	bh, bp, berr := net.SplitHostPort(b)
+	if aerr != nil || berr != nil {
+		return a == b
+	}
+	if ap == "0" || bp == "0" || ap != bp {
+		return false
+	}
+	if ah == bh {
+		return true
+	}
+	wild := func(h string) bool { return h == "" || h == "0.0.0.0" || h == "::" }
+	return wild(ah) || wild(bh)
 }
 
 func validateDMHY(c SourceDMHY) error {

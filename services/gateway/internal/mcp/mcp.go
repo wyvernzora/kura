@@ -19,6 +19,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wyvernzora/kura/services/gateway/internal/client"
+	"github.com/wyvernzora/kura/services/gateway/internal/metrics"
 )
 
 const (
@@ -41,6 +42,10 @@ type Server struct {
 	releases *client.Client
 	logger   *slog.Logger
 	sdk      *mcpsdk.Server
+
+	// Metrics, when non-nil, records per-tool call counts and durations.
+	// Set once at wiring, before the handler serves.
+	Metrics *metrics.Metrics
 }
 
 // New builds the server with all 16 tools registered.
@@ -74,9 +79,11 @@ func (s *Server) log(ctx context.Context, level slog.Level, msg string, attrs ..
 // observability story for the bridge: tool, upstream status, duration, and
 // error kind. Bodies and magnet URIs are deliberately absent.
 func (s *Server) observe(ctx context.Context, tool string, start time.Time, err error, extra ...any) {
+	elapsed := time.Since(start)
+	s.Metrics.ToolCall(tool, elapsed, err)
 	attrs := append([]any{
 		"tool", tool,
-		"duration_ms", time.Since(start).Milliseconds(),
+		"duration_ms", elapsed.Milliseconds(),
 	}, extra...)
 	if err != nil {
 		var env *client.Error

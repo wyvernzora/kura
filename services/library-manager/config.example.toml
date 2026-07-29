@@ -18,6 +18,10 @@ rest_cors_origins = []
 # Primarily useful with an ephemeral REST address ending in ":0".
 rest_port_file = ""
 
+# Optional; default = ":9090". Serves Prometheus /metrics and nothing else,
+# on its own listener so scrape access does not imply API access.
+metrics = ":9090"
+
 # Optional; default = "info". Allowed: debug, info, warn, error.
 log_level = "info"
 

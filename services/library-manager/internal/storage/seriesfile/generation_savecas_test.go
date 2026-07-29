@@ -96,7 +96,7 @@ func TestGenerationBumpMatrix(t *testing.T) {
 		{
 			name: "active attrs changed",
 			mutate: func(model *series.Series) {
-				model.Episodes[episode1].Active.Attrs = media.Attrs{"origin": "takuhai"}
+				model.Episodes[episode1].Active.Attrs = media.Attrs{"origin": "indexer"}
 			},
 			wantBump: true,
 		},

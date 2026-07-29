@@ -29,7 +29,12 @@ const (
 
 // Config is the validated runtime configuration.
 type Config struct {
-	Address          string
+	Address string
+	// MetricsAddress serves /metrics only. Unlike Address it may (and
+	// should) bind the Pod network: exposition is read-only and the
+	// NetworkPolicy split mirrors the leaves' :9090 listeners. Caddy owns
+	// :9090 in this Pod, hence :9091.
+	MetricsAddress   string
 	RequestTimeout   time.Duration
 	ComponentTimeout time.Duration
 	MaxResponseBytes int64
@@ -43,6 +48,7 @@ type Config struct {
 func Defaults() Config {
 	return Config{
 		Address:          "127.0.0.1:8081",
+		MetricsAddress:   ":9091",
 		RequestTimeout:   30 * time.Second,
 		ComponentTimeout: time.Second,
 		MaxResponseBytes: 1 << 20,
@@ -52,7 +58,8 @@ func Defaults() Config {
 
 type fileConfig struct {
 	Server *struct {
-		Address *string `toml:"address"`
+		Address        *string `toml:"address"`
+		MetricsAddress *string `toml:"metrics_address"`
 	} `toml:"server"`
 	API *struct {
 		RequestTimeout   *string `toml:"request_timeout"`
@@ -99,8 +106,13 @@ func Load(path string, getenv func(string) string) (Config, error) {
 }
 
 func applyFile(cfg *Config, fc fileConfig) error {
-	if fc.Server != nil && fc.Server.Address != nil {
-		cfg.Address = *fc.Server.Address
+	if fc.Server != nil {
+		if fc.Server.Address != nil {
+			cfg.Address = *fc.Server.Address
+		}
+		if fc.Server.MetricsAddress != nil {
+			cfg.MetricsAddress = *fc.Server.MetricsAddress
+		}
 	}
 	if fc.API != nil {
 		for _, d := range []struct {
@@ -139,6 +151,32 @@ func setDuration(raw *string, dst *time.Duration, name string) error {
 	return nil
 }
 
+// addrsCollide reports whether two listen addresses would contend for
+// the same socket: same non-zero port with equal hosts, or either side
+// binding the wildcard. Colliding listeners would otherwise surface as
+// a raw bind-time "address in use". Mirrors the library-manager's
+// config check.
+//
+// Deliberately best-effort and textual: it catches the realistic
+// footgun (same or default port twice) with a clear config error;
+// exotic spellings and mixed-family nuances are left to net.Listen's
+// bind-time failure, which still aborts startup fast.
+func addrsCollide(a, b string) bool {
+	ah, ap, aerr := net.SplitHostPort(a)
+	bh, bp, berr := net.SplitHostPort(b)
+	if aerr != nil || berr != nil {
+		return a == b
+	}
+	if ap == "0" || bp == "0" || ap != bp {
+		return false
+	}
+	if ah == bh {
+		return true
+	}
+	wild := func(h string) bool { return h == "" || h == "0.0.0.0" || h == "::" }
+	return wild(ah) || wild(bh)
+}
+
 // Validate rejects configuration the bridge cannot run on.
 func (c Config) Validate() error {
 	if c.Address == "" {
@@ -153,6 +191,15 @@ func (c Config) Validate() error {
 	}
 	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
 		return fmt.Errorf("server.address %q must bind a loopback address", c.Address)
+	}
+	if c.MetricsAddress == "" {
+		return fmt.Errorf("server.metrics_address must not be empty")
+	}
+	if _, _, err := net.SplitHostPort(c.MetricsAddress); err != nil {
+		return fmt.Errorf("server.metrics_address %q is not host:port: %w", c.MetricsAddress, err)
+	}
+	if addrsCollide(c.MetricsAddress, c.Address) {
+		return fmt.Errorf("server.metrics_address %q collides with server.address %q", c.MetricsAddress, c.Address)
 	}
 	for _, d := range []struct {
 		v    time.Duration

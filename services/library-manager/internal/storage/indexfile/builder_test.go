@@ -143,6 +143,41 @@ func TestBuildRowFromModel_StagedFlag(t *testing.T) {
 	}
 }
 
+func TestBuildRowFromModel_StagedWorkCoversNonEpisodeStaging(t *testing.T) {
+	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
+	base := func() *series.Series {
+		return &series.Series{
+			Ref:      mustParseSeries(t, "Show"),
+			Metadata: refs.Metadata("tvdb:1"),
+			Episodes: map[refs.Episode]series.Episode{},
+		}
+	}
+
+	if row := indexfile.BuildRowFromModel(base(), now); row.StagedWork {
+		t.Fatal("empty series: StagedWork = true, want false")
+	}
+
+	trashOnly := base()
+	trashOnly.StagedTrash = []series.StagedTrashItem{{}}
+	if row := indexfile.BuildRowFromModel(trashOnly, now); row.Staged || !row.StagedWork {
+		t.Fatalf("trash-only: Staged=%v StagedWork=%v, want false/true (wire flag keeps episode-staging meaning)", row.Staged, row.StagedWork)
+	}
+
+	extraOnly := base()
+	extraOnly.StagedExtras = []series.StagedExtraItem{{}}
+	if row := indexfile.BuildRowFromModel(extraOnly, now); !row.StagedWork {
+		t.Fatal("extra-only: StagedWork = false, want true")
+	}
+
+	specialOnly := base()
+	specialOnly.Episodes[mustEpisode(t, 0, 1)] = series.Episode{
+		Staged: &media.Record{Source: media.SourceBluRay, Resolution: mustResolution(t, 1280, 720), Size: 1},
+	}
+	if row := indexfile.BuildRowFromModel(specialOnly, now); row.Staged || !row.StagedWork {
+		t.Fatalf("staged-special-only: Staged=%v StagedWork=%v, want false/true", row.Staged, row.StagedWork)
+	}
+}
+
 func TestBuildRowFromModel_DateAddedAndLastAired(t *testing.T) {
 	now := time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC)
 	model := &series.Series{

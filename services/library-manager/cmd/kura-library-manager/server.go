@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,6 +18,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/config"
 	"github.com/wyvernzora/kura/services/library-manager/internal/coord"
 	"github.com/wyvernzora/kura/services/library-manager/internal/jobs"
+	"github.com/wyvernzora/kura/services/library-manager/internal/metrics"
 	restserver "github.com/wyvernzora/kura/services/library-manager/internal/server/rest"
 	"github.com/wyvernzora/kura/services/library-manager/internal/storage/indexfile"
 	"github.com/wyvernzora/kura/services/library-manager/internal/sweep"
@@ -46,7 +50,8 @@ func runServer(
 	// the same handler + level as the explicit deps.Logger plumbing.
 	slog.SetDefault(logger)
 
-	deps, registry, watch, err := buildServeDeps(parent, getenv, cfg, logger)
+	metricsSrv := metrics.New(Version)
+	deps, registry, watch, err := buildServeDeps(parent, getenv, cfg, logger, metricsSrv)
 	if err != nil {
 		logger.Error("server bootstrap failed", "err", err)
 		return err
@@ -69,6 +74,9 @@ func runServer(
 	go runShutdownSignalLoop(ctx, sigCh, cancel, logger)
 
 	deps.Index.Watch(ctx, watch)
+	metricsSrv.ObserveIndex(deps.Index.Rebuilding, func() []metrics.SeriesFacts {
+		return indexSeriesFacts(deps.Index)
+	})
 
 	var restSrv *restserver.Server
 	if cfg.Server.RESTAddr != "" {
@@ -76,6 +84,7 @@ func runServer(
 			Workflow:       deps,
 			Logger:         logger,
 			AllowedOrigins: cfg.Server.RESTCORSOrigins,
+			Metrics:        metricsSrv,
 			Version:        Version,
 		})
 	}
@@ -86,7 +95,7 @@ func runServer(
 		"transports", serverTransports(cfg.Server),
 	)
 
-	runErr := launchServerTransports(ctx, cfg, restSrv, deps, logger)
+	runErr := launchServerTransports(ctx, cfg, restSrv, metricsSrv, deps, logger)
 	return finishServerShutdown(registry, logger, runErr, cfg.Server.ShutdownTimeout)
 }
 
@@ -111,6 +120,7 @@ func launchServerTransports(
 	ctx context.Context,
 	cfg config.Config,
 	restSrv *restserver.Server,
+	metricsSrv *metrics.Metrics,
 	deps workflow.Deps,
 	logger *slog.Logger,
 ) error {
@@ -122,6 +132,9 @@ func launchServerTransports(
 		}
 		g.Go(func() error { return restserver.Serve(gctx, addr, opts, restSrv) })
 	}
+	g.Go(func() error {
+		return serveMetrics(gctx, cfg.Server.MetricsAddr, metricsSrv.Handler(), logger)
+	})
 	g.Go(func() error {
 		return sweep.Run(gctx, deps.LibRoot, sweep.Config{
 			Interval:     cfg.Sweep.Interval,
@@ -210,7 +223,60 @@ func serverTransports(cfg config.Server) []string {
 	if cfg.RESTAddr != "" {
 		out = append(out, "rest="+cfg.RESTAddr)
 	}
+	out = append(out, "metrics="+cfg.MetricsAddr)
 	return out
+}
+
+// indexSeriesFacts projects the in-memory index rows into the shape
+// the metrics collector consumes, at scrape time.
+func indexSeriesFacts(index *indexfile.Index) []metrics.SeriesFacts {
+	rows := index.Rows()
+	out := make([]metrics.SeriesFacts, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, metrics.SeriesFacts{
+			Status:          string(row.Status),
+			Airing:          row.IsAiring,
+			Staged:          row.StagedWork,
+			Resolutions:     row.Resolutions,
+			Sources:         row.Sources,
+			EpisodesPresent: row.EpisodesAvailable,
+			EpisodesStaged:  row.EpisodesStaged,
+			EpisodesTotal:   row.EpisodeCount,
+		})
+	}
+	return out
+}
+
+// serveMetrics binds the /metrics-only listener. Separate from the
+// REST listener so a NetworkPolicy that permits a Prometheus scrape
+// does not also permit API calls. Drains with the same grace pattern
+// as restserver.Serve.
+func serveMetrics(ctx context.Context, addr string, handler http.Handler, logger *slog.Logger) error {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", handler)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("metrics listen %s: %w", addr, err)
+	}
+	logger.Info("metrics listening", "addr", ln.Addr().String())
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
+	errCh := make(chan error, 1)
+	go func() {
+		err := srv.Serve(ln)
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		errCh <- err
+	}()
+	select {
+	case <-ctx.Done():
+		shutCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutCtx)
+		return <-errCh
+	case err := <-errCh:
+		return err
+	}
 }
 
 // buildServeDeps constructs the workflow deps with the server serializer plus
@@ -226,12 +292,13 @@ func buildServeDeps(
 	getenv func(string) string,
 	cfg config.Config,
 	logger *slog.Logger,
+	metricsSrv *metrics.Metrics,
 ) (workflow.Deps, *jobs.Registry, indexfile.WatchConfig, error) {
 	// Async index path: any cold-start rebuild proceeds in the
 	// background. list_series returns server_not_ready until the rebuild
 	// completes; transports come up immediately.
 	coordinator := coord.NewMCPCoordinator()
-	deps, err := buildDepsAsyncIndex(ctx, getenv, cfg, coordinator, logger)
+	deps, err := buildDepsAsyncIndex(ctx, getenv, cfg, coordinator, logger, metricsSrv.IndexRebuild)
 	if err != nil {
 		return workflow.Deps{}, nil, indexfile.WatchConfig{}, err
 	}
@@ -252,6 +319,8 @@ func buildServeDeps(
 		Retention:      cfg.Jobs.Retention,
 		ReaperInterval: cfg.Jobs.ReaperInterval,
 		LibRoot:        deps.LibRoot,
+		OnJobStarted:   metricsSrv.JobStarted,
+		OnJobTerminal:  metricsSrv.JobTerminal,
 	}, logger)
 	deps.Jobs = registry
 	deps.Logger = logger

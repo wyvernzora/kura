@@ -1,4 +1,4 @@
-// Package migrations embeds takuhai's goose SQL migrations and runs them via the
+// Package migrations embeds the indexer's goose SQL migrations and runs them via the
 // goose Go library (no goose CLI). The schema is the §3 DDL; the first migration
 // creates the core tables, the match_status enum, and the hot-path partial
 // indexes. The conformance harness and cmd/kura-release-indexer call Run to bring a fresh

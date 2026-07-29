@@ -181,8 +181,11 @@ type daemonConfig struct {
 type daemonServer struct {
 	RESTAddr     string `toml:"rest"`
 	RESTPortFile string `toml:"rest_port_file"`
-	LogLevel     string `toml:"log_level"`
-	Umask        string `toml:"umask,omitempty"`
+	// MetricsAddr binds to an ephemeral port so parallel daemons
+	// don't fight over the production default (:9090).
+	MetricsAddr string `toml:"metrics"`
+	LogLevel    string `toml:"log_level"`
+	Umask       string `toml:"umask,omitempty"`
 }
 
 type daemonLibrary struct {
@@ -196,6 +199,7 @@ func writeDaemonConfig(t *testing.T, dir, libRoot, inboxRoot, portFile, umask st
 		Server: daemonServer{
 			RESTAddr:     "127.0.0.1:0",
 			RESTPortFile: portFile,
+			MetricsAddr:  "127.0.0.1:0",
 			LogLevel:     "error",
 			Umask:        umask,
 		},

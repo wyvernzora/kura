@@ -680,7 +680,7 @@ func (s *Store) ResolveMagnets(ctx context.Context, infohashes []string) (map[st
 
 func (s *Store) Ping(ctx context.Context) error {
 	if s.pool == nil {
-		return errors.New("takuhai/postgres: nil pool")
+		return errors.New("indexer/postgres: nil pool")
 	}
 	return s.pool.Ping(ctx)
 }

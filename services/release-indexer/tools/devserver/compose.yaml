@@ -1,31 +1,31 @@
-name: takuhai
+name: kura-release-indexer
 
 services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: takuhai
-      POSTGRES_USER: takuhai
-      POSTGRES_PASSWORD: takuhai
+      POSTGRES_DB: kura
+      POSTGRES_USER: kura
+      POSTGRES_PASSWORD: kura
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "5432:5432"
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U takuhai -d takuhai"]
+      test: ["CMD-SHELL", "pg_isready -U kura -d kura"]
       interval: 2s
       timeout: 5s
       retries: 20
 
-  takuhai:
+  indexer:
     build:
       context: ../..
       dockerfile: Dockerfile
       args:
         VERSION: dev
     environment:
-      KURA_RELEASES_DATABASE_URL: postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable
+      KURA_RELEASES_DATABASE_URL: postgres://kura:kura@postgres:5432/kura?sslmode=disable
     volumes:
       - ./release-indexer.toml:/etc/kura/release-indexer.toml:ro
     ports:
