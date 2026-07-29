@@ -94,6 +94,9 @@ func (s *Server) applyMiddleware(next http.Handler) http.Handler {
 	h = recoverMiddleware(s.deps.Logger)(h)
 	h = corsMiddleware(s.deps.AllowedOrigins)(h)
 	h = versionMiddleware(s.deps.Version)(h)
+	// Metrics sit inside logging so both observe the final status,
+	// including panics the recover middleware turned into 500s.
+	h = s.deps.Metrics.WrapHTTP(h)
 	h = loggingMiddleware(s.deps.Logger)(h)
 	return h
 }

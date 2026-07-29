@@ -15,6 +15,7 @@ import (
 
 const (
 	defaultRESTAddr             = ":8080"
+	defaultMetricsAddr          = ":9090"
 	defaultLogLevel             = "info"
 	defaultShutdownTimeout      = 10 * time.Second
 	defaultMediaInfoCommand     = "mediainfo"
@@ -47,6 +48,10 @@ type Server struct {
 	RESTAddr        string
 	RESTCORSOrigins []string
 	RESTPortFile    string
+	// MetricsAddr is a separate listener serving /metrics only, so a
+	// NetworkPolicy that permits a Prometheus scrape does not also
+	// permit API calls. Same split as the release-indexer.
+	MetricsAddr     string
 	LogLevel        string
 	ShutdownTimeout time.Duration
 	Umask           string
@@ -96,6 +101,7 @@ func Defaults() Config {
 	return Config{
 		Server: Server{
 			RESTAddr:        defaultRESTAddr,
+			MetricsAddr:     defaultMetricsAddr,
 			LogLevel:        defaultLogLevel,
 			ShutdownTimeout: defaultShutdownTimeout,
 		},
@@ -165,6 +171,9 @@ func (c Config) Validate() error {
 func (c Server) validate() error {
 	if c.RESTAddr == "" {
 		return fmt.Errorf("server.rest must not be empty")
+	}
+	if c.MetricsAddr == "" {
+		return fmt.Errorf("server.metrics must not be empty")
 	}
 	if !slices.Contains(validLogLevels, c.LogLevel) {
 		return fmt.Errorf("server.log_level %q is invalid (want one of %v)", c.LogLevel, validLogLevels)
@@ -269,6 +278,7 @@ type fileServer struct {
 	RESTAddr        *string  `toml:"rest"`
 	RESTCORSOrigins []string `toml:"rest_cors_origins"`
 	RESTPortFile    *string  `toml:"rest_port_file"`
+	MetricsAddr     *string  `toml:"metrics"`
 	LogLevel        *string  `toml:"log_level"`
 	ShutdownTimeout *string  `toml:"shutdown_timeout"`
 	Umask           *string  `toml:"umask"`
@@ -341,6 +351,7 @@ func (r *fileServer) resolve(dst *Server) error {
 		dst.RESTCORSOrigins = slices.Clone(r.RESTCORSOrigins)
 	}
 	setString(&dst.RESTPortFile, r.RESTPortFile)
+	setString(&dst.MetricsAddr, r.MetricsAddr)
 	setString(&dst.LogLevel, r.LogLevel)
 	setString(&dst.Umask, r.Umask)
 	var err error

@@ -71,7 +71,7 @@ COPY config.example.toml /etc/kura/library-manager.toml
 
 # REST is the only transport; MCP is served by the suite gateway. Adjust the
 # mounted config if you bind a different port.
-EXPOSE 8080
+EXPOSE 8080 9090
 
 USER ${KURA_UID}:${KURA_GID}
 

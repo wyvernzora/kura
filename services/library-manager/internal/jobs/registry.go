@@ -40,6 +40,13 @@ type Config struct {
 	// — preserves CLI/test paths that construct registries without a
 	// library root.
 	LibRoot string
+
+	// OnJobStarted / OnJobTerminal are optional metric hooks (nil =
+	// no-op). Started fires on the Submit path for fresh jobs only;
+	// Terminal fires exactly once per started job, from the job
+	// goroutine. Both must be cheap and non-blocking.
+	OnJobStarted  func(kind string)
+	OnJobTerminal func(kind, state string, elapsed time.Duration)
 }
 
 // Registry tracks in-flight and recently-terminal long jobs. One per
@@ -239,6 +246,9 @@ func Submit[T any](
 	r.mu.Unlock()
 
 	r.log.Info("job submitted", "id", id, "kind", kind, "series", series.String())
+	if r.cfg.OnJobStarted != nil {
+		r.cfg.OnJobStarted(string(kind))
+	}
 	go runJob(r, j, e, fn)
 	return j
 }
@@ -363,7 +373,22 @@ func runJob[T any](
 	r.mu.Unlock()
 
 	close(doneChOf(j))
-	r.log.Info("job terminal", "id", j.id, "kind", j.kind, "series", j.series, "state", state.String())
+	elapsed := endedAt.Sub(j.startedAt)
+	if terminalErr != nil {
+		r.log.Error("job terminal",
+			"id", j.id, "kind", j.kind, "series", j.series,
+			"state", state.String(), "duration_ms", elapsed.Milliseconds(),
+			"err", terminalErr,
+		)
+	} else {
+		r.log.Info("job terminal",
+			"id", j.id, "kind", j.kind, "series", j.series,
+			"state", state.String(), "duration_ms", elapsed.Milliseconds(),
+		)
+	}
+	if r.cfg.OnJobTerminal != nil {
+		r.cfg.OnJobTerminal(string(j.kind), state.String(), elapsed)
+	}
 }
 
 // deriveJobCtx returns a ctx derived from the registry's parent ctx,

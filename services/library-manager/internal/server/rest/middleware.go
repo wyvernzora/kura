@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"bytes"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -20,8 +21,17 @@ const (
 
 type middleware func(http.Handler) http.Handler
 
-// loggingMiddleware emits one structured log line per request with
-// method, path, status, duration. No-op when logger is nil.
+// maxLoggedErrorBody caps how much of an error response body is
+// captured for the request log. Error envelopes already truncate their
+// message to 512 bytes; this bound keeps log lines from ballooning if
+// a handler ever streams a large non-2xx body.
+const maxLoggedErrorBody = 1024
+
+// loggingMiddleware emits one structured log line per request. Level
+// tracks the outcome — Error for 5xx, Warn for 4xx, Debug for probe
+// noise on /healthz, Info otherwise — and non-2xx responses carry the
+// error envelope the client saw, so a 500/503 in the log names its
+// cause without correlating across systems. No-op when logger is nil.
 func loggingMiddleware(logger *slog.Logger) middleware {
 	return func(next http.Handler) http.Handler {
 		if logger == nil {
@@ -31,12 +41,29 @@ func loggingMiddleware(logger *slog.Logger) middleware {
 			started := time.Now()
 			rec := &recordingWriter{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
-			logger.Info("rest request",
+			level := slog.LevelInfo
+			switch {
+			case rec.status >= 500:
+				level = slog.LevelError
+			case rec.status >= 400:
+				level = slog.LevelWarn
+			case r.URL.Path == "/healthz":
+				level = slog.LevelDebug
+			}
+			attrs := []any{
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", rec.status,
 				"duration_ms", time.Since(started).Milliseconds(),
-			)
+				"bytes", rec.bytes,
+			}
+			if q := r.URL.RawQuery; q != "" {
+				attrs = append(attrs, "query", q)
+			}
+			if rec.status >= 400 && rec.errBody.Len() > 0 {
+				attrs = append(attrs, "error_body", rec.errBody.String())
+			}
+			logger.Log(r.Context(), level, "rest request", attrs...)
 		})
 	}
 }
@@ -111,16 +138,28 @@ func versionMiddleware(version string) middleware {
 	}
 }
 
-// recordingWriter captures the status code so loggingMiddleware can
-// log it after the handler returns.
+// recordingWriter captures the status code, response size, and — for
+// non-2xx responses — a bounded copy of the body so loggingMiddleware
+// can log the error envelope after the handler returns.
 type recordingWriter struct {
 	http.ResponseWriter
-	status int
+	status  int
+	bytes   int
+	errBody bytes.Buffer
 }
 
 func (rw *recordingWriter) WriteHeader(code int) {
 	rw.status = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *recordingWriter) Write(p []byte) (int, error) {
+	if rw.status >= 400 && rw.errBody.Len() < maxLoggedErrorBody {
+		rw.errBody.Write(p[:min(len(p), maxLoggedErrorBody-rw.errBody.Len())])
+	}
+	n, err := rw.ResponseWriter.Write(p)
+	rw.bytes += n
+	return n, err
 }
 
 // Flush forwards to the underlying ResponseWriter's Flusher so SSE
