@@ -14,10 +14,11 @@ else, so granting Prometheus scrape access does not grant API access.
 | `kura_library_jobs_running` | gauge | none | Async jobs currently running. |
 | `kura_library_jobs_total` | counter | `kind`, `state` | Terminal async jobs by kind (`scan`, `stage`, `apply`, …) and state (`succeeded`, `failed`). |
 | `kura_library_jobs_duration_seconds` | histogram | `kind` | Async job wall-clock duration. |
-| `kura_library_index_rebuilding` | gauge | none | `1` while the library index is rebuilding, else `0`. Rebuilds are when `server_not_ready` (HTTP 503) responses occur. |
-| `kura_library_index_rebuild_duration_seconds` | histogram | none | Successful index rebuild duration — the length of each 503 window on cold starts. |
-| `kura_library_index_series` | gauge | none | Series currently tracked in the library index. |
-| `kura_library_episodes` | gauge | `state` | Trackable episodes across the library: `present` (active file), `pending_apply` (staged, awaiting reconcile apply), `missing` (aired, no file, nothing staged). |
+| `kura_library_index_rebuilding` | gauge | none | `1` while the library index is rebuilding, else `0`. Only *cold* rebuilds (empty index — first boot or corruption recovery) produce `server_not_ready` 503s; the hourly warm rebuild flips this gauge without ever failing a request, so don't alert on the gauge alone. |
+| `kura_library_index_rebuild_duration_seconds` | histogram | none | Successful index rebuild duration. On cold starts this is the length of the 503 window; warm rebuilds serve normally throughout. |
+| `kura_library_index_series` | gauge | none | Rows in the library index — all statuses, including `untracked` and `error` rows. Equals `sum(kura_library_series_status)`. |
+| `kura_library_series_staged` | gauge | none | Series with any staged work awaiting `reconcile apply`: staged episodes (including upgrades over an active file and season-0 specials), staged trash, or staged extras. |
+| `kura_library_episodes` | gauge | `state` | Trackable non-special episodes across the library (season-0 specials are excluded from all episode counters, matching the list rollup): `present` (active file), `pending_apply` (staged, no active file), `missing` (aired, no file, nothing staged). The three states partition the total, so a staged *upgrade* over an existing file counts as `present` — watch `kura_library_series_staged` for pending upgrades. |
 | `kura_library_series_status` | gauge | `status` | Series by rolled-up list status (`untracked`, `complete`, `incomplete`, `error`). All four statuses are always exported. |
 | `kura_library_series_airing` | gauge | none | Series currently observed as airing (independent of status). |
 | `kura_library_series_resolution` | gauge | `resolution` | Series with at least one active file at this resolution (`1080p`, `4K`, …). A series counts once per distinct resolution, so the sum can exceed the series total. |

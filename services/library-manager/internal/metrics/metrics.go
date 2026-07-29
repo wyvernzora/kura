@@ -162,6 +162,7 @@ func (m *Metrics) JobTerminal(kind, state string, elapsed time.Duration) {
 type SeriesFacts struct {
 	Status      string
 	Airing      bool
+	Staged      bool
 	Resolutions []string
 	Sources     []string
 
@@ -190,13 +191,15 @@ type indexCollector struct {
 
 var (
 	indexRebuildingDesc = prometheus.NewDesc(namespace+"_index_rebuilding",
-		"1 while the library index is rebuilding, else 0.", nil, nil)
+		"1 while the library index is rebuilding, else 0. Only cold rebuilds (empty index) cause server_not_ready 503s; warm periodic rebuilds serve normally throughout.", nil, nil)
 	indexSeriesDesc = prometheus.NewDesc(namespace+"_index_series",
-		"Series currently tracked in the library index.", nil, nil)
+		"Rows in the library index, all statuses included (equals the sum of kura_library_series_status).", nil, nil)
 	seriesStatusDesc = prometheus.NewDesc(namespace+"_series_status",
 		"Series by rolled-up list status.", []string{"status"}, nil)
 	seriesAiringDesc = prometheus.NewDesc(namespace+"_series_airing",
 		"Series currently observed as airing (independent of status).", nil, nil)
+	seriesStagedDesc = prometheus.NewDesc(namespace+"_series_staged",
+		"Series with any staged work awaiting reconcile apply: staged episodes (including upgrades and specials), staged trash, or staged extras.", nil, nil)
 	seriesResolutionDesc = prometheus.NewDesc(namespace+"_series_resolution",
 		"Series with at least one active file at this resolution. A series counts once per distinct resolution, so the sum can exceed the series total.",
 		[]string{"resolution"}, nil)
@@ -204,7 +207,7 @@ var (
 		"Series with at least one active file from this source. A series counts once per distinct source, so the sum can exceed the series total.",
 		[]string{"source"}, nil)
 	episodesDesc = prometheus.NewDesc(namespace+"_episodes",
-		"Trackable episodes across the library by state: present (active file on disk), pending_apply (staged, awaiting reconcile apply), missing (aired, no file, nothing staged).",
+		"Trackable non-special episodes by state (season-0 specials are excluded from all episode counters): present (active file, including files with a staged upgrade), pending_apply (staged, no active file), missing (aired, no file, nothing staged). The states partition the total.",
 		[]string{"state"}, nil)
 )
 
@@ -213,6 +216,7 @@ func (c *indexCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- indexSeriesDesc
 	ch <- seriesStatusDesc
 	ch <- seriesAiringDesc
+	ch <- seriesStagedDesc
 	ch <- seriesResolutionDesc
 	ch <- seriesSourceDesc
 	ch <- episodesDesc
@@ -236,7 +240,7 @@ func (c *indexCollector) Collect(ch chan<- prometheus.Metric) {
 		string(api.ListStatusIncomplete): 0,
 		string(api.ListStatusError):      0,
 	}
-	airing := 0
+	airing, staged := 0, 0
 	present, pending, missing := 0, 0, 0
 	resolutions := map[string]int{}
 	sources := map[string]int{}
@@ -244,6 +248,9 @@ func (c *indexCollector) Collect(ch chan<- prometheus.Metric) {
 		statuses[row.Status]++
 		if row.Airing {
 			airing++
+		}
+		if row.Staged {
+			staged++
 		}
 		present += row.EpisodesPresent
 		pending += row.EpisodesStaged
@@ -265,6 +272,7 @@ func (c *indexCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(seriesStatusDesc, prometheus.GaugeValue, float64(n), status)
 	}
 	ch <- prometheus.MustNewConstMetric(seriesAiringDesc, prometheus.GaugeValue, float64(airing))
+	ch <- prometheus.MustNewConstMetric(seriesStagedDesc, prometheus.GaugeValue, float64(staged))
 	ch <- prometheus.MustNewConstMetric(episodesDesc, prometheus.GaugeValue, float64(present), "present")
 	ch <- prometheus.MustNewConstMetric(episodesDesc, prometheus.GaugeValue, float64(pending), "pending_apply")
 	ch <- prometheus.MustNewConstMetric(episodesDesc, prometheus.GaugeValue, float64(missing), "missing")

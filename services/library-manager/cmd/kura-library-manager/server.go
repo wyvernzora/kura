@@ -73,7 +73,6 @@ func runServer(
 	defer signal.Stop(sigCh)
 	go runShutdownSignalLoop(ctx, sigCh, cancel, logger)
 
-	deps.Index.OnRebuild = metricsSrv.IndexRebuild
 	deps.Index.Watch(ctx, watch)
 	metricsSrv.ObserveIndex(deps.Index.Rebuilding, func() []metrics.SeriesFacts {
 		return indexSeriesFacts(deps.Index)
@@ -237,6 +236,7 @@ func indexSeriesFacts(index *indexfile.Index) []metrics.SeriesFacts {
 		out = append(out, metrics.SeriesFacts{
 			Status:          string(row.Status),
 			Airing:          row.IsAiring,
+			Staged:          row.StagedWork,
 			Resolutions:     row.Resolutions,
 			Sources:         row.Sources,
 			EpisodesPresent: row.EpisodesAvailable,
@@ -298,7 +298,7 @@ func buildServeDeps(
 	// background. list_series returns server_not_ready until the rebuild
 	// completes; transports come up immediately.
 	coordinator := coord.NewMCPCoordinator()
-	deps, err := buildDepsAsyncIndex(ctx, getenv, cfg, coordinator, logger)
+	deps, err := buildDepsAsyncIndex(ctx, getenv, cfg, coordinator, logger, metricsSrv.IndexRebuild)
 	if err != nil {
 		return workflow.Deps{}, nil, indexfile.WatchConfig{}, err
 	}

@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -175,6 +176,11 @@ func (c Server) validate() error {
 	if c.MetricsAddr == "" {
 		return fmt.Errorf("server.metrics must not be empty")
 	}
+	// Colliding listeners would fail at bind time with a raw "address
+	// in use" — reject at config time instead.
+	if addrsCollide(c.MetricsAddr, c.RESTAddr) {
+		return fmt.Errorf("server.metrics %q collides with server.rest %q", c.MetricsAddr, c.RESTAddr)
+	}
 	if !slices.Contains(validLogLevels, c.LogLevel) {
 		return fmt.Errorf("server.log_level %q is invalid (want one of %v)", c.LogLevel, validLogLevels)
 	}
@@ -251,6 +257,32 @@ func (c Coordination) validate() error {
 		return fmt.Errorf("coordination.conflict_retries must be >= 0")
 	}
 	return nil
+}
+
+// addrsCollide reports whether two listen addresses would contend for
+// the same socket: same non-zero port with equal hosts, or either side
+// binding the wildcard. Port 0 never collides (two ephemeral binds —
+// test harnesses).
+//
+// Deliberately best-effort and textual: it exists to catch the
+// realistic footgun (same or default port twice) with a clear config
+// error. Exotic spellings — non-canonical ports, long-form IPv6,
+// mixed-family wildcard nuances — are left to net.Listen, whose
+// bind-time "address in use" still fails startup fast.
+func addrsCollide(a, b string) bool {
+	ah, ap, aerr := net.SplitHostPort(a)
+	bh, bp, berr := net.SplitHostPort(b)
+	if aerr != nil || berr != nil {
+		return a == b
+	}
+	if ap == "0" || bp == "0" || ap != bp {
+		return false
+	}
+	if ah == bh {
+		return true
+	}
+	wild := func(h string) bool { return h == "" || h == "0.0.0.0" || h == "::" }
+	return wild(ah) || wild(bh)
 }
 
 func validateUmask(raw string) error {
