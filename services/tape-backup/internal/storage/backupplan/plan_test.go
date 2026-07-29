@@ -303,6 +303,31 @@ func TestAdmitBearingPlanRequiresTargetMediumSerial(t *testing.T) {
 	assertExactError(t, err, want)
 }
 
+func TestInitTargetMediumSerialRejectsInvalidUTF8OnEncodeAndDecode(t *testing.T) {
+	plan := validPlan()
+	plan.Actions = []Action{{Type: ActionReformat}}
+	plan.Target.MediumSerial = "MAM-\xff"
+	assertExactError(
+		t,
+		Draft(t.TempDir(), plan),
+		"backupplan: target.mediumSerial must be valid UTF-8",
+	)
+
+	plan.Target.MediumSerial = testMediumSerial
+	data, err := json.Marshal(toWire(plan))
+	if err != nil {
+		t.Fatalf("Marshal plan: %v", err)
+	}
+	data = bytes.Replace(
+		data,
+		[]byte(testMediumSerial),
+		[]byte("MAM-\xff"),
+		1,
+	)
+	_, err = decodePlan(data, plan.PlanID)
+	assertExactError(t, err, "backupplan: plan must be valid UTF-8")
+}
+
 func TestTargetMediumSerialRoundTripsForInitPlan(t *testing.T) {
 	root := t.TempDir()
 	plan := validPlan()

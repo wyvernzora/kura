@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/wyvernzora/kura/services/tape-backup/internal/snapshotname"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapemanifest"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
@@ -47,6 +50,32 @@ func TestRunExecutesValidatedBeliefDraftVerbatimAfterPendingChanges(t *testing.T
 	}
 }
 
+func TestRunValidatedBeliefDraftSurvivesDebrisAppearingAfterConsult(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	consult, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	f.addSeries(t, "B", "tvdb:b", 64)
+	debrisName := writeMarked(t, f.driveRoot(t), "tvdb:b", 1)
+
+	assertNoError(t, f.service.Run(t.Context(), PlanRequest{}))
+
+	catalog, err := planner.ReadCatalogSnapshot(f.stateRoot)
+	assertNoError(t, err)
+	if got := catalogSnapshotNames(catalog, testVolume); !reflect.DeepEqual(
+		got,
+		[]string{mustSnapshotName(t, "tvdb:a", 1)},
+	) {
+		t.Fatalf("catalog snapshots = %v, want only fresh A", got)
+	}
+	assertPlanDiscarded(t, f.stateRoot, consult.Drafts[0].PlanID, false)
+	session, err := backupplan.ReadSession(f.stateRoot, f.lastSessionID())
+	assertNoError(t, err)
+	if !sessionLoggedExtra(session, debrisName) {
+		t.Fatalf("session did not log debris %q", debrisName)
+	}
+}
+
 func TestConsultDampsAndPreservesInitDraft(t *testing.T) {
 	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
 	f.addSeries(t, "A", "tvdb:a", 8)
@@ -58,6 +87,15 @@ func TestConsultDampsAndPreservesInitDraft(t *testing.T) {
 	if !reflect.DeepEqual(first.Drafts[0].Target, second.Drafts[0].Target) ||
 		!reflect.DeepEqual(first.Drafts[0].Actions, second.Drafts[0].Actions) {
 		t.Fatalf("re-consult changed target/actions")
+	}
+	for _, action := range first.Drafts[0].Actions {
+		switch action.Type {
+		case backupplan.ActionAssertVolume,
+			backupplan.ActionAssertInventory,
+			backupplan.ActionBackup:
+		default:
+			t.Fatalf("consult draft contains destructive/deferred action %q", action.Type)
+		}
 	}
 
 	init := f.initDraft(t, secondTape, "SERIAL-2", "tvdb:held")
@@ -72,6 +110,26 @@ func TestConsultDampsAndPreservesInitDraft(t *testing.T) {
 	if len(third.Report.InitPlansAwaitingApproval) != 1 ||
 		len(third.Report.InitPlansAwaitingApproval[0].Claimed) != 1 {
 		t.Fatalf("init status = %+v, want one held claim", third.Report.InitPlansAwaitingApproval)
+	}
+}
+
+func TestConsultAndStatusRemainAvailableWhileDriveIsOffline(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	f.drive.SetFaults(executor.DriveFaults{Open: os.ErrNotExist})
+
+	result, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	if len(result.Drafts) != 1 {
+		t.Fatalf("consult drafts = %d, want 1", len(result.Drafts))
+	}
+	status, err := f.service.Status()
+	assertNoError(t, err)
+	if status.Drive != (DriveStatus{
+		State:   "drive_offline",
+		Message: "drive offline",
+	}) {
+		t.Fatalf("drive status = %#v, want exact offline refusal", status.Drive)
 	}
 }
 
@@ -111,6 +169,90 @@ func TestServiceMutexSerializesPromotionAgainstConsultSweep(t *testing.T) {
 		consultErr = <-consultDone
 	}
 	assertNoError(t, consultErr)
+}
+
+func TestTargetedPlanKeepsCollidingDebrisPending(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "B", "tvdb:b", 64)
+	debrisName := writeMarked(t, f.driveRoot(t), "tvdb:b", 1)
+
+	result, err := f.service.Plan(PlanRequest{})
+	assertNoError(t, err)
+	if got := backupRefs(result.Plan); !reflect.DeepEqual(got, []string{"tvdb:b"}) {
+		t.Fatalf("backup refs = %v, want debris series B pending", got)
+	}
+	if !reflect.DeepEqual(result.Debris, []string{debrisName}) {
+		t.Fatalf("debris = %v, want [%s]", result.Debris, debrisName)
+	}
+}
+
+func TestTargetedPlanDoesNotCreditDebrisBytes(t *testing.T) {
+	cartridge := identifiedCartridge(t, testTape, testVolume, true)
+	cartridge.Capacity = 512
+	f := newFixture(t, cartridge)
+	f.addSeries(t, "A", "tvdb:a", 8)
+	f.addSeries(t, "B", "tvdb:b", 1<<20)
+	debrisName := writeMarked(t, f.driveRoot(t), "tvdb:b", 1)
+
+	result, err := f.service.Plan(PlanRequest{})
+	assertNoError(t, err)
+	if got := backupRefs(result.Plan); !reflect.DeepEqual(got, []string{"tvdb:a"}) {
+		t.Fatalf("backup refs = %v, want only fitting A", got)
+	}
+	if !reflect.DeepEqual(result.Debris, []string{debrisName}) {
+		t.Fatalf("debris = %v, want [%s]", result.Debris, debrisName)
+	}
+}
+
+func TestTargetedPlanToleratesProtectedElsewhereDebrisWithoutRepending(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "B", "tvdb:b", 64)
+	installProtectedSnapshot(t, f.stateRoot, secondTape, "tvdb:b", 1)
+	debrisName := writeMarked(t, f.driveRoot(t), "tvdb:b", 1)
+
+	result, err := f.service.Plan(PlanRequest{})
+	assertNoError(t, err)
+	if result.Classification != "fill" || result.Plan.PlanID != "" {
+		t.Fatalf("Plan() = %+v, want no-work fill", result)
+	}
+	if !reflect.DeepEqual(result.Debris, []string{debrisName}) {
+		t.Fatalf("debris = %v, want [%s]", result.Debris, debrisName)
+	}
+	consult, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	if len(consult.Report.Pending) != 0 {
+		t.Fatalf("pending = %+v, want protected series absent", consult.Report.Pending)
+	}
+}
+
+func TestRunMootsMismatchedBeliefDraftBeforeStubRefusal(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	consult, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	foreignName := writeMarked(t, f.driveRoot(t), "tvdb:foreign", 1)
+
+	err = f.service.Run(t.Context(), PlanRequest{})
+	want := "divergence_deferred: tape's contents diverge from the catalog " +
+		"(missing=[] extra=[" + foreignName + "]); divergence handling is deferred"
+	assertError(t, err, want)
+	assertPlanDiscarded(t, f.stateRoot, consult.Drafts[0].PlanID, true)
+}
+
+func TestTargetedPlanningRetiresStaleReadyPlan(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.addSeries(t, "A", "tvdb:a", 8)
+	consult, err := f.service.Consult(nil)
+	assertNoError(t, err)
+	stale := consult.Drafts[0]
+	assertNoError(t, backupplan.Approve(f.stateRoot, stale.PlanID))
+
+	result, err := f.service.Plan(PlanRequest{})
+	assertNoError(t, err)
+	if result.Plan.PlanID == stale.PlanID {
+		t.Fatalf("targeted plan reused stale ready plan %s", stale.PlanID)
+	}
+	assertPlanDiscarded(t, f.stateRoot, stale.PlanID, true)
 }
 
 func TestStubOperationsRefuseWithExactCodes(t *testing.T) {
@@ -232,6 +374,7 @@ type fixture struct {
 	stateRoot   string
 	libraryRoot string
 	ids         []string
+	issued      []string
 }
 
 func newFixture(t *testing.T, cartridge executor.DirectoryCartridge) *fixture {
@@ -283,6 +426,7 @@ func newFixture(t *testing.T, cartridge executor.DirectoryCartridge) *fixture {
 		NewID: func() string {
 			id := f.ids[0]
 			f.ids = f.ids[1:]
+			f.issued = append(f.issued, id)
 			return id
 		},
 	})
@@ -372,13 +516,14 @@ func (f *fixture) initDraft(
 	}
 }
 
-func writeMarked(t *testing.T, root, metadataRef string, generation int) {
+func writeMarked(t *testing.T, root, metadataRef string, generation int) string {
 	t.Helper()
 	name, err := snapshotname.Format(metadataRef, generation)
 	assertNoError(t, err)
 	dir := filepath.Join(tapevolume.SnapshotsDir(root), name)
 	assertNoError(t, os.MkdirAll(dir, 0o775))
 	assertNoError(t, os.WriteFile(filepath.Join(dir, "complete.json"), []byte("{}"), 0o664))
+	return name
 }
 
 func backupRefs(plan backupplan.Plan) []string {
@@ -389,6 +534,130 @@ func backupRefs(plan backupplan.Plan) []string {
 		}
 	}
 	return refs
+}
+
+func mustSnapshotName(t *testing.T, metadataRef string, generation int) string {
+	t.Helper()
+	name, err := snapshotname.Format(metadataRef, generation)
+	assertNoError(t, err)
+	return name
+}
+
+func catalogSnapshotNames(
+	catalog planner.CatalogSnapshot,
+	volumeID volume.ID,
+) []string {
+	for _, catalogVolume := range catalog.Volumes {
+		if catalogVolume.VolumeID != volumeID {
+			continue
+		}
+		names := make([]string, 0, len(catalogVolume.Snapshots))
+		for _, snapshot := range catalogVolume.Snapshots {
+			name, _ := snapshotname.Format(snapshot.MetadataRef, snapshot.Generation)
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		return names
+	}
+	return []string{}
+}
+
+func (f *fixture) driveRoot(t *testing.T) string {
+	t.Helper()
+	identity, err := f.drive.LoadedIdentity()
+	assertNoError(t, err)
+	return identity.Cartridge.Root
+}
+
+func (f *fixture) lastSessionID() string {
+	if len(f.issued) == 0 {
+		return ""
+	}
+	return f.issued[len(f.issued)-1]
+}
+
+func sessionLoggedExtra(session backupplan.Session, name string) bool {
+	for _, event := range session.Events {
+		if event.Type == backupplan.EventDivergenceChecked &&
+			slices.Contains(event.ExtraSnapshots, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func assertPlanDiscarded(
+	t *testing.T,
+	stateRoot, planID string,
+	wantDiscarded bool,
+) {
+	t.Helper()
+	err := backupplan.Discard(stateRoot, planID)
+	if !wantDiscarded {
+		want := "backupplan: discard " + planID + ": done plan cannot be discarded"
+		assertError(t, err, want)
+		return
+	}
+	want := "backupplan: discard " + planID + ": plan is already discarded"
+	assertError(t, err, want)
+}
+
+func installProtectedSnapshot(
+	t *testing.T,
+	stateRoot string,
+	tapeID tape.ID,
+	metadataRef string,
+	generation int,
+) {
+	t.Helper()
+	const protectedVolume volume.ID = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	root := t.TempDir()
+	assertNoError(t, tapevolume.Write(root, tapevolume.Volume{
+		VolumeID:  protectedVolume,
+		TapeID:    tapeID,
+		CreatedAt: time.Unix(1, 0).UTC(),
+	}))
+	header, err := os.ReadFile(tapevolume.VolumeFile(root))
+	assertNoError(t, err)
+	assertNoError(t, tapecatalog.InstallVolume(
+		stateRoot,
+		protectedVolume,
+		header,
+		tapecatalog.Observed{
+			TapeID:        tapeID,
+			ObservedAt:    time.Unix(1, 0).UTC(),
+			CapacityBytes: 1 << 30,
+			FreeBytes:     1 << 30,
+		},
+	))
+	name := mustSnapshotName(t, metadataRef, generation)
+	snapshotDir := filepath.Join(t.TempDir(), name)
+	assertNoError(t, tapemanifest.Write(snapshotDir, tapemanifest.Manifest{
+		MetadataRef: metadataRef,
+		RootPath:    "B",
+		Generation:  generation,
+		CapturedAt:  time.Unix(1, 0).UTC(),
+		WrittenBy:   tapemanifest.Writer{Version: "test", Host: "test-host"},
+		TotalBytes:  1,
+		Files: []tapemanifest.File{{
+			Path:    "payload.mkv",
+			Size:    1,
+			ModTime: time.Unix(1, 0).UTC(),
+			Hash:    "sha256:" + strings.Repeat("0", 64),
+		}},
+	}))
+	assertNoError(t, tapemanifest.Commit(snapshotDir))
+	manifest, err := os.ReadFile(filepath.Join(snapshotDir, "manifest.json"))
+	assertNoError(t, err)
+	complete, err := os.ReadFile(filepath.Join(snapshotDir, "complete.json"))
+	assertNoError(t, err)
+	assertNoError(t, tapecatalog.PutSnapshot(
+		stateRoot,
+		protectedVolume,
+		name,
+		manifest,
+		complete,
+	))
 }
 
 func assertNoError(t *testing.T, err error) {

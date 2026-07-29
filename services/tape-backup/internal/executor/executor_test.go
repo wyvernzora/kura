@@ -15,6 +15,7 @@ import (
 
 	"github.com/wyvernzora/kura/services/tape-backup/internal/executor"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/fingerprint"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/planner"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapemanifest"
@@ -85,7 +86,9 @@ func TestRunSessionSyncFailureAppendsNoCatalogRecordAndRetiresPlan(t *testing.T)
 	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
 	session := fixture.readSession(t)
 	assertEvent(t, session.Events, backupplan.EventPlanFailed, func(event backupplan.Event) bool {
-		return strings.Contains(event.Detail, syncErr.Error())
+		return event.Reason == "halted" &&
+			event.Detail == "executor: plan failed: executor: sync cartridge index: "+
+				syncErr.Error()
 	})
 }
 
@@ -193,13 +196,30 @@ func TestRunSessionForeignMarkedContentRefusesAndRetiresBeforeCopy(t *testing.T)
 	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
 	session := fixture.readSession(t)
 	assertEvent(t, session.Events, backupplan.EventPlanFailed, func(event backupplan.Event) bool {
-		return strings.Contains(event.Detail, "divergence_deferred") &&
-			strings.Contains(event.Detail, foreignName)
+		return event.Reason == "halted" &&
+			event.Detail == "executor: plan "+firstPlanID+
+				" divergence_deferred: foreign marked snapshots: "+foreignName
 	})
 }
 
 func TestRunSessionSweepRemovesConstructedGarbageAndContinues(t *testing.T) {
 	fixture := newSessionFixture(t)
+	committed := backupAction("tvdb:committed", "Committed", 1, "sha256:committed", 1)
+	committedName, manifest, complete := writeCommittedSnapshot(
+		t,
+		fixture.cartridgeRoot,
+		committed,
+		"committed",
+	)
+	if err := tapecatalog.PutSnapshot(
+		fixture.stateRoot,
+		firstVolume,
+		committedName,
+		manifest,
+		complete,
+	); err != nil {
+		t.Fatalf("PutSnapshot committed neighbor error = %v", err)
+	}
 	markerless := snapshotName(t, "tvdb:partial", 1)
 	writeFile(t, filepath.Join(
 		tapevolume.SnapshotsDir(fixture.cartridgeRoot),
@@ -212,7 +232,13 @@ func TestRunSessionSweepRemovesConstructedGarbageAndContinues(t *testing.T) {
 		"not-a-snapshot",
 		"complete.json",
 	), []byte("{}\n"))
-	fixture.plan = fillPlan(firstPlanID, firstVolume, "ABC123L6", nil, nil)
+	fixture.plan = fillPlan(
+		firstPlanID,
+		firstVolume,
+		"ABC123L6",
+		[]string{committedName},
+		nil,
+	)
 	fixture.promote(t)
 
 	if err := fixture.run(t, nil); err != nil {
@@ -227,6 +253,12 @@ func TestRunSessionSweepRemovesConstructedGarbageAndContinues(t *testing.T) {
 		if !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("Lstat swept %q error = %v, want file does not exist", name, err)
 		}
+	}
+	if _, err := os.Lstat(filepath.Join(
+		tapevolume.SnapshotsDir(fixture.cartridgeRoot),
+		committedName,
+	)); err != nil {
+		t.Fatalf("committed neighbor was swept: %v", err)
 	}
 	session := fixture.readSession(t)
 	if got := countEvents(session.Events, backupplan.EventSnapshotSwept); got != 2 {
@@ -365,6 +397,35 @@ func TestRunSessionHaltKeepsCommittedPrefixAndReleasesRemainder(t *testing.T) {
 	if err := backupplan.Draft(fixture.stateRoot, replacement); err != nil {
 		t.Fatalf("Draft replacement error = %v", err)
 	}
+
+	session := fixture.readSession(t)
+	assertEvent(t, session.Events, backupplan.EventItemFailed, func(event backupplan.Event) bool {
+		return event.MetadataRef == second.MetadataRef &&
+			event.Generation == second.Generation &&
+			event.Reason == string(backupplan.ReasonWriteFailed) &&
+			event.Detail == stopErr.Error()
+	})
+	const haltDetail = "executor: plan failed: " +
+		"executor: backup action (\"tvdb:b\", 1) failed: write_failed: " +
+		"injected second-copy failure\ninjected second-copy failure"
+	assertEvent(t, session.Events, backupplan.EventPlanFailed, func(event backupplan.Event) bool {
+		return event.Reason == "halted" && event.Detail == haltDetail
+	})
+	library, err := planner.ReadLibrarySnapshot(fixture.libraryRoot, 0)
+	if err != nil {
+		t.Fatalf("ReadLibrarySnapshot error = %v", err)
+	}
+	catalog, err := planner.ReadCatalogSnapshot(fixture.stateRoot)
+	if err != nil {
+		t.Fatalf("ReadCatalogSnapshot error = %v", err)
+	}
+	report, err := planner.Consult(library, catalog, nil, 0)
+	if err != nil {
+		t.Fatalf("Consult error = %v", err)
+	}
+	if len(report.Pending) != 1 || report.Pending[0].MetadataRef != second.MetadataRef {
+		t.Fatalf("pending after halt = %+v, want only %s", report.Pending, second.MetadataRef)
+	}
 }
 
 func TestRunSessionUsesLiveCapacityInsteadOfStaleCatalogFreeBytes(t *testing.T) {
@@ -373,6 +434,10 @@ func TestRunSessionUsesLiveCapacityInsteadOfStaleCatalogFreeBytes(t *testing.T) 
 	action.Bytes = 1 << 20
 	fixture.plan = fillPlan(firstPlanID, firstVolume, "ABC123L6", nil, []backupplan.Action{action})
 	fixture.promote(t)
+	_, free, err := fixture.drive.Capacity()
+	if err != nil {
+		t.Fatalf("Capacity error = %v", err)
+	}
 	called := false
 
 	if err := fixture.run(t, func(context.Context, executor.BackupActionRequest) error {
@@ -385,6 +450,46 @@ func TestRunSessionUsesLiveCapacityInsteadOfStaleCatalogFreeBytes(t *testing.T) 
 		t.Fatal("backup handler was called despite insufficient live capacity")
 	}
 	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
+	session := fixture.readSession(t)
+	wantDetail := fmt.Sprintf(
+		"item needs %d bytes; 0-byte margin, %d bytes free",
+		action.Bytes,
+		free,
+	)
+	assertEvent(t, session.Events, backupplan.EventItemFailed, func(event backupplan.Event) bool {
+		return event.MetadataRef == action.MetadataRef &&
+			event.Generation == action.Generation &&
+			event.Reason == string(backupplan.ReasonInsufficientSpace) &&
+			event.Detail == wantDetail
+	})
+}
+
+func TestRunSessionCancellationDuringBackupRetiresAndLogsExactReason(t *testing.T) {
+	fixture := newSessionFixture(t)
+	action := writeSeries(t, fixture.libraryRoot, "Series A", "tvdb:a", 1)
+	fixture.plan = fillPlan(firstPlanID, firstVolume, "ABC123L6", nil, []backupplan.Action{action})
+	fixture.promote(t)
+
+	if err := fixture.run(t, func(context.Context, executor.BackupActionRequest) error {
+		return context.Canceled
+	}); err != nil {
+		t.Fatalf("RunSession error = %v", err)
+	}
+
+	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
+	session := fixture.readSession(t)
+	assertEvent(t, session.Events, backupplan.EventItemFailed, func(event backupplan.Event) bool {
+		return event.MetadataRef == action.MetadataRef &&
+			event.Generation == action.Generation &&
+			event.Reason == string(backupplan.ReasonWriteFailed) &&
+			event.Detail == context.Canceled.Error()
+	})
+	const haltDetail = "executor: plan failed: " +
+		"executor: backup action (\"tvdb:a\", 1) failed: write_failed: " +
+		"context canceled\ncontext canceled"
+	assertEvent(t, session.Events, backupplan.EventPlanFailed, func(event backupplan.Event) bool {
+		return event.Reason == "halted" && event.Detail == haltDetail
+	})
 }
 
 type sessionFixture struct {

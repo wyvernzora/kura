@@ -236,6 +236,26 @@ func TestHandlersMapSixVerbs(t *testing.T) {
 	})
 }
 
+func TestRecoveryAndRestoreSurfacesAreStructurallyAbsent(t *testing.T) {
+	fake := &fakeTapeService{}
+	for _, path := range []string{
+		"/api/tape/recovery",
+		"/api/tape/restore",
+	} {
+		t.Run(path, func(t *testing.T) {
+			response := serveRequest(t, fake, http.MethodPost, path, []byte(`{}`))
+			if response.Code != http.StatusNotFound {
+				t.Fatalf(
+					"POST %s status = %d, want %d",
+					path,
+					response.Code,
+					http.StatusNotFound,
+				)
+			}
+		})
+	}
+}
+
 func TestAllSixVerbsRejectMissingBearerToken(t *testing.T) {
 	for _, test := range []struct {
 		name   string

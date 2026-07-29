@@ -214,6 +214,23 @@ func TestValidateRejectsEmptyAuthTokenPathExactly(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsZeroFlushCadenceExactly(t *testing.T) {
+	cfg := Defaults()
+	cfg.Library.Root = "/library"
+	cfg.Library.URL = "http://library"
+	cfg.State.Root = "/state"
+	cfg.Tape.FlushCadence = 0
+
+	err := cfg.Validate()
+	if err == nil || err.Error() != "tape.flush_cadence must be at least 1" {
+		t.Fatalf(
+			"Validate() error = %v, want %q",
+			err,
+			"tape.flush_cadence must be at least 1",
+		)
+	}
+}
+
 func TestLoadMissingFile(t *testing.T) {
 	_, err := Load(filepath.Join(t.TempDir(), "missing.toml"))
 	if err == nil || !strings.Contains(err.Error(), "open") {
