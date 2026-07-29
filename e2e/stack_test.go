@@ -284,10 +284,12 @@ max_attempts = 3
 [sources.dmhy]
 enabled = true
 interval = "1h"
+settle_window = "3650d"
 timeout = "30s"
+request_timeout = "10s"
 url = "http://upstreams:8080"
 category = "2"
-max_rps = 0
+max_rps = 100
 cache_ttl = "0s"
 `
 	container, err := testcontainers.Run(ctx, releaseImage,

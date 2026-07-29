@@ -109,19 +109,48 @@ kura-release-indexer crawl -config /etc/kura/release-indexer.toml -source nyaa -
 A full catch-up is a shell loop — resumable at any page, paced by its own
 `sleep`, with live progress from the ingest response counters:
 
-```sh
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
 KURA="http://127.0.0.1:8080"
+CUTOFF="2026-05-01"                                             # your cutoff
 page=1
 while :; do
-  kura-release-indexer crawl -config cfg.toml -source nyaa -page "$page" > batch.jsonl
-  [ -s batch.jsonl ] || break                                   # archive floor
-  jq -s '{posts:.}' batch.jsonl \
-    | curl -sS -XPOST "$KURA/api/v1/releases/ingest" -d @- | jq -c .batch
-  oldest=$(jq -rs 'map(.publishedAt) | min' batch.jsonl)
-  [ "$oldest" \< "2026-05-01" ] && break                        # your cutoff
+  # Empty stdout means the archive floor ONLY when the crawl succeeded; a
+  # failed fetch/parse also writes nothing, so branch on exit status first.
+  if ! kura-release-indexer crawl -config cfg.toml -source nyaa -page "$page" > batch.jsonl; then
+    echo "crawl failed on page $page; fix the cause, then resume at page=$page" >&2
+    exit 1
+  fi
+  if [ ! -s batch.jsonl ]; then
+    # The in-process walk requires TWO consecutive empty pages before calling
+    # the archive floor; a single empty page can be a listing artifact. Fetch
+    # one more page to confirm before trusting a first empty.
+    echo "empty page at $page — likely the archive floor; confirm with page $((page+1)) if in doubt" >&2
+    break
+  fi
+  # --fail-with-body + pipefail: an ingest error envelope must stop the loop
+  # rather than silently advancing past an unpersisted page.
+  if ! jq -s '{posts:.}' batch.jsonl \
+      | curl -sS --fail-with-body -XPOST "$KURA/api/v1/releases/ingest" -d @- \
+      | jq -c .batch; then
+    echo "ingest failed for page $page; resume at page=$page" >&2
+    exit 1
+  fi
+  # Cutoff on the batch MAXIMUM: stop only when even the newest post on the
+  # page is past the cutoff. A minimum would let one pinned/epoch-dated row
+  # end a deep backfill after page 1.
+  newest=$(jq -rs 'map(.publishedAt) | max' batch.jsonl)
+  if [[ "$newest" < "$CUTOFF" ]]; then break; fi
   page=$((page+1)); sleep 2                                     # politeness
 done
 ```
+
+The exit-status branches are load-bearing: this loop is the only backfill
+mechanism, and a 503, a request timeout, or a markup change all produce the
+same empty stdout as a genuine archive floor. Without them a truncated
+backfill reports itself as a clean completion.
 
 Every step is idempotent: re-running a page, overlapping ranges, or restarting
 the loop mid-way is always safe. Run it after any outage longer than the
@@ -129,8 +158,9 @@ settle window ("was the crawler down for more than N? run the catch-up loop"),
 and for one-time deep history imports pick the cutoff accordingly — on DMHY,
 deep pages are slow on the source side, which paces the loop naturally. The
 subcommand needs no database access and works on a configured-but-disabled
-source; politeness is your loop's `sleep` plus the source's `max_rps` cap on
-the fetch itself.
+source. Politeness is your loop's `sleep` — the subcommand makes exactly one
+upstream request per invocation, so `max_rps` never has a second request to
+delay; do not drop the sleep or fan invocations out in parallel.
 
 ## Security
 

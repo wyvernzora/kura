@@ -142,6 +142,50 @@ func TestCrawlSinceIgnoresImplausibleStamps(t *testing.T) {
 	}
 }
 
+// A page whose stamps are all far older than the boundary is the STRONGEST
+// possible stop signal, not an anomaly: plausibility must not be scaled to
+// the settle window, or a short window turns those pages into "undatable" and
+// fails every run.
+func TestCrawlSinceStopsOnDefinitivelyOldPage(t *testing.T) {
+	now := time.Now()
+	fixture := &sinceFixture{now: now, pages: [][]time.Duration{
+		repeatOffsets(5, -5*time.Minute),
+		repeatOffsets(5, -30*24*time.Hour), // decades of settle windows behind
+		repeatOffsets(5, -60*24*time.Hour),
+	}}
+
+	pages := 0
+	err := fixture.crawler().CrawlSince(t.Context(), now.Add(-15*time.Minute), func([]api.RawPost) error {
+		pages++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("CrawlSince() error = %v, want clean stop on the boundary page", err)
+	}
+	if pages != 2 {
+		t.Fatalf("walked %d pages, want 2 (boundary page emitted, then stop)", pages)
+	}
+}
+
+// The mirror image: a very wide settle window must not make a 1970 artifact
+// plausible enough to stop the walk. Epoch pages stay undatable at any window
+// width, so breakage still fails loudly instead of reading as "past the end".
+func TestCrawlSinceRejectsEpochPagesUnderWideWindow(t *testing.T) {
+	now := time.Now()
+	epoch := -now.Sub(time.Unix(0, 0))
+	fixture := &sinceFixture{now: now, pages: [][]time.Duration{
+		{epoch, epoch},
+		{epoch},
+	}}
+
+	err := fixture.crawler().CrawlSince(t.Context(), now.Add(-3650*24*time.Hour), func([]api.RawPost) error {
+		return nil
+	})
+	if !errors.Is(err, ErrNoPlausibleDates) {
+		t.Fatalf("CrawlSince() error = %v, want ErrNoPlausibleDates", err)
+	}
+}
+
 // Consecutive content pages with zero plausible stamps indicate parser or
 // markup breakage; the walk must fail loudly instead of walking the archive.
 func TestCrawlSinceFailsOnConsecutiveUndatablePages(t *testing.T) {

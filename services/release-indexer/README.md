@@ -35,9 +35,12 @@ opaque strings it never resolves; it only records the matcher outcome.
 ## Architecture in one breath
 
 The release-indexer runs DMHY and Nyaa crawls on configured intervals and ingests
-their posts directly. Each run starts at the newest listing and is bounded to the
-latest 200 posts; durable ingestion makes replay harmless.
-`POST /api/v1/releases/ingest` remains an escape hatch for external producers.
+their posts directly. Each run starts at the newest listing and ingests, page by
+page, everything newer than the source's configured settle window; durable
+ingestion makes replay harmless.
+`POST /api/v1/releases/ingest` remains the external-producer surface, and the
+binary's `crawl` subcommand emits ingest-ready JSONL one page at a time for
+operator-scripted backfills (see docs/operations.md).
 n8n drives only the **match loop** over the queue
 REST API; a stateless matcher resolves each release. Consumers read the catalog over
 a REST API under `/api/v1/releases`. Postgres is both
