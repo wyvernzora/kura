@@ -48,12 +48,12 @@ func TestHTTPWrapRecordsRouteAndStatus(t *testing.T) {
 
 func TestConstructorsUseIndependentRegistries(t *testing.T) {
 	q := fakeQueueStats{}
-	_ = NewTakuhai("v", "c", q)
-	_ = NewTakuhai("v", "c", q)
+	_ = New("v", "c", q)
+	_ = New("v", "c", q)
 }
 
 func TestSubmitConfidenceRecordsMatchedAndSuppressed(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{})
+	m := New("v", "c", fakeQueueStats{})
 
 	matched := 0.94
 	suppressed := 0.73
@@ -68,7 +68,7 @@ func TestSubmitConfidenceRecordsMatchedAndSuppressed(t *testing.T) {
 }
 
 func TestQueueStatsErrorDoesNotFailScrape(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{err: errors.New("boom")})
+	m := New("v", "c", fakeQueueStats{err: errors.New("boom")})
 	rec := httptest.NewRecorder()
 
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
@@ -81,13 +81,13 @@ func TestQueueStatsErrorDoesNotFailScrape(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read /metrics: %v", err)
 	}
-	if !strings.Contains(string(body), "takuhai_queue_stats_scrape_ok 0") {
+	if !strings.Contains(string(body), "kura_indexer_queue_stats_scrape_ok 0") {
 		t.Fatalf("/metrics missing queue scrape failure gauge:\n%s", body)
 	}
 }
 
-func TestTakuhaiPrecreatesIngestPostCounters(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{})
+func TestMetricsPrecreatesIngestPostCounters(t *testing.T) {
+	m := New("v", "c", fakeQueueStats{})
 	rec := httptest.NewRecorder()
 
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", http.NoBody))
@@ -98,7 +98,7 @@ func TestTakuhaiPrecreatesIngestPostCounters(t *testing.T) {
 	text := string(body)
 	for _, source := range api.Sources() {
 		for _, result := range []string{"new", "updated", "duplicate", "conflict", "skipped", "error"} {
-			want := `takuhai_ingest_posts_total{result="` + result + `",source="` + source + `"} 0`
+			want := `kura_indexer_ingest_posts_total{result="` + result + `",source="` + source + `"} 0`
 			if !strings.Contains(text, want) {
 				t.Fatalf("/metrics missing %q:\n%s", want, text)
 			}
@@ -107,7 +107,7 @@ func TestTakuhaiPrecreatesIngestPostCounters(t *testing.T) {
 }
 
 func TestCatalogStatsScrape(t *testing.T) {
-	m := NewTakuhai("v", "c", fakeQueueStats{
+	m := New("v", "c", fakeQueueStats{
 		catalog: store.CatalogStats{RawPosts: 7, Infohashes: 3, Refs: 2},
 	})
 	rec := httptest.NewRecorder()
@@ -119,10 +119,10 @@ func TestCatalogStatsScrape(t *testing.T) {
 	}
 	text := string(body)
 	for _, want := range []string{
-		"takuhai_catalog_raw_posts 7",
-		"takuhai_catalog_infohashes 3",
-		"takuhai_catalog_refs 2",
-		"takuhai_catalog_stats_scrape_ok 1",
+		"kura_indexer_catalog_raw_posts 7",
+		"kura_indexer_catalog_infohashes 3",
+		"kura_indexer_catalog_refs 2",
+		"kura_indexer_catalog_stats_scrape_ok 1",
 	} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("/metrics missing %q:\n%s", want, text)

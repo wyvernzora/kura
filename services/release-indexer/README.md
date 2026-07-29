@@ -6,30 +6,31 @@
 </div>
 
 <p align="center">
-<b>takuhai - self-hosted anime release indexer</b>
+<b>kura release-indexer - self-hosted anime release indexer</b>
 </p>
 
 <hr>
 <br>
 <br>
 
-**takuhai** (宅配 — "home delivery / courier") is a self-hosted anime **release
-index**: a durable store + source crawler + work queue + query API. It crawls
-configured sources, keeps their raw releases immutably, dedups them by infohash into a
-queryable catalog, and exposes the unmatched ones as a work queue.
+The **release-indexer** (宅配 — "home delivery / courier"; formerly the standalone
+takuhai project) is the kura suite's anime **release index**: a durable store +
+source crawler + work queue + query API. It crawls configured sources, keeps their
+raw releases immutably, dedups them by infohash into a queryable catalog, and
+exposes the unmatched ones as a work queue.
 
-It pairs with [`kura`](https://github.com/wyvernzora/kura) (蔵 — "storehouse").
+It pairs with the kura library manager (蔵 — "storehouse") in the same suite.
 
 ## The idea
 
 The hard direction of release management — *canonical series → search keywords* — is
 intractable; the forward direction — *raw release name → canonical series* — is not.
-takuhai inverts the problem: an **external matching agent** resolves each release to a
-canonical ref once, at ingest. Consumers that already hold a ref then query
-the index **directly by ref**, no keyword guessing.
+The release-indexer inverts the problem: an **external matching agent** resolves each
+release to a canonical ref once, at ingest. Consumers that already hold a ref then
+query the index **directly by ref**, no keyword guessing.
 
-takuhai holds **no matching intelligence** of its own. Canonical refs are opaque
-strings it never resolves; it only records the matcher outcome.
+The release-indexer holds **no matching intelligence** of its own. Canonical refs are
+opaque strings it never resolves; it only records the matcher outcome.
 
 ## Architecture in one breath
 

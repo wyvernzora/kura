@@ -49,23 +49,23 @@ func TestEndToEndWorkflow(t *testing.T) {
 
 	pg := startPostgres(t, ctx, nw)
 	startFakeDMHY(t, ctx, nw)
-	takuhaiURL := startTakuhai(t, ctx, nw, pg)
-	waitForAvailable(t, takuhaiURL, 3)
+	indexerURL := startIndexer(t, ctx, nw, pg)
+	waitForAvailable(t, indexerURL, 3)
 
-	matchToken := claimOne(t, takuhaiURL, matchInfohash, 30)
-	assertSubmitStatus(t, takuhaiURL, http.StatusConflict, map[string]any{
+	matchToken := claimOne(t, indexerURL, matchInfohash, 30)
+	assertSubmitStatus(t, indexerURL, http.StatusConflict, map[string]any{
 		"infohash":   matchInfohash,
 		"claimToken": matchToken - 1,
 		"status":     "matched",
 		"ref":        "tvdb:12345",
 		"confidence": 0.5,
 	})
-	assertSubmitStatus(t, takuhaiURL, http.StatusBadRequest, map[string]any{
+	assertSubmitStatus(t, indexerURL, http.StatusBadRequest, map[string]any{
 		"infohash":   matchInfohash,
 		"claimToken": matchToken,
 		"status":     "defer",
 	})
-	submitOK(t, takuhaiURL, map[string]any{
+	submitOK(t, indexerURL, map[string]any{
 		"infohash":   matchInfohash,
 		"claimToken": matchToken,
 		"status":     "matched",
@@ -74,46 +74,46 @@ func TestEndToEndWorkflow(t *testing.T) {
 		"reason":     "e2e exact fixture match",
 	})
 
-	suppressToken := claimOne(t, takuhaiURL, suppressInfohash, 30)
-	submitOK(t, takuhaiURL, map[string]any{
+	suppressToken := claimOne(t, indexerURL, suppressInfohash, 30)
+	submitOK(t, indexerURL, map[string]any{
 		"infohash":   suppressInfohash,
 		"claimToken": suppressToken,
 		"status":     "suppressed",
 		"reason":     "e2e not wanted",
 	})
 
-	exhaustToken := claimOne(t, takuhaiURL, exhaustInfohash, 1)
-	submitOK(t, takuhaiURL, map[string]any{
+	exhaustToken := claimOne(t, indexerURL, exhaustInfohash, 1)
+	submitOK(t, indexerURL, map[string]any{
 		"infohash":   exhaustInfohash,
 		"claimToken": exhaustToken,
 		"status":     "unmatched",
 		"reason":     "e2e first miss",
 	})
-	assertNoClaim(t, takuhaiURL, "unmatched submit keeps the lease until timeout")
+	assertNoClaim(t, indexerURL, "unmatched submit keeps the lease until timeout")
 	time.Sleep(1500 * time.Millisecond)
-	exhaustToken = claimOne(t, takuhaiURL, exhaustInfohash, 1)
-	submitOK(t, takuhaiURL, map[string]any{
+	exhaustToken = claimOne(t, indexerURL, exhaustInfohash, 1)
+	submitOK(t, indexerURL, map[string]any{
 		"infohash":   exhaustInfohash,
 		"claimToken": exhaustToken,
 		"status":     "unmatched",
 		"reason":     "e2e second miss exhausts",
 	})
 
-	stats := queueStats(t, takuhaiURL)
+	stats := queueStats(t, indexerURL)
 	if stats.Matched != 1 || stats.Suppressed != 1 || stats.Exhausted != 1 || stats.Available != 0 || stats.Leased != 0 {
 		t.Fatalf("queue stats = %+v, want matched=1 suppressed=1 exhausted=1 available=0 leased=0", stats)
 	}
 
-	assertConsumerAPI(t, ctx, takuhaiURL, matchMagnet)
+	assertConsumerAPI(t, ctx, indexerURL, matchMagnet)
 }
 
 func startPostgres(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork) *tcpostgres.PostgresContainer {
 	t.Helper()
 	pg, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
-		tcpostgres.WithDatabase("takuhai"),
-		tcpostgres.WithUsername("takuhai"),
-		tcpostgres.WithPassword("takuhai"),
+		tcpostgres.WithDatabase("kura"),
+		tcpostgres.WithUsername("kura"),
+		tcpostgres.WithPassword("kura"),
 		tcnetwork.WithNetwork([]string{"postgres"}, nw),
 	)
 	if err != nil {
@@ -134,7 +134,7 @@ func startFakeDMHY(t *testing.T, ctx context.Context, nw *testcontainers.DockerN
 		testcontainers.WithDockerfile(testcontainers.FromDockerfile{
 			Context:        dir,
 			Dockerfile:     "Dockerfile",
-			Repo:           "takuhai-e2e-dmhy",
+			Repo:           "indexer-e2e-dmhy",
 			Tag:            "latest",
 			BuildLogWriter: os.Stderr,
 		}),
@@ -153,7 +153,7 @@ func startFakeDMHY(t *testing.T, ctx context.Context, nw *testcontainers.DockerN
 	return c
 }
 
-func startTakuhai(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork, pg *tcpostgres.PostgresContainer) string {
+func startIndexer(t *testing.T, ctx context.Context, nw *testcontainers.DockerNetwork, pg *tcpostgres.PostgresContainer) string {
 	t.Helper()
 	config := `[server]
 addr = ":8080"
@@ -175,13 +175,13 @@ cache_ttl = "0s"
 		testcontainers.WithDockerfile(testcontainers.FromDockerfile{
 			Context:        repoRoot(t),
 			Dockerfile:     "Dockerfile",
-			Repo:           "takuhai-e2e-service",
+			Repo:           "indexer-e2e-service",
 			Tag:            "latest",
 			BuildLogWriter: os.Stderr,
 		}),
-		tcnetwork.WithNetwork([]string{"takuhai"}, nw),
+		tcnetwork.WithNetwork([]string{"indexer"}, nw),
 		testcontainers.WithEnv(map[string]string{
-			"KURA_RELEASES_DATABASE_URL": "postgres://takuhai:takuhai@postgres:5432/takuhai?sslmode=disable",
+			"KURA_RELEASES_DATABASE_URL": "postgres://kura:kura@postgres:5432/kura?sslmode=disable",
 		}),
 		testcontainers.WithFiles(testcontainers.ContainerFile{
 			Reader:            strings.NewReader(config),
@@ -192,7 +192,7 @@ cache_ttl = "0s"
 		testcontainers.WithWaitStrategy(wait.ForHTTP("/healthz").WithPort("8080/tcp").WithStartupTimeout(2*time.Minute)),
 	)
 	if err != nil {
-		t.Fatalf("start takuhai container after postgres %s: %v", pg.MustConnectionString(ctx, "sslmode=disable"), err)
+		t.Fatalf("start indexer container after postgres %s: %v", pg.MustConnectionString(ctx, "sslmode=disable"), err)
 	}
 	t.Cleanup(func() {
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -201,16 +201,16 @@ cache_ttl = "0s"
 	})
 	endpoint, err := c.Endpoint(ctx, "http")
 	if err != nil {
-		t.Fatalf("takuhai endpoint: %v", err)
+		t.Fatalf("indexer endpoint: %v", err)
 	}
 	return endpoint
 }
 
-func waitForAvailable(t *testing.T, takuhaiURL string, want int) {
+func waitForAvailable(t *testing.T, indexerURL string, want int) {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		if stats := queueStats(t, takuhaiURL); stats.Available == want {
+		if stats := queueStats(t, indexerURL); stats.Available == want {
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -218,10 +218,10 @@ func waitForAvailable(t *testing.T, takuhaiURL string, want int) {
 	t.Fatalf("queue did not reach %d available releases", want)
 }
 
-func claimOne(t *testing.T, takuhaiURL, wantInfohash string, leaseSeconds int) int64 {
+func claimOne(t *testing.T, indexerURL, wantInfohash string, leaseSeconds int) int64 {
 	t.Helper()
 	var claim claimResponse
-	postJSON(t, takuhaiURL+"/api/v1/releases/queue/claim", map[string]any{
+	postJSON(t, indexerURL+"/api/v1/releases/queue/claim", map[string]any{
 		"limit":        1,
 		"leaseSeconds": leaseSeconds,
 	}, http.StatusOK, &claim)
@@ -241,10 +241,10 @@ func claimOne(t *testing.T, takuhaiURL, wantInfohash string, leaseSeconds int) i
 	return item.ClaimToken
 }
 
-func assertNoClaim(t *testing.T, takuhaiURL, note string) {
+func assertNoClaim(t *testing.T, indexerURL, note string) {
 	t.Helper()
 	var claim claimResponse
-	postJSON(t, takuhaiURL+"/api/v1/releases/queue/claim", map[string]any{
+	postJSON(t, indexerURL+"/api/v1/releases/queue/claim", map[string]any{
 		"limit":        1,
 		"leaseSeconds": 1,
 	}, http.StatusOK, &claim)
@@ -253,20 +253,20 @@ func assertNoClaim(t *testing.T, takuhaiURL, note string) {
 	}
 }
 
-func submitOK(t *testing.T, takuhaiURL string, body map[string]any) {
+func submitOK(t *testing.T, indexerURL string, body map[string]any) {
 	t.Helper()
-	assertSubmitStatus(t, takuhaiURL, http.StatusOK, body)
+	assertSubmitStatus(t, indexerURL, http.StatusOK, body)
 }
 
-func assertSubmitStatus(t *testing.T, takuhaiURL string, wantStatus int, body map[string]any) {
+func assertSubmitStatus(t *testing.T, indexerURL string, wantStatus int, body map[string]any) {
 	t.Helper()
 	var out map[string]any
-	postJSON(t, takuhaiURL+"/api/v1/releases/queue/submit", body, wantStatus, &out)
+	postJSON(t, indexerURL+"/api/v1/releases/queue/submit", body, wantStatus, &out)
 }
 
-func queueStats(t *testing.T, takuhaiURL string) queueStatsResponse {
+func queueStats(t *testing.T, indexerURL string) queueStatsResponse {
 	t.Helper()
-	resp, err := http.Get(takuhaiURL + "/api/v1/releases/queue/stats")
+	resp, err := http.Get(indexerURL + "/api/v1/releases/queue/stats")
 	if err != nil {
 		t.Fatalf("GET /queue/stats: %v", err)
 	}
@@ -288,11 +288,11 @@ func queueStats(t *testing.T, takuhaiURL string) queueStatsResponse {
 // This ran through the leaf MCP server until that was removed; the assertions
 // are unchanged, only the transport. The MCP surface itself is now the
 // gateway's and is covered by its own suite.
-func assertConsumerAPI(t *testing.T, ctx context.Context, takuhaiURL, wantMagnet string) {
+func assertConsumerAPI(t *testing.T, ctx context.Context, indexerURL, wantMagnet string) {
 	t.Helper()
 
 	var list listReleasesResponse
-	getJSON(t, ctx, takuhaiURL+"/api/v1/releases?ref=tvdb:12345&limit=10", http.StatusOK, &list)
+	getJSON(t, ctx, indexerURL+"/api/v1/releases?ref=tvdb:12345&limit=10", http.StatusOK, &list)
 	if len(list.Releases) != 1 {
 		t.Fatalf("list returned %d releases, want 1", len(list.Releases))
 	}
@@ -308,18 +308,18 @@ func assertConsumerAPI(t *testing.T, ctx context.Context, takuhaiURL, wantMagnet
 	}
 
 	var empty listReleasesResponse
-	getJSON(t, ctx, takuhaiURL+"/api/v1/releases?ref=tvdb:99999&limit=10", http.StatusOK, &empty)
+	getJSON(t, ctx, indexerURL+"/api/v1/releases?ref=tvdb:99999&limit=10", http.StatusOK, &empty)
 	if len(empty.Releases) != 0 {
 		t.Fatalf("list for an unmatched ref = %+v, want none", empty.Releases)
 	}
 
 	var magnet magnetResponse
-	getJSON(t, ctx, takuhaiURL+"/api/v1/releases/"+matchInfohash+"/magnet", http.StatusOK, &magnet)
+	getJSON(t, ctx, indexerURL+"/api/v1/releases/"+matchInfohash+"/magnet", http.StatusOK, &magnet)
 	if magnet.Magnet != wantMagnet {
 		t.Fatalf("magnet = %q, want %q", magnet.Magnet, wantMagnet)
 	}
 	// An unknown infohash is a 404, not an empty body.
-	getJSON(t, ctx, takuhaiURL+"/api/v1/releases/"+unknownInfohash+"/magnet", http.StatusNotFound, nil)
+	getJSON(t, ctx, indexerURL+"/api/v1/releases/"+unknownInfohash+"/magnet", http.StatusNotFound, nil)
 }
 
 func getJSON(t *testing.T, ctx context.Context, url string, wantStatus int, out any) {

@@ -46,11 +46,11 @@ const cursorVersion = 1
 
 var (
 	// ErrInvalidRef is the contract sentinel for a ref that fails the ref shape check.
-	ErrInvalidRef = errors.New("takuhai/cursor: invalid ref")
+	ErrInvalidRef = errors.New("indexer/cursor: invalid ref")
 
 	// ErrInvalidCursor is the contract sentinel for a malformed/undecodable cursor,
 	// a cursor bound to a different ref, or a cross-path replay.
-	ErrInvalidCursor = errors.New("takuhai/cursor: invalid cursor")
+	ErrInvalidCursor = errors.New("indexer/cursor: invalid cursor")
 )
 
 // Path identifies which list_releases ordering the cursor was issued for. The two

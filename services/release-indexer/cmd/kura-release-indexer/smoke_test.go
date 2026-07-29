@@ -27,9 +27,9 @@ func TestSmoke(t *testing.T) {
 
 	container, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
-		tcpostgres.WithDatabase("takuhai"),
-		tcpostgres.WithUsername("takuhai"),
-		tcpostgres.WithPassword("takuhai"),
+		tcpostgres.WithDatabase("kura"),
+		tcpostgres.WithUsername("kura"),
+		tcpostgres.WithPassword("kura"),
 		tcpostgres.BasicWaitStrategies(),
 	)
 	if err != nil {
@@ -45,12 +45,12 @@ func TestSmoke(t *testing.T) {
 		t.Fatalf("postgres connection string: %v", err)
 	}
 
-	binPath := filepath.Join(t.TempDir(), "takuhai-smoke")
+	binPath := filepath.Join(t.TempDir(), "indexer-smoke")
 	build := exec.CommandContext(ctx, "go", "build", "-o", binPath, ".")
 	build.Env = append(os.Environ(), "GOCACHE="+filepath.Join(t.TempDir(), "gocache"))
 	build.Stderr = os.Stderr
 	if out, err := build.Output(); err != nil {
-		t.Fatalf("build takuhai binary: %v\n%s", err, out)
+		t.Fatalf("build indexer binary: %v\n%s", err, out)
 	}
 
 	addr := "127.0.0.1:" + freePort(t)
@@ -273,7 +273,7 @@ func startBinary(t *testing.T, ctx context.Context, binPath, configPath, dsn str
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		t.Fatalf("start takuhai binary: %v", err)
+		t.Fatalf("start indexer binary: %v", err)
 	}
 	t.Cleanup(func() {
 		if cmd.Process != nil {

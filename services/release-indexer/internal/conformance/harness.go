@@ -41,9 +41,9 @@ func startSharedPG() {
 
 		container, err := tcpostgres.Run(ctx,
 			"postgres:18-alpine",
-			tcpostgres.WithDatabase("takuhai_admin"),
-			tcpostgres.WithUsername("takuhai"),
-			tcpostgres.WithPassword("takuhai"),
+			tcpostgres.WithDatabase("kura_admin"),
+			tcpostgres.WithUsername("kura"),
+			tcpostgres.WithPassword("kura"),
 			tcpostgres.BasicWaitStrategies(),
 		)
 		if err != nil {
@@ -94,7 +94,7 @@ func newConformanceStoreWithClock(t *testing.T, clock store.Clock) store.Store {
 	}
 
 	ctx := context.Background()
-	dbName := fmt.Sprintf("takuhai_test_%d", dbCounter.Add(1))
+	dbName := fmt.Sprintf("kura_test_%d", dbCounter.Add(1))
 
 	// Carve a fresh database on the shared container via a short-lived admin connection.
 	adminPool, err := pgxpool.New(ctx, sharedPGDSN)

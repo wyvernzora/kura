@@ -1,4 +1,4 @@
-// Package infohash owns the canonical dedup key. takuhai derives the
+// Package infohash owns the canonical dedup key. The indexer derives the
 // canonical v1 btih (40 lowercase hex) from each post's magnet on ingest and
 // drops pure-v2/malformed values; the crawler stays dumb and emits raw posts
 // with no infohash. This package is a leaf — it imports nothing internal.
@@ -15,7 +15,7 @@ import (
 // in-scope skip: an empty, pure-v2, or non-40-hex infohash that ingest must drop
 // (never insert, never abort the page — design §5 step 0). The conformance
 // pure-v2/malformed-skip test asserts this specific sentinel.
-var ErrSkipInfohash = errors.New("takuhai/infohash: infohash skipped (empty, pure-v2, or non-40-hex)")
+var ErrSkipInfohash = errors.New("indexer/infohash: infohash skipped (empty, pure-v2, or non-40-hex)")
 
 // NormalizeInfohash resolves an inbound infohash (or magnet xt payload) to the
 // canonical v1 btih: 40 lowercase hex (design §2/§3). A 32-char RFC 4648 base32

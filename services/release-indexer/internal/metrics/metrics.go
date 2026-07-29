@@ -82,7 +82,7 @@ func (m *HTTP) route(path string) string {
 
 func (m *HTTP) Route(path string) string { return m.route(path) }
 
-type Takuhai struct {
+type Metrics struct {
 	HTTP                *HTTP
 	handler             http.Handler
 	ingestBatches       *prometheus.CounterVec
@@ -98,15 +98,15 @@ type Takuhai struct {
 	submitConfidence    *prometheus.HistogramVec
 }
 
-func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
+func New(version, commit string, qs queueStatsProvider) *Metrics {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-	registerBuildInfo(reg, "takuhai", version, commit)
+	registerBuildInfo(reg, "kura_indexer", version, commit)
 	reg.MustRegister(&queueCollector{source: qs})
 	auto := promauto.With(reg)
-	m := &Takuhai{
+	m := &Metrics{
 		handler: promhttp.HandlerFor(reg, promhttp.HandlerOpts{}),
-		HTTP: newHTTP(reg, "takuhai", map[string]string{
+		HTTP: newHTTP(reg, "kura_indexer", map[string]string{
 			"/healthz":                      "/healthz",
 			"/metrics":                      "/metrics",
 			"/api/v1/releases":              "/api/v1/releases",
@@ -116,70 +116,70 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 			"/api/v1/releases/queue/submit": "/api/v1/releases/queue/submit",
 		}),
 		ingestBatches: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "ingest",
 			Name:      "batches_total",
 			Help:      "Total ingest batches.",
 		}, []string{"result"}),
 		ingestPosts: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "ingest",
 			Name:      "posts_total",
 			Help:      "Total ingest posts by source and result.",
 		}, []string{"source", "result"}),
 		ingestBatchSize: auto.NewHistogram(prometheus.HistogramOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "ingest",
 			Name:      "batch_size",
 			Help:      "Posts per ingest batch.",
 			Buckets:   []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000},
 		}),
 		sourceCrawls: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "source",
 			Name:      "crawls_total",
 			Help:      "Scheduled source crawls by result.",
 		}, []string{"source", "result"}),
 		sourceCrawlDuration: auto.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "source",
 			Name:      "crawl_duration_seconds",
 			Help:      "Scheduled source crawl duration.",
 			Buckets:   prometheus.DefBuckets,
 		}, []string{"source"}),
 		sourceCrawlPosts: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "source",
 			Name:      "crawl_posts_total",
 			Help:      "Posts returned by scheduled source crawls.",
 		}, []string{"source"}),
 		queueClaims: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "queue",
 			Name:      "claims_total",
 			Help:      "Total queue claim requests.",
 		}, []string{"result"}),
 		queueClaimedItems: auto.NewCounter(prometheus.CounterOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "queue",
 			Name:      "claimed_items_total",
 			Help:      "Total queue items claimed.",
 		}),
 		queueClaimBatchSize: auto.NewHistogram(prometheus.HistogramOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "queue",
 			Name:      "claim_batch_size",
 			Help:      "Items per non-empty queue claim.",
 			Buckets:   []float64{1, 2, 5, 10, 25, 50, 100},
 		}),
 		submits: auto.NewCounterVec(prometheus.CounterOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "submit",
 			Name:      "total",
 			Help:      "Total matcher submissions.",
 		}, []string{"status", "result"}),
 		submitConfidence: auto.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: "takuhai",
+			Namespace: "kura_indexer",
 			Subsystem: "submit",
 			Name:      "confidence",
 			Help:      "Successful matcher submission confidence.",
@@ -198,9 +198,9 @@ func NewTakuhai(version, commit string, qs queueStatsProvider) *Takuhai {
 	return m
 }
 
-func (m *Takuhai) Handler() http.Handler { return m.handler }
+func (m *Metrics) Handler() http.Handler { return m.handler }
 
-func (m *Takuhai) IngestBatch(size int, result string) {
+func (m *Metrics) IngestBatch(size int, result string) {
 	if m == nil {
 		return
 	}
@@ -208,7 +208,7 @@ func (m *Takuhai) IngestBatch(size int, result string) {
 	m.ingestBatchSize.Observe(float64(size))
 }
 
-func (m *Takuhai) IngestPost(source, result string) {
+func (m *Metrics) IngestPost(source, result string) {
 	if m == nil {
 		return
 	}
@@ -218,7 +218,7 @@ func (m *Takuhai) IngestPost(source, result string) {
 	m.ingestPosts.WithLabelValues(source, result).Inc()
 }
 
-func (m *Takuhai) SourceCrawl(source, result string, posts int, duration time.Duration) {
+func (m *Metrics) SourceCrawl(source, result string, posts int, duration time.Duration) {
 	if m == nil {
 		return
 	}
@@ -229,7 +229,7 @@ func (m *Takuhai) SourceCrawl(source, result string, posts int, duration time.Du
 	}
 }
 
-func (m *Takuhai) QueueClaim(count int, result string) {
+func (m *Metrics) QueueClaim(count int, result string) {
 	if m == nil {
 		return
 	}
@@ -240,7 +240,7 @@ func (m *Takuhai) QueueClaim(count int, result string) {
 	}
 }
 
-func (m *Takuhai) Submit(status, result string, confidence *float64) {
+func (m *Metrics) Submit(status, result string, confidence *float64) {
 	if m == nil {
 		return
 	}
@@ -270,42 +270,42 @@ type queueCollector struct {
 }
 
 var queueItemsDesc = prometheus.NewDesc(
-	"takuhai_queue_items",
+	"kura_indexer_queue_items",
 	"Current queue items by state.",
 	[]string{"state"},
 	nil,
 )
 
 var queueStatsScrapeOKDesc = prometheus.NewDesc(
-	"takuhai_queue_stats_scrape_ok",
+	"kura_indexer_queue_stats_scrape_ok",
 	"Whether queue stats were available during the metrics scrape.",
 	nil,
 	nil,
 )
 
 var catalogRawPostsDesc = prometheus.NewDesc(
-	"takuhai_catalog_raw_posts",
+	"kura_indexer_catalog_raw_posts",
 	"Current number of raw release posts.",
 	nil,
 	nil,
 )
 
 var catalogInfohashesDesc = prometheus.NewDesc(
-	"takuhai_catalog_infohashes",
+	"kura_indexer_catalog_infohashes",
 	"Current number of unique release infohashes.",
 	nil,
 	nil,
 )
 
 var catalogRefsDesc = prometheus.NewDesc(
-	"takuhai_catalog_refs",
+	"kura_indexer_catalog_refs",
 	"Current number of unique non-empty refs.",
 	nil,
 	nil,
 )
 
 var catalogStatsScrapeOKDesc = prometheus.NewDesc(
-	"takuhai_catalog_stats_scrape_ok",
+	"kura_indexer_catalog_stats_scrape_ok",
 	"Whether catalog stats were available during the metrics scrape.",
 	nil,
 	nil,

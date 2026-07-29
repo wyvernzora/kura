@@ -1,4 +1,4 @@
-// Package rest wires takuhai's HTTP REST surfaces: pushed crawl ingest, queue
+// Package rest wires the indexer's HTTP REST surfaces: pushed crawl ingest, queue
 // claiming/stats, and matcher disposition submit.
 package rest
 
@@ -23,7 +23,7 @@ type Handler struct {
 	ingest   *ingest.Processor
 	stats    ingestStats
 	mux      *http.ServeMux
-	metrics  *metrics.Takuhai
+	metrics  *metrics.Metrics
 	logger   *slog.Logger
 }
 
@@ -35,11 +35,11 @@ func New(s store.Store) *Handler {
 	return NewWithMetrics(s, nil)
 }
 
-func NewWithMetrics(s store.Store, m *metrics.Takuhai) *Handler {
+func NewWithMetrics(s store.Store, m *metrics.Metrics) *Handler {
 	return NewWithMetricsAndLogger(s, m, nil)
 }
 
-func NewWithMetricsAndLogger(s store.Store, m *metrics.Takuhai, logger *slog.Logger) *Handler {
+func NewWithMetricsAndLogger(s store.Store, m *metrics.Metrics, logger *slog.Logger) *Handler {
 	h := &Handler{
 		dispatch: dispatch.New(s),
 		ingest:   ingest.New(s, m),

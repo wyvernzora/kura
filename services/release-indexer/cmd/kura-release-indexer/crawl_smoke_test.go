@@ -24,9 +24,9 @@ func TestSmokeScheduledCrawl(t *testing.T) {
 
 	container, err := tcpostgres.Run(ctx,
 		"postgres:18-alpine",
-		tcpostgres.WithDatabase("takuhai"),
-		tcpostgres.WithUsername("takuhai"),
-		tcpostgres.WithPassword("takuhai"),
+		tcpostgres.WithDatabase("kura"),
+		tcpostgres.WithUsername("kura"),
+		tcpostgres.WithPassword("kura"),
 		tcpostgres.BasicWaitStrategies(),
 	)
 	if err != nil {

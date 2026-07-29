@@ -38,7 +38,7 @@ var (
 )
 
 // arrowMagnetRe pulls the tracker-rich magnet out of the normal download link. Its
-// btih may be 32-char base32; takuhai decodes it during ingest. dataMagnetRe is the
+// btih may be 32-char base32; the indexer decodes it during ingest. dataMagnetRe is the
 // fallback Xunlei magnet, which is usually bare hex with no trackers.
 var (
 	dataMagnetRe  = regexp.MustCompile(`data-magnet="(magnet:[^"]*)"`)
@@ -59,7 +59,7 @@ var hiddenDateRe = regexp.MustCompile(`display:\s*none;?">\s*([0-9]{4}/[0-9]{2}/
 // api.RawPost (raw
 // title+magnet+metadata+size), including rows whose magnet has no canonical v1 btih
 // (pure-v2 / malformed) — those were SKIPPED by the old parser but are now emitted
-// here with their raw magnet and no infohash. takuhai derives the dedup key and the
+// here with their raw magnet and no infohash. the indexer derives the dedup key and the
 // skipped bucket during ingest.
 //
 // End-of-archive detection rides on the row count, but ONLY for pages that are
@@ -181,7 +181,7 @@ func rowSourceID(href string) string {
 var dmhyZone = time.FixedZone("CST", 8*3600)
 
 // rowPublishedAt parses the row's hidden timestamp; a missing/unparseable date yields
-// the zero time (the post is still emitted — takuhai tolerates it). The hidden span is
+// the zero time (the post is still emitted — the indexer tolerates it). The hidden span is
 // CST (UTC+8), so it is parsed in dmhyZone to produce a correct instant.
 func rowPublishedAt(row string) time.Time {
 	m := hiddenDateRe.FindStringSubmatch(row)
