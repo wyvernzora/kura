@@ -66,8 +66,10 @@ func TestObserveIndexBreakdowns(t *testing.T) {
 		func() bool { return true },
 		func() []SeriesFacts {
 			return []SeriesFacts{
-				{Status: "complete", Resolutions: []string{"1080p", "4K"}, Sources: []string{"BDRip"}},
-				{Status: "incomplete", Airing: true, Resolutions: []string{"1080p"}, Sources: []string{"WebRip"}},
+				{Status: "complete", Resolutions: []string{"1080p", "4K"}, Sources: []string{"BDRip"},
+					EpisodesPresent: 12, EpisodesTotal: 12},
+				{Status: "incomplete", Airing: true, Resolutions: []string{"1080p"}, Sources: []string{"WebRip"},
+					EpisodesPresent: 5, EpisodesStaged: 2, EpisodesTotal: 10},
 			}
 		},
 	)
@@ -76,6 +78,9 @@ func TestObserveIndexBreakdowns(t *testing.T) {
 	for _, want := range []string{
 		"kura_library_index_rebuilding 1",
 		"kura_library_index_series 2",
+		`kura_library_episodes{state="present"} 17`,
+		`kura_library_episodes{state="pending_apply"} 2`,
+		`kura_library_episodes{state="missing"} 3`,
 		`kura_library_series_status{status="complete"} 1`,
 		`kura_library_series_status{status="incomplete"} 1`,
 		`kura_library_series_status{status="untracked"} 0`,

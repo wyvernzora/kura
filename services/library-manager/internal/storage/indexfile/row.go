@@ -51,7 +51,11 @@ type Row struct {
 	SeasonsAvailable  int `json:"seasonsAvailable,omitempty"`
 	SeasonCount       int `json:"seasonCount,omitempty"`
 	EpisodesAvailable int `json:"episodesAvailable,omitempty"`
-	EpisodeCount      int `json:"episodeCount,omitempty"`
+	// EpisodesStaged counts slots with a staged record and no active
+	// one (pending reconcile apply). Rows are derived live from the
+	// in-memory model, so this is always current.
+	EpisodesStaged int `json:"episodesStaged,omitempty"`
+	EpisodeCount   int `json:"episodeCount,omitempty"`
 
 	Resolutions []string `json:"resolutions,omitempty"`
 	Sources     []string `json:"sources,omitempty"`

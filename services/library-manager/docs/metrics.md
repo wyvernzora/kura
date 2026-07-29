@@ -15,7 +15,9 @@ else, so granting Prometheus scrape access does not grant API access.
 | `kura_library_jobs_total` | counter | `kind`, `state` | Terminal async jobs by kind (`scan`, `stage`, `apply`, …) and state (`succeeded`, `failed`). |
 | `kura_library_jobs_duration_seconds` | histogram | `kind` | Async job wall-clock duration. |
 | `kura_library_index_rebuilding` | gauge | none | `1` while the library index is rebuilding, else `0`. Rebuilds are when `server_not_ready` (HTTP 503) responses occur. |
+| `kura_library_index_rebuild_duration_seconds` | histogram | none | Successful index rebuild duration — the length of each 503 window on cold starts. |
 | `kura_library_index_series` | gauge | none | Series currently tracked in the library index. |
+| `kura_library_episodes` | gauge | `state` | Trackable episodes across the library: `present` (active file), `pending_apply` (staged, awaiting reconcile apply), `missing` (aired, no file, nothing staged). |
 | `kura_library_series_status` | gauge | `status` | Series by rolled-up list status (`untracked`, `complete`, `incomplete`, `error`). All four statuses are always exported. |
 | `kura_library_series_airing` | gauge | none | Series currently observed as airing (independent of status). |
 | `kura_library_series_resolution` | gauge | `resolution` | Series with at least one active file at this resolution (`1080p`, `4K`, …). A series counts once per distinct resolution, so the sum can exceed the series total. |

@@ -107,6 +107,7 @@ func BuildRowFromModelWithOptions(model *series.Series, now time.Time, opts Buil
 	row.SeasonsAvailable = summary.seasonsActive
 	row.SeasonCount = summary.seasons
 	row.EpisodesAvailable = summary.episodesActive
+	row.EpisodesStaged = summary.episodesStaged
 	row.EpisodeCount = summary.episodes
 	row.Staged = summary.hasStaged
 	row.Status = listStatusFor(summary)
@@ -142,6 +143,10 @@ type seriesSummary struct {
 	seasonsActive  int
 	episodes       int
 	episodesActive int
+	// episodesStaged counts slots with a staged record and no active one
+	// — content in hand awaiting reconcile apply. Staged upgrades over an
+	// existing active record count as active, not staged.
+	episodesStaged int
 	missing        int
 	pending        int
 	hasStaged      bool
@@ -195,6 +200,7 @@ func summarizeSeries(model *series.Series, now time.Time, opts BuildOptions) ser
 			continue
 		}
 		if episode.Staged != nil {
+			s.episodesStaged++
 			continue
 		}
 		s.missing++

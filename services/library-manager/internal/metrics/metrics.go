@@ -34,6 +34,8 @@ type Metrics struct {
 	jobsRunning prometheus.Gauge
 	jobsTotal   *prometheus.CounterVec
 	jobDuration *prometheus.HistogramVec
+
+	indexRebuild prometheus.Histogram
 }
 
 // New builds the registry with build info, Go/process collectors, HTTP
@@ -85,7 +87,23 @@ func New(version string) *Metrics {
 			// library-wide scans on NFS.
 			Buckets: []float64{0.1, 0.5, 1, 5, 15, 60, 300, 900, 3600},
 		}, []string{"kind"}),
+		indexRebuild: auto.NewHistogram(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "index",
+			Name:      "rebuild_duration_seconds",
+			Help:      "Successful library index rebuild duration — the length of each server_not_ready window on cold starts.",
+			Buckets:   []float64{0.5, 1, 2, 5, 10, 20, 40, 80, 160, 320, 640},
+		}),
 	}
+}
+
+// IndexRebuild observes one successful index rebuild. Wired to
+// indexfile.Index.OnRebuild.
+func (m *Metrics) IndexRebuild(d time.Duration) {
+	if m == nil {
+		return
+	}
+	m.indexRebuild.Observe(d.Seconds())
 }
 
 // Handler serves the Prometheus exposition endpoint.
@@ -146,6 +164,13 @@ type SeriesFacts struct {
 	Airing      bool
 	Resolutions []string
 	Sources     []string
+
+	// Episode-state inputs: Present = active record on disk, Staged =
+	// staged with no active record (pending reconcile apply), Total =
+	// all trackable slots. missing derives as Total - Present - Staged.
+	EpisodesPresent int
+	EpisodesStaged  int
+	EpisodesTotal   int
 }
 
 // ObserveIndex registers gauges computed from the live in-memory index
@@ -178,6 +203,9 @@ var (
 	seriesSourceDesc = prometheus.NewDesc(namespace+"_series_source",
 		"Series with at least one active file from this source. A series counts once per distinct source, so the sum can exceed the series total.",
 		[]string{"source"}, nil)
+	episodesDesc = prometheus.NewDesc(namespace+"_episodes",
+		"Trackable episodes across the library by state: present (active file on disk), pending_apply (staged, awaiting reconcile apply), missing (aired, no file, nothing staged).",
+		[]string{"state"}, nil)
 )
 
 func (c *indexCollector) Describe(ch chan<- *prometheus.Desc) {
@@ -187,6 +215,7 @@ func (c *indexCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- seriesAiringDesc
 	ch <- seriesResolutionDesc
 	ch <- seriesSourceDesc
+	ch <- episodesDesc
 }
 
 func (c *indexCollector) Collect(ch chan<- prometheus.Metric) {
@@ -208,12 +237,18 @@ func (c *indexCollector) Collect(ch chan<- prometheus.Metric) {
 		string(api.ListStatusError):      0,
 	}
 	airing := 0
+	present, pending, missing := 0, 0, 0
 	resolutions := map[string]int{}
 	sources := map[string]int{}
 	for _, row := range rows {
 		statuses[row.Status]++
 		if row.Airing {
 			airing++
+		}
+		present += row.EpisodesPresent
+		pending += row.EpisodesStaged
+		if m := row.EpisodesTotal - row.EpisodesPresent - row.EpisodesStaged; m > 0 {
+			missing += m
 		}
 		for _, r := range row.Resolutions {
 			if r != "" {
@@ -230,6 +265,9 @@ func (c *indexCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(seriesStatusDesc, prometheus.GaugeValue, float64(n), status)
 	}
 	ch <- prometheus.MustNewConstMetric(seriesAiringDesc, prometheus.GaugeValue, float64(airing))
+	ch <- prometheus.MustNewConstMetric(episodesDesc, prometheus.GaugeValue, float64(present), "present")
+	ch <- prometheus.MustNewConstMetric(episodesDesc, prometheus.GaugeValue, float64(pending), "pending_apply")
+	ch <- prometheus.MustNewConstMetric(episodesDesc, prometheus.GaugeValue, float64(missing), "missing")
 	for resolution, n := range resolutions {
 		ch <- prometheus.MustNewConstMetric(seriesResolutionDesc, prometheus.GaugeValue, float64(n), resolution)
 	}
