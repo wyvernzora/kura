@@ -1,0 +1,7 @@
+# tape_init_attestation: init previews disclose observed media use and preserve
+# a readable header identity in the destructive reformat attestation.
+# kura_e2e_config server=tape
+
+kura_tape plan HDR001L6
+stdout '^Media: 12.0 GiB in use, 100.0 GiB capacity\.$'
+stdout '^Attestation: observed volume 01BX5ZZKBKACTAV9WEVGEMMVS2, serial MAM-SERIAL-HEADERED-001; init will format this cartridge\.$'

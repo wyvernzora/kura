@@ -1,0 +1,28 @@
+# tape_init_walkthrough: R21 consult → blank plan → approve → run → consult,
+# plus the ceremony split proving a pure fill runs without approval.
+# kura_e2e_config server=tape
+
+kura_tape consult --blank BLK001L6 --blank BLK002L6
+stdout 'Roster covers 100.0 GiB of 300.0 GiB pending; bring ~2 blank LTO-6.'
+
+kura_tape plan BLK001L6
+stdout 'Classification: init'
+stdout 'Attestation: no readable identity, serial MAM-SERIAL-BLANK-001; init will format this cartridge.'
+stdout 'Approval: required — run `kura tape approve 01ARZ3NDEKTSV4RRFFQ69G5FAV`.'
+stdout 'tvdb:blank-a'
+
+kura_tape approve 01ARZ3NDEKTSV4RRFFQ69G5FAV
+stdout 'Approved 01ARZ3NDEKTSV4RRFFQ69G5FAV.'
+
+kura_tape run BLK001L6
+stdout 'Executed init plan 01ARZ3NDEKTSV4RRFFQ69G5FAV on BLK001L6.'
+stdout 'tvdb:blank-a'
+
+kura_tape consult
+stdout 'Roster covers 0 B of 0 B pending; bring ~0 blank LTO-6.'
+
+kura_tape plan FILL01L6
+stdout 'Approval: not required; fill preview was not persisted.'
+
+kura_tape run FILL01L6
+stdout 'Executed fill plan 01BX5ZZKBKACTAV9WEVGEMMVRZ on FILL01L6.'

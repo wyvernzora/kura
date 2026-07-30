@@ -1,0 +1,6 @@
+# The eject verb is a normal remote operation and needs no node shell.
+# kura_e2e_config server=tape
+
+kura_tape eject
+stdout 'Ejected tape\.'
+! stderr .

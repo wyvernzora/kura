@@ -29,6 +29,10 @@ var (
 	e2eCLIPath    string
 	buildOnce     sync.Once
 	buildErr      error
+
+	e2eTapeServerPath string
+	tapeBuildOnce     sync.Once
+	tapeBuildErr      error
 )
 
 // buildKuraE2E compiles the stub server and kura CLI once per process.
@@ -72,6 +76,43 @@ func buildKuraE2E(t *testing.T) (serverPath, cliPath string) {
 	return e2eServerPath, e2eCLIPath
 }
 
+func buildTapeE2E(t *testing.T) (serverPath, cliPath string) {
+	t.Helper()
+	_, cliPath = buildKuraE2E(t)
+	tapeBuildOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "kura-tape-e2e-bin-")
+		if err != nil {
+			tapeBuildErr = fmt.Errorf("mktemp: %w", err)
+			return
+		}
+		serverBin := filepath.Join(dir, "kura-tape-e2e-server")
+		cmd := exec.Command(
+			"go",
+			"build",
+			"-tags=e2e_stub",
+			"-o",
+			serverBin,
+			"./cmd/kura-tape-backup-e2e",
+		)
+		cmd.Dir = filepath.Join(repoRoot(), "services", "tape-backup")
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			tapeBuildErr = fmt.Errorf(
+				"go build kura-tape-e2e-server: %w\nstderr: %s",
+				err,
+				stderr.String(),
+			)
+			return
+		}
+		e2eTapeServerPath = serverBin
+	})
+	if tapeBuildErr != nil {
+		t.Fatalf("buildTapeE2E: %v", tapeBuildErr)
+	}
+	return e2eTapeServerPath, cliPath
+}
+
 // repoRoot returns the kura repo root. Tests run from cli/e2e/, so go up
 // two levels. Centralized so callers don't repeat the relative.
 func repoRoot() string {
@@ -93,6 +134,7 @@ type e2eBinary struct {
 	url       string
 	cmd       *exec.Cmd
 	stderr    *syncBuffer
+	token     string
 	stopOnce  sync.Once
 }
 
@@ -169,6 +211,51 @@ func startDaemon(t *testing.T, libRoot, inboxRoot, umask string) *e2eBinary {
 	if err := waitForHealth(b.url, 5*time.Second); err != nil {
 		b.dumpStderr()
 		t.Fatalf("daemon health: %v", err)
+	}
+	return b
+}
+
+func startTapeDaemon(t *testing.T, libRoot, inboxRoot string) *e2eBinary {
+	t.Helper()
+	serverBin, cliBin := buildTapeE2E(t)
+
+	dir := t.TempDir()
+	portFile := filepath.Join(dir, "port")
+	const token = "e2e-token"
+	cmd := exec.Command(
+		serverBin,
+		"--addr=127.0.0.1:0",
+		"--port-file="+portFile,
+		"--token="+token,
+	)
+	cmd.Env = os.Environ()
+	stderr := &syncBuffer{}
+	cmd.Stderr = stderr
+	cmd.Stdout = io.Discard
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start tape daemon: %v", err)
+	}
+	b := &e2eBinary{
+		t:         t,
+		bin:       cliBin,
+		libRoot:   libRoot,
+		inboxRoot: inboxRoot,
+		cmd:       cmd,
+		stderr:    stderr,
+		token:     token,
+	}
+	t.Cleanup(b.stop)
+
+	port, err := waitForPortFile(portFile, 5*time.Second)
+	if err != nil {
+		b.dumpStderr()
+		t.Fatalf("tape daemon port file: %v", err)
+	}
+	b.port = port
+	b.url = fmt.Sprintf("http://127.0.0.1:%d", port)
+	if err := waitForTapeHealth(b.url, 5*time.Second); err != nil {
+		b.dumpStderr()
+		t.Fatalf("tape daemon health: %v", err)
 	}
 	return b
 }
@@ -250,6 +337,9 @@ func (b *e2eBinary) run(ctx context.Context, args ...string) (stdout, stderr str
 		"KURA_LIBRARY_ROOT="+b.libRoot,
 		"KURA_SERVER_URL="+b.url,
 	)
+	if b.token != "" {
+		cmd.Env = append(cmd.Env, "KURA_TOKEN="+b.token)
+	}
 	var so, se bytes.Buffer
 	cmd.Stdout = &so
 	cmd.Stderr = &se
@@ -307,6 +397,22 @@ func waitForPortFile(path string, timeout time.Duration) (int, error) {
 // waitForHealth polls /healthz until 200 OK or timeout. Confirms
 // the daemon is fully ready beyond just bound to the port.
 func waitForHealth(baseURL string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(baseURL + "/healthz")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return fmt.Errorf("timeout waiting for %s/healthz", baseURL)
+}
+
+func waitForTapeHealth(baseURL string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	client := &http.Client{Timeout: 500 * time.Millisecond}
 	for time.Now().Before(deadline) {

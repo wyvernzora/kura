@@ -18,7 +18,7 @@ case "$subject" in
 esac
 
 types='feat|fix|docs|refactor|test|build|ci|chore|perf|revert'
-scopes='library|indexer|gateway|backup|repo|deps|release|n8n|deploy|cli'
+scopes='library|indexer|gateway|tape|repo|deps|release|n8n|deploy|cli'
 
 if [[ ! "$subject" =~ ^($types)\(($scopes)\)\!?:\ .+ ]]; then
   cat >&2 <<MSG

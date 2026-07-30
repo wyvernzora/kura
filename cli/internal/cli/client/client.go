@@ -80,6 +80,16 @@ func FromEnv(getenv func(string) string) *Client {
 	return c
 }
 
+// WithoutTimeout returns a copy of c whose HTTP client has no whole-request
+// timeout. Caller context cancellation remains active.
+func (c *Client) WithoutTimeout() *Client {
+	cp := *c
+	httpClient := *c.HTTPClient
+	httpClient.Timeout = 0
+	cp.HTTPClient = &httpClient
+	return &cp
+}
+
 // ErrorEnvelope is the wire shape for non-2xx responses. Callers use
 // errors.As on the returned error to inspect kind/category/data.
 type ErrorEnvelope struct {
