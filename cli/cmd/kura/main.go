@@ -11,6 +11,7 @@ import (
 type cli struct {
 	Version   kong.VersionFlag `name:"version" help:"Print the kura version and exit."`
 	Add       addCmd           `cmd:"" help:"Add a brand new series to the library."`
+	Crawl     crawlCmd         `cmd:"" help:"Crawl a release source and ingest posts through the release indexer."`
 	Import    importCmd        `cmd:"" help:"Import an existing directory as a tracked series."`
 	Inbox     inboxCmd         `cmd:"" help:"Inspect the inbox where new media drops before staging."`
 	List      listCmd          `cmd:"" help:"List library contents."`

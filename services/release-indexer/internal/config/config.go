@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"regexp"
@@ -22,19 +23,27 @@ const (
 	defaultDatabaseSchema   = "releases"
 	defaultLogLevel         = "info"
 	defaultQueueMaxAttempts = 3
-	defaultTimeout          = 2 * time.Minute
 	defaultMaxRPS           = 0.5
 	defaultDMHYURL          = "https://share.dmhy.org"
 	defaultDMHYCategory     = "2"
-	defaultDMHYCacheTTL     = 10 * time.Minute
+	defaultCacheTTL         = 5 * time.Minute
 	defaultNyaaURL          = "https://nyaa.si"
 	defaultNyaaCategory     = "1_4"
 	defaultNyaaFilter       = "0"
+
+	// Timeouts default per source: DMHY's deep-history pages have been
+	// observed to exceed 60s per request, so its run slice and per-request
+	// budget must leave room for several slow pages; Nyaa answers fast.
+	defaultDMHYTimeout        = 10 * time.Minute
+	defaultDMHYRequestTimeout = 180 * time.Second
+	defaultNyaaTimeout        = 2 * time.Minute
+	defaultNyaaRequestTimeout = 30 * time.Second
 )
 
 var (
 	validDatabaseSchema = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 	validLogLevels      = []string{"debug", "info", "warn", "error"}
+	dayWeekDuration     = regexp.MustCompile(`^(\d+)([dw])$`)
 )
 
 // Config is the validated runtime configuration.
@@ -60,21 +69,31 @@ type SourceDMHY struct {
 	Enabled  bool
 	Interval time.Duration
 	Timeout  time.Duration
-	URL      string
-	Category string
-	MaxRPS   float64
-	CacheTTL time.Duration
+	// SettleWindow is the operator's freshness/lateness contract: every
+	// scheduled run re-reads the listing back to now − settle_window.
+	// Required when the source is enabled — there is deliberately no default.
+	SettleWindow time.Duration
+	// RequestTimeout bounds one page fetch. It must be under Timeout so a
+	// run slice can always fit at least one page.
+	RequestTimeout time.Duration
+	URL            string
+	Category       string
+	MaxRPS         float64
+	CacheTTL       time.Duration
 }
 
 type SourceNyaa struct {
-	Enabled  bool
-	Interval time.Duration
-	Timeout  time.Duration
-	URL      string
-	Query    string
-	Category string
-	Filter   string
-	MaxRPS   float64
+	Enabled        bool
+	Interval       time.Duration
+	Timeout        time.Duration
+	SettleWindow   time.Duration
+	RequestTimeout time.Duration
+	URL            string
+	Query          string
+	Category       string
+	Filter         string
+	MaxRPS         float64
+	CacheTTL       time.Duration
 }
 
 // Defaults returns the non-secret defaults with all sources disabled.
@@ -88,18 +107,21 @@ func Defaults(databaseURL string) Config {
 		QueueMaxAttempts: defaultQueueMaxAttempts,
 		Sources: Sources{
 			DMHY: SourceDMHY{
-				Timeout:  defaultTimeout,
-				URL:      defaultDMHYURL,
-				Category: defaultDMHYCategory,
-				MaxRPS:   defaultMaxRPS,
-				CacheTTL: defaultDMHYCacheTTL,
+				Timeout:        defaultDMHYTimeout,
+				RequestTimeout: defaultDMHYRequestTimeout,
+				URL:            defaultDMHYURL,
+				Category:       defaultDMHYCategory,
+				MaxRPS:         defaultMaxRPS,
+				CacheTTL:       defaultCacheTTL,
 			},
 			Nyaa: SourceNyaa{
-				Timeout:  defaultTimeout,
-				URL:      defaultNyaaURL,
-				Category: defaultNyaaCategory,
-				Filter:   defaultNyaaFilter,
-				MaxRPS:   defaultMaxRPS,
+				Timeout:        defaultNyaaTimeout,
+				RequestTimeout: defaultNyaaRequestTimeout,
+				URL:            defaultNyaaURL,
+				Category:       defaultNyaaCategory,
+				Filter:         defaultNyaaFilter,
+				MaxRPS:         defaultMaxRPS,
+				CacheTTL:       defaultCacheTTL,
 			},
 		},
 	}
@@ -109,6 +131,17 @@ func Defaults(databaseURL string) Config {
 // the result. DatabaseURL remains outside TOML so deployments can inject it
 // from a Secret.
 func Load(path, databaseURL string) (Config, error) {
+	cfg, err := decode(path, databaseURL)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := cfg.Validate(); err != nil {
+		return Config{}, fmt.Errorf("config: %w", err)
+	}
+	return cfg, nil
+}
+
+func decode(path, databaseURL string) (Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return Config{}, fmt.Errorf("config: open %s: %w", path, err)
@@ -153,13 +186,14 @@ func (c Config) Validate() error {
 	if c.QueueMaxAttempts <= 0 {
 		return fmt.Errorf("queue.max_attempts must be > 0")
 	}
+	return c.validateSources()
+}
+
+func (c Config) validateSources() error {
 	if err := validateDMHY(c.Sources.DMHY); err != nil {
 		return err
 	}
-	if err := validateNyaa(c.Sources.Nyaa); err != nil {
-		return err
-	}
-	return nil
+	return validateNyaa(c.Sources.Nyaa)
 }
 
 // addrsCollide reports whether two listen addresses would contend for
@@ -188,41 +222,91 @@ func addrsCollide(a, b string) bool {
 }
 
 func validateDMHY(c SourceDMHY) error {
-	if !c.Enabled {
-		return nil
-	}
-	if err := validateSource("sources.dmhy", c.Interval, c.Timeout, c.URL, c.MaxRPS); err != nil {
+	if err := validateCrawlFields("sources.dmhy", c.RequestTimeout, c.URL, c.MaxRPS); err != nil {
 		return err
 	}
-	category, err := strconv.Atoi(c.Category)
-	if err != nil || category < 0 {
-		return fmt.Errorf("sources.dmhy.category must be a non-negative integer string")
+	if err := validateDMHYCategory(c.Category); err != nil {
+		return err
 	}
 	if c.CacheTTL < 0 {
 		return fmt.Errorf("sources.dmhy.cache_ttl must be >= 0")
+	}
+	if !c.Enabled {
+		return nil
+	}
+	return validateSourceSchedule(sourceTimings{
+		name:           "sources.dmhy",
+		interval:       c.Interval,
+		timeout:        c.Timeout,
+		settleWindow:   c.SettleWindow,
+		requestTimeout: c.RequestTimeout,
+	})
+}
+
+func validateDMHYCategory(raw string) error {
+	category, err := strconv.Atoi(raw)
+	if err != nil || category < 0 {
+		return fmt.Errorf("sources.dmhy.category must be a non-negative integer string")
 	}
 	return nil
 }
 
 func validateNyaa(c SourceNyaa) error {
+	if err := validateCrawlFields("sources.nyaa", c.RequestTimeout, c.URL, c.MaxRPS); err != nil {
+		return err
+	}
+	if c.CacheTTL < 0 {
+		return fmt.Errorf("sources.nyaa.cache_ttl must be >= 0")
+	}
 	if !c.Enabled {
 		return nil
 	}
-	return validateSource("sources.nyaa", c.Interval, c.Timeout, c.URL, c.MaxRPS)
+	return validateSourceSchedule(sourceTimings{
+		name:           "sources.nyaa",
+		interval:       c.Interval,
+		timeout:        c.Timeout,
+		settleWindow:   c.SettleWindow,
+		requestTimeout: c.RequestTimeout,
+	})
 }
 
-func validateSource(name string, interval, timeout time.Duration, url string, maxRPS float64) error {
-	if interval <= 0 {
-		return fmt.Errorf("%s.interval is required and must be > 0", name)
+type sourceTimings struct {
+	name           string
+	interval       time.Duration
+	timeout        time.Duration
+	settleWindow   time.Duration
+	requestTimeout time.Duration
+}
+
+func validateSourceSchedule(t sourceTimings) error {
+	if t.interval <= 0 {
+		return fmt.Errorf("%s.interval is required and must be > 0", t.name)
 	}
-	if timeout <= 0 {
-		return fmt.Errorf("%s.timeout must be > 0", name)
+	if t.settleWindow <= 0 {
+		return fmt.Errorf("%s.settle_window is required and must be > 0", t.name)
+	}
+	if t.timeout <= 0 {
+		return fmt.Errorf("%s.timeout must be > 0", t.name)
+	}
+	// A page slower than the run slice could never land: the walk would be
+	// killed by the run deadline on every attempt.
+	if t.timeout <= t.requestTimeout {
+		return fmt.Errorf("%s.timeout (%s) must be greater than %s.request_timeout (%s)", t.name, t.timeout, t.name, t.requestTimeout)
+	}
+	return nil
+}
+
+func validateCrawlFields(name string, requestTimeout time.Duration, url string, maxRPS float64) error {
+	if requestTimeout <= 0 {
+		return fmt.Errorf("%s.request_timeout must be > 0", name)
 	}
 	if strings.TrimSpace(url) == "" {
 		return fmt.Errorf("%s.url must not be empty", name)
 	}
-	if maxRPS < 0 {
-		return fmt.Errorf("%s.max_rps must be >= 0", name)
+	// Every source remains remotely crawlable when its scheduled loop is
+	// disabled, so the politeness cap applies in both modes.
+	if maxRPS <= 0 {
+		return fmt.Errorf("%s.max_rps must be > 0", name)
 	}
 	return nil
 }
@@ -254,24 +338,29 @@ type fileSources struct {
 }
 
 type fileDMHY struct {
-	Enabled  *bool    `toml:"enabled"`
-	Interval *string  `toml:"interval"`
-	Timeout  *string  `toml:"timeout"`
-	URL      *string  `toml:"url"`
-	Category *string  `toml:"category"`
-	MaxRPS   *float64 `toml:"max_rps"`
-	CacheTTL *string  `toml:"cache_ttl"`
+	Enabled        *bool    `toml:"enabled"`
+	Interval       *string  `toml:"interval"`
+	Timeout        *string  `toml:"timeout"`
+	SettleWindow   *string  `toml:"settle_window"`
+	RequestTimeout *string  `toml:"request_timeout"`
+	URL            *string  `toml:"url"`
+	Category       *string  `toml:"category"`
+	MaxRPS         *float64 `toml:"max_rps"`
+	CacheTTL       *string  `toml:"cache_ttl"`
 }
 
 type fileNyaa struct {
-	Enabled  *bool    `toml:"enabled"`
-	Interval *string  `toml:"interval"`
-	Timeout  *string  `toml:"timeout"`
-	URL      *string  `toml:"url"`
-	Query    *string  `toml:"query"`
-	Category *string  `toml:"category"`
-	Filter   *string  `toml:"filter"`
-	MaxRPS   *float64 `toml:"max_rps"`
+	Enabled        *bool    `toml:"enabled"`
+	Interval       *string  `toml:"interval"`
+	Timeout        *string  `toml:"timeout"`
+	SettleWindow   *string  `toml:"settle_window"`
+	RequestTimeout *string  `toml:"request_timeout"`
+	URL            *string  `toml:"url"`
+	Query          *string  `toml:"query"`
+	Category       *string  `toml:"category"`
+	Filter         *string  `toml:"filter"`
+	MaxRPS         *float64 `toml:"max_rps"`
+	CacheTTL       *string  `toml:"cache_ttl"`
 }
 
 func (r fileConfig) resolve(databaseURL string) (Config, error) {
@@ -297,9 +386,6 @@ func (r fileConfig) resolve(databaseURL string) (Config, error) {
 			return Config{}, err
 		}
 	}
-	if err := cfg.Validate(); err != nil {
-		return Config{}, err
-	}
 	return cfg, nil
 }
 
@@ -314,7 +400,13 @@ func resolveDMHY(dst *SourceDMHY, src *fileDMHY) error {
 	if dst.Interval, err = requiredDuration("sources.dmhy.interval", src.Interval, dst.Enabled); err != nil {
 		return err
 	}
+	if dst.SettleWindow, err = requiredDuration("sources.dmhy.settle_window", src.SettleWindow, dst.Enabled); err != nil {
+		return err
+	}
 	if dst.Timeout, err = optionalDuration("sources.dmhy.timeout", src.Timeout, dst.Timeout); err != nil {
+		return err
+	}
+	if dst.RequestTimeout, err = optionalDuration("sources.dmhy.request_timeout", src.RequestTimeout, dst.RequestTimeout); err != nil {
 		return err
 	}
 	if dst.CacheTTL, err = optionalDuration("sources.dmhy.cache_ttl", src.CacheTTL, dst.CacheTTL); err != nil {
@@ -336,7 +428,16 @@ func resolveNyaa(dst *SourceNyaa, src *fileNyaa) error {
 	if dst.Interval, err = requiredDuration("sources.nyaa.interval", src.Interval, dst.Enabled); err != nil {
 		return err
 	}
+	if dst.SettleWindow, err = requiredDuration("sources.nyaa.settle_window", src.SettleWindow, dst.Enabled); err != nil {
+		return err
+	}
 	if dst.Timeout, err = optionalDuration("sources.nyaa.timeout", src.Timeout, dst.Timeout); err != nil {
+		return err
+	}
+	if dst.RequestTimeout, err = optionalDuration("sources.nyaa.request_timeout", src.RequestTimeout, dst.RequestTimeout); err != nil {
+		return err
+	}
+	if dst.CacheTTL, err = optionalDuration("sources.nyaa.cache_ttl", src.CacheTTL, dst.CacheTTL); err != nil {
 		return err
 	}
 	return nil
@@ -359,7 +460,24 @@ func optionalDuration(name string, raw *string, def time.Duration) (time.Duratio
 	return parseDuration(name, *raw)
 }
 
+// parseDuration accepts time.ParseDuration syntax plus whole-day ("30d") and
+// whole-week ("2w") forms, since stdlib durations top out at hours and the
+// settle window is most naturally expressed in days.
 func parseDuration(name, raw string) (time.Duration, error) {
+	if m := dayWeekDuration.FindStringSubmatch(raw); m != nil {
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			return 0, fmt.Errorf("%s %q is invalid: %w", name, raw, err)
+		}
+		unit := 24 * time.Hour
+		if m[2] == "w" {
+			unit = 7 * 24 * time.Hour
+		}
+		if int64(n) > math.MaxInt64/int64(unit) {
+			return 0, fmt.Errorf("%s %q is invalid: overflows time.Duration", name, raw)
+		}
+		return time.Duration(n) * unit, nil
+	}
 	d, err := time.ParseDuration(raw)
 	if err != nil {
 		return 0, fmt.Errorf("%s %q is invalid: %w", name, raw, err)

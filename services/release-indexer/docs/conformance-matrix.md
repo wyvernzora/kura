@@ -22,6 +22,11 @@ go test -tags=conformance ./...
 | Migrations and the runtime pool land every migrated table, the goose version table, and the `match_status` enum in the configured `database.schema` and nothing in `public` | `TestConfiguredSchemaOwnsMigrationObjects` |
 | DMHY fixtures, parser output, newest-200 bound, empty-floor threshold, and transient/parse failures | `sources/dmhy` conformance suite |
 | Nyaa live fixtures, parser output, newest-window bound, empty-floor threshold, and transient failures | `sources/nyaa` conformance suite |
+| Time-bounded scheduled walk: full >200-post backlog in one run, newest-plausible-stamp stop rule (sticky/epoch/future stamps), per-page emit with progress kept on failure, archive-floor and undatable-page termination | `pkg/crawl` `TestCrawlSince*` (unit) |
+| Count-and-cursor crawl engine: exact mid-page budgets and resume, page-level lookback boundary resilient to pinned-old and epoch-artifact rows, empty-run resolution, confirmed floor, malformed/foreign cursors, transient failures without advanced state | `pkg/crawl` `TestCrawlChunk*`, `TestParseCursor*` (unit) |
+| Shared source HTTP gate: serialized fetches, rolling three-request latency cooldown, capped transient retries and `Retry-After`, permanent-status rejection, cancellation | `pkg/crawl` `TestHTTPFetcher*` (unit/race) |
+| `POST /api/v1/sources/{source}/crawl`: direct ingest, cursor/lookback forwarding, stamp bounds, terminal response, upstream failure → 502 `upstream_error`, request validation | `internal/rest` `TestCrawlEndpoint*` (unit) |
+| `kura crawl`: automatic bounded cursor loop, stdout checkpoints, and exact resume command through terminal response | `cli/cmd/kura` `TestCrawl*`, `cli/internal/cli/client` `TestCrawlSource*` (unit); `e2e` `TestEndToEndWorkflowCrawlCLI` |
 
 The real-binary smoke test covers startup migrations, `/healthz`, `/api/v1/releases/ingest`,
 `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`, `/api/v1/releases/queue/claim`, `/api/v1/releases/queue/submit`, `/api/v1/releases/queue/stats`
@@ -30,3 +35,7 @@ startup, an in-process scheduled Nyaa crawl, direct ingest, and bounded shutdown
 The Docker e2e runs the consolidated release-indexer against fake DMHY and PostgreSQL,
 then exercises the full claim, submit, and query workflow over those scheduled
 releases.
+The CLI crawl e2e builds the real `kura` and `kura-release-indexer` binaries, runs
+them against stub DMHY and PostgreSQL, and covers bounded ingestion, idempotent
+replay, client-driven cursor looping to a lookback boundary, and failure/resume
+without gaps.

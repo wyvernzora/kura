@@ -61,12 +61,11 @@
 		reverse_proxy 127.0.0.1:8081
 	}
 
-	# Releases must match before the general /api rule, and both the
-	# collection root and its subpaths need explicit matchers. handle_path
-	# is deliberately not used anywhere here — it would strip the prefix
-	# the leaves route on.
-	@releases path /api/v1/releases /api/v1/releases/*
-	handle @releases {
+	# Release-indexer routes must match before the general /api rule.
+	# handle_path is deliberately not used anywhere here — it would strip
+	# the prefix the leaves route on.
+	@indexer path /api/v1/releases /api/v1/releases/* /api/v1/sources/*
+	handle @indexer {
 		reverse_proxy {$KURA_RELEASES_UPSTREAM}
 	}
 

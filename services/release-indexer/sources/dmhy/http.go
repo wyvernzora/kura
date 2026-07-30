@@ -20,19 +20,20 @@ func archivePageURL(base string, category, page int) string {
 }
 
 // NewHTTPCrawler constructs a DMHY crawler over a live HTTP/file source.
-func NewHTTPCrawler(baseURL string, category int, maxRPS float64, cacheTTL time.Duration) *Crawler {
+func NewHTTPCrawler(baseURL string, category int, maxRPS float64, cacheTTL, requestTimeout time.Duration) *Crawler {
 	c := &Crawler{threshold: Threshold, category: category}
 	fetcher := crawl.NewHTTPFetcher(crawl.HTTPFetcherConfig{
 		Source: "dmhy",
 		BuildURL: func(page int) (string, error) {
 			return archivePageURL(baseURL, c.category, page), nil
 		},
-		RatePerSec: maxRPS,
+		RatePerSec:     maxRPS,
+		RequestTimeout: requestTimeout,
 	})
-	fetch := PageFetcher(fetcher.FetchPage)
+	fetch := crawl.PageFetcher(fetcher.FetchPage)
 	if cacheTTL > 0 {
-		fetch = newPageCache(cacheTTL).wrap(fetch)
+		fetch = crawl.NewPageCache(cacheTTL).Wrap(fetch)
 	}
-	c.fetch = fetch
+	c.fetch = PageFetcher(fetch)
 	return c
 }

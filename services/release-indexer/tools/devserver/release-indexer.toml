@@ -11,7 +11,9 @@ max_attempts = 3
 
 [sources.dmhy]
 interval = "5m"
-timeout = "2m"
+settle_window = "24h"
+timeout = "10m"
+request_timeout = "180s"
 url = "https://share.dmhy.org"
 category = "2"
 max_rps = 0.5
@@ -19,7 +21,9 @@ cache_ttl = "10m"
 
 [sources.nyaa]
 interval = "5m"
+settle_window = "24h"
 timeout = "2m"
+request_timeout = "30s"
 url = "https://nyaa.si"
 query = ""
 category = "1_4"

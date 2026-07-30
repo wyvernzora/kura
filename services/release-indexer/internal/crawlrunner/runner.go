@@ -1,4 +1,5 @@
-// Package crawlrunner schedules bounded source crawls and ingests their posts.
+// Package crawlrunner schedules time-bounded source crawls and ingests their
+// pages as they arrive.
 package crawlrunner
 
 import (
@@ -10,7 +11,10 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/api"
 )
 
-type CrawlFunc func(ctx context.Context) ([]api.RawPost, error)
+// CrawlFunc walks a source's listing and invokes emit once per parsed page,
+// newest page first. Emitting a page persists it: a later fetch or parse
+// failure must not undo pages already emitted.
+type CrawlFunc func(ctx context.Context, emit func([]api.RawPost) error) error
 
 type IngestFunc func(ctx context.Context, posts []api.RawPost) (api.IngestBatch, error)
 
@@ -69,40 +73,64 @@ func (r Runner) runOnce(ctx context.Context, job Job) {
 	runCtx, cancel := context.WithTimeout(ctx, job.Timeout)
 	defer cancel()
 
-	posts, err := job.Crawl(runCtx)
-	if err != nil {
-		r.record(job.Source, "crawl_error", 0, time.Since(start))
-		r.log(runCtx, slog.LevelWarn, "scheduled crawl failed",
-			"source", job.Source,
-			"duration_ms", time.Since(start).Milliseconds(),
-			"err", err,
-		)
-		return
-	}
-
-	batch, err := r.Ingest(runCtx, posts)
-	if err != nil {
-		r.record(job.Source, "ingest_error", len(posts), time.Since(start))
+	var (
+		pages     int
+		posts     int
+		batch     api.IngestBatch
+		ingestErr error
+	)
+	crawlErr := job.Crawl(runCtx, func(pagePosts []api.RawPost) error {
+		pages++
+		posts += len(pagePosts)
+		// Ingest per page, immediately: pages already ingested survive any
+		// later failure, so a long catch-up crawl makes durable progress
+		// even when it does not finish.
+		pageBatch, err := r.Ingest(runCtx, pagePosts)
+		addBatch(&batch, pageBatch)
 		if r.Metrics != nil {
-			r.Metrics.IngestBatch(len(posts), "error")
+			result := "ok"
+			if err != nil {
+				result = "error"
+			}
+			r.Metrics.IngestBatch(len(pagePosts), result)
 		}
-		r.log(runCtx, slog.LevelError, "scheduled crawl ingest failed",
+		if err != nil {
+			ingestErr = err
+		}
+		return err
+	})
+
+	if crawlErr != nil {
+		result := "crawl_error"
+		level := slog.LevelWarn
+		message := "scheduled crawl failed"
+		if ingestErr != nil {
+			result = "ingest_error"
+			level = slog.LevelError
+			message = "scheduled crawl ingest failed"
+		}
+		r.record(job.Source, result, posts, time.Since(start))
+		r.log(runCtx, level, message,
 			"source", job.Source,
-			"post_count", len(posts),
+			"page_count", pages,
+			"post_count", posts,
+			"new_count", batch.New,
 			"duration_ms", time.Since(start).Milliseconds(),
-			"err", err,
+			"err", crawlErr,
 		)
 		return
 	}
 
-	r.record(job.Source, "ok", len(posts), time.Since(start))
+	r.record(job.Source, "ok", posts, time.Since(start))
 	if r.Metrics != nil {
-		r.Metrics.IngestBatch(len(posts), "ok")
+		// Per-page IngestBatch is emitted inside the emit closure; the
+		// run-level success marker still fires once per clean run.
 		r.Metrics.SourceCrawlSuccess(job.Source)
 	}
 	r.log(runCtx, slog.LevelInfo, "scheduled crawl completed",
 		"source", job.Source,
-		"post_count", len(posts),
+		"page_count", pages,
+		"post_count", posts,
 		"new_count", batch.New,
 		"updated_count", batch.Updated,
 		"duplicate_count", batch.Duplicate,
@@ -110,6 +138,14 @@ func (r Runner) runOnce(ctx context.Context, job Job) {
 		"skipped_count", batch.Skipped,
 		"duration_ms", time.Since(start).Milliseconds(),
 	)
+}
+
+func addBatch(dst *api.IngestBatch, b api.IngestBatch) {
+	dst.New += b.New
+	dst.Updated += b.Updated
+	dst.Duplicate += b.Duplicate
+	dst.Conflict += b.Conflict
+	dst.Skipped += b.Skipped
 }
 
 func (r Runner) record(source, result string, posts int, duration time.Duration) {

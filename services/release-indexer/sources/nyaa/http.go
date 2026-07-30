@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/wyvernzora/kura/services/release-indexer/pkg/crawl"
 )
@@ -13,16 +14,21 @@ import (
 const Threshold = 2
 
 // NewHTTPCrawler constructs a Nyaa crawler over a live HTTP/file source.
-func NewHTTPCrawler(baseURL, query, category, filter string, maxRPS float64) *Crawler {
+func NewHTTPCrawler(baseURL, query, category, filter string, maxRPS float64, requestTimeout, cacheTTL time.Duration) *Crawler {
 	fetcher := crawl.NewHTTPFetcher(crawl.HTTPFetcherConfig{
 		Source: "nyaa",
 		BuildURL: func(page int) (string, error) {
 			return listingPageURL(baseURL, query, category, filter, page)
 		},
-		RatePerSec: maxRPS,
+		RatePerSec:     maxRPS,
+		RequestTimeout: requestTimeout,
 	})
+	fetch := crawl.PageFetcher(fetcher.FetchPage)
+	if cacheTTL > 0 {
+		fetch = crawl.NewPageCache(cacheTTL).Wrap(fetch)
+	}
 	return &Crawler{
-		fetch:     fetcher.FetchPage,
+		fetch:     PageFetcher(fetch),
 		threshold: Threshold,
 	}
 }

@@ -15,14 +15,20 @@ import (
 type fakeStore struct {
 	claim           store.ClaimParams
 	submit          store.SubmitParams
+	ingest          []store.IngestParams
+	ingestOutcome   store.IngestOutcome
+	ingestErr       error
+	queueStats      store.QueueStats
+	queueStatsErr   error
 	infohashes      []string
 	releaseInfohash string
 	releaseQuery    store.ReleaseQuery
 }
 
 func (f *fakeStore) Ping(context.Context) error { return nil }
-func (f *fakeStore) IngestN(context.Context, store.IngestParams) (store.IngestOutcome, error) {
-	return store.IngestOutcome{}, nil
+func (f *fakeStore) IngestN(_ context.Context, p store.IngestParams) (store.IngestOutcome, error) {
+	f.ingest = append(f.ingest, p)
+	return f.ingestOutcome, f.ingestErr
 }
 func (f *fakeStore) Claim(_ context.Context, p store.ClaimParams) (store.ClaimResult, error) {
 	f.claim = p
@@ -40,7 +46,7 @@ func (f *fakeStore) Submit(_ context.Context, p store.SubmitParams) error {
 	return nil
 }
 func (f *fakeStore) QueueStats(context.Context) (store.QueueStats, error) {
-	return store.QueueStats{}, nil
+	return f.queueStats, f.queueStatsErr
 }
 func (f *fakeStore) CatalogStats(context.Context) (store.CatalogStats, error) {
 	return store.CatalogStats{}, nil

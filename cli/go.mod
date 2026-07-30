@@ -9,6 +9,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/wyvernzora/kura/services/library-manager v0.0.0-00010101000000-000000000000
+	github.com/wyvernzora/kura/services/release-indexer v0.0.0-00010101000000-000000000000
 	golang.org/x/term v0.44.0
 	golang.org/x/tools v0.47.0
 	rsc.io/script v0.0.2
@@ -26,9 +27,10 @@ require (
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 )
 
 replace github.com/wyvernzora/kura/services/library-manager => ../services/library-manager
+
+replace github.com/wyvernzora/kura/services/release-indexer => ../services/release-indexer

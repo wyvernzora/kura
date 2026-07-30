@@ -13,11 +13,17 @@ consumer agent list matched releases with optional canonical-ref filtering.
 - `ref` values are opaque namespace-prefixed strings such as `tvdb:123`; the indexer only
   shape-validates them.
 - DMHY and Nyaa run inside the indexer process. Each source has one non-overlapping
-  scheduled loop, starts at the newest listing, and emits at most 200 posts per run.
-- Normal crawling has no durable cursor, bootstrap window, or overlap setting.
-  Idempotent ingestion makes repeated recent-window reads safe.
-- `POST /api/v1/releases/ingest` remains an external-producer escape hatch; sources still emit the
-  same `RawPost` contract and do not import indexer storage.
+  scheduled loop that starts at the newest listing and ingests, page by page,
+  everything newer than its configured settle window.
+- Normal crawling has no durable cursor, bootstrap window, or overlap state; the
+  settle window is the loop's only time parameter. Listing state older than the
+  settle window is assumed immutable, and idempotent ingestion makes repeated
+  reads safe.
+- `POST /api/v1/releases/ingest` remains the external-producer surface; sources still emit the
+  same `RawPost` contract and do not import indexer storage. The sanctioned backfill
+  path is `POST /api/v1/sources/{source}/crawl`: a stateless count-and-cursor
+  chunk that uses the scheduled loop's crawler instance and ingests directly.
+  The client owns the cursor; the indexer persists no crawl position.
 - Queue claims are fenced by `claim_token`; stale submits must not overwrite newer
   claims.
 - The indexer stores the full crawler-provided magnet link. It does not normalize,
@@ -50,6 +56,7 @@ or matcher attributes exist in this pass.
 | --- | --- | --- |
 | `GET` | `/api/v1/releases` | List matched releases, newest first; optionally narrowed to one ref. |
 | `POST` | `/api/v1/releases/ingest` | Accept a batch of crawler posts. |
+| `POST` | `/api/v1/sources/{source}/crawl` | Consume one count-and-cursor source chunk and ingest it directly (operator backfill). |
 | `GET` | `/api/v1/releases/{infohash}/magnet` | Get the stored magnet URI for one release. |
 | `GET` | `/api/v1/releases/{infohash}` | Get one release detail, raw source evidence, and match history. |
 | `POST` | `/api/v1/releases/queue/claim` | Lease claimable unmatched releases. |
@@ -93,13 +100,27 @@ Crawler posts and ingest posts use the same shape:
 
 Enabled sources run once after the HTTP listener binds and then on their configured
 fixed interval. A source loop is sequential, so a slow run cannot overlap the next
-tick. `timeout` bounds both crawling and direct ingestion. Failures are logged and
-counted, then the loop waits for its next interval; they do not affect `/healthz`.
+tick. `timeout` bounds one run's slice of work; `request_timeout` bounds each page
+fetch. Failures are logged and counted, then the loop waits for its next interval;
+they do not affect `/healthz`.
 
-Every run requests the newest 200 posts. Crawlers have no cursor or lookback
-protocol. This is a steady-state polling window, not a backfill engine. If the service is offline long
-enough to miss more than that window, an external producer can perform the exceptional
-backfill and use `POST /api/v1/releases/ingest`.
+Every run walks the listing from page 1 and ingests each page immediately, until
+the page's newest plausible timestamp passes `now − settle_window` (or the source's
+consecutive-empty floor). The stop rule uses the newest plausible stamp so a
+pinned row or an unparseable-date artifact cannot end the walk early, and a run
+that fails mid-walk keeps every page already ingested. This is a steady-state
+freshness loop, not a backfill engine: after downtime longer than the settle
+window, the operator drives `POST /api/v1/sources/{source}/crawl`. Each request
+consumes an exact post budget (up to 200), may cross listing-page boundaries,
+ingests directly, and returns an opaque `(page, offset)` cursor. The client
+threads that cursor until the requested lookback boundary or the confirmed
+archive floor; `kura crawl <source> <lookback>` owns this loop automatically
+without adding server-side state (see operations.md). Requests share the
+scheduled loop's crawler instances, so one fetch gate applies the `max_rps`
+ceiling, latency-aware cooldown, and transient retry policy to their combined
+upstream traffic. A short per-source page cache lets adjacent chunks that split
+a listing page reuse the same snapshot; after it expires, ordinary listing
+drift can replay boundary posts, which idempotent ingestion absorbs.
 
 ## Queue Semantics
 

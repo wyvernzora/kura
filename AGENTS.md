@@ -236,9 +236,10 @@ When the user corrects your approach, append a one-line rule here before ending 
 - **Module:** `github.com/wyvernzora/kura/cli`.
 - **Binary:** `kura`, built from `cmd/kura`; it is a developer/operator
   tool and does not ship as a container image.
-- **Boundary:** REST-client-only. Code under `cli/` must never import
-  `services/library-manager/internal`; shared wire and vocabulary types
-  come only from `services/library-manager/pkg/api*`.
+- **Boundary:** REST-client-only. Code under `cli/` must never import any
+  service's `internal`; shared wire and vocabulary types come only from the
+  services' public packages (`services/library-manager/pkg/api*`,
+  `services/release-indexer/pkg/api`).
 - **Discovery:** `KURA_SERVER_URL` selects the library-manager REST
   endpoint (default `http://127.0.0.1:8080`). Kura does not authenticate;
   `KURA_TOKEN` is still sent as a bearer header for whatever proxy fronts
@@ -249,8 +250,12 @@ When the user corrects your approach, append a one-line rule here before ending 
   `kura` CLI as separate binaries.
 - **Commands:** `make check`, `make e2e`, `make build`, and `make install`
   from `cli/`.
-- **Non-goal:** suite-wide verbs such as release-indexer backfill may live
-  here later, but this extraction adds no release-indexer commands.
+- **Releases:** `kura crawl <source> <lookback>` automatically threads
+  bounded cursor chunks through `POST /api/v1/sources/{source}/crawl` until
+  the lookback boundary or archive floor; `--cursor` resumes from a printed
+  checkpoint. It needs `KURA_SERVER_URL`
+  pointing at the suite gateway (one origin over every service API) or at
+  the indexer directly; against a bare library-manager they 404.
 
 ---
 
@@ -276,9 +281,11 @@ Read design.md before any sizable change.
   overlap state. `POST /api/v1/releases/ingest` remains an external-producer
   escape hatch.
 - **Surfaces:**
-  - REST (n8n-driven), all under `/api/v1/releases`: `GET /` (list),
+  - Release REST (n8n-driven), under `/api/v1/releases`: `GET /` (list),
     `POST /ingest`, `POST /queue/claim`, `GET /queue/stats`,
     `POST /queue/submit`, `GET /{infohash}`, and `GET /{infohash}/magnet`.
+  - Source REST: `POST /api/v1/sources/{source}/crawl` consumes one
+    count-and-cursor chunk and ingests it directly; the caller owns the cursor.
   - `/healthz` — a live DB ping.
 - **Transport:** HTTP (configured by TOML).
 - **Distribution:** one Go binary + Docker container.
@@ -358,6 +365,10 @@ corrects your approach, append a one-line, concrete rule here before ending the 
   not affect matching semantics.
 - Keep every source `category` as a TOML string; DMHY maps that string to its existing
   `sort_id` semantics internally.
+- Prefer a stateless time-bounded loop plus operator-scripted CLI/ingest primitives
+  over durable crawl bookkeeping (cursor/journal/queue): the owner rejected fully
+  designed coverage-journal and interval-queue approaches because durable progress
+  state can lie and defending it dominates design cost (2026-07).
 
 ---
 

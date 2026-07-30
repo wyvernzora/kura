@@ -1,4 +1,4 @@
-package dmhy
+package crawl
 
 import (
 	"context"
@@ -19,10 +19,10 @@ func countingFetcher(calls *int, body []byte, err error) PageFetcher {
 // exactly once.
 func TestPageCacheDedupsWithinTTL(t *testing.T) {
 	var calls int
-	c := newPageCache(10 * time.Minute)
+	c := NewPageCache(10 * time.Minute)
 	now := time.Unix(0, 0)
 	c.now = func() time.Time { return now }
-	w := c.wrap(countingFetcher(&calls, []byte("page"), nil))
+	w := c.Wrap(countingFetcher(&calls, []byte("page"), nil))
 
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
@@ -39,10 +39,10 @@ func TestPageCacheDedupsWithinTTL(t *testing.T) {
 // TestPageCachePagesDistinct: each page has its own cache entry.
 func TestPageCachePagesDistinct(t *testing.T) {
 	var calls int
-	c := newPageCache(time.Minute)
+	c := NewPageCache(time.Minute)
 	now := time.Unix(0, 0)
 	c.now = func() time.Time { return now }
-	w := c.wrap(countingFetcher(&calls, []byte("x"), nil))
+	w := c.Wrap(countingFetcher(&calls, []byte("x"), nil))
 
 	ctx := context.Background()
 	w(ctx, 1)
@@ -56,10 +56,10 @@ func TestPageCachePagesDistinct(t *testing.T) {
 // TestPageCacheExpires: once the TTL elapses, the page is re-fetched.
 func TestPageCacheExpires(t *testing.T) {
 	var calls int
-	c := newPageCache(10 * time.Minute)
+	c := NewPageCache(10 * time.Minute)
 	now := time.Unix(0, 0)
 	c.now = func() time.Time { return now }
-	w := c.wrap(countingFetcher(&calls, []byte("x"), nil))
+	w := c.Wrap(countingFetcher(&calls, []byte("x"), nil))
 
 	ctx := context.Background()
 	w(ctx, 1) // fetch (calls=1)
@@ -76,10 +76,10 @@ func TestPageCacheExpires(t *testing.T) {
 // immediately retryable.
 func TestPageCacheDoesNotCacheErrors(t *testing.T) {
 	var calls int
-	c := newPageCache(time.Minute)
+	c := NewPageCache(time.Minute)
 	now := time.Unix(0, 0)
 	c.now = func() time.Time { return now }
-	w := c.wrap(countingFetcher(&calls, nil, errors.New("boom")))
+	w := c.Wrap(countingFetcher(&calls, nil, errors.New("boom")))
 
 	ctx := context.Background()
 	if _, err := w(ctx, 1); err == nil {

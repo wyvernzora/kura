@@ -77,10 +77,12 @@ metrics_addr = %q
 
 [sources.nyaa]
 interval = "1h"
+settle_window = "3650d"
 timeout = "30s"
+request_timeout = "10s"
 url = %q
 category = "1_4"
-max_rps = 0
+max_rps = 100
 `, addr, metricsAddr, source.URL)
 	if err := os.WriteFile(configPath, []byte(configBody), 0o600); err != nil {
 		t.Fatalf("write config: %v", err)

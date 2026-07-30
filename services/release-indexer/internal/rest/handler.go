@@ -25,6 +25,7 @@ type Handler struct {
 	mux      *http.ServeMux
 	metrics  *metrics.Metrics
 	logger   *slog.Logger
+	crawlers map[string]ChunkCrawler
 }
 
 type ingestStats interface {
@@ -46,6 +47,7 @@ func NewWithMetricsAndLogger(s store.Store, m *metrics.Metrics, logger *slog.Log
 		stats:    s,
 		metrics:  m,
 		logger:   logger,
+		crawlers: make(map[string]ChunkCrawler),
 	}
 	mux := http.NewServeMux()
 	// Literal segments outrank the {infohash} wildcard, so the queue
@@ -53,6 +55,7 @@ func NewWithMetricsAndLogger(s store.Store, m *metrics.Metrics, logger *slog.Log
 	// same depth as the per-release ones.
 	mux.HandleFunc("/api/v1/releases", h.handleListReleases)
 	mux.HandleFunc("/api/v1/releases/ingest", h.handleIngest)
+	mux.HandleFunc("/api/v1/sources/{source}/crawl", h.handleSourceCrawl)
 	mux.HandleFunc("/api/v1/releases/queue/claim", h.handleClaim)
 	mux.HandleFunc("/api/v1/releases/queue/stats", h.handleQueueStats)
 	mux.HandleFunc("/api/v1/releases/queue/submit", h.handleSubmit)

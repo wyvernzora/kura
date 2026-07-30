@@ -165,10 +165,12 @@ max_attempts = 2
 
 [sources.dmhy]
 interval = "1h"
+settle_window = "3650d"
 timeout = "30s"
+request_timeout = "10s"
 url = "http://dmhy"
 category = "2"
-max_rps = 0
+max_rps = 100
 cache_ttl = "0s"
 `
 	c, err := testcontainers.Run(ctx, "",
