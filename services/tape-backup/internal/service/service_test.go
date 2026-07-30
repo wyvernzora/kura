@@ -142,6 +142,93 @@ func TestConsultAndStatusRemainAvailableWhileDriveIsOffline(t *testing.T) {
 	}
 }
 
+func TestMissingOrMalformedKeyFailsTapeStartWhileStatusAndConsultAnswer(t *testing.T) {
+	for _, keyErr := range []error{
+		os.ErrNotExist,
+		errors.New("malformed key material that must not be exposed"),
+	} {
+		f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+		f.addSeries(t, "A", "tvdb:a", 8)
+		f.service.deps.KeyLoadError = keyErr
+
+		if _, err := f.service.Consult(nil); err != nil {
+			t.Fatalf("Consult() error = %v", err)
+		}
+		status, err := f.service.Status()
+		if err != nil {
+			t.Fatalf("Status() error = %v", err)
+		}
+		want := DriveStatus{
+			State:   "encryption_key_setup_failed",
+			Message: "configured encryption key is unavailable",
+		}
+		if status.Drive != want {
+			t.Fatalf("Status().Drive = %#v, want %#v", status.Drive, want)
+		}
+		_, err = f.service.Plan(PlanRequest{})
+		assertError(
+			t,
+			err,
+			"encryption_key_setup_failed: configured encryption key is unavailable",
+		)
+		if strings.Contains(err.Error(), keyErr.Error()) {
+			t.Fatalf("Plan() error exposed key loader detail: %q", err)
+		}
+		_, err = f.service.Run(t.Context(), PlanRequest{})
+		assertError(
+			t,
+			err,
+			"encryption_key_setup_failed: configured encryption key is unavailable",
+		)
+		if strings.Contains(err.Error(), keyErr.Error()) {
+			t.Fatalf("Run() error exposed key loader detail: %q", err)
+		}
+	}
+}
+
+func TestPlanRefusesEncryptionKeyMismatchWithBothFingerprints(t *testing.T) {
+	cartridge := identifiedCartridge(t, testTape, testVolume, true)
+	assertNoError(t, tapevolume.Write(cartridge.Root, tapevolume.Volume{
+		VolumeID:       testVolume,
+		TapeID:         testTape,
+		KeyFingerprint: "aaaaaaaaaaaaaaaa",
+		CreatedAt:      time.Unix(1, 0).UTC(),
+	}))
+	f := newFixture(t, cartridge)
+
+	_, err := f.service.Plan(PlanRequest{})
+	const want = "encryption_key_mismatch: written under key aaaaaaaaaaaaaaaa, current key is 66687aadf862bd77"
+	assertError(t, err, want)
+}
+
+func TestEjectUnmountsAndUnloadsCartridge(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+
+	if err := f.service.Eject(); err != nil {
+		t.Fatalf("Eject() error = %v", err)
+	}
+	if f.drive.IsMounted(testTape) {
+		t.Fatal("cartridge remains mounted after Eject")
+	}
+	if !f.drive.IsEjected(testTape) {
+		t.Fatal("cartridge was not unloaded by Eject")
+	}
+}
+
+func TestEjectRefusesWhileSessionHoldsDrive(t *testing.T) {
+	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
+	f.service.live["session-1"] = LiveSession{
+		SessionID: "session-1",
+		Plans:     []LivePlan{{PlanID: "01ARZ3NDEKTSV4RRFFQ69G5FAX", TapeID: testTape}},
+	}
+
+	err := f.service.Eject()
+	assertError(t, err, "drive_busy_session: drive is busy with a tape session")
+	if f.drive.IsEjected(testTape) {
+		t.Fatal("cartridge was ejected during a live session")
+	}
+}
+
 func TestServiceMutexSerializesPromotionAgainstConsultSweep(t *testing.T) {
 	f := newFixture(t, identifiedCartridge(t, testTape, testVolume, true))
 	f.addSeries(t, "A", "tvdb:a", 8)
@@ -535,7 +622,9 @@ func identifiedCartridge(
 	t.Helper()
 	root := t.TempDir()
 	assertNoError(t, tapevolume.Write(root, tapevolume.Volume{
-		VolumeID: volumeID, TapeID: tapeID, CreatedAt: time.Unix(1, 0).UTC(),
+		VolumeID: volumeID, TapeID: tapeID,
+		KeyFingerprint: "66687aadf862bd77",
+		CreatedAt:      time.Unix(1, 0).UTC(),
 	}))
 	assertNoError(t, os.MkdirAll(tapevolume.SnapshotsDir(root), 0o775))
 	serial := "SERIAL-UNKNOWN"
@@ -552,7 +641,7 @@ func identifiedCartridge(
 func unidentifiedCartridge(t *testing.T, tapeID tape.ID) executor.DirectoryCartridge {
 	t.Helper()
 	return executor.DirectoryCartridge{
-		TapeID: tapeID, Root: t.TempDir(), Mounted: true,
+		TapeID: tapeID, Root: t.TempDir(), Mounted: false,
 		IdentityState: executor.LoadedIdentityUnidentified,
 		MediumSerial:  "SERIAL-1", EncryptionActive: true, Capacity: 1 << 30,
 	}
@@ -704,9 +793,10 @@ func installProtectedSnapshot(
 	const protectedVolume volume.ID = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 	root := t.TempDir()
 	assertNoError(t, tapevolume.Write(root, tapevolume.Volume{
-		VolumeID:  protectedVolume,
-		TapeID:    tapeID,
-		CreatedAt: time.Unix(1, 0).UTC(),
+		VolumeID:       protectedVolume,
+		TapeID:         tapeID,
+		KeyFingerprint: "66687aadf862bd77",
+		CreatedAt:      time.Unix(1, 0).UTC(),
 	}))
 	header, err := os.ReadFile(tapevolume.VolumeFile(root))
 	assertNoError(t, err)

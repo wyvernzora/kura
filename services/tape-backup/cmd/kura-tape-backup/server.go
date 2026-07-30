@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/wyvernzora/kura/services/tape-backup/internal/config"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/encryptionkey"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/executor"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/server/auth"
 	restserver "github.com/wyvernzora/kura/services/tape-backup/internal/server/rest"
@@ -39,6 +40,15 @@ func runServer(
 	}
 	logTokenStatus(logger, tokenResult, cfg.Auth.TokenPath)
 
+	key, keyLoadErr := encryptionkey.Load(cfg.Encryption.KeyFile)
+	if keyLoadErr != nil {
+		logger.Error(
+			"kura tape encryption key unavailable",
+			"key_file", cfg.Encryption.KeyFile,
+			"error", keyLoadErr,
+		)
+	}
+
 	drive, err := executor.NewHardwareDrive()
 	if err != nil {
 		return err
@@ -62,6 +72,8 @@ func runServer(
 		FlushCadence:    cfg.Tape.FlushCadence,
 		PollInterval:    drivePollInterval,
 		IdleTimeout:     cfg.Tape.IdleTimeout,
+		EncryptionKey:   key,
+		KeyLoadError:    keyLoadErr,
 	})
 	if err != nil {
 		return err

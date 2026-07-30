@@ -50,6 +50,9 @@ log_level = "debug"
 disabled = true
 token_path = "/run/secrets/kura-tape-token"
 
+[encryption]
+key_file = "/run/secrets/kura-tape-key"
+
 [library]
 root = "/library"
 url = "https://library.example"
@@ -72,6 +75,9 @@ flush_cadence = 4
 	}
 	if !cfg.Auth.Disabled || cfg.Auth.TokenPath != "/run/secrets/kura-tape-token" {
 		t.Fatalf("Auth = %+v", cfg.Auth)
+	}
+	if cfg.Encryption.KeyFile != "/run/secrets/kura-tape-key" {
+		t.Fatalf("Encryption = %+v", cfg.Encryption)
 	}
 	if cfg.Library.Root != "/library" || cfg.Library.URL != "https://library.example" {
 		t.Fatalf("Library = %+v", cfg.Library)
@@ -114,6 +120,11 @@ func TestLoadRejectsInvalidConfig(t *testing.T) {
 		body string
 		want string
 	}{
+		{
+			name: "relative encryption key file",
+			body: validConfig() + "\n[encryption]\nkey_file = \"tape.key\"\n",
+			want: "encryption.key_file must be absolute",
+		},
 		{
 			name: "unknown field",
 			body: validConfig() + "\n[server]\naddress = \":9090\"\n",

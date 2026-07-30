@@ -17,6 +17,7 @@ type tapeCmd struct {
 	Run     tapeRunCmd     `cmd:"" help:"Run the validated plan for the loaded cartridge."`
 	Approve tapeApproveCmd `cmd:"" help:"Approve an init plan's blank-cartridge attestation."`
 	Discard tapeDiscardCmd `cmd:"" help:"Discard a draft or ready plan."`
+	Eject   tapeEjectCmd   `cmd:"" help:"Unmount and eject the loaded cartridge."`
 }
 
 type tapeStatusCmd struct {
@@ -45,6 +46,8 @@ type tapeApproveCmd struct {
 type tapeDiscardCmd struct {
 	PlanID string `arg:"" required:"" name:"plan" help:"Draft or ready plan ID to discard."`
 }
+
+type tapeEjectCmd struct{}
 
 func (cmd *tapeStatusCmd) Run(rt *runContext) error {
 	result, err := clientFromRT(rt).TapeStatus(rt.Context)
@@ -101,6 +104,14 @@ func (cmd *tapeDiscardCmd) Run(rt *runContext) error {
 		return tapeError(err)
 	}
 	_, err := fmt.Fprintf(rt.Stdout, "Discarded %s.\n", cmd.PlanID)
+	return err
+}
+
+func (*tapeEjectCmd) Run(rt *runContext) error {
+	if err := clientFromRT(rt).TapeEject(rt.Context); err != nil {
+		return tapeError(err)
+	}
+	_, err := fmt.Fprintln(rt.Stdout, "Ejected tape.")
 	return err
 }
 

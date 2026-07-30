@@ -88,3 +88,11 @@ func (s *Server) handleDiscard(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *Server) handleEject(w http.ResponseWriter, _ *http.Request) {
+	if err := s.deps.Service.Eject(); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

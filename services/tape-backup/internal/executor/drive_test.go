@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/wyvernzora/kura/services/tape-backup/internal/encryptionkey"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/executor"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
@@ -140,6 +141,51 @@ func TestDirectoryDriveOpenCloseExclusiveCustodyAndFaults(t *testing.T) {
 	}
 }
 
+func TestDirectoryDriveKeyMountUnmountAndEjectState(t *testing.T) {
+	drive := newDrive(t, []executor.DirectoryCartridge{{
+		TapeID: "ABC123L6", Root: t.TempDir(), Mounted: false,
+		IdentityState: executor.LoadedIdentityUnidentified,
+		MediumSerial:  firstMediumSerial, Capacity: 100,
+	}}, "ABC123L6")
+
+	if drive.KeySet("ABC123L6") {
+		t.Fatal("key is set before SetEncryptionKey")
+	}
+	if err := drive.SetEncryptionKey(encryptionkey.Key{}); err != nil {
+		t.Fatalf("SetEncryptionKey() error = %v", err)
+	}
+	if !drive.KeySet("ABC123L6") {
+		t.Fatal("key remains unset after SetEncryptionKey")
+	}
+	if err := drive.Mount(); err != nil {
+		t.Fatalf("Mount() error = %v", err)
+	}
+	if !drive.IsMounted("ABC123L6") {
+		t.Fatal("cartridge remains unmounted after Mount")
+	}
+	drive.SetFaults(executor.DriveFaults{BusyUnmount: true})
+	if err := drive.Unmount(); err != syscall.EBUSY {
+		t.Fatalf("busy Unmount() error = %v, want exact EBUSY", err)
+	}
+	drive.SetFaults(executor.DriveFaults{})
+	if err := drive.Unmount(); err != nil {
+		t.Fatalf("Unmount() error = %v", err)
+	}
+	if err := drive.Eject(); err != nil {
+		t.Fatalf("Eject() error = %v", err)
+	}
+	if !drive.IsEjected("ABC123L6") {
+		t.Fatal("cartridge is not marked ejected")
+	}
+	identity, err := drive.LoadedIdentity()
+	if err != nil {
+		t.Fatalf("LoadedIdentity() error = %v", err)
+	}
+	if identity.State != executor.LoadedIdentityNone {
+		t.Fatalf("identity state = %q, want none", identity.State)
+	}
+}
+
 func TestDirectoryDriveFormatCrashFaultLeavesUnidentifiedMedia(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "payload.bin"), []byte("destroyed by format"))
@@ -187,6 +233,9 @@ func TestDirectoryDriveStampIdentityCrashFaultLeavesHeaderWithoutReadableMAM(t *
 	drive.SetFaults(executor.DriveFaults{
 		StampIdentity: errors.New("stamp identity fault"),
 	})
+	if err := drive.SetEncryptionKey(encryptionkey.Key{}); err != nil {
+		t.Fatalf("SetEncryptionKey() error = %v", err)
+	}
 
 	assertExactError(
 		t,
@@ -222,6 +271,9 @@ func TestDirectoryDriveStampIdentityEstablishesHealthyEmptyWitness(t *testing.T)
 		EncryptionActive: true,
 		Capacity:         100,
 	}}, "ABC123L6")
+	if err := drive.SetEncryptionKey(encryptionkey.Key{}); err != nil {
+		t.Fatalf("SetEncryptionKey() error = %v", err)
+	}
 
 	if err := drive.StampIdentity(firstVolume, "ABC123L6"); err != nil {
 		t.Fatalf("StampIdentity: %v", err)
@@ -261,16 +313,16 @@ func TestClassifyDriveAvailabilityTaxonomy(t *testing.T) {
 			name:        "device busy",
 			openErr:     syscall.EBUSY,
 			wantReason:  executor.DriveInUse,
-			wantMessage: "in use by another process — run `fuser /dev/nst0` on the node.",
+			wantMessage: "in use by unidentified process",
 		},
 		{
-			name:         "busy LTFS mount is ready",
+			name:         "foreign LTFS mount is anomalous",
 			openErr:      syscall.EBUSY,
 			loaded:       true,
 			encryption:   true,
-			mountLine:    "/dev/nst0 %s fuse.ltfs rw 0 0\n",
-			wantReason:   executor.DriveReady,
-			wantMessage:  "drive ready",
+			mountLine:    "/dev/nst0 /foreign fuse.ltfs rw 0 0\n",
+			wantReason:   executor.DriveInUse,
+			wantMessage:  "in use by foreign mount at /foreign",
 			wantFakeOpen: false,
 		},
 		{
@@ -281,10 +333,10 @@ func TestClassifyDriveAvailabilityTaxonomy(t *testing.T) {
 			wantFakeOpen: true,
 		},
 		{
-			name:         "encryption inactive",
+			name:         "cartridge presence is ready before session key setup",
 			loaded:       true,
-			wantReason:   executor.DriveEncryptionInactive,
-			wantMessage:  "drive encryption is inactive",
+			wantReason:   executor.DriveReady,
+			wantMessage:  "drive ready",
 			wantClose:    true,
 			wantFakeOpen: true,
 		},
@@ -360,6 +412,96 @@ func TestClassifyDriveAvailabilityTaxonomy(t *testing.T) {
 	}
 }
 
+func TestClassifyDriveAvailabilityCleansStaleKuraMountAndProceeds(t *testing.T) {
+	root := t.TempDir()
+	writeVolume(t, root, "ABC123L6", firstVolume)
+	base := newDrive(t, []executor.DirectoryCartridge{{
+		TapeID: "ABC123L6", Root: root, Mounted: true,
+		IdentityState: executor.LoadedIdentityIdentified,
+		MediumSerial:  firstMediumSerial, Capacity: 100,
+	}}, "ABC123L6")
+	drive := &busyOnceDrive{DirectoryDrive: base}
+	mountsPath := filepath.Join(t.TempDir(), "mounts")
+	if err := os.WriteFile(
+		mountsPath,
+		[]byte(formatMountLine("/dev/nst0 %s fuse.ltfs rw 0 0\n", root)),
+		0o600,
+	); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := executor.ClassifyDriveAvailability(
+		drive,
+		executor.DriveAvailabilityOptions{
+			LTFSRoot: root, ProcMountsPath: mountsPath,
+		},
+	)
+	if err != nil {
+		t.Fatalf("ClassifyDriveAvailability() error = %v", err)
+	}
+	if got.Reason != executor.DriveReady || !got.CloseRequired {
+		t.Fatalf("classification = %#v, want ready custody", got)
+	}
+	if base.IsMounted("ABC123L6") {
+		t.Fatal("stale Kura mount remains mounted")
+	}
+	if err := base.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestClassifyDriveAvailabilityNamesUnrecoverableStaleKuraMount(t *testing.T) {
+	root := t.TempDir()
+	writeVolume(t, root, "ABC123L6", firstVolume)
+	drive := newDrive(t, []executor.DirectoryCartridge{{
+		TapeID: "ABC123L6", Root: root, Mounted: true,
+		IdentityState: executor.LoadedIdentityIdentified,
+		MediumSerial:  firstMediumSerial, Capacity: 100,
+	}}, "ABC123L6")
+	drive.SetFaults(executor.DriveFaults{
+		Open:    syscall.EBUSY,
+		Unmount: errors.New("injected stale unmount failure"),
+	})
+	mountsPath := filepath.Join(t.TempDir(), "mounts")
+	if err := os.WriteFile(
+		mountsPath,
+		[]byte(formatMountLine("/dev/nst0 %s fuse.ltfs rw 0 0\n", root)),
+		0o600,
+	); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	got, err := executor.ClassifyDriveAvailability(
+		drive,
+		executor.DriveAvailabilityOptions{
+			LTFSRoot: root, ProcMountsPath: mountsPath,
+		},
+	)
+	if err != nil {
+		t.Fatalf("ClassifyDriveAvailability() error = %v", err)
+	}
+	want := executor.DriveAvailability{
+		Reason:  executor.DriveMountStaleUnrecoverable,
+		Message: "stale Kura mount at " + root + " could not be unmounted",
+	}
+	if got != want {
+		t.Fatalf("classification = %#v, want %#v", got, want)
+	}
+}
+
+type busyOnceDrive struct {
+	*executor.DirectoryDrive
+	openCalls int
+}
+
+func (d *busyOnceDrive) Open() error {
+	d.openCalls++
+	if d.openCalls == 1 {
+		return syscall.EBUSY
+	}
+	return d.DirectoryDrive.Open()
+}
+
 func TestRunSessionHoldsCustodyOnlyForSessionDuration(t *testing.T) {
 	fixture := newSessionFixture(t)
 	action := writeSeries(t, fixture.libraryRoot, "Series", "tvdb:custody", 1)
@@ -386,6 +528,9 @@ func TestRunSessionHoldsCustodyOnlyForSessionDuration(t *testing.T) {
 	}
 	if fixture.drive.IsOpen() {
 		t.Fatal("drive custody remains held after session")
+	}
+	if fixture.drive.IsMounted("ABC123L6") {
+		t.Fatal("fill session left the cartridge mounted")
 	}
 }
 

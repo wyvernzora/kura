@@ -780,9 +780,10 @@ func writeVolume(
 ) {
 	t.Helper()
 	if err := tapevolume.Write(root, tapevolume.Volume{
-		VolumeID:  volumeID,
-		TapeID:    tapeID,
-		CreatedAt: time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC),
+		VolumeID:       volumeID,
+		TapeID:         tapeID,
+		KeyFingerprint: "66687aadf862bd77",
+		CreatedAt:      time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC),
 	}); err != nil {
 		t.Fatalf("Write volume error = %v", err)
 	}

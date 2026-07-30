@@ -536,9 +536,10 @@ func installVolume(
 	t.Helper()
 	headerRoot := t.TempDir()
 	mustSucceed(t, tapevolume.Write(headerRoot, tapevolume.Volume{
-		VolumeID:  id,
-		TapeID:    tapeID,
-		CreatedAt: time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+		VolumeID:       id,
+		TapeID:         tapeID,
+		KeyFingerprint: "66687aadf862bd77",
+		CreatedAt:      time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 	}))
 	header, err := os.ReadFile(tapevolume.VolumeFile(headerRoot))
 	mustSucceed(t, err)

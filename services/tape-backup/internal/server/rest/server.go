@@ -21,7 +21,7 @@ const (
 	readHeaderTimeout    = 10 * time.Second
 )
 
-// TapeService is the six-verb service facade consumed by the REST transport.
+// TapeService is the service facade consumed by the REST transport.
 type TapeService interface {
 	Status() (service.StatusResult, error)
 	Consult([]planner.Blank) (service.ConsultResult, error)
@@ -29,6 +29,7 @@ type TapeService interface {
 	Run(context.Context, service.PlanRequest) (service.RunResult, error)
 	Approve(string) error
 	Discard(string) error
+	Eject() error
 }
 
 // Deps are the process-owned REST dependencies.
@@ -46,7 +47,7 @@ type Server struct {
 	startedAt time.Time
 }
 
-// NewServer constructs the authenticated six-verb REST surface.
+// NewServer constructs the authenticated REST surface.
 func NewServer(deps Deps) (*Server, error) {
 	if deps.Service == nil {
 		return nil, errors.New("tape rest: service is required")
@@ -120,6 +121,7 @@ func (s *Server) buildRouter() http.Handler {
 	mux.HandleFunc("POST /api/tape/run", s.handleRun)
 	mux.HandleFunc("POST /api/tape/approve/{planID}", s.handleApprove)
 	mux.HandleFunc("POST /api/tape/discard/{planID}", s.handleDiscard)
+	mux.HandleFunc("POST /api/tape/eject", s.handleEject)
 
 	var handler http.Handler = auth.BearerMiddleware(s.deps.BearerToken)(mux)
 	handler = recoverMiddleware(s.deps.Logger)(handler)

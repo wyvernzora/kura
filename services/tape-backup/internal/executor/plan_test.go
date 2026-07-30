@@ -221,20 +221,22 @@ func (d *countingDrive) Sync() error {
 
 var _ executor.Drive = (*countingDrive)(nil)
 
-func TestRunSessionWaitsForMountedMatchingCartridge(t *testing.T) {
+func TestRunSessionMountsMatchingCartridgeWithoutOperatorStep(t *testing.T) {
 	fixture := newSessionFixture(t)
 	fixture.plan = fillPlan(firstPlanID, firstVolume, "ABC123L6", nil, nil)
 	fixture.promote(t)
 	if err := fixture.drive.SetMounted("ABC123L6", false); err != nil {
 		t.Fatalf("SetMounted false error = %v", err)
 	}
-	go func() {
-		time.Sleep(5 * time.Millisecond)
-		_ = fixture.drive.SetMounted("ABC123L6", true)
-	}()
 
 	if err := fixture.run(t, nil); err != nil {
 		t.Fatalf("RunSession error = %v", err)
+	}
+	if fixture.drive.IsMounted("ABC123L6") {
+		t.Fatal("fill session left the matching cartridge mounted")
+	}
+	if _, err := backupplan.ReadDone(fixture.stateRoot, firstPlanID); err != nil {
+		t.Fatalf("ReadDone() error = %v", err)
 	}
 }
 
@@ -286,7 +288,7 @@ func TestRunSessionCancellationRetiresPendingPlan(t *testing.T) {
 	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
 }
 
-func TestRunSessionEncryptionInactiveWritesNothingAndRetires(t *testing.T) {
+func TestRunSessionKeySetFailureWritesNothingAndRetires(t *testing.T) {
 	stateRoot := t.TempDir()
 	libraryRoot := t.TempDir()
 	cartridgeRoot := t.TempDir()
@@ -300,6 +302,9 @@ func TestRunSessionEncryptionInactiveWritesNothingAndRetires(t *testing.T) {
 		EncryptionActive: false,
 		Capacity:         1 << 20,
 	}}, "ABC123L6")
+	drive.SetFaults(executor.DriveFaults{
+		SetEncryptionKey: errors.New("injected key programming failure"),
+	})
 	installCatalogVolume(
 		t,
 		stateRoot,
@@ -324,7 +329,7 @@ func TestRunSessionEncryptionInactiveWritesNothingAndRetires(t *testing.T) {
 		[]backupplan.Plan{plan},
 		journal,
 		func(context.Context, executor.BackupActionRequest) error {
-			t.Fatal("backup handler called with encryption inactive")
+			t.Fatal("backup handler called after key setup failure")
 			return nil
 		},
 		executor.SessionOptions{
@@ -343,4 +348,10 @@ func TestRunSessionEncryptionInactiveWritesNothingAndRetires(t *testing.T) {
 		t.Fatalf("RunSession error = %v", err)
 	}
 	assertPlanDiscarded(t, stateRoot, plan.PlanID)
+	session, err := backupplan.ReadSession(stateRoot, sessionID)
+	if err != nil {
+		t.Fatalf("ReadSession() error = %v", err)
+	}
+	const want = "executor: encryption_key_setup_failed: injected key programming failure"
+	assertExactPlanFailure(t, session, want)
 }

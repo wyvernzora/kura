@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/wyvernzora/kura/services/tape-backup/internal/encryptionkey"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/planner"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/seriesmeta"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
@@ -31,6 +33,9 @@ var (
 	ErrEncryptionInactive = errors.New("executor: drive encryption is inactive")
 	// ErrSessionActive reports that another session owns the service slot.
 	ErrSessionActive = errors.New("executor: session is already active")
+	// ErrEncryptionKeySetupFailed reports that the drive rejected the
+	// configured key before a write gate.
+	ErrEncryptionKeySetupFailed = errors.New("executor: encryption_key_setup_failed")
 )
 
 var sessionRegistry struct {
@@ -62,6 +67,9 @@ type SessionOptions struct {
 	LibraryRoot     string
 	FreeSpaceMargin int64
 	FlushCadence    int
+	LTFSRoot        string
+	ProcMountsPath  string
+	EncryptionKey   encryptionkey.Key
 }
 
 type admittedPlan struct {
@@ -103,8 +111,23 @@ func RunSession(
 		return err
 	}
 	defer unregisterSession()
-	if err := drive.Open(); err != nil {
-		return fmt.Errorf("executor: open drive: %w", err)
+	availability, err := ClassifyDriveAvailability(drive, DriveAvailabilityOptions{
+		LTFSRoot:       options.LTFSRoot,
+		ProcMountsPath: options.ProcMountsPath,
+	})
+	if err != nil {
+		return err
+	}
+	if availability.Reason != DriveReady &&
+		availability.Reason != DriveWaitingForTape {
+		return fmt.Errorf(
+			"executor: %s: %s",
+			availability.Reason,
+			availability.Message,
+		)
+	}
+	if !availability.CloseRequired {
+		return errors.New("executor: drive custody was not acquired")
 	}
 	defer func() {
 		if err := drive.Close(); err != nil {
@@ -196,6 +219,13 @@ func runAdmittedPlans(
 				options.FreeSpaceMargin,
 				options.FlushCadence,
 				backup,
+			)
+		}
+		if unmountErr := drive.Unmount(); unmountErr != nil {
+			slog.Warn(
+				"kura tape session unmount failed",
+				"plan_id", selected.plan.PlanID,
+				"error", unmountErr,
 			)
 		}
 		if err != nil {
@@ -299,14 +329,7 @@ func waitForCandidate(
 			)
 		case identity.State == LoadedIdentityIdentified:
 			if index := matchingPlan(plans, identity.Cartridge.TapeID); index >= 0 {
-				if _, _, capacityErr := drive.Capacity(); capacityErr == nil {
-					return index, identity, nil
-				} else if !errors.Is(capacityErr, ErrNotMounted) {
-					return -1, LoadedIdentity{}, fmt.Errorf(
-						"executor: inspect mounted cartridge capacity: %w",
-						capacityErr,
-					)
-				}
+				return index, identity, nil
 			}
 		case identity.State == LoadedIdentityUnidentified:
 			if index := matchingInitPlan(plans, identity.MediumSerial); index >= 0 {
@@ -350,7 +373,29 @@ func prepareFillCartridge(
 	}); err != nil {
 		return PreparedPlan{}, err
 	}
-	if err := verifyEncryption(drive, journal, plan.PlanID); err != nil {
+	if err := setAndVerifyEncryption(
+		drive,
+		options.EncryptionKey,
+		journal,
+		plan.PlanID,
+	); err != nil {
+		return PreparedPlan{}, err
+	}
+	if err := drive.Mount(); err != nil {
+		return PreparedPlan{}, fmt.Errorf(
+			"executor: mount tape %s: %w",
+			plan.Target.TapeID,
+			err,
+		)
+	}
+	identity, err := drive.LoadedIdentity()
+	if err != nil {
+		return PreparedPlan{}, fmt.Errorf(
+			"executor: re-read mounted tape identity: %w",
+			err,
+		)
+	}
+	if err := validateKeyFingerprint(identity, options.EncryptionKey); err != nil {
 		return PreparedPlan{}, err
 	}
 
@@ -419,7 +464,6 @@ func prepareInitCartridge(
 		return PreparedPlan{}, err
 	}
 	if err := formatAndStampInitMedia(
-		ctx,
 		drive,
 		identity,
 		admitted,
@@ -435,6 +479,13 @@ func prepareInitCartridge(
 		options.StateRoot,
 	)
 	if err != nil {
+		return PreparedPlan{}, err
+	}
+	if err := validateInitFillCapacity(
+		drive,
+		plan,
+		options.FreeSpaceMargin,
+	); err != nil {
 		return PreparedPlan{}, err
 	}
 	if err := appendSessionEvent(journal, backupplan.Event{
@@ -468,8 +519,17 @@ func validateInitPreFormat(
 	options SessionOptions,
 ) error {
 	plan := admitted.plan
-	if err := validateInitIdentity(identity, admitted, options.StateRoot); err != nil {
+	if err := setAndVerifyEncryption(
+		drive,
+		options.EncryptionKey,
+		journal,
+		plan.PlanID,
+	); err != nil {
 		return err
+	}
+	identity, err := drive.LoadedIdentity()
+	if err != nil {
+		return fmt.Errorf("executor: re-read init medium identity: %w", err)
 	}
 	if identity.MediumSerial != plan.Target.MediumSerial {
 		return fmt.Errorf(
@@ -479,7 +539,10 @@ func validateInitPreFormat(
 			plan.Target.MediumSerial,
 		)
 	}
-	if err := verifyEncryption(drive, journal, plan.PlanID); err != nil {
+	if err := validateInitIdentity(identity, admitted, options.StateRoot); err != nil {
+		return err
+	}
+	if err := validateKeyFingerprint(identity, options.EncryptionKey); err != nil {
 		return err
 	}
 	return preflightInitBackups(
@@ -490,7 +553,6 @@ func validateInitPreFormat(
 }
 
 func formatAndStampInitMedia(
-	ctx context.Context,
 	drive Drive,
 	identity LoadedIdentity,
 	admitted admittedPlan,
@@ -499,40 +561,64 @@ func formatAndStampInitMedia(
 ) error {
 	plan := admitted.plan
 	if identity.State == LoadedIdentityIdentified {
-		if err := waitForMountState(
-			ctx,
-			drive,
-			journal,
-			plan.Target.TapeID,
-			false,
-			options.PollInterval,
-			options.IdleTimeout,
-		); err != nil {
-			return err
+		if err := drive.Unmount(); err != nil {
+			return fmt.Errorf(
+				"executor: unmount tape %s before format: %w",
+				plan.Target.TapeID,
+				err,
+			)
 		}
 	}
 	if err := drive.Format(plan.Target.TapeID); err != nil {
 		return fmt.Errorf("executor: format tape %s: %w", plan.Target.TapeID, err)
 	}
-	if err := waitForMountState(
-		ctx,
-		drive,
-		journal,
-		plan.Target.TapeID,
-		true,
-		options.PollInterval,
-		options.IdleTimeout,
-	); err != nil {
-		return err
+	if err := drive.Mount(); err != nil {
+		return fmt.Errorf("executor: mount tape %s: %w", plan.Target.TapeID, err)
 	}
 	if err := verifyEncryption(drive, journal, plan.PlanID); err != nil {
-		return err
+		if !errors.Is(err, ErrEncryptionInactive) {
+			return err
+		}
+		if err := drive.SetEncryptionKey(options.EncryptionKey); err != nil {
+			return fmt.Errorf("%w: %v", ErrEncryptionKeySetupFailed, err)
+		}
+		if err := verifyEncryption(drive, journal, plan.PlanID); err != nil {
+			return err
+		}
 	}
 	if err := drive.StampIdentity(admitted.pin, plan.Target.TapeID); err != nil {
 		return fmt.Errorf(
 			"executor: stamp tape %s identity: %w",
 			plan.Target.TapeID,
 			err,
+		)
+	}
+	return nil
+}
+
+func validateInitFillCapacity(
+	drive Drive,
+	plan backupplan.Plan,
+	freeSpaceMargin int64,
+) error {
+	_, free, err := drive.Capacity()
+	if err != nil {
+		return fmt.Errorf("executor: revalidate initialized tape capacity: %w", err)
+	}
+	var needed int64
+	for _, action := range plan.Actions[2 : len(plan.Actions)-1] {
+		if action.Bytes > math.MaxInt64-needed {
+			return errors.New("executor: init fill set byte total overflows int64")
+		}
+		needed += action.Bytes
+	}
+	available := free - freeSpaceMargin
+	if available < 0 || needed > available {
+		return fmt.Errorf(
+			"executor: initialized tape has %d bytes free with %d-byte margin; fill set needs %d bytes",
+			free,
+			freeSpaceMargin,
+			needed,
 		)
 	}
 	return nil
@@ -805,49 +891,6 @@ func preflightInitBackups(
 	return nil
 }
 
-func waitForMountState(
-	ctx context.Context,
-	drive Drive,
-	journal *backupplan.Writer,
-	tapeID tape.ID,
-	wantMounted bool,
-	pollInterval time.Duration,
-	idleTimeout time.Duration,
-) error {
-	if err := appendSessionEvent(journal, backupplan.Event{
-		Type:       backupplan.EventWaitingForTape,
-		Candidates: []tape.ID{tapeID},
-	}); err != nil {
-		return err
-	}
-	deadline := time.Now().Add(idleTimeout)
-	for {
-		_, _, err := drive.Capacity()
-		switch {
-		case wantMounted && err == nil:
-			return nil
-		case !wantMounted && errors.Is(err, ErrNotMounted):
-			return nil
-		case err != nil && !errors.Is(err, ErrNotMounted):
-			return fmt.Errorf("executor: inspect tape mount state: %w", err)
-		}
-
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return errIdleTimeout
-		}
-		timer := time.NewTimer(min(pollInterval, remaining))
-		select {
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
-			return ctx.Err()
-		case <-timer.C:
-		}
-	}
-}
-
 func verifyEncryption(
 	drive Drive,
 	journal *backupplan.Writer,
@@ -864,6 +907,34 @@ func verifyEncryption(
 		Type:   backupplan.EventEncryptionVerified,
 		PlanID: planID,
 	})
+}
+
+func setAndVerifyEncryption(
+	drive Drive,
+	key encryptionkey.Key,
+	journal *backupplan.Writer,
+	planID string,
+) error {
+	if err := drive.SetEncryptionKey(key); err != nil {
+		return fmt.Errorf("%w: %v", ErrEncryptionKeySetupFailed, err)
+	}
+	return verifyEncryption(drive, journal, planID)
+}
+
+func validateKeyFingerprint(identity LoadedIdentity, key encryptionkey.Key) error {
+	if identity.State != LoadedIdentityIdentified {
+		return nil
+	}
+	current := key.Fingerprint()
+	written := identity.Volume.KeyFingerprint
+	if written == current {
+		return nil
+	}
+	return fmt.Errorf(
+		"executor: encryption_key_mismatch: written under key %s, current key is %s",
+		written,
+		current,
+	)
 }
 
 func validateFillIdentity(

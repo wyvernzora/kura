@@ -15,25 +15,27 @@ import (
 const (
 	DefaultPath = "/etc/kura/tape-backup.toml"
 
-	defaultAddr                  = ":8080"
-	defaultLogLevel              = "info"
-	defaultLTFSRoot              = "/mnt/ltfs"
-	defaultDriveDevice           = "/dev/nst0"
-	defaultTokenPath             = "/var/lib/kura/token"
-	defaultFreeSpaceMargin int64 = 1 << 30
-	defaultIdleTimeout           = 30 * time.Minute
-	defaultFlushCadence          = 1
+	defaultAddr                    = ":8080"
+	defaultLogLevel                = "info"
+	defaultLTFSRoot                = "/mnt/ltfs"
+	defaultDriveDevice             = "/dev/nst0"
+	defaultEncryptionKeyFile       = "/etc/kura/tape.key"
+	defaultTokenPath               = "/var/lib/kura/token"
+	defaultFreeSpaceMargin   int64 = 1 << 30
+	defaultIdleTimeout             = 30 * time.Minute
+	defaultFlushCadence            = 1
 )
 
 var validLogLevels = []string{"debug", "info", "warn", "error"}
 
 // Config is the validated runtime configuration shared by both entrypoints.
 type Config struct {
-	Server  Server
-	Library Library
-	State   State
-	Tape    Tape
-	Auth    Auth
+	Server     Server
+	Library    Library
+	State      State
+	Tape       Tape
+	Auth       Auth
+	Encryption Encryption
 }
 
 // Server configures the long-lived control plane.
@@ -47,6 +49,12 @@ type Server struct {
 type Auth struct {
 	Disabled  bool
 	TokenPath string
+}
+
+// Encryption configures the Secret-mounted tape key file. Key material never
+// appears in TOML.
+type Encryption struct {
+	KeyFile string
 }
 
 // Library configures read-only library access and its manager endpoint.
@@ -78,6 +86,9 @@ func Defaults() Config {
 		},
 		Auth: Auth{
 			TokenPath: defaultTokenPath,
+		},
+		Encryption: Encryption{
+			KeyFile: defaultEncryptionKeyFile,
 		},
 		Tape: Tape{
 			LTFSRoot:        defaultLTFSRoot,
@@ -127,6 +138,9 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.Auth.TokenPath) == "" {
 		return fmt.Errorf("auth.token_path must not be empty")
 	}
+	if err := requiredAbsolutePath("encryption.key_file", c.Encryption.KeyFile); err != nil {
+		return err
+	}
 	if err := requiredAbsolutePath("library.root", c.Library.Root); err != nil {
 		return err
 	}
@@ -165,11 +179,12 @@ func requiredAbsolutePath(name, value string) error {
 }
 
 type fileConfig struct {
-	Server  *fileServer  `toml:"server"`
-	Library *fileLibrary `toml:"library"`
-	State   *fileState   `toml:"state"`
-	Tape    *fileTape    `toml:"tape"`
-	Auth    *fileAuth    `toml:"auth"`
+	Server     *fileServer     `toml:"server"`
+	Library    *fileLibrary    `toml:"library"`
+	State      *fileState      `toml:"state"`
+	Tape       *fileTape       `toml:"tape"`
+	Auth       *fileAuth       `toml:"auth"`
+	Encryption *fileEncryption `toml:"encryption"`
 }
 
 type fileServer struct {
@@ -189,6 +204,10 @@ type fileState struct {
 type fileAuth struct {
 	Disabled  *bool   `toml:"disabled"`
 	TokenPath *string `toml:"token_path"`
+}
+
+type fileEncryption struct {
+	KeyFile *string `toml:"key_file"`
 }
 
 type fileTape struct {
@@ -215,6 +234,9 @@ func (r fileConfig) resolve() (Config, error) {
 	if r.Auth != nil {
 		setBool(&cfg.Auth.Disabled, r.Auth.Disabled)
 		setString(&cfg.Auth.TokenPath, r.Auth.TokenPath)
+	}
+	if r.Encryption != nil {
+		setString(&cfg.Encryption.KeyFile, r.Encryption.KeyFile)
 	}
 	if r.Tape != nil {
 		setString(&cfg.Tape.LTFSRoot, r.Tape.LTFSRoot)

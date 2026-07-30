@@ -79,3 +79,8 @@ func (c *Client) TapeDiscard(ctx context.Context, planID string) error {
 		nil,
 	)
 }
+
+// TapeEject calls POST /api/tape/eject.
+func (c *Client) TapeEject(ctx context.Context) error {
+	return c.Do(ctx, http.MethodPost, "/api/tape/eject", nil, nil, nil)
+}

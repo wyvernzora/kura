@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"syscall"
@@ -15,11 +16,12 @@ const defaultProcMountsPath = "/proc/mounts"
 type DriveAvailabilityReason string
 
 const (
-	DriveReady              DriveAvailabilityReason = "ready"
-	DriveOffline            DriveAvailabilityReason = "drive_offline"
-	DriveInUse              DriveAvailabilityReason = "drive_in_use"
-	DriveWaitingForTape     DriveAvailabilityReason = "waiting_for_tape"
-	DriveEncryptionInactive DriveAvailabilityReason = "encryption_inactive"
+	DriveReady                   DriveAvailabilityReason = "ready"
+	DriveOffline                 DriveAvailabilityReason = "drive_offline"
+	DriveInUse                   DriveAvailabilityReason = "drive_in_use"
+	DriveWaitingForTape          DriveAvailabilityReason = "waiting_for_tape"
+	DriveEncryptionInactive      DriveAvailabilityReason = "encryption_inactive"
+	DriveMountStaleUnrecoverable DriveAvailabilityReason = "mount_stale_unrecoverable"
 )
 
 // DriveAvailability is one classified drive observation. CloseRequired means
@@ -30,8 +32,9 @@ type DriveAvailability struct {
 	CloseRequired bool
 }
 
-// DriveAvailabilityOptions supplies the LTFS mount observation used only for
-// the EBUSY ready-state carve-out. ProcMountsPath defaults to /proc/mounts.
+// DriveAvailabilityOptions supplies the mount observation used to distinguish
+// a crashed Kura mount from foreign custody. ProcMountsPath defaults to
+// /proc/mounts.
 type DriveAvailabilityOptions struct {
 	LTFSRoot       string
 	ProcMountsPath string
@@ -57,11 +60,36 @@ func ClassifyDriveAvailability(
 				Message: "drive offline",
 			}, nil
 		case errors.Is(err, syscall.EBUSY):
-			if !ltfsMounted(options) {
+			ownMount, foreignMount := ltfsMounts(options)
+			if ownMount != "" {
+				if err := drive.Unmount(); err != nil {
+					return DriveAvailability{
+						Reason: DriveMountStaleUnrecoverable,
+						Message: fmt.Sprintf(
+							"stale Kura mount at %s could not be unmounted",
+							ownMount,
+						),
+					}, nil
+				}
+				slog.Info("cleaned stale kura tape mount", "mountpoint", ownMount)
+				if err := drive.Open(); err == nil {
+					closeRequired = true
+					break
+				} else if !errors.Is(err, syscall.EBUSY) {
+					return DriveAvailability{}, fmt.Errorf(
+						"executor: reopen drive after stale mount cleanup: %w",
+						err,
+					)
+				}
+			}
+			message := "in use by unidentified process"
+			if foreignMount != "" {
+				message = "in use by foreign mount at " + foreignMount
+			}
+			if !closeRequired {
 				return DriveAvailability{
-					Reason: DriveInUse,
-					Message: "in use by another process — run " +
-						"`fuser /dev/nst0` on the node.",
+					Reason:  DriveInUse,
+					Message: message,
 				}, nil
 			}
 		default:
@@ -87,21 +115,6 @@ func ClassifyDriveAvailability(
 		}, nil
 	}
 
-	active, err := drive.EncryptionActive()
-	if err != nil {
-		return DriveAvailability{}, closeAfterClassificationError(
-			drive,
-			closeRequired,
-			fmt.Errorf("executor: check drive encryption: %w", err),
-		)
-	}
-	if !active {
-		return DriveAvailability{
-			Reason:        DriveEncryptionInactive,
-			Message:       "drive encryption is inactive",
-			CloseRequired: closeRequired,
-		}, nil
-	}
 	return DriveAvailability{
 		Reason:        DriveReady,
 		Message:       "drive ready",
@@ -119,17 +132,14 @@ func closeAfterClassificationError(drive Drive, closeRequired bool, err error) e
 	return err
 }
 
-func ltfsMounted(options DriveAvailabilityOptions) bool {
-	if options.LTFSRoot == "" {
-		return false
-	}
+func ltfsMounts(options DriveAvailabilityOptions) (own, foreign string) {
 	path := options.ProcMountsPath
 	if path == "" {
 		path = defaultProcMountsPath
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return false
+		return "", ""
 	}
 	defer file.Close()
 
@@ -139,12 +149,19 @@ func ltfsMounted(options DriveAvailabilityOptions) bool {
 		if len(fields) < 3 {
 			continue
 		}
-		if decodeProcMountField(fields[1]) == options.LTFSRoot &&
-			strings.Contains(strings.ToLower(fields[2]), "ltfs") {
-			return true
+		if !strings.Contains(strings.ToLower(fields[2]), "ltfs") {
+			continue
+		}
+		mountpoint := decodeProcMountField(fields[1])
+		if options.LTFSRoot != "" && mountpoint == options.LTFSRoot {
+			own = mountpoint
+			continue
+		}
+		if foreign == "" {
+			foreign = mountpoint
 		}
 	}
-	return false
+	return own, foreign
 }
 
 func decodeProcMountField(value string) string {

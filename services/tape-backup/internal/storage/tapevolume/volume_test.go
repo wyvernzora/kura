@@ -36,12 +36,13 @@ func TestVolumeRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if len(wire) != 4 {
-		t.Fatalf("volume field count = %d, want 4: %s", len(wire), data)
+	if len(wire) != 5 {
+		t.Fatalf("volume field count = %d, want 5: %s", len(wire), data)
 	}
 	if wire["schemaVersion"] != float64(1) ||
 		wire["volumeID"] != "01J8ZQ7W5TWHA6R6J8X4QZ9Y7V" ||
 		wire["tapeID"] != "ABC123L6" ||
+		wire["keyFingerprint"] != "630dcd2966c43366" ||
 		wire["createdAt"] != "2026-07-21T12:00:00Z" {
 		t.Fatalf("volume wire = %#v, want documented fields", wire)
 	}
@@ -68,6 +69,18 @@ func TestVolumeValidation(t *testing.T) {
 		mutateWire func(map[string]any)
 		want       string
 	}{
+		{
+			name:       "key fingerprint required",
+			mutate:     func(v *tapevolume.Volume) { v.KeyFingerprint = "" },
+			mutateWire: func(w map[string]any) { w["keyFingerprint"] = "" },
+			want:       "tapevolume: keyFingerprint must be 16 lowercase hexadecimal characters",
+		},
+		{
+			name:       "key fingerprint lowercase hex",
+			mutate:     func(v *tapevolume.Volume) { v.KeyFingerprint = "630DCD2966C43366" },
+			mutateWire: func(w map[string]any) { w["keyFingerprint"] = "630DCD2966C43366" },
+			want:       "tapevolume: keyFingerprint must be 16 lowercase hexadecimal characters",
+		},
 		{
 			name:       "volume ID required",
 			mutate:     func(v *tapevolume.Volume) { v.VolumeID = "" },
@@ -193,18 +206,20 @@ func TestVolumeReadMissing(t *testing.T) {
 
 func validVolume() tapevolume.Volume {
 	return tapevolume.Volume{
-		VolumeID:  volume.ID("01J8ZQ7W5TWHA6R6J8X4QZ9Y7V"),
-		TapeID:    tape.ID("ABC123L6"),
-		CreatedAt: time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+		VolumeID:       volume.ID("01J8ZQ7W5TWHA6R6J8X4QZ9Y7V"),
+		TapeID:         tape.ID("ABC123L6"),
+		KeyFingerprint: "630dcd2966c43366",
+		CreatedAt:      time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 	}
 }
 
 func validVolumeWire() map[string]any {
 	return map[string]any{
-		"schemaVersion": 1,
-		"volumeID":      "01J8ZQ7W5TWHA6R6J8X4QZ9Y7V",
-		"tapeID":        "ABC123L6",
-		"createdAt":     "2026-07-21T12:00:00Z",
+		"schemaVersion":  1,
+		"volumeID":       "01J8ZQ7W5TWHA6R6J8X4QZ9Y7V",
+		"tapeID":         "ABC123L6",
+		"keyFingerprint": "630dcd2966c43366",
+		"createdAt":      "2026-07-21T12:00:00Z",
 	}
 }
 

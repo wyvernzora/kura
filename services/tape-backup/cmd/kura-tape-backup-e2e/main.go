@@ -36,6 +36,7 @@ type stubState struct {
 	initDrafted  bool
 	initApproved bool
 	initRan      bool
+	ejected      bool
 }
 
 func main() {
@@ -98,6 +99,7 @@ func (s *stubState) handler(token string) http.Handler {
 	mux.HandleFunc("POST /api/tape/run", s.run)
 	mux.HandleFunc("POST /api/tape/approve/{planID}", s.approve)
 	mux.HandleFunc("POST /api/tape/discard/{planID}", s.discard)
+	mux.HandleFunc("POST /api/tape/eject", s.eject)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/healthz" &&
 			r.Header.Get("Authorization") != "Bearer "+token {
@@ -283,6 +285,13 @@ func (s *stubState) discard(w http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
 	s.initDrafted = false
 	s.initApproved = false
+	s.mu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *stubState) eject(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	s.ejected = true
 	s.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }

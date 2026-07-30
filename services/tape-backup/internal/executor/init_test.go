@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wyvernzora/kura/services/tape-backup/internal/encryptionkey"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/executor"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/backupplan"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapecatalog"
@@ -40,9 +41,9 @@ func TestRunSessionInitHappyPathFormatsStampsInstallsAndFills(t *testing.T) {
 
 	if got := drive.callSequence(); !isSubsequence(
 		got,
-		[]string{"encryption", "format", "encryption", "stamp", "sync"},
+		[]string{"set_key", "encryption", "format", "mount", "encryption", "stamp", "sync", "unmount"},
 	) {
-		t.Fatalf("drive call sequence = %v, want encryption/format/encryption/stamp/sync", got)
+		t.Fatalf("drive call sequence = %v, want fully automatic init order", got)
 	}
 	assertCatalogSnapshot(
 		t,
@@ -109,31 +110,78 @@ func TestRunSessionInitPreflightRefusesOversizedFillBeforeFormat(t *testing.T) {
 	assertExactPlanFailure(t, session, want)
 }
 
-func TestRunSessionInitEncryptionInactiveAfterRemountRetiresBeforeStamp(t *testing.T) {
+func TestRunSessionInitKeySetFailureHaltsBeforeFormat(t *testing.T) {
 	fixture := newInitFixture(t, executor.LoadedIdentityUnidentified, false)
 	fixture.plan = initPlan(nil)
 	fixture.promote(t)
 	drive := newRitualDrive(fixture.drive)
-	drive.inactiveOnEncryptionCheck = 2
+	fixture.drive.SetFaults(executor.DriveFaults{
+		SetEncryptionKey: errors.New("injected key setup failure"),
+	})
+
+	if err := fixture.run(t, drive, fixture.backupHandler(t)); err != nil {
+		t.Fatalf("RunSession() error = %v", err)
+	}
+
+	if drive.countCall("format") != 0 {
+		t.Fatal("Format was called after SetEncryptionKey failed")
+	}
+	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
+	session := fixture.readSession(t)
+	assertExactPlanFailure(
+		t,
+		session,
+		"executor: encryption_key_setup_failed: injected key setup failure",
+	)
+}
+
+func TestRunSessionInitEncryptionInactiveAfterFormatResetsOnceAndProceeds(t *testing.T) {
+	fixture := newInitFixture(t, executor.LoadedIdentityUnidentified, false)
+	fixture.plan = initPlan(nil)
+	fixture.promote(t)
+	drive := newRitualDrive(fixture.drive)
+	fixture.drive.SetFaults(executor.DriveFaults{
+		EncryptionInactiveAfterFormat: true,
+	})
 
 	if err := fixture.run(t, drive, fixture.backupHandler(t)); err != nil {
 		t.Fatalf("RunSession error = %v", err)
 	}
 
-	if drive.countCall("format") != 1 {
-		t.Fatalf("Format calls = %d, want 1", drive.countCall("format"))
+	if drive.countCall("set_key") != 2 {
+		t.Fatalf("SetEncryptionKey calls = %d, want 2", drive.countCall("set_key"))
+	}
+	if drive.countCall("stamp") != 1 {
+		t.Fatalf("StampIdentity calls = %d, want 1", drive.countCall("stamp"))
+	}
+	if _, err := backupplan.ReadDone(fixture.stateRoot, firstPlanID); err != nil {
+		t.Fatalf("ReadDone() error = %v", err)
+	}
+}
+
+func TestRunSessionInitEncryptionInactiveAfterOneResetHaltsBeforeStamp(t *testing.T) {
+	fixture := newInitFixture(t, executor.LoadedIdentityUnidentified, false)
+	fixture.plan = initPlan(nil)
+	fixture.promote(t)
+	drive := newRitualDrive(fixture.drive)
+	drive.keepInactiveAfterFormatReset = true
+	fixture.drive.SetFaults(executor.DriveFaults{
+		EncryptionInactiveAfterFormat: true,
+	})
+
+	if err := fixture.run(t, drive, fixture.backupHandler(t)); err != nil {
+		t.Fatalf("RunSession error = %v", err)
+	}
+
+	if drive.countCall("set_key") != 2 {
+		t.Fatalf("SetEncryptionKey calls = %d, want 2", drive.countCall("set_key"))
 	}
 	if drive.countCall("stamp") != 0 {
-		t.Fatal("StampIdentity was called after the second encryption gate failed")
+		t.Fatal("StampIdentity was called while encryption remained inactive")
 	}
 	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
-	identity, err := fixture.drive.LoadedIdentity()
-	if err != nil {
-		t.Fatalf("LoadedIdentity error = %v", err)
-	}
-	if identity.State != executor.LoadedIdentityUnidentified {
-		t.Fatalf("identity state = %q, want unidentified", identity.State)
-	}
+	session := fixture.readSession(t)
+	assertExactPlanFailure(t, session, "executor: drive encryption is inactive")
 }
 
 func TestRunSessionInitSyncFailureLeavesStampedUncatalogedWitness(t *testing.T) {
@@ -165,12 +213,60 @@ func TestRunSessionInitSyncFailureLeavesStampedUncatalogedWitness(t *testing.T) 
 	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
 }
 
+func TestRunSessionInitMountFailureAfterFormatHaltsRetired(t *testing.T) {
+	fixture := newInitFixture(t, executor.LoadedIdentityUnidentified, false)
+	fixture.plan = initPlan(nil)
+	fixture.promote(t)
+	drive := newRitualDrive(fixture.drive)
+	fixture.drive.SetFaults(executor.DriveFaults{
+		Mount: errors.New("injected mount failure"),
+	})
+
+	if err := fixture.run(t, drive, fixture.backupHandler(t)); err != nil {
+		t.Fatalf("RunSession() error = %v", err)
+	}
+
+	if drive.countCall("format") != 1 {
+		t.Fatalf("Format calls = %d, want 1", drive.countCall("format"))
+	}
+	if drive.countCall("stamp") != 0 {
+		t.Fatal("StampIdentity was called after Mount failed")
+	}
+	assertPlanDiscarded(t, fixture.stateRoot, firstPlanID)
+	session := fixture.readSession(t)
+	assertExactPlanFailure(
+		t,
+		session,
+		"executor: mount tape ABC123L6: injected mount failure",
+	)
+}
+
+func TestRunSessionEndUnmountFailureLeavesCompletedPlanAndMountedTape(t *testing.T) {
+	fixture := newInitFixture(t, executor.LoadedIdentityUnidentified, false)
+	fixture.plan = initPlan(nil)
+	fixture.promote(t)
+	drive := newRitualDrive(fixture.drive)
+	fixture.drive.SetFaults(executor.DriveFaults{
+		Unmount: errors.New("injected unmount failure"),
+	})
+
+	if err := fixture.run(t, drive, fixture.backupHandler(t)); err != nil {
+		t.Fatalf("RunSession() error = %v", err)
+	}
+
+	if _, err := backupplan.ReadDone(fixture.stateRoot, firstPlanID); err != nil {
+		t.Fatalf("ReadDone() error = %v", err)
+	}
+	if !fixture.drive.IsMounted("ABC123L6") {
+		t.Fatal("tape is unmounted despite injected Unmount failure")
+	}
+}
+
 func TestRunSessionInitHealthyEmptyWitnessProceeds(t *testing.T) {
 	fixture := newInitFixture(t, executor.LoadedIdentityIdentified, true)
 	fixture.plan = initPlanForVolume(nil, secondVolume)
 	fixture.promote(t)
 	drive := newRitualDrive(fixture.drive)
-	drive.unmountOnCapacityCall = 2
 
 	if err := fixture.run(t, drive, fixture.backupHandler(t)); err != nil {
 		t.Fatalf("RunSession error = %v", err)
@@ -407,14 +503,11 @@ func initPlanForVolume(
 
 type ritualDrive struct {
 	*executor.DirectoryDrive
-	mu                        sync.Mutex
-	calls                     []string
-	capacityCalls             int
-	unmountOnCapacityCall     int
-	inactiveOnEncryptionCheck int
-	encryptionChecks          int
-	fixedCapacity             bool
-	mediumSerial              string
+	mu                           sync.Mutex
+	calls                        []string
+	fixedCapacity                bool
+	mediumSerial                 string
+	keepInactiveAfterFormatReset bool
 }
 
 func newRitualDrive(drive *executor.DirectoryDrive) *ritualDrive {
@@ -431,29 +524,13 @@ func (d *ritualDrive) LoadedIdentity() (executor.LoadedIdentity, error) {
 
 func (d *ritualDrive) EncryptionActive() (bool, error) {
 	d.record("encryption")
-	d.mu.Lock()
-	d.encryptionChecks++
-	check := d.encryptionChecks
-	inactiveOn := d.inactiveOnEncryptionCheck
-	d.mu.Unlock()
-	if inactiveOn != 0 && check == inactiveOn {
-		return false, nil
-	}
 	return d.DirectoryDrive.EncryptionActive()
 }
 
 func (d *ritualDrive) Capacity() (total, free int64, err error) {
 	d.mu.Lock()
-	d.capacityCalls++
-	call := d.capacityCalls
-	unmountOn := d.unmountOnCapacityCall
 	fixed := d.fixedCapacity
 	d.mu.Unlock()
-	if call == unmountOn {
-		if err := d.DirectoryDrive.SetMounted("ABC123L6", false); err != nil {
-			return 0, 0, err
-		}
-	}
 	if fixed {
 		return 1 << 20, 1 << 20, nil
 	}
@@ -462,10 +539,28 @@ func (d *ritualDrive) Capacity() (total, free int64, err error) {
 
 func (d *ritualDrive) Format(tapeID tape.ID) error {
 	d.record("format")
-	if err := d.DirectoryDrive.Format(tapeID); err != nil {
+	return d.DirectoryDrive.Format(tapeID)
+}
+
+func (d *ritualDrive) SetEncryptionKey(key encryptionkey.Key) error {
+	d.record("set_key")
+	if err := d.DirectoryDrive.SetEncryptionKey(key); err != nil {
 		return err
 	}
-	return d.DirectoryDrive.SetMounted(tapeID, true)
+	if d.keepInactiveAfterFormatReset && d.countCall("format") > 0 {
+		return d.DirectoryDrive.SetEncryptionActive("ABC123L6", false)
+	}
+	return nil
+}
+
+func (d *ritualDrive) Mount() error {
+	d.record("mount")
+	return d.DirectoryDrive.Mount()
+}
+
+func (d *ritualDrive) Unmount() error {
+	d.record("unmount")
+	return d.DirectoryDrive.Unmount()
 }
 
 func (d *ritualDrive) StampIdentity(volumeID volume.ID, tapeID tape.ID) error {

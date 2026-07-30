@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/wyvernzora/kura/services/tape-backup/internal/encryptionkey"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/executor"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/planner"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/snapshotname"
@@ -128,6 +129,8 @@ type Deps struct {
 	FlushCadence    int
 	PollInterval    time.Duration
 	IdleTimeout     time.Duration
+	EncryptionKey   encryptionkey.Key
+	KeyLoadError    error
 	Now             func() time.Time
 	NewID           func() string
 }
@@ -138,6 +141,33 @@ type Service struct {
 	deps          Deps
 	live          map[string]LiveSession
 	beforePromote func()
+}
+
+// Eject unmounts a cartridge when needed and unloads it. The service mutex
+// closes the race with session registration.
+func (s *Service) Eject() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.live) > 0 {
+		return &Refusal{
+			Code:    "drive_busy_session",
+			Message: "drive is busy with a tape session",
+		}
+	}
+	if err := s.deps.Drive.Unmount(); err != nil &&
+		!errors.Is(err, executor.ErrNoCartridge) {
+		return fmt.Errorf("tape service: unmount before eject: %w", err)
+	}
+	if err := s.deps.Drive.Eject(); err != nil {
+		if errors.Is(err, executor.ErrDriveBusySession) {
+			return &Refusal{
+				Code:    "drive_busy_session",
+				Message: "drive is busy with a tape session",
+			}
+		}
+		return fmt.Errorf("tape service: eject cartridge: %w", err)
+	}
+	return nil
 }
 
 // New creates a service without starting work.
@@ -352,6 +382,8 @@ func (s *Service) Run(
 			LibraryRoot:     s.deps.LibraryRoot,
 			FreeSpaceMargin: s.deps.FreeSpaceMargin,
 			FlushCadence:    s.deps.FlushCadence,
+			LTFSRoot:        s.deps.LTFSRoot,
+			EncryptionKey:   s.deps.EncryptionKey,
 		},
 	)
 	if runErr != nil {
@@ -429,6 +461,12 @@ func (s *Service) inspectLoaded(requested tape.ID) (
 	result inspection,
 	resultErr error,
 ) {
+	if s.deps.KeyLoadError != nil {
+		return inspection{}, &Refusal{
+			Code:    "encryption_key_setup_failed",
+			Message: "configured encryption key is unavailable",
+		}
+	}
 	availability, err := executor.ClassifyDriveAvailability(
 		s.deps.Drive,
 		executor.DriveAvailabilityOptions{LTFSRoot: s.deps.LTFSRoot},
@@ -468,14 +506,12 @@ func (s *Service) inspectLoaded(requested tape.ID) (
 		}
 		identity.Cartridge.TapeID = requested
 	}
-	total, free, err := s.deps.Drive.Capacity()
-	if errors.Is(err, executor.ErrNotMounted) &&
-		identity.State == executor.LoadedIdentityUnidentified {
-		total, err = planner.NominalCapacity(identity.Cartridge.TapeID)
-		free = total
+	if err := s.programEncryption(); err != nil {
+		return inspection{}, err
 	}
+	identity, total, free, err := s.inspectCapacity(identity)
 	if err != nil {
-		return inspection{}, fmt.Errorf("tape service: inspect loaded capacity: %w", err)
+		return inspection{}, err
 	}
 	library, catalog, err := s.snapshots()
 	if err != nil {
@@ -489,6 +525,69 @@ func (s *Service) inspectLoaded(requested tape.ID) (
 		identity: identity, catalog: catalog, library: library,
 		marked: marked, namespaceAbsent: absent, total: total, free: free,
 	}, nil
+}
+
+func (s *Service) programEncryption() error {
+	if err := s.deps.Drive.SetEncryptionKey(s.deps.EncryptionKey); err != nil {
+		return &Refusal{
+			Code:    "encryption_key_setup_failed",
+			Message: "drive rejected the configured encryption key",
+		}
+	}
+	active, err := s.deps.Drive.EncryptionActive()
+	if err != nil {
+		return fmt.Errorf("tape service: check drive encryption: %w", err)
+	}
+	if !active {
+		return &Refusal{
+			Code:    "encryption_inactive",
+			Message: "drive encryption is inactive",
+		}
+	}
+	return nil
+}
+
+func (s *Service) inspectCapacity(
+	identity executor.LoadedIdentity,
+) (result executor.LoadedIdentity, total, free int64, resultErr error) {
+	if identity.State == executor.LoadedIdentityUnidentified {
+		total, err := planner.NominalCapacity(identity.Cartridge.TapeID)
+		return identity, total, total, err
+	}
+	if err := s.deps.Drive.Mount(); err != nil {
+		return executor.LoadedIdentity{}, 0, 0,
+			fmt.Errorf("tape service: mount loaded cartridge: %w", err)
+	}
+	defer func() {
+		if err := s.deps.Drive.Unmount(); err != nil {
+			resultErr = errors.Join(
+				resultErr,
+				fmt.Errorf("tape service: unmount inspection: %w", err),
+			)
+		}
+	}()
+	identity, err := s.deps.Drive.LoadedIdentity()
+	if err != nil {
+		return executor.LoadedIdentity{}, 0, 0,
+			fmt.Errorf("tape service: re-read mounted identity: %w", err)
+	}
+	current := s.deps.EncryptionKey.Fingerprint()
+	if identity.Volume.KeyFingerprint != current {
+		return executor.LoadedIdentity{}, 0, 0, &Refusal{
+			Code: "encryption_key_mismatch",
+			Message: fmt.Sprintf(
+				"written under key %s, current key is %s",
+				identity.Volume.KeyFingerprint,
+				current,
+			),
+		}
+	}
+	total, free, err = s.deps.Drive.Capacity()
+	if err != nil {
+		return executor.LoadedIdentity{}, 0, 0,
+			fmt.Errorf("tape service: inspect loaded capacity: %w", err)
+	}
+	return identity, total, free, nil
 }
 
 func (s *Service) targetPlanLocked(request PlanRequest, persistInit bool) (PlanResult, error) {
@@ -818,6 +917,12 @@ func (s *Service) discardTargetedSuperseded(tapeID tape.ID) error {
 func (s *Service) driveStatus(inSession bool) (DriveStatus, error) {
 	if inSession {
 		return DriveStatus{State: "in_session"}, nil
+	}
+	if s.deps.KeyLoadError != nil {
+		return DriveStatus{
+			State:   "encryption_key_setup_failed",
+			Message: "configured encryption key is unavailable",
+		}, nil
 	}
 	availability, err := executor.ClassifyDriveAvailability(
 		s.deps.Drive,

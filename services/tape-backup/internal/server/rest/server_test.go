@@ -25,6 +25,7 @@ type fakeTapeService struct {
 	runFunc     func(context.Context, service.PlanRequest) (service.RunResult, error)
 	approveFunc func(string) error
 	discardFunc func(string) error
+	ejectFunc   func() error
 }
 
 func (f *fakeTapeService) Status() (service.StatusResult, error) {
@@ -72,7 +73,14 @@ func (f *fakeTapeService) Discard(planID string) error {
 	return f.discardFunc(planID)
 }
 
-func TestHandlersMapSixVerbs(t *testing.T) {
+func (f *fakeTapeService) Eject() error {
+	if f.ejectFunc == nil {
+		return nil
+	}
+	return f.ejectFunc()
+}
+
+func TestHandlersMapTapeVerbs(t *testing.T) {
 	t.Run("status", func(t *testing.T) {
 		want := service.StatusResult{
 			LiveSessions: []service.LiveSession{},
@@ -277,6 +285,23 @@ func TestHandlersMapSixVerbs(t *testing.T) {
 			t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
 		}
 	})
+
+	t.Run("eject", func(t *testing.T) {
+		called := false
+		fake := &fakeTapeService{
+			ejectFunc: func() error {
+				called = true
+				return nil
+			},
+		}
+		response := serveRequest(t, fake, http.MethodPost, "/api/tape/eject", nil)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
+		}
+		if !called {
+			t.Fatal("Eject() was not called")
+		}
+	})
 }
 
 func TestRecoveryAndRestoreSurfacesAreStructurallyAbsent(t *testing.T) {
@@ -299,7 +324,7 @@ func TestRecoveryAndRestoreSurfacesAreStructurallyAbsent(t *testing.T) {
 	}
 }
 
-func TestAllSixVerbsRejectMissingBearerToken(t *testing.T) {
+func TestAllTapeVerbsRejectMissingBearerToken(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		method string
@@ -312,6 +337,7 @@ func TestAllSixVerbsRejectMissingBearerToken(t *testing.T) {
 		{name: "run", method: http.MethodPost, path: "/api/tape/run", body: []byte(`{}`)},
 		{name: "approve", method: http.MethodPost, path: "/api/tape/approve/plan-1"},
 		{name: "discard", method: http.MethodPost, path: "/api/tape/discard/plan-1"},
+		{name: "eject", method: http.MethodPost, path: "/api/tape/eject"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server, err := NewServer(Deps{
@@ -362,6 +388,27 @@ func TestRefusalCodesPassThroughExactly(t *testing.T) {
 				t.Fatalf("body = %q, want %q", response.Body.String(), want)
 			}
 		})
+	}
+}
+
+func TestEjectBusySessionUsesTypedErrorEnvelope(t *testing.T) {
+	fake := &fakeTapeService{
+		ejectFunc: func() error {
+			return &service.Refusal{
+				Code:    "drive_busy_session",
+				Message: "drive is busy with a tape session",
+			}
+		},
+	}
+
+	response := serveRequest(t, fake, http.MethodPost, "/api/tape/eject", nil)
+
+	if response.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusConflict)
+	}
+	const want = "{\"kind\":\"drive_busy_session\",\"category\":\"invalid_params\",\"message\":\"drive is busy with a tape session\"}\n"
+	if response.Body.String() != want {
+		t.Fatalf("body = %q, want %q", response.Body.String(), want)
 	}
 }
 
@@ -459,6 +506,7 @@ func TestStatusHandlerIsReadOnly(t *testing.T) {
 		},
 		approveFunc: func(string) error { return unexpected },
 		discardFunc: func(string) error { return unexpected },
+		ejectFunc:   func() error { return unexpected },
 	}
 
 	response := serveRequest(t, fake, http.MethodGet, "/api/tape/status", nil)

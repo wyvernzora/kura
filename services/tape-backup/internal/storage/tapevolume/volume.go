@@ -21,16 +21,18 @@ type Volume struct {
 	// VolumeID identifies both the archived content and its initialization:
 	// clones keep it, while reformatting mints a new one. A separate format
 	// counter would carry no additional information.
-	VolumeID  volume.ID
-	TapeID    tape.ID
-	CreatedAt time.Time
+	VolumeID       volume.ID
+	TapeID         tape.ID
+	KeyFingerprint string
+	CreatedAt      time.Time
 }
 
 type volumeWire struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	VolumeID      string `json:"volumeID"`
-	TapeID        string `json:"tapeID"`
-	CreatedAt     string `json:"createdAt"`
+	SchemaVersion  int    `json:"schemaVersion"`
+	VolumeID       string `json:"volumeID"`
+	TapeID         string `json:"tapeID"`
+	KeyFingerprint string `json:"keyFingerprint"`
+	CreatedAt      string `json:"createdAt"`
 }
 
 // Write validates and atomically writes the volume header.
@@ -86,6 +88,11 @@ func validateVolume(volume Volume) error {
 	if _, err := tape.ParseID(string(volume.TapeID)); err != nil {
 		return fmt.Errorf("tapevolume: %w", err)
 	}
+	if len(volume.KeyFingerprint) != 16 || !lowerHex(volume.KeyFingerprint) {
+		return errors.New(
+			"tapevolume: keyFingerprint must be 16 lowercase hexadecimal characters",
+		)
+	}
 	if volume.CreatedAt.IsZero() {
 		return errors.New("tapevolume: createdAt is required")
 	}
@@ -97,10 +104,11 @@ func validateVolume(volume Volume) error {
 
 func toWire(volume Volume) volumeWire {
 	return volumeWire{
-		SchemaVersion: schemaVersion,
-		VolumeID:      string(volume.VolumeID),
-		TapeID:        string(volume.TapeID),
-		CreatedAt:     volume.CreatedAt.UTC().Format(time.RFC3339),
+		SchemaVersion:  schemaVersion,
+		VolumeID:       string(volume.VolumeID),
+		TapeID:         string(volume.TapeID),
+		KeyFingerprint: volume.KeyFingerprint,
+		CreatedAt:      volume.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -110,10 +118,23 @@ func fromWire(wire volumeWire) (Volume, error) {
 		return Volume{}, fmt.Errorf("tapevolume: parse createdAt: %w", err)
 	}
 	return Volume{
-		VolumeID:  volume.ID(wire.VolumeID),
-		TapeID:    tape.ID(wire.TapeID),
-		CreatedAt: createdAt,
+		VolumeID:       volume.ID(wire.VolumeID),
+		TapeID:         tape.ID(wire.TapeID),
+		KeyFingerprint: wire.KeyFingerprint,
+		CreatedAt:      createdAt,
 	}, nil
+}
+
+func lowerHex(value string) bool {
+	for _, character := range value {
+		if character >= '0' && character <= '9' {
+			continue
+		}
+		if character < 'a' || character > 'f' {
+			return false
+		}
+	}
+	return true
 }
 
 func volumeID(id volume.ID) (volume.ID, error) {

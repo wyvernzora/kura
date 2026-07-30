@@ -1787,9 +1787,10 @@ func volumeHeaderBytes(t *testing.T, id volume.ID) []byte {
 	mustSucceed(
 		t,
 		tapevolume.Write(root, tapevolume.Volume{
-			VolumeID:  id,
-			TapeID:    "ABC123L6",
-			CreatedAt: time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
+			VolumeID:       id,
+			TapeID:         "ABC123L6",
+			KeyFingerprint: "66687aadf862bd77",
+			CreatedAt:      time.Date(2026, 7, 21, 12, 0, 0, 0, time.UTC),
 		}),
 	)
 	data, err := os.ReadFile(tapevolume.VolumeFile(root))

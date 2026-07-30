@@ -60,6 +60,69 @@ func TestRunServeLoadsConfigAndStopsAtHardwareBoundary(t *testing.T) {
 	}
 }
 
+func TestRunServeValidatesKeyAtStartupWithoutLoggingContents(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		contents   string
+		wantLogged string
+	}{
+		{
+			name:       "missing",
+			wantLogged: "encryption key: configured key file does not exist",
+		},
+		{
+			name:       "malformed",
+			contents:   "THIS-MUST-NEVER-APPEAR-IN-THE-LOG",
+			wantLogged: "encryption key: configured key file must contain exactly 64 lowercase hexadecimal characters with one optional trailing newline",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			keyPath := filepath.Join(t.TempDir(), "tape.key")
+			if test.contents != "" {
+				if err := os.WriteFile(keyPath, []byte(test.contents), 0o600); err != nil {
+					t.Fatalf("WriteFile() error = %v", err)
+				}
+			}
+			configPath := writeConfig(t)
+			file, err := os.OpenFile(configPath, os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatalf("OpenFile() error = %v", err)
+			}
+			if _, err := file.WriteString(
+				"\n[encryption]\nkey_file = \"" + keyPath + "\"\n",
+			); err != nil {
+				_ = file.Close()
+				t.Fatalf("WriteString() error = %v", err)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatalf("Close() error = %v", err)
+			}
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			err = run(
+				context.Background(),
+				[]string{"serve", "-config", configPath},
+				func(string) string { return "test-token" },
+				&stdout,
+				&stderr,
+			)
+			if !errors.Is(err, executor.ErrHardwareDriveNotImplemented) {
+				t.Fatalf(
+					"run() error = %v, want ErrHardwareDriveNotImplemented",
+					err,
+				)
+			}
+			if !strings.Contains(stderr.String(), test.wantLogged) {
+				t.Fatalf("stderr = %q, want %q", stderr.String(), test.wantLogged)
+			}
+			if test.contents != "" && strings.Contains(stderr.String(), test.contents) {
+				t.Fatalf("stderr exposed key file contents: %q", stderr.String())
+			}
+		})
+	}
+}
+
 func TestRunAcceptsFlagsBeforeSubcommand(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

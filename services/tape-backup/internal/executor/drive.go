@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/wyvernzora/kura/services/tape-backup/internal/encryptionkey"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/storage/tapevolume"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/tape"
 	"github.com/wyvernzora/kura/services/tape-backup/internal/volume"
@@ -25,6 +26,12 @@ var (
 	// ErrStillMounted reports that an operation requiring the raw device found
 	// the loaded cartridge still mounted.
 	ErrStillMounted = errors.New("executor: loaded cartridge is still mounted")
+	// ErrEncryptionKeyUnset reports an identity stamp attempted without the
+	// session key being programmed.
+	ErrEncryptionKeyUnset = errors.New("executor: encryption key is not set")
+	// ErrDriveBusySession reports an eject attempted while session custody is
+	// held.
+	ErrDriveBusySession = errors.New("executor: drive is busy with a session")
 )
 
 // Cartridge describes the cartridge selected in the drive and its fake mount.
@@ -60,7 +67,11 @@ type Drive interface {
 	Open() error
 	Close() error
 	LoadedIdentity() (LoadedIdentity, error)
+	SetEncryptionKey(key encryptionkey.Key) error
 	EncryptionActive() (bool, error)
+	Mount() error
+	Unmount() error
+	Eject() error
 	Capacity() (total, free int64, err error)
 	Sync() error
 	Format(tapeID tape.ID) error
@@ -75,19 +86,26 @@ type DirectoryCartridge struct {
 	IdentityState    LoadedIdentityState
 	MediumSerial     string
 	EncryptionActive bool
+	KeySet           bool
 	Capacity         int64
 }
 
 // DriveFaults injects failures at each Drive method boundary.
 type DriveFaults struct {
-	Open             error
-	Close            error
-	LoadedIdentity   error
-	EncryptionActive error
-	Capacity         error
-	Sync             error
-	Format           error
-	StampIdentity    error
+	Open                          error
+	Close                         error
+	LoadedIdentity                error
+	SetEncryptionKey              error
+	EncryptionActive              error
+	EncryptionInactiveAfterFormat bool
+	Mount                         error
+	Unmount                       error
+	BusyUnmount                   bool
+	Eject                         error
+	Capacity                      error
+	Sync                          error
+	Format                        error
+	StampIdentity                 error
 }
 
 // DirectoryDrive is a directory-backed fake Drive with a mutable loaded
@@ -107,6 +125,9 @@ type directoryCartridge struct {
 	identityState    LoadedIdentityState
 	mediumSerial     string
 	encryptionActive bool
+	keySet           bool
+	keyFingerprint   string
+	ejected          bool
 	capacity         int64
 	consumed         int64
 	synced           bool
@@ -188,10 +209,47 @@ func (d *DirectoryDrive) add(cartridge DirectoryCartridge) error {
 		identityState:    cartridge.IdentityState,
 		mediumSerial:     cartridge.MediumSerial,
 		encryptionActive: cartridge.EncryptionActive,
+		keySet:           cartridge.KeySet,
 		capacity:         cartridge.Capacity,
 		consumed:         consumed,
 	}
 	return nil
+}
+
+// KeySet reports whether the fake has a programmed key for one cartridge.
+func (d *DirectoryDrive) KeySet(tapeID tape.ID) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cartridge, exists := d.cartridges[tapeID]
+	return exists && cartridge.keySet
+}
+
+// SetEncryptionActive changes the fake AME observation for one cartridge.
+func (d *DirectoryDrive) SetEncryptionActive(tapeID tape.ID, active bool) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cartridge, exists := d.cartridges[tapeID]
+	if !exists {
+		return fmt.Errorf("executor: directory cartridge %s is not configured", tapeID)
+	}
+	cartridge.encryptionActive = active
+	return nil
+}
+
+// IsMounted reports the fake mount state for one cartridge.
+func (d *DirectoryDrive) IsMounted(tapeID tape.ID) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cartridge, exists := d.cartridges[tapeID]
+	return exists && cartridge.mounted
+}
+
+// IsEjected reports whether the fake cartridge was unloaded through Eject.
+func (d *DirectoryDrive) IsEjected(tapeID tape.ID) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	cartridge, exists := d.cartridges[tapeID]
+	return exists && cartridge.ejected
 }
 
 // SelectLoaded changes the fake drive's loaded cartridge.
@@ -202,6 +260,7 @@ func (d *DirectoryDrive) SelectLoaded(tapeID tape.ID) error {
 		return fmt.Errorf("executor: directory cartridge %s is not configured", tapeID)
 	}
 	d.loaded = tapeID
+	d.cartridges[tapeID].ejected = false
 	return nil
 }
 
@@ -325,6 +384,23 @@ func (d *DirectoryDrive) LoadedIdentity() (LoadedIdentity, error) {
 	return identity, nil
 }
 
+// SetEncryptionKey programs the fake AME key for the selected cartridge.
+func (d *DirectoryDrive) SetEncryptionKey(key encryptionkey.Key) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.faults.SetEncryptionKey != nil {
+		return d.faults.SetEncryptionKey
+	}
+	cartridge, err := d.loadedCartridge()
+	if err != nil {
+		return err
+	}
+	cartridge.keySet = true
+	cartridge.keyFingerprint = key.Fingerprint()
+	cartridge.encryptionActive = true
+	return nil
+}
+
 // EncryptionActive reports the fake drive-device encryption state.
 func (d *DirectoryDrive) EncryptionActive() (bool, error) {
 	d.mu.Lock()
@@ -337,6 +413,62 @@ func (d *DirectoryDrive) EncryptionActive() (bool, error) {
 		return false, err
 	}
 	return cartridge.encryptionActive, nil
+}
+
+// Mount models the service-owned LTFS mount and its automatic no-op recovery
+// hook.
+func (d *DirectoryDrive) Mount() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.faults.Mount != nil {
+		return d.faults.Mount
+	}
+	cartridge, err := d.loadedCartridge()
+	if err != nil {
+		return err
+	}
+	cartridge.mounted = true
+	return nil
+}
+
+// Unmount tears down the fake LTFS mount. It is idempotent.
+func (d *DirectoryDrive) Unmount() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.faults.Unmount != nil {
+		return d.faults.Unmount
+	}
+	if d.faults.BusyUnmount {
+		return syscall.EBUSY
+	}
+	cartridge, err := d.loadedCartridge()
+	if err != nil {
+		return err
+	}
+	cartridge.mounted = false
+	return nil
+}
+
+// Eject unloads the selected fake cartridge after it has been unmounted.
+func (d *DirectoryDrive) Eject() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.open {
+		return ErrDriveBusySession
+	}
+	if d.faults.Eject != nil {
+		return d.faults.Eject
+	}
+	cartridge, err := d.loadedCartridge()
+	if err != nil {
+		return err
+	}
+	if cartridge.mounted {
+		return ErrStillMounted
+	}
+	cartridge.ejected = true
+	d.loaded = ""
+	return nil
 }
 
 // Capacity reports total and monotonic free capacity for the mounted fake.
@@ -389,6 +521,9 @@ func (d *DirectoryDrive) Format(tapeID tape.ID) error {
 	}
 	cartridge.identityState = LoadedIdentityUnidentified
 	cartridge.synced = false
+	if d.faults.EncryptionInactiveAfterFormat {
+		cartridge.encryptionActive = false
+	}
 	if err := clearDirectory(cartridge.root); err != nil {
 		return fmt.Errorf("executor: format directory cartridge %s: %w", tapeID, err)
 	}
@@ -409,10 +544,14 @@ func (d *DirectoryDrive) StampIdentity(volumeID volume.ID, tapeID tape.ID) error
 	if !cartridge.mounted {
 		return ErrNotMounted
 	}
+	if !cartridge.keySet {
+		return ErrEncryptionKeyUnset
+	}
 	if err := tapevolume.Write(cartridge.root, tapevolume.Volume{
-		VolumeID:  volumeID,
-		TapeID:    tapeID,
-		CreatedAt: time.Now().UTC(),
+		VolumeID:       volumeID,
+		TapeID:         tapeID,
+		KeyFingerprint: cartridge.keyFingerprint,
+		CreatedAt:      time.Now().UTC(),
 	}); err != nil {
 		return fmt.Errorf("executor: stamp directory cartridge identity: %w", err)
 	}
