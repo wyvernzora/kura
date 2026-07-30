@@ -8,7 +8,34 @@
 
 Notable release changes for Kura.
 
-## Unreleased
+## v0.7.1 - 2026-07-29
+
+### Highlights
+
+- Added Prometheus metrics and structured diagnostic logging across the
+  library manager, release indexer, and gateway, plus a suite-overview Grafana
+  dashboard.
+- Reworked scheduled source crawls to walk a configurable settle window,
+  ingest each listing page as it lands, and retain that progress when a later
+  page fails.
+- Added resumable operator backfills through
+  `kura crawl <source> <lookback>` and
+  `POST /api/v1/sources/{source}/crawl`, with cursor checkpoints, shared rate
+  limiting, adaptive cooldowns, and transient retries.
+
+### Upgrade notes
+
+- Add `settle_window` to every enabled release-indexer source. Review
+  `request_timeout`, `timeout`, `max_rps`, and `cache_ttl` against the updated
+  source configuration documented in
+  `services/release-indexer/docs/operations.md`.
+- Update Prometheus rules and dashboards from the retired `takuhai_*` metric
+  namespace to `kura_indexer_*`. The example release-indexer dashboard has a
+  new UID and imports as a new dashboard.
+- Permit and scrape the dedicated metrics listeners where needed: library
+  manager `:9090`, gateway Caddy `:9090`, and gateway MCP bridge `:9091`.
+
+## v0.7.0 - 2026-07-28
 
 Unified API: the suite now presents one hostname, one `/api/v1` REST surface,
 and one `/mcp/v1` MCP surface behind a new gateway. This release is **breaking
