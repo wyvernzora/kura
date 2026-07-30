@@ -58,7 +58,12 @@
 		# `>` replaces: the MCP SDK sets its own Cache-Control, and a plain
 		# directive would emit both.
 		header >Cache-Control "no-store"
-		reverse_proxy 127.0.0.1:8081
+		reverse_proxy 127.0.0.1:8081 {
+			# The bridge is intentionally loopback-only. Present its loopback
+			# authority instead of the client-facing Service or public Host so
+			# the MCP SDK can retain DNS-rebinding protection.
+			header_up Host localhost
+		}
 	}
 
 	# Release-indexer routes must match before the general /api rule.

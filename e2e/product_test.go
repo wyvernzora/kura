@@ -34,6 +34,7 @@ func TestProduct(t *testing.T) {
 	t.Run("restart durability", testRestartDurability)
 	t.Run("partial outage recovery", testPartialOutageRecovery)
 	t.Run("streaming and shutdown", testStreamingAndShutdown)
+	t.Run("MCP through Kubernetes Service authority", testMCPServiceAuthority)
 	t.Run("n8n action workflow", testN8NActionWorkflow)
 	t.Run("n8n polling trigger workflow", testN8NTriggerWorkflow)
 }
@@ -207,7 +208,24 @@ func testStreamingAndShutdown(t *testing.T) {
 	}
 }
 
+func testMCPServiceAuthority(t *testing.T) {
+	stack := startProductStack(t)
+	session := connectMCPWithHost(t, stack.gatewayURL, "kura.kura.svc.cluster.local")
+	tools, err := session.ListTools(callContext(t), nil)
+	if err != nil {
+		t.Fatalf("list tools through Kubernetes Service authority: %v", err)
+	}
+	if len(tools.Tools) != 16 {
+		t.Fatalf("tool count through Kubernetes Service authority = %d, want 16", len(tools.Tools))
+	}
+}
+
 func connectMCP(t *testing.T, gatewayURL string) *mcpsdk.ClientSession {
+	t.Helper()
+	return connectMCPWithHost(t, gatewayURL, "")
+}
+
+func connectMCPWithHost(t *testing.T, gatewayURL, host string) *mcpsdk.ClientSession {
 	t.Helper()
 	client := mcpsdk.NewClient(&mcpsdk.Implementation{
 		Name:    "kura-product-e2e",
@@ -217,6 +235,11 @@ func connectMCP(t *testing.T, gatewayURL string) *mcpsdk.ClientSession {
 		Endpoint:   gatewayURL + "/mcp/v1",
 		MaxRetries: -1,
 	}
+	if host != "" {
+		transport.HTTPClient = &http.Client{
+			Transport: rewriteHostTransport{host: host},
+		}
+	}
 	session, err := client.Connect(callContext(t), transport, nil)
 	if err != nil {
 		t.Fatalf("connect MCP streamable HTTP: %v", err)
@@ -225,6 +248,16 @@ func connectMCP(t *testing.T, gatewayURL string) *mcpsdk.ClientSession {
 		_ = session.Close()
 	})
 	return session
+}
+
+type rewriteHostTransport struct {
+	host string
+}
+
+func (t rewriteHostTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	clone.Host = t.host
+	return http.DefaultTransport.RoundTrip(clone)
 }
 
 func callTool(

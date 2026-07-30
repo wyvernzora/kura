@@ -228,6 +228,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Run LTO/LTFS tooling on a dedicated VM with its own read-only library-root mount and VM-local disposable tape state; derive hot/cold placement from payload-change history rather than raw metadata-write frequency.
 - Treat LTO as operator-assisted homelab archival for valuable-but-replaceable data; prefer visible manual recovery conflicts and operator-approved risk over high-availability protocols or automatic conflict resolution.
 - Keep library-manager serve settings in strict TOML; reserve environment variables for the TVDB secret, stable host identity, client discovery, and the local `path` command.
+- For deployment-shaped E2E, reproduce known load-bearing topology including client placement, Service DNS and HTTP Host through proxy hops, TLS/auth boundaries, and network reachability; production containers reached through host loopback are not cluster-network proof.
 
 ---
 

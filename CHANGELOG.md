@@ -8,6 +8,17 @@
 
 Notable release changes for Kura.
 
+## v0.7.2 - 2026-07-29
+
+### Fixes
+
+- Fixed MCP access through Kubernetes Service and public hostnames. The gateway
+  now presents loopback authority on its private Caddy-to-bridge hop so the MCP
+  SDK can retain DNS-rebinding protection without rejecting legitimate proxied
+  requests.
+- Added a full-stack regression that initializes MCP through the production
+  gateway with the Kubernetes Service hostname.
+
 ## v0.7.1 - 2026-07-29
 
 ### Highlights
