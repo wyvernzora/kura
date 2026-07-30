@@ -1,20 +1,9 @@
-import { access, cp, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, cp } from 'node:fs/promises';
 
-const ICON = '../../services/library-manager/docs/assets/logo-n8n.svg';
-const NODES = 'dist/nodes';
-const CREDENTIALS = 'dist/credentials';
+const SOURCE = 'src/assets';
+const DESTINATION = 'dist/assets';
 
-await access(ICON);
+await access(SOURCE);
+await cp(SOURCE, DESTINATION, { recursive: true });
 
-let n = 0;
-for (const entry of await readdir(NODES, { withFileTypes: true })) {
-	if (!entry.isDirectory()) continue;
-	await cp(ICON, join(NODES, entry.name, 'kura.svg'));
-	n++;
-}
-
-await cp(ICON, join(CREDENTIALS, 'kura.svg'));
-n++;
-
-console.log(`copy-assets: placed kura.svg in ${n} node/credential dir(s) from ${ICON}`);
+console.log(`copy-assets: copied ${SOURCE} to ${DESTINATION}`);

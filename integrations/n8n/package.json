@@ -4,6 +4,14 @@
   "description": "n8n nodes for the Kura suite: library automation, release ingest, and the matcher queue.",
   "keywords": ["n8n-community-node-package", "kura", "anime"],
   "license": "MIT",
+  "author": {
+    "name": "Denis Luchkin-Zhou",
+    "email": "wyvernzora@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wyvernzora/kura.git"
+  },
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=20.15"
@@ -15,6 +23,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-assets.mjs",
     "dev": "tsc -p tsconfig.json --watch",
+    "lint": "eslint src package.json",
+    "lint:fix": "eslint src package.json --fix",
     "test": "node scripts/projection-check.mjs && node scripts/request-contract-check.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -32,7 +42,10 @@
     "n8n-workflow": "*"
   },
   "devDependencies": {
+    "@n8n/eslint-plugin-community-nodes": "0.22.0",
+    "@typescript-eslint/parser": "8.65.0",
     "@types/node": "^24.0.0",
+    "eslint": "9.29.0",
     "n8n-workflow": "2.28.1",
     "typescript": "^6.0.0"
   }

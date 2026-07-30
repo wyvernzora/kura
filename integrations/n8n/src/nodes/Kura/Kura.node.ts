@@ -7,7 +7,7 @@ import type {
 	INodeTypeDescription,
 	JsonObject,
 } from 'n8n-workflow';
-import { LoggerProxy as Logger } from 'n8n-workflow';
+import { LoggerProxy as Logger, NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
 
 const CRED = 'kuraApi';
 const PAGE_LIMIT = 1000;
@@ -19,7 +19,10 @@ export class Kura implements INodeType {
 		name: 'kura',
 		group: ['transform'],
 		version: 2,
-		icon: 'file:kura.svg',
+		icon: {
+			light: 'file:../../assets/kura.svg',
+			dark: 'file:../../assets/kura.dark.svg',
+		},
 		subtitle: '={{$parameter["operation"] + " (" + $parameter["resource"] + ")"}}',
 		description:
 			'Interact with the Kura suite: library series, release ingest, and the matcher queue',
@@ -36,10 +39,11 @@ export class Kura implements INodeType {
 			alias: ['Anime library', 'Plex library', 'Media library', 'Release indexer'],
 		},
 		defaults: { name: 'Kura' },
-		inputs: ['main'],
+		inputs: [NodeConnectionTypes.Main],
 		outputs:
 			'={{$parameter["operation"] === "show" && $parameter["errorOnNotFound"] === false ? ["main", "main"] : ["main"]}}',
 		outputNames: ['tracked', 'untracked'],
+		usableAsTool: true,
 		credentials: [{ name: CRED, required: true }],
 		properties: [
 			{
@@ -48,9 +52,9 @@ export class Kura implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				options: [
-					{ name: 'Series', value: 'series' },
-					{ name: 'Release', value: 'release' },
 					{ name: 'Queue', value: 'queue' },
+					{ name: 'Release', value: 'release' },
+					{ name: 'Series', value: 'series' },
 				],
 				default: 'series',
 			},
@@ -74,13 +78,13 @@ export class Kura implements INodeType {
 				noDataExpression: true,
 				displayOptions: { show: { resource: ['release'] } },
 				options: [
-					{ name: 'Ingest', value: 'ingest', action: 'Ingest releases' },
 					{ name: 'Get', value: 'get', action: 'Get a release' },
 					{
 						name: 'Get Magnet Link',
 						value: 'getMagnetLink',
 						action: 'Get a release magnet link',
 					},
+					{ name: 'Ingest', value: 'ingest', action: 'Ingest releases' },
 				],
 				default: 'ingest',
 			},
@@ -92,8 +96,8 @@ export class Kura implements INodeType {
 				displayOptions: { show: { resource: ['queue'] } },
 				options: [
 					{ name: 'Claim', value: 'claim', action: 'Claim a batch of releases' },
-					{ name: 'Submit Dispositions', value: 'submit', action: 'Submit disposition results' },
 					{ name: 'Get Queue Stats', value: 'queueStats', action: 'Read the queue counts' },
+					{ name: 'Submit Dispositions', value: 'submit', action: 'Submit disposition results' },
 				],
 				default: 'claim',
 			},
@@ -124,8 +128,8 @@ export class Kura implements INodeType {
 				name: 'airing',
 				type: 'options',
 				options: [
-					{ name: 'Any', value: 'any' },
 					{ name: 'Airing', value: 'airing' },
+					{ name: 'Any', value: 'any' },
 					{ name: 'Not Airing', value: 'notAiring' },
 				],
 				default: 'any',
@@ -270,11 +274,18 @@ export class Kura implements INodeType {
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		const resource = this.getNodeParameter('resource', 0) as string;
-		if (resource === 'series') {
-			return executeSeries.call(this);
+		try {
+			const resource = this.getNodeParameter('resource', 0) as string;
+			if (resource === 'series') {
+				return await executeSeries.call(this);
+			}
+			return await executeIndexer.call(this, resource);
+		} catch (error) {
+			if (this.continueOnFail()) {
+				return [[{ json: { error: (error as Error).message }, pairedItem: { item: 0 } }]];
+			}
+			throw new NodeApiError(this.getNode(), error as JsonObject);
 		}
-		return executeIndexer.call(this, resource);
 	}
 }
 
@@ -318,7 +329,7 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 					out.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 					continue;
 				}
-				throw error;
+				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 			}
 		}
 		return [out];
@@ -350,7 +361,7 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 				out.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
 				continue;
 			}
-			throw error;
+			throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 		}
 	}
 	return emitUntrackedOutput ? [out, resolvedNotFound] : [out];
@@ -425,7 +436,7 @@ async function executeIndexer(
 			const payload = submitPayload(this.getNodeParameter('body', i));
 			const submitted: IDataObject[] = [];
 			for (const body of payload.bodies) {
-				submitted.push(await submitOne(call, body));
+				submitted.push(await submitOne(this, call, body, i));
 			}
 			Logger.info('Kura submissions completed', {
 				item_index: i,
@@ -450,7 +461,7 @@ async function executeIndexer(
 				continue;
 			}
 			Logger.debug('Kura indexer item failed', meta);
-			throw error;
+			throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
 		}
 	}
 	return [out];
@@ -487,13 +498,10 @@ type HTTPCall = (method: IHttpRequestMethods, path: string, body?: IDataObject) 
 
 function callFactory(ctx: IExecuteFunctions, credentials: IDataObject): HTTPCall {
 	const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');
-	const bearerToken = String(credentials.bearerToken ?? '');
-	const headers = bearerToken === '' ? undefined : { Authorization: `Bearer ${bearerToken}` };
 	return (method, path, body) =>
-		ctx.helpers.httpRequest({
+		ctx.helpers.httpRequestWithAuthentication.call(ctx, CRED, {
 			method,
 			url: `${baseUrl}${path}`,
-			headers,
 			body: body as JsonObject | undefined,
 			json: true,
 		}) as Promise<IDataObject>;
@@ -640,7 +648,12 @@ function hasSubtitles(media: IDataObject): boolean {
 	});
 }
 
-async function submitOne(call: HTTPCall, body: IDataObject): Promise<IDataObject> {
+async function submitOne(
+	ctx: IExecuteFunctions,
+	call: HTTPCall,
+	body: IDataObject,
+	itemIndex: number,
+): Promise<IDataObject> {
 	try {
 		await call('POST', '/api/v1/releases/queue/submit', body);
 		return { infohash: submitInfohash(body), ref: submitRef(body), ok: true };
@@ -648,7 +661,7 @@ async function submitOne(call: HTTPCall, body: IDataObject): Promise<IDataObject
 		if (statusCode(error) === 409) {
 			return { infohash: submitInfohash(body), ref: submitRef(body), ok: false, error: 'conflict' };
 		}
-		throw error;
+		throw new NodeApiError(ctx.getNode(), error as JsonObject, { itemIndex });
 	}
 }
 

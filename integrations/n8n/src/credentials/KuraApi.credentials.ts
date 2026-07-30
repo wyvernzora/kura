@@ -1,4 +1,5 @@
 import type {
+	IAuthenticateGeneric,
 	Icon,
 	ICredentialTestRequest,
 	ICredentialType,
@@ -9,7 +10,10 @@ export class KuraApi implements ICredentialType {
 	name = 'kuraApi';
 	displayName = 'Kura API';
 	documentationUrl = 'https://github.com/wyvernzora/kura';
-	icon: Icon = 'file:kura.svg';
+	icon: Icon = {
+		light: 'file:../assets/kura.svg',
+		dark: 'file:../assets/kura.dark.svg',
+	};
 
 	properties: INodeProperties[] = [
 		{
@@ -30,6 +34,16 @@ export class KuraApi implements ICredentialType {
 			description: 'Optional bearer token for a gateway protected by Pomerium',
 		},
 	];
+
+	authenticate: IAuthenticateGeneric = {
+		type: 'generic',
+		properties: {
+			headers: {
+				Authorization:
+					'={{$credentials.bearerToken ? "Bearer " + $credentials.bearerToken : undefined}}',
+			},
+		},
+	};
 
 	test: ICredentialTestRequest = {
 		request: {

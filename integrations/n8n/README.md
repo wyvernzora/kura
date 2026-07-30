@@ -36,7 +36,9 @@ Version 1 workflows must be migrated before installing this package.
 
 ```sh
 pnpm install
-pnpm build       # tsc + icon copy (needs services/library-manager/docs/assets in scope)
+pnpm lint        # official n8n community-node recommended rules
+pnpm typecheck
+pnpm build       # tsc + bundled light/dark icon copy
 pnpm test        # projection and request-contract checks against compiled output
 ```
 

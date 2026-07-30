@@ -4,8 +4,9 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 	IPollFunctions,
+	JsonObject,
 } from 'n8n-workflow';
-import { LoggerProxy as Logger } from 'n8n-workflow';
+import { LoggerProxy as Logger, NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
 
 const CRED = 'kuraApi';
 
@@ -18,7 +19,10 @@ export class KuraQueueTrigger implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Kura Queue Trigger',
 		name: 'kuraQueueTrigger',
-		icon: 'file:kura.svg',
+		icon: {
+			light: 'file:../../assets/kura.svg',
+			dark: 'file:../../assets/kura.dark.svg',
+		},
 		group: ['trigger'],
 		version: 2,
 		subtitle: '={{"claim: " + $parameter["limit"]}}',
@@ -32,7 +36,8 @@ export class KuraQueueTrigger implements INodeType {
 		defaults: { name: 'Kura Queue Trigger' },
 		polling: true,
 		inputs: [],
-		outputs: ['main'],
+		outputs: [NodeConnectionTypes.Main],
+		usableAsTool: true,
 		credentials: [{ name: CRED, required: true }],
 		properties: [
 			{
@@ -56,15 +61,12 @@ export class KuraQueueTrigger implements INodeType {
 	async poll(this: IPollFunctions): Promise<INodeExecutionData[][] | null> {
 		const credentials = await this.getCredentials(CRED);
 		const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');
-		const bearerToken = String(credentials.bearerToken ?? '');
-		const headers = bearerToken === '' ? undefined : { Authorization: `Bearer ${bearerToken}` };
 
 		let res: IDataObject;
 		try {
-			res = (await this.helpers.httpRequest({
+			res = (await this.helpers.httpRequestWithAuthentication.call(this, CRED, {
 				method: 'POST',
 				url: `${baseUrl}/api/v1/releases/queue/claim`,
-				headers,
 				body: {
 					limit: Number(this.getNodeParameter('limit', 10)),
 					leaseSeconds: Number(this.getNodeParameter('leaseSeconds', 300)),
@@ -73,7 +75,7 @@ export class KuraQueueTrigger implements INodeType {
 			})) as IDataObject;
 		} catch (error) {
 			Logger.debug('Kura queue trigger claim failed', { err: (error as Error).message });
-			throw error;
+			throw new NodeApiError(this.getNode(), error as JsonObject);
 		}
 
 		const claimed = (res.items as IDataObject[]) ?? [];

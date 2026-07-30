@@ -14,6 +14,13 @@ const AUTH = { Authorization: 'Bearer product-token' };
 function harness({ parameters, responses, items = [{ json: {} }] }) {
 	const calls = [];
 	const queued = [...responses];
+	const respond = async (request) => {
+		calls.push(request);
+		assert.notEqual(queued.length, 0, `unexpected request ${request.method} ${request.url}`);
+		const response = queued.shift();
+		if (response instanceof Error) throw response;
+		return response;
+	};
 	return {
 		calls,
 		context: {
@@ -23,18 +30,23 @@ function harness({ parameters, responses, items = [{ json: {} }] }) {
 				return { baseUrl: `${BASE_URL}/`, bearerToken: 'product-token' };
 			},
 			getInputData: () => items,
+			getNode: () => ({
+				id: 'kura-test-node',
+				name: 'Kura',
+				type: 'n8n-nodes-kura.kura',
+				typeVersion: 2,
+				position: [0, 0],
+				parameters: {},
+			}),
 			getNodeParameter: (name, itemIndex, fallback) => {
 				const value = parameters[name];
 				if (typeof value === 'function') return value(itemIndex);
 				return value === undefined ? fallback : value;
 			},
 			helpers: {
-				httpRequest: async (request) => {
-					calls.push(request);
-					assert.notEqual(queued.length, 0, `unexpected request ${request.method} ${request.url}`);
-					const response = queued.shift();
-					if (response instanceof Error) throw response;
-					return response;
+				httpRequestWithAuthentication: async (credentialsType, request) => {
+					assert.equal(credentialsType, 'kuraApi');
+					return await respond({ ...request, headers: AUTH });
 				},
 			},
 		},
@@ -66,6 +78,7 @@ function request(method, path, body) {
 	assert.equal(credential.name, 'kuraApi');
 	assert.equal(credential.displayName, 'Kura API');
 	assert.equal(credential.properties[0].default, 'http://kura:8080');
+	assert.equal(credential.authenticate.type, 'generic');
 	assert.equal(credential.test.request.url, '/api/v1/health');
 	assert.equal(new Kura().description.version, 2);
 	assert.deepEqual(new Kura().description.credentials, [{ name: 'kuraApi', required: true }]);
@@ -300,6 +313,46 @@ function request(method, path, body) {
 		],
 		count: 2,
 	});
+}
+
+{
+	class AxiosError extends Error {}
+
+	const httpMessage = {};
+	const res = { socket: { _httpMessage: httpMessage } };
+	httpMessage.res = res;
+
+	const badRequest = new AxiosError('Request failed with status code 400');
+	badRequest.response = {
+		status: 400,
+		data: { message: 'json: unknown field "claim_token"' },
+	};
+	badRequest.request = httpMessage;
+
+	let thrown;
+	try {
+		await execute(
+			{
+				resource: 'queue',
+				operation: 'submit',
+				body: { infohash: HASH, claim_token: 42, status: 'matched', ref: REF },
+			},
+			[badRequest],
+		);
+	} catch (error) {
+		thrown = error;
+	}
+
+	assert.equal(thrown?.constructor.name, 'NodeApiError');
+	assert.equal(thrown?.httpCode, '400');
+	assert.doesNotThrow(() =>
+		JSON.stringify({
+			...thrown,
+			name: thrown.name,
+			message: thrown.message,
+			stack: thrown.stack,
+		}),
+	);
 }
 
 {

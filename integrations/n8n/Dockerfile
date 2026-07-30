@@ -4,9 +4,6 @@
 # and dist/ into a tiny image whose entrypoint installs the package into the
 # N8N_CUSTOM_EXTENSIONS volume.
 #
-# Built from the repo root so docs/assets/logo-n8n.svg is in scope for the
-# build-time icon copy.
-
 ARG VERSION=dev
 
 FROM node:24-alpine AS build
@@ -16,7 +13,6 @@ RUN corepack enable
 COPY integrations/n8n/package.json integrations/n8n/pnpm-lock.yaml integrations/n8n/pnpm-workspace.yaml ./
 RUN corepack pnpm install --frozen-lockfile
 COPY integrations/n8n/ ./
-COPY services/library-manager/docs/assets/logo-n8n.svg /src/services/library-manager/docs/assets/logo-n8n.svg
 RUN corepack pnpm build
 RUN mkdir -p /pkg && cp -r package.json dist /pkg/
 
