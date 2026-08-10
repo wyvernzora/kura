@@ -11,8 +11,8 @@ KURA_RELEASES_DATABASE_URL=postgres://… \
   ./bin/kura-release-indexer --config ./config.example.toml
 ```
 
-One process serves `/api/v1/releases/ingest`, `/api/v1/sources/{source}/crawl`, `/api/v1/releases/{infohash}/magnet`, `/api/v1/releases/{infohash}`,
-`/api/v1/releases/queue/claim`, `/api/v1/releases/queue/stats`, `/api/v1/releases/queue/submit`, and `/healthz` on
+One process serves `/api/releases/v1/ingest`, `/api/releases/v1/sources/{source}/crawl`, `/api/releases/v1/{infohash}/magnet`, `/api/releases/v1/{infohash}`,
+`/api/releases/v1/queue/claim`, `/api/releases/v1/queue/stats`, `/api/releases/v1/queue/submit`, and `/healthz` on
 `server.addr`, and runs every enabled source crawler. `/metrics` is served on a
 second listener, `server.metrics_addr`, and is the only thing on it.
 
@@ -85,14 +85,14 @@ ALTER TYPE public.match_status SET SCHEMA releases;
 ```text
 release-indexer scheduler -> DMHY / Nyaa
 release-indexer crawler   -> direct ingest -> Postgres
-external producer        -> POST /api/v1/releases/ingest (escape hatch)
-n8n                       -> POST /api/v1/releases/queue/claim
+external producer        -> POST /api/releases/v1/ingest (escape hatch)
+n8n                       -> POST /api/releases/v1/queue/claim
 n8n                       -> matcher agent
-n8n                       -> POST /api/v1/releases/queue/submit
+n8n                       -> POST /api/releases/v1/queue/submit
 consumer agent            -> gateway MCP list_releases / get_release / get_magnet
 ```
 
-`/api/v1/releases/queue/stats.exhausted` is the operator intervention signal for matcher work.
+`/api/releases/v1/queue/stats.exhausted` is the operator intervention signal for matcher work.
 
 ## Backfill
 
@@ -100,7 +100,7 @@ Deep or catch-up backfill restores the standalone crawlers' stateless
 count-and-cursor contract, but performs ingestion inside the indexer:
 
 ```json
-POST /api/v1/sources/dmhy/crawl
+POST /api/releases/v1/sources/dmhy/crawl
 {"pageSize":100,"cursor":"","lookback":"260w"}
 ```
 

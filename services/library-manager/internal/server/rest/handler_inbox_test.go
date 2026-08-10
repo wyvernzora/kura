@@ -52,7 +52,7 @@ func writeInboxFile(t *testing.T, root, rel string) {
 
 func TestHandleInboxList_Empty(t *testing.T) {
 	srv, _ := newInboxTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -75,7 +75,7 @@ func TestHandleInboxList_ListsFiles(t *testing.T) {
 	writeInboxFile(t, root, "a.mkv")
 	writeInboxFile(t, root, "b.mkv")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -100,7 +100,7 @@ func TestHandleInboxList_ListsFiles(t *testing.T) {
 
 func TestHandleInboxList_BadDepth(t *testing.T) {
 	srv, _ := newInboxTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox?depth=-1", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox?depth=-1", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -110,7 +110,7 @@ func TestHandleInboxList_BadDepth(t *testing.T) {
 
 func TestHandleInboxList_BadLimit(t *testing.T) {
 	srv, _ := newInboxTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox?limit=abc", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox?limit=abc", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -120,7 +120,7 @@ func TestHandleInboxList_BadLimit(t *testing.T) {
 
 func TestHandleInboxList_LimitTooLarge(t *testing.T) {
 	srv, _ := newInboxTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox?limit=99999", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox?limit=99999", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -130,7 +130,7 @@ func TestHandleInboxList_LimitTooLarge(t *testing.T) {
 
 func TestHandleInboxList_PathNotFound(t *testing.T) {
 	srv, _ := newInboxTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox?path=missing", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox?path=missing", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
@@ -140,7 +140,7 @@ func TestHandleInboxList_PathNotFound(t *testing.T) {
 
 func TestHandleInboxList_Traversal(t *testing.T) {
 	srv, _ := newInboxTestServer(t)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox?path=../etc", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox?path=../etc", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -152,7 +152,7 @@ func TestHandleInboxList_ETagShortCircuit(t *testing.T) {
 	srv, root := newInboxTestServer(t)
 	writeInboxFile(t, root, "a.mkv")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -163,7 +163,7 @@ func TestHandleInboxList_ETagShortCircuit(t *testing.T) {
 		t.Fatal("etag empty")
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/api/v1/inbox", http.NoBody)
+	req2 := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox", http.NoBody)
 	req2.Header.Set(headerIfNoneMatch, etag)
 	rec2 := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec2, req2)
@@ -177,7 +177,7 @@ func TestHandleInboxList_RecursiveQuery(t *testing.T) {
 	writeInboxFile(t, root, "[BDrip] Show/E01.mkv")
 	writeInboxFile(t, root, "[BDrip] Show/E02.mkv")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/inbox?recursive=1", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/inbox?recursive=1", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

@@ -38,7 +38,7 @@ func seedTaggedSeries(t *testing.T, srv *Server) {
 func TestHandleTagsUpdateMutatesAtomically(t *testing.T) {
 	srv := newTestServer(t)
 	seedTaggedSeries(t, srv)
-	req := httptest.NewRequest(http.MethodPatch, "/api/v1/series/tvdb:42/tags", strings.NewReader(`{"tags":["Priority","!Maintenance-Disabled"]}`))
+	req := httptest.NewRequest(http.MethodPatch, "/api/library/v1/series/tvdb:42/tags", strings.NewReader(`{"tags":["Priority","!Maintenance-Disabled"]}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -57,7 +57,7 @@ func TestHandleTagsUpdateMutatesAtomically(t *testing.T) {
 func TestHandleTagsUpdateRejectsInvalidExpression(t *testing.T) {
 	srv := newTestServer(t)
 	seedTaggedSeries(t, srv)
-	req := httptest.NewRequest(http.MethodPatch, "/api/v1/series/tvdb:42/tags", strings.NewReader(`{"tags":["not valid"]}`))
+	req := httptest.NewRequest(http.MethodPatch, "/api/library/v1/series/tvdb:42/tags", strings.NewReader(`{"tags":["not valid"]}`))
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -68,7 +68,7 @@ func TestHandleTagsUpdateRejectsInvalidExpression(t *testing.T) {
 func TestHandleListFiltersSpaceDelimitedTags(t *testing.T) {
 	srv := newTestServer(t)
 	seedTaggedSeries(t, srv)
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/series?tags=Maintenance-Disabled+%21PRIORITY", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/library/v1/series?tags=Maintenance-Disabled+%21PRIORITY", http.NoBody)
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {

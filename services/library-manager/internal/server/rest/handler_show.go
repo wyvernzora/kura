@@ -9,7 +9,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
-// handleShow serves GET /api/v1/series/{ref}.
+// handleShow serves GET /api/library/v1/series/{ref}.
 //
 // {ref} is a MetadataRef (provider:id). Per Product.md "Selectors,
 // not paths" every resource endpoint identifies series by metadata

@@ -66,17 +66,27 @@
 		}
 	}
 
-	# Release-indexer routes must match before the general /api rule.
-	# handle_path is deliberately not used anywhere here — it would strip
-	# the prefix the leaves route on.
-	@indexer path /api/v1/releases /api/v1/releases/* /api/v1/sources/*
-	handle @indexer {
+	# Each leaf owns one stable prefix, so routing needs no enumerated
+	# route lists and no ordering between the two services. handle_path
+	# is deliberately not used anywhere here — it would strip the prefix
+	# the leaves route on.
+	@releases path /api/releases/v1 /api/releases/v1/*
+	handle @releases {
 		reverse_proxy {$KURA_RELEASES_UPSTREAM}
 	}
 
+	@library path /api/library/v1 /api/library/v1/*
+	handle @library {
+		reverse_proxy {$KURA_LIBRARY_UPSTREAM}
+	}
+
+	# Anything else under /api is an unknown API path — including the
+	# retired bare /api/v1 spellings — and answers in the suite envelope
+	# rather than falling through to the SPA's index.html.
 	@api path /api /api/*
 	handle @api {
-		reverse_proxy {$KURA_LIBRARY_UPSTREAM}
+		header Content-Type application/json
+		respond `{"kind":"not_found","message":"unknown API path"}` 404
 	}
 
 	# SPA last: hashed assets as files, everything else to index.html for

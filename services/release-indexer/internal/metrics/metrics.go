@@ -56,7 +56,7 @@ func (m *HTTP) Wrap(next http.Handler) http.Handler {
 
 // releasePrefix is the one route family whose identifier sits mid-path,
 // so neither an exact nor a prefix map entry can label it.
-const releasePrefix = "/api/v1/releases/"
+const releasePrefix = "/api/releases/v1/"
 
 func (m *HTTP) route(path string) string {
 	if route, ok := m.routes[path]; ok {
@@ -112,11 +112,11 @@ func New(version, commit string, qs queueStatsProvider) *Metrics {
 		HTTP: newHTTP(reg, "kura_indexer", map[string]string{
 			"/healthz":                      "/healthz",
 			"/metrics":                      "/metrics",
-			"/api/v1/releases":              "/api/v1/releases",
-			"/api/v1/releases/ingest":       "/api/v1/releases/ingest",
-			"/api/v1/releases/queue/claim":  "/api/v1/releases/queue/claim",
-			"/api/v1/releases/queue/stats":  "/api/v1/releases/queue/stats",
-			"/api/v1/releases/queue/submit": "/api/v1/releases/queue/submit",
+			"/api/releases/v1":              "/api/releases/v1",
+			"/api/releases/v1/ingest":       "/api/releases/v1/ingest",
+			"/api/releases/v1/queue/claim":  "/api/releases/v1/queue/claim",
+			"/api/releases/v1/queue/stats":  "/api/releases/v1/queue/stats",
+			"/api/releases/v1/queue/submit": "/api/releases/v1/queue/submit",
 		}),
 		ingestBatches: auto.NewCounterVec(prometheus.CounterOpts{
 			Namespace: "kura_indexer",

@@ -32,7 +32,7 @@ func (f *fakeChunkCrawler) CrawlChunk(_ context.Context, pageSize int, cursor st
 
 func crawlRequest(t *testing.T, h *Handler, source, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/sources/"+source+"/crawl", strings.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/releases/v1/sources/"+source+"/crawl", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec

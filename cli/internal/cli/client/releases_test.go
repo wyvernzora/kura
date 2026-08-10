@@ -43,8 +43,8 @@ func TestCrawlSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CrawlSource() error = %v", err)
 	}
-	if gotMethod != http.MethodPost || gotPath != "/api/v1/sources/nyaa/crawl" {
-		t.Fatalf("request = %s %s, want POST /api/v1/sources/nyaa/crawl", gotMethod, gotPath)
+	if gotMethod != http.MethodPost || gotPath != "/api/releases/v1/sources/nyaa/crawl" {
+		t.Fatalf("request = %s %s, want POST /api/releases/v1/sources/nyaa/crawl", gotMethod, gotPath)
 	}
 	if gotReq.PageSize != 100 || gotReq.Cursor != "previous" || gotReq.Lookback != "30d" {
 		t.Fatalf("request body = %+v", gotReq)

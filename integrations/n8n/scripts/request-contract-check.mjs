@@ -114,11 +114,11 @@ function request(method, path, body) {
 	assert.deepEqual(calls, [
 		request(
 			'GET',
-			'/api/v1/series?status=complete&status=incomplete&airing=true&tags=priority%3Ahigh+%21maintenance%3Adisabled&limit=1000',
+			'/api/library/v1/series?status=complete&status=incomplete&airing=true&tags=priority%3Ahigh+%21maintenance%3Adisabled&limit=1000',
 		),
 		request(
 			'GET',
-			'/api/v1/series?status=complete&status=incomplete&airing=true&tags=priority%3Ahigh+%21maintenance%3Adisabled&limit=1000&cursor=page-2',
+			'/api/library/v1/series?status=complete&status=incomplete&airing=true&tags=priority%3Ahigh+%21maintenance%3Adisabled&limit=1000&cursor=page-2',
 		),
 	]);
 	assert.deepEqual(
@@ -163,7 +163,7 @@ function request(method, path, body) {
 	assert.deepEqual(calls, [
 		request(
 			'GET',
-			'/api/v1/series/tvdb%3A370070?episodes=ALL&status=missing&source=WebRip&resolution=1080p',
+			'/api/library/v1/series/tvdb%3A370070?episodes=ALL&status=missing&source=WebRip&resolution=1080p',
 		),
 	]);
 	assert.deepEqual(output[0][0].json, {
@@ -194,8 +194,8 @@ function request(method, path, body) {
 		[notFound, { candidates: [{ ref: REF, preferredTitle: 'Bookworm' }] }],
 	);
 	assert.deepEqual(calls, [
-		request('GET', '/api/v1/series/tvdb%3A370070'),
-		request('POST', '/api/v1/series/resolve', { terms: [REF] }),
+		request('GET', '/api/library/v1/series/tvdb%3A370070'),
+		request('POST', '/api/library/v1/series/resolve', { terms: [REF] }),
 	]);
 	assert.deepEqual(output, [[], [{ json: { ref: REF, preferredTitle: 'Bookworm' }, pairedItem: { item: 0 } }]]);
 }
@@ -211,7 +211,7 @@ function request(method, path, body) {
 		[{ ref: REF, tags: ['priority:high'] }],
 	);
 	assert.deepEqual(calls, [
-		request('PATCH', '/api/v1/series/tvdb%3A370070/tags', {
+		request('PATCH', '/api/library/v1/series/tvdb%3A370070/tags', {
 			tags: ['priority:high', '!maintenance:disabled'],
 		}),
 	]);
@@ -238,7 +238,7 @@ function request(method, path, body) {
 		[{ batch: { new: 1, updated: 0, duplicate: 0 }, queue: { available: 1 } }],
 	);
 	assert.deepEqual(calls, [
-		request('POST', '/api/v1/releases/ingest', { posts }),
+		request('POST', '/api/releases/v1/ingest', { posts }),
 	]);
 	assert.equal(output[0][0].json.batch.new, 1);
 }
@@ -248,7 +248,7 @@ function request(method, path, body) {
 		{ resource: 'release', operation: 'get', infohash: HASH },
 		[{ infohash: HASH, matchStatus: 'matched', ref: REF }],
 	);
-	assert.deepEqual(calls, [request('GET', `/api/v1/releases/${HASH}`)]);
+	assert.deepEqual(calls, [request('GET', `/api/releases/v1/${HASH}`)]);
 	assert.equal(output[0][0].json.ref, REF);
 }
 
@@ -257,7 +257,7 @@ function request(method, path, body) {
 		{ resource: 'release', operation: 'getMagnetLink', infohash: HASH },
 		[{ infohash: HASH, magnet: `magnet:?xt=urn:btih:${HASH}` }],
 	);
-	assert.deepEqual(calls, [request('GET', `/api/v1/releases/${HASH}/magnet`)]);
+	assert.deepEqual(calls, [request('GET', `/api/releases/v1/${HASH}/magnet`)]);
 	assert.equal(output[0][0].json.infohash, HASH);
 }
 
@@ -274,7 +274,7 @@ function request(method, path, body) {
 		{ resource: 'queue', operation: 'queueStats' },
 		[stats],
 	);
-	assert.deepEqual(calls, [request('GET', '/api/v1/releases/queue/stats')]);
+	assert.deepEqual(calls, [request('GET', '/api/releases/v1/queue/stats')]);
 	assert.deepEqual(output, [[{ json: stats }]]);
 }
 
@@ -285,7 +285,7 @@ function request(method, path, body) {
 		[claim],
 	);
 	assert.deepEqual(calls, [
-		request('POST', '/api/v1/releases/queue/claim', { limit: 4, leaseSeconds: 90 }),
+		request('POST', '/api/releases/v1/queue/claim', { limit: 4, leaseSeconds: 90 }),
 	]);
 	assert.deepEqual(output[0][0].json, { items: claim.items, count: 1 });
 }
@@ -303,8 +303,8 @@ function request(method, path, body) {
 		[{ ok: true }, conflict],
 	);
 	assert.deepEqual(calls, [
-		request('POST', '/api/v1/releases/queue/submit', accepted),
-		request('POST', '/api/v1/releases/queue/submit', stale),
+		request('POST', '/api/releases/v1/queue/submit', accepted),
+		request('POST', '/api/releases/v1/queue/submit', stale),
 	]);
 	assert.deepEqual(output[0][0].json, {
 		items: [
@@ -363,7 +363,7 @@ function request(method, path, body) {
 	const output = await KuraQueueTrigger.prototype.poll.call(test.context);
 	test.assertDone();
 	assert.deepEqual(test.calls, [
-		request('POST', '/api/v1/releases/queue/claim', { limit: 3, leaseSeconds: 120 }),
+		request('POST', '/api/releases/v1/queue/claim', { limit: 3, leaseSeconds: 120 }),
 	]);
 	assert.deepEqual(output, [[{ json: { items: [{ infohash: HASH, claimToken: 42, rawItems: [] }], count: 1 } }]]);
 }

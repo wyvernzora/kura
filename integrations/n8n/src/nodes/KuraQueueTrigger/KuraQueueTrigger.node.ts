@@ -66,7 +66,7 @@ export class KuraQueueTrigger implements INodeType {
 		try {
 			res = (await this.helpers.httpRequestWithAuthentication.call(this, CRED, {
 				method: 'POST',
-				url: `${baseUrl}/api/v1/releases/queue/claim`,
+				url: `${baseUrl}/api/releases/v1/queue/claim`,
 				body: {
 					limit: Number(this.getNodeParameter('limit', 10)),
 					leaseSeconds: Number(this.getNodeParameter('leaseSeconds', 300)),

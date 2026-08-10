@@ -65,8 +65,8 @@ func run() error {
 		RequestTimeout:   cfg.RequestTimeout,
 		MaxResponseBytes: cfg.MaxResponseBytes,
 	}
-	library := client.New(cfg.LibraryUpstream, opts)
-	releases := client.New(cfg.ReleasesUpstream, opts)
+	library := client.New(cfg.LibraryUpstream, "/api/library/v1", opts)
+	releases := client.New(cfg.ReleasesUpstream, "/api/releases/v1", opts)
 
 	healthz := health.New(version, []health.Leaf{
 		{Name: "libraryManager", URL: library.HealthURL()},

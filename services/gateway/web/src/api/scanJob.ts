@@ -73,7 +73,7 @@ export function useScanJob(metadataRef: string): ScanJobState {
         return;
       }
       try {
-        const status = await api<JobStatus>(`/api/v1/jobs/${encodeURIComponent(jobId)}`);
+        const status = await api<JobStatus>(`/api/library/v1/jobs/${encodeURIComponent(jobId)}`);
         if (cancelled) {
           return;
         }
@@ -166,7 +166,7 @@ export function useScanJob(metadataRef: string): ScanJobState {
     void (async () => {
       try {
         const handle = await api<{ jobId: string; submittedAt: string }>(
-          `/api/v1/series/${encodeURIComponent(metadataRef)}/scan`,
+          `/api/library/v1/series/${encodeURIComponent(metadataRef)}/scan`,
           { method: 'POST', body: JSON.stringify({}) },
         );
         if (cancelled) {

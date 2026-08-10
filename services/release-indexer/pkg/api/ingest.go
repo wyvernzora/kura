@@ -2,7 +2,7 @@ package api
 
 import "time"
 
-// RawPost is one crawled posting, as accepted by POST /api/v1/releases/ingest
+// RawPost is one crawled posting, as accepted by POST /api/releases/v1/ingest
 // and as emitted by the in-process source crawlers.
 //
 // There is deliberately no infohash field: the service derives the canonical
@@ -19,7 +19,7 @@ type RawPost struct {
 	SizeBytes int64 `json:"sizeBytes"`
 }
 
-// IngestRequest is the POST /api/v1/releases/ingest body.
+// IngestRequest is the POST /api/releases/v1/ingest body.
 type IngestRequest struct {
 	Posts []RawPost `json:"posts"`
 }

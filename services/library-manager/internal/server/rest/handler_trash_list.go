@@ -8,7 +8,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// handleTrashListSeries serves GET /api/v1/series/{ref}/trash.
+// handleTrashListSeries serves GET /api/library/v1/series/{ref}/trash.
 func (s *Server) handleTrashListSeries(w http.ResponseWriter, r *http.Request) {
 	ref, err := s.resolveRefPath(r.PathValue("ref"))
 	if err != nil {
@@ -31,7 +31,7 @@ func (s *Server) handleTrashListSeries(w http.ResponseWriter, r *http.Request) {
 	writeJSONWithETag(w, r, http.StatusOK, result)
 }
 
-// handleTrashListAll serves GET /api/v1/trash (library-wide).
+// handleTrashListAll serves GET /api/library/v1/trash (library-wide).
 func (s *Server) handleTrashListAll(w http.ResponseWriter, r *http.Request) {
 	older, err := parseOlderThan(r.URL.Query().Get("olderThan"))
 	if err != nil {

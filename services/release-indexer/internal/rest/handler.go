@@ -53,14 +53,14 @@ func NewWithMetricsAndLogger(s store.Store, m *metrics.Metrics, logger *slog.Log
 	// Literal segments outrank the {infohash} wildcard, so the queue
 	// routes are unreachable-by-accident even though they sit at the
 	// same depth as the per-release ones.
-	mux.HandleFunc("/api/v1/releases", h.handleListReleases)
-	mux.HandleFunc("/api/v1/releases/ingest", h.handleIngest)
-	mux.HandleFunc("/api/v1/sources/{source}/crawl", h.handleSourceCrawl)
-	mux.HandleFunc("/api/v1/releases/queue/claim", h.handleClaim)
-	mux.HandleFunc("/api/v1/releases/queue/stats", h.handleQueueStats)
-	mux.HandleFunc("/api/v1/releases/queue/submit", h.handleSubmit)
-	mux.HandleFunc("/api/v1/releases/{infohash}/magnet", h.handleGetMagnet)
-	mux.HandleFunc("/api/v1/releases/{infohash}", h.handleGetRelease)
+	mux.HandleFunc("/api/releases/v1", h.handleListReleases)
+	mux.HandleFunc("/api/releases/v1/ingest", h.handleIngest)
+	mux.HandleFunc("/api/releases/v1/sources/{source}/crawl", h.handleSourceCrawl)
+	mux.HandleFunc("/api/releases/v1/queue/claim", h.handleClaim)
+	mux.HandleFunc("/api/releases/v1/queue/stats", h.handleQueueStats)
+	mux.HandleFunc("/api/releases/v1/queue/submit", h.handleSubmit)
+	mux.HandleFunc("/api/releases/v1/{infohash}/magnet", h.handleGetMagnet)
+	mux.HandleFunc("/api/releases/v1/{infohash}", h.handleGetRelease)
 	h.mux = mux
 	return h
 }

@@ -7,7 +7,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// scanAllRequest is the POST /api/v1/library/scan body. All fields are
+// scanAllRequest is the POST /api/library/v1/scan body. All fields are
 // optional; the empty body shape kicks off a default-concurrency scan.
 type scanAllRequest struct {
 	Refresh      bool `json:"refresh,omitempty"`
@@ -15,7 +15,7 @@ type scanAllRequest struct {
 	Concurrency  int  `json:"concurrency,omitempty"`
 }
 
-// handleScanAll serves POST /api/v1/library/scan. Job-shaped: returns
+// handleScanAll serves POST /api/library/v1/scan. Job-shaped: returns
 // a JobAck the caller can poll via /jobs/{id} or stream via
 // /jobs/{id}/stream. The fan-out runs inside the job goroutine.
 //

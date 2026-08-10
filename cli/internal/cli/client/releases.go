@@ -19,7 +19,7 @@ import (
 // indexer directly; a library-manager-only endpoint will 404.
 func (c *Client) CrawlSource(ctx context.Context, source string, reqBody relapi.CrawlRequest) (relapi.CrawlResult, error) {
 	var result relapi.CrawlResult
-	path := "/api/v1/sources/" + url.PathEscape(source) + "/crawl"
+	path := "/api/releases/v1/sources/" + url.PathEscape(source) + "/crawl"
 	req, err := buildHTTPRequest(ctx, http.MethodPost, c.BaseURL+path, reqBody)
 	if err != nil {
 		return result, err

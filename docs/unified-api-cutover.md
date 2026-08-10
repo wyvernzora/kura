@@ -18,7 +18,7 @@ The services no longer contain any authentication. It was not disabled behind a
 flag; it was deleted, and the gateway additionally strips inbound
 `Authorization` before proxying. There is therefore nothing to turn back on if
 Pomerium is misconfigured — the only remedy is redeploying an older image.
-Deploying the gateway before Pomerium is proven leaves `DELETE /api/v1/trash`
+Deploying the gateway before Pomerium is proven leaves `DELETE /api/library/v1/trash`
 and the release ingest and queue routes anonymous to anyone who can reach the
 hostname.
 
@@ -40,7 +40,7 @@ hatch rather than a supported client path.
 3. **Network policy first, then deploy.** Apply the release-indexer network
    policy *before* creating its Service. The service has no authentication of
    its own, so a Service that exists ahead of its policy leaves
-   `/api/v1/releases/ingest` and `/api/v1/releases/queue/*` writable by any pod
+   `/api/releases/v1/ingest` and `/api/releases/v1/queue/*` writable by any pod
    in the cluster for the entire migration window.
 
    Then deploy the library-manager, release-indexer, and gateway Deployments

@@ -10,7 +10,7 @@ import {
 
 /**
  * Gear menu states are driven by `kura.libraryJob` localStorage and
- * the `/api/v1/jobs/{id}` mock in `.storybook/fetchMock.ts`. The mock
+ * the `/api/library/v1/jobs/{id}` mock in `.storybook/fetchMock.ts`. The mock
  * peeks at localStorage on each poll: if a story seeded a record, it
  * returns mid-progress running state (current=312/total=742) so the
  * running view stays visible. Otherwise it returns terminal succeeded.

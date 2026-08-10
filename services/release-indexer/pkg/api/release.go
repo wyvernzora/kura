@@ -12,7 +12,7 @@ const (
 	MatchStatusExhausted  MatchStatus = "exhausted"
 )
 
-// ReleaseItem is one row of GET /api/v1/releases.
+// ReleaseItem is one row of GET /api/releases/v1.
 //
 // SizeBytes and Confidence are pointers because both columns are nullable and
 // the distinction matters: a release with no recorded size is not a release of
@@ -28,14 +28,14 @@ type ReleaseItem struct {
 	Sources     []string  `json:"sources"`
 }
 
-// ReleaseList is the GET /api/v1/releases response. Items is never null.
+// ReleaseList is the GET /api/releases/v1 response. Items is never null.
 // NextCursor is omitted when there is no next page.
 type ReleaseList struct {
 	Items      []ReleaseItem `json:"items"`
 	NextCursor *string       `json:"nextCursor,omitempty"`
 }
 
-// ReleaseDetail is the GET /api/v1/releases/{infohash} response.
+// ReleaseDetail is the GET /api/releases/v1/{infohash} response.
 //
 // Every nullable database fact stays an explicit JSON null rather than being
 // omitted, so a consumer can tell "not recorded" from "not returned".
@@ -79,7 +79,7 @@ type MatchEvent struct {
 	CreatedAt  time.Time   `json:"createdAt"`
 }
 
-// Magnet is the GET /api/v1/releases/{infohash}/magnet response.
+// Magnet is the GET /api/releases/v1/{infohash}/magnet response.
 //
 // There is no bulk form. A caller needing several magnets issues several
 // requests; a batch endpoint would need a cap, a partial-failure shape, and a

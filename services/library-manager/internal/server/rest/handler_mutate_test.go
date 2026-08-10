@@ -10,7 +10,7 @@ import (
 func TestHandleAdd_RejectsBadMetadata(t *testing.T) {
 	srv := newTestServer(t)
 	body := strings.NewReader(`{"metadata":"bogus","ref":"foo"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/library/v1/series", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -23,7 +23,7 @@ func TestHandleAdd_RejectsBadMetadata(t *testing.T) {
 func TestHandleImport_RequiresRef(t *testing.T) {
 	srv := newTestServer(t)
 	body := strings.NewReader(`{"metadata":"tvdb:123"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/import", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/library/v1/series/import", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -36,7 +36,7 @@ func TestHandleImport_RequiresRef(t *testing.T) {
 func TestHandleReset_BadEpisode(t *testing.T) {
 	srv := newTestServer(t)
 	body := strings.NewReader(`{"episode":"bad-format"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/reset", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/library/v1/series/foo/reset", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)

@@ -252,7 +252,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - **Commands:** `make check`, `make e2e`, `make build`, and `make install`
   from `cli/`.
 - **Releases:** `kura crawl <source> <lookback>` automatically threads
-  bounded cursor chunks through `POST /api/v1/sources/{source}/crawl` until
+  bounded cursor chunks through `POST /api/releases/v1/sources/{source}/crawl` until
   the lookback boundary or archive floor; `--cursor` resumes from a printed
   checkpoint. It needs `KURA_SERVER_URL`
   pointing at the suite gateway (one origin over every service API) or at
@@ -279,13 +279,13 @@ Read design.md before any sizable change.
   matching policy.
 - **Crawling is in-process.** One scheduled loop per enabled source crawls the newest
   bounded window and ingests it directly. There is no durable cursor, bootstrap, or
-  overlap state. `POST /api/v1/releases/ingest` remains an external-producer
+  overlap state. `POST /api/releases/v1/ingest` remains an external-producer
   escape hatch.
 - **Surfaces:**
-  - Release REST (n8n-driven), under `/api/v1/releases`: `GET /` (list),
+  - Release REST (n8n-driven), under `/api/releases/v1`: `GET /` (list),
     `POST /ingest`, `POST /queue/claim`, `GET /queue/stats`,
     `POST /queue/submit`, `GET /{infohash}`, and `GET /{infohash}/magnet`.
-  - Source REST: `POST /api/v1/sources/{source}/crawl` consumes one
+  - Source REST: `POST /api/releases/v1/sources/{source}/crawl` consumes one
     count-and-cursor chunk and ingests it directly; the caller owns the cursor.
   - `/healthz` — a live DB ping.
 - **Transport:** HTTP (configured by TOML).
@@ -331,7 +331,7 @@ internal/ingest/     transport-neutral RawPost normalization + persistence
 internal/infohash/   NormalizeInfohash + ErrSkipInfohash — the dedup key
 internal/cursor/     list_releases cursor encode/decode + ref/path binding + ref validation
 internal/dispatch/   transport-neutral worker/consumer dispatch + sentinel→code helper
-internal/rest/       REST handlers under /api/v1/releases
+internal/rest/       REST handlers under /api/releases/v1
 internal/store/      Store interface + param/result types + sentinel errors
 internal/store/postgres/  pgx implementation (only backend in v1)
 internal/health/     /healthz: DB ping via the Ping seam

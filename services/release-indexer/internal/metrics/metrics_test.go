@@ -19,20 +19,20 @@ import (
 
 func TestHTTPWrapRecordsRouteAndStatus(t *testing.T) {
 	reg := prometheus.NewRegistry()
-	m := newHTTP(reg, "testapp", map[string]string{"/known": "/known", "/api/v1/releases/": "/api/v1/releases/{infohash}"})
+	m := newHTTP(reg, "testapp", map[string]string{"/known": "/known", "/api/releases/v1/": "/api/releases/v1/{infohash}"})
 	handler := m.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 	}))
 
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/known", http.NoBody))
-	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/releases/0123456789abcdef0123456789abcdef01234567/magnet", http.NoBody))
+	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/releases/v1/0123456789abcdef0123456789abcdef01234567/magnet", http.NoBody))
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/random/123", http.NoBody))
 
 	got := testutil.ToFloat64(m.requests.WithLabelValues(http.MethodPost, "/known", "202"))
 	if got != 1 {
 		t.Fatalf("known route count = %v, want 1", got)
 	}
-	got = testutil.ToFloat64(m.requests.WithLabelValues(http.MethodGet, "/api/v1/releases/{infohash}/magnet", "202"))
+	got = testutil.ToFloat64(m.requests.WithLabelValues(http.MethodGet, "/api/releases/v1/{infohash}/magnet", "202"))
 	if got != 1 {
 		t.Fatalf("magnet route count = %v, want 1", got)
 	}

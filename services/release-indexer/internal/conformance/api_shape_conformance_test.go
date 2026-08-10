@@ -168,7 +168,7 @@ func TestAPIShape_GetReleaseDetail(t *testing.T) {
 	detail := decodeReleaseDetail(t, res)
 	assertReleaseDetail(t, detail)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/releases/"+apiIH1, http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/releases/v1/"+apiIH1, http.NoBody)
 	rec := httptest.NewRecorder()
 	rest.New(st).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -201,7 +201,7 @@ func TestAPIShape_GetReleaseExplicitNullsAndNoLeaseInternals(t *testing.T) {
 		t.Fatalf("Submit unmatched without facts: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/releases/"+apiIH1, http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/releases/v1/"+apiIH1, http.NoBody)
 	rec := httptest.NewRecorder()
 	rest.New(st).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -256,8 +256,8 @@ func TestAPIShape_GetReleaseRESTErrors(t *testing.T) {
 		wantStatus int
 		wantKind   string
 	}{
-		{name: "invalid infohash", path: "/api/v1/releases/not-an-infohash", wantStatus: http.StatusBadRequest, wantKind: "invalid_request"},
-		{name: "unknown release", path: "/api/v1/releases/" + apiIH3, wantStatus: http.StatusNotFound, wantKind: "not_found"},
+		{name: "invalid infohash", path: "/api/releases/v1/not-an-infohash", wantStatus: http.StatusBadRequest, wantKind: "invalid_request"},
+		{name: "unknown release", path: "/api/releases/v1/" + apiIH3, wantStatus: http.StatusNotFound, wantKind: "not_found"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.path, http.NoBody).WithContext(ctx)

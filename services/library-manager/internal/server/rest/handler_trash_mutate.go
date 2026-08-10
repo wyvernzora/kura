@@ -9,7 +9,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// handleTrashRestore serves POST /api/v1/series/{ref}/trash/{ulid}/restore.
+// handleTrashRestore serves POST /api/library/v1/series/{ref}/trash/{ulid}/restore.
 func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) {
 	ref, err := s.resolveRefPath(r.PathValue("ref"))
 	if err != nil {
@@ -32,7 +32,7 @@ func (s *Server) handleTrashRestore(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// handleTrashEmptySeries serves DELETE /api/v1/series/{ref}/trash.
+// handleTrashEmptySeries serves DELETE /api/library/v1/series/{ref}/trash.
 // Destructive; the CLI gates it behind --confirm.
 func (s *Server) handleTrashEmptySeries(w http.ResponseWriter, r *http.Request) {
 	ref, err := s.resolveRefPath(r.PathValue("ref"))
@@ -56,7 +56,7 @@ func (s *Server) handleTrashEmptySeries(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, result)
 }
 
-// handleTrashEmptyAll serves DELETE /api/v1/trash. Library-wide
+// handleTrashEmptyAll serves DELETE /api/library/v1/trash. Library-wide
 // destructive; the CLI gates it behind --all --confirm.
 func (s *Server) handleTrashEmptyAll(w http.ResponseWriter, r *http.Request) {
 	older, err := parseOlderThan(r.URL.Query().Get("olderThan"))

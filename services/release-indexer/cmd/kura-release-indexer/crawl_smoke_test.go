@@ -104,7 +104,7 @@ max_rps = 100
 
 	baseURL := "http://" + addr
 	waitHealthy(t, ctx, baseURL+"/healthz", 60*time.Second)
-	waitForAvailableRelease(t, ctx, baseURL+"/api/v1/releases/queue/stats")
+	waitForAvailableRelease(t, ctx, baseURL+"/api/releases/v1/queue/stats")
 
 	if err := cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("signal release-indexer: %v", err)

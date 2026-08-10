@@ -1,6 +1,6 @@
 package api
 
-// ReindexResult is the terminal payload of POST /api/v1/library/reindex.
+// ReindexResult is the terminal payload of POST /api/library/v1/reindex.
 // Surfaces the row count so the caller can sanity-check the rebuild
 // against expectations without re-fetching the full list.
 type ReindexResult struct {

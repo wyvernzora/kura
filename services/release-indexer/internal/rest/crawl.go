@@ -21,13 +21,13 @@ type ChunkCrawler interface {
 	CrawlChunk(ctx context.Context, pageSize int, cursor string, lookback time.Duration) (crawl.CrawlResponse, error)
 }
 
-// RegisterCrawler exposes a source through POST /api/v1/sources/{source}/crawl.
+// RegisterCrawler exposes a source through POST /api/releases/v1/sources/{source}/crawl.
 // Wiring-time only; not safe to call once the handler is serving.
 func (h *Handler) RegisterCrawler(source string, c ChunkCrawler) {
 	h.crawlers[source] = c
 }
 
-// handleSourceCrawl serves POST /api/v1/sources/{source}/crawl: consume one
+// handleSourceCrawl serves POST /api/releases/v1/sources/{source}/crawl: consume one
 // chunk server-side and ingest it directly. This is the sanctioned backfill
 // producer — a remote loop (normally `kura crawl`) threads the returned
 // cursor, and the server holds no crawl state between requests.

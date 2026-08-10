@@ -2,7 +2,7 @@ package api
 
 import "time"
 
-// CrawlRequest is the POST /api/v1/sources/{source}/crawl body: consume
+// CrawlRequest is the POST /api/releases/v1/sources/{source}/crawl body: consume
 // exactly pageSize posts from the cursor's resume point, ingest them
 // directly, and return the next cursor. The API remains one bounded chunk per
 // request and holds no crawl state between requests; the kura CLI threads
@@ -37,7 +37,7 @@ type CrawlResult struct {
 	// PagesFetched counts upstream listing pages read this chunk (cache
 	// hits included).
 	PagesFetched int `json:"pagesFetched"`
-	// Batch and Queue mirror the POST /api/v1/releases/ingest response.
+	// Batch and Queue mirror the POST /api/releases/v1/ingest response.
 	Batch IngestBatch `json:"batch"`
 	Queue QueueCounts `json:"queue"`
 	// OldestPublishedAt / NewestPublishedAt bound the consumed posts'

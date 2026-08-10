@@ -1,5 +1,5 @@
 // Package api is the release-indexer public wire contract: the request and
-// response shapes served under /api/v1/releases.
+// response shapes served under /api/releases/v1.
 //
 // It is a leaf. It imports nothing from internal/ and holds no storage,
 // dispatch, or network behaviour — only serialized DTOs and the enum values

@@ -332,14 +332,14 @@ func matchRelease(t *testing.T, stack *productStack) {
 			ClaimToken int64  `json:"claimToken"`
 		} `json:"items"`
 	}
-	postJSON(t, stack.gatewayURL+"/api/v1/releases/queue/claim", map[string]any{
+	postJSON(t, stack.gatewayURL+"/api/releases/v1/queue/claim", map[string]any{
 		"limit":        1,
 		"leaseSeconds": 30,
 	}, &claim)
 	if len(claim.Items) != 1 || claim.Items[0].Infohash != productInfohash || claim.Items[0].ClaimToken == 0 {
 		t.Fatalf("release claim = %+v, want product fixture", claim)
 	}
-	postJSON(t, stack.gatewayURL+"/api/v1/releases/queue/submit", map[string]any{
+	postJSON(t, stack.gatewayURL+"/api/releases/v1/queue/submit", map[string]any{
 		"infohash":   productInfohash,
 		"claimToken": claim.Items[0].ClaimToken,
 		"status":     "matched",
@@ -354,7 +354,7 @@ func waitQueueAvailable(t *testing.T, gatewayURL string) {
 	deadline := time.Now().Add(30 * time.Second)
 	var last map[string]int
 	for time.Now().Before(deadline) {
-		getJSON(t, gatewayURL+"/api/v1/releases/queue/stats", &last)
+		getJSON(t, gatewayURL+"/api/releases/v1/queue/stats", &last)
 		if last["available"] == 1 {
 			return
 		}
@@ -450,7 +450,7 @@ func assertJobStream(t *testing.T, gatewayURL, jobID string) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		gatewayURL+"/api/v1/jobs/"+jobID+"/stream", http.NoBody)
+		gatewayURL+"/api/library/v1/jobs/"+jobID+"/stream", http.NoBody)
 	if err != nil {
 		t.Fatalf("build job stream request: %v", err)
 	}

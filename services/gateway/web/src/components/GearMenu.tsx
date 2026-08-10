@@ -34,7 +34,7 @@ const APPEARANCE_FADE_MS = 180;
  * the job ends, hold the running view for ~180 ms so the ring fades
  * out before the body re-flips to library actions.
  *
- * Backed by `useLibraryJob`, which polls `/api/v1/jobs/{id}` for the
+ * Backed by `useLibraryJob`, which polls `/api/library/v1/jobs/{id}` for the
  * single in-flight library job and persists the running record to
  * localStorage so reload/cross-tab restores it.
  */

@@ -348,7 +348,7 @@ export interface RecoverReconcile {
 // source: reindex.go
 
 /**
- * ReindexResult is the terminal payload of POST /api/v1/library/reindex.
+ * ReindexResult is the terminal payload of POST /api/library/v1/reindex.
  * Surfaces the row count so the caller can sanity-check the rebuild
  * against expectations without re-fetching the full list.
  */
@@ -521,7 +521,7 @@ export const SkipCodeMetadataSlotMissing = 'metadata_slot_missing';
 // source: scan_all.go
 
 /**
- * ScanAllResult is the terminal payload of POST /api/v1/library/scan.
+ * ScanAllResult is the terminal payload of POST /api/library/v1/scan.
  * Aggregates the outcome of fanning per-series scans across the
  * tracked library — total dispatched, succeeded, failed, and the
  * per-series failure detail for any that didn't succeed. Per-series

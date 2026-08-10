@@ -20,8 +20,8 @@ caller poll. Across surfaces:
 
 - CLI blocks on the job and renders progress inline.
 - REST returns `202 Accepted` with `{jobId, statusUrl, streamUrl}`.
-  Clients poll `GET /api/v1/jobs/{id}` or stream
-  `GET /api/v1/jobs/{id}/stream` (SSE).
+  Clients poll `GET /api/library/v1/jobs/{id}` or stream
+  `GET /api/library/v1/jobs/{id}/stream` (SSE).
 - MCP returns a job handle. Agents poll `get_job`.
 
 Per-job forensic logs are written to

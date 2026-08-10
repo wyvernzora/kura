@@ -19,9 +19,9 @@ consumer agent list matched releases with optional canonical-ref filtering.
   settle window is the loop's only time parameter. Listing state older than the
   settle window is assumed immutable, and idempotent ingestion makes repeated
   reads safe.
-- `POST /api/v1/releases/ingest` remains the external-producer surface; sources still emit the
+- `POST /api/releases/v1/ingest` remains the external-producer surface; sources still emit the
   same `RawPost` contract and do not import indexer storage. The sanctioned backfill
-  path is `POST /api/v1/sources/{source}/crawl`: a stateless count-and-cursor
+  path is `POST /api/releases/v1/sources/{source}/crawl`: a stateless count-and-cursor
   chunk that uses the scheduled loop's crawler instance and ingests directly.
   The client owns the cursor; the indexer persists no crawl position.
 - Queue claims are fenced by `claim_token`; stale submits must not overwrite newer
@@ -54,14 +54,14 @@ or matcher attributes exist in this pass.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/v1/releases` | List matched releases, newest first; optionally narrowed to one ref. |
-| `POST` | `/api/v1/releases/ingest` | Accept a batch of crawler posts. |
-| `POST` | `/api/v1/sources/{source}/crawl` | Consume one count-and-cursor source chunk and ingest it directly (operator backfill). |
-| `GET` | `/api/v1/releases/{infohash}/magnet` | Get the stored magnet URI for one release. |
-| `GET` | `/api/v1/releases/{infohash}` | Get one release detail, raw source evidence, and match history. |
-| `POST` | `/api/v1/releases/queue/claim` | Lease claimable unmatched releases. |
-| `GET` | `/api/v1/releases/queue/stats` | Return queue/status counts, including exhausted. |
-| `POST` | `/api/v1/releases/queue/submit` | Submit `matched`, `unmatched`, or `suppressed` for a claim. |
+| `GET` | `/api/releases/v1` | List matched releases, newest first; optionally narrowed to one ref. |
+| `POST` | `/api/releases/v1/ingest` | Accept a batch of crawler posts. |
+| `POST` | `/api/releases/v1/sources/{source}/crawl` | Consume one count-and-cursor source chunk and ingest it directly (operator backfill). |
+| `GET` | `/api/releases/v1/{infohash}/magnet` | Get the stored magnet URI for one release. |
+| `GET` | `/api/releases/v1/{infohash}` | Get one release detail, raw source evidence, and match history. |
+| `POST` | `/api/releases/v1/queue/claim` | Lease claimable unmatched releases. |
+| `GET` | `/api/releases/v1/queue/stats` | Return queue/status counts, including exhausted. |
+| `POST` | `/api/releases/v1/queue/submit` | Submit `matched`, `unmatched`, or `suppressed` for a claim. |
 | `GET` | `/healthz` | DB ping; returns `{ok, version}`. |
 | `GET` | `/metrics` | Prometheus metrics. Served on `server.metrics_addr`, not the API listener. |
 
@@ -79,8 +79,8 @@ Crawler posts and ingest posts use the same shape:
 }
 ```
 
-`/api/v1/releases/queue/claim` returns `claimToken`, `attemptCount`, `leaseExpiresAt`, and linked
-`rawItems`. `/api/v1/releases/queue/submit` accepts:
+`/api/releases/v1/queue/claim` returns `claimToken`, `attemptCount`, `leaseExpiresAt`, and linked
+`rawItems`. `/api/releases/v1/queue/submit` accepts:
 
 ```json
 {
@@ -110,7 +110,7 @@ consecutive-empty floor). The stop rule uses the newest plausible stamp so a
 pinned row or an unparseable-date artifact cannot end the walk early, and a run
 that fails mid-walk keeps every page already ingested. This is a steady-state
 freshness loop, not a backfill engine: after downtime longer than the settle
-window, the operator drives `POST /api/v1/sources/{source}/crawl`. Each request
+window, the operator drives `POST /api/releases/v1/sources/{source}/crawl`. Each request
 consumes an exact post budget (up to 200), may cross listing-page boundaries,
 ingests directly, and returns an opaque `(page, offset)` cursor. The client
 threads that cursor until the requested lookback boundary or the confirmed
@@ -134,7 +134,7 @@ unmatched result becomes `exhausted`. Expired unmatched rows at or above the cap
 marked exhausted before new claims are offered. Claim crashes do not increment
 `attempt_count`.
 
-`GET /api/v1/releases/{infohash}` returns the single-release full context view:
+`GET /api/releases/v1/{infohash}` returns the single-release full context view:
 representative release fields, `matchStatus`, nullable derived fields (`magnet`,
 `sizeBytes`, `ref`, `confidence`, `firstMatchedAt`), `attemptCount`,
 timestamps, `rawItems`, and `matchEvents`. The response deliberately excludes
@@ -152,4 +152,4 @@ This service serves REST only. Agent-facing MCP tools — `list_releases`,
 the endpoints above. The gateway owns the tool names, schemas, annotations, and
 error projection; nothing here should grow a second copy of them.
 
-The REST `/api/v1/releases/{infohash}/magnet` endpoint returns `{ "infohash": "...", "magnet": "..." }`.
+The REST `/api/releases/v1/{infohash}/magnet` endpoint returns `{ "infohash": "...", "magnet": "..." }`.

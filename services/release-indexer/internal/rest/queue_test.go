@@ -77,7 +77,7 @@ func (f *fakeStore) Close() error { return nil }
 func TestClaimRejectsInvalidJSON(t *testing.T) {
 	st := &fakeStore{}
 	for _, body := range []string{"", "{"} {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/queue/claim", strings.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/api/releases/v1/queue/claim", strings.NewReader(body))
 		rec := httptest.NewRecorder()
 
 		New(st).ServeHTTP(rec, req)
@@ -89,7 +89,7 @@ func TestClaimRejectsInvalidJSON(t *testing.T) {
 }
 
 func TestSubmitRejectsInvalidStatus(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/queue/submit", strings.NewReader(`{
+	req := httptest.NewRequest(http.MethodPost, "/api/releases/v1/queue/submit", strings.NewReader(`{
 		"infohash":"0123456789abcdef0123456789abcdef01234567",
 		"claimToken":1,
 		"status":"defer"
@@ -105,7 +105,7 @@ func TestSubmitRejectsInvalidStatus(t *testing.T) {
 
 func TestSubmitPreservesSuppressedConfidence(t *testing.T) {
 	st := &fakeStore{}
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/releases/queue/submit", strings.NewReader(`{
+	req := httptest.NewRequest(http.MethodPost, "/api/releases/v1/queue/submit", strings.NewReader(`{
 		"infohash":"0123456789abcdef0123456789abcdef01234567",
 		"claimToken":1,
 		"status":"suppressed",
@@ -125,7 +125,7 @@ func TestSubmitPreservesSuppressedConfidence(t *testing.T) {
 
 func TestGetMagnet(t *testing.T) {
 	st := &fakeStore{}
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/releases/0123456789abcdef0123456789abcdef01234567/magnet", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/releases/v1/0123456789abcdef0123456789abcdef01234567/magnet", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	New(st).ServeHTTP(rec, req)
@@ -150,7 +150,7 @@ func TestGetMagnet(t *testing.T) {
 
 func TestGetRelease(t *testing.T) {
 	st := &fakeStore{}
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/releases/JN7DUBILGVIFL46NCSOF42GZ5JCXNNUS", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/releases/v1/JN7DUBILGVIFL46NCSOF42GZ5JCXNNUS", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	New(st).ServeHTTP(rec, req)
@@ -175,7 +175,7 @@ func TestGetRelease(t *testing.T) {
 }
 
 func TestGetReleaseRejectsInvalidInfohash(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/releases/not-an-infohash", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/releases/v1/not-an-infohash", http.NoBody)
 	rec := httptest.NewRecorder()
 
 	New(&fakeStore{}).ServeHTTP(rec, req)

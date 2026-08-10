@@ -24,7 +24,7 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 200;
 
 /**
- * Walks `GET /api/v1/series` cursor pagination to assemble the full
+ * Walks `GET /api/library/v1/series` cursor pagination to assemble the full
  * library in one array. Personal-scale libraries (hundreds of series)
  * fit in memory cleanly; the virtualized grid handles render cost.
  *
@@ -41,7 +41,7 @@ async function fetchAllSeries(): Promise<ListRow[]> {
     if (cursor) {
       params.set('cursor', cursor);
     }
-    const page = await api<ListResult>(`/api/v1/series?${params.toString()}`);
+    const page = await api<ListResult>(`/api/library/v1/series?${params.toString()}`);
     acc.push(...page.items);
     if (!page.nextCursor || page.nextCursor === cursor) {
       return acc;
@@ -75,7 +75,7 @@ const RESOLVE_DEBOUNCE_MS = 300;
 const RESOLVE_MIN_QUERY_LENGTH = 2;
 
 /**
- * Debounced wrapper around POST /api/v1/series/resolve. The library home
+ * Debounced wrapper around POST /api/library/v1/series/resolve. The library home
  * uses this to turn the user's search query into a ranked list of
  * metadata candidates; the home page then intersects those refs
  * against the loaded library to render matches in candidate order.
@@ -102,7 +102,9 @@ export function useShow(ref: string | undefined, preview = false) {
     enabled: !!ref,
     staleTime: 30_000,
     queryFn: () =>
-      api<Show>(`/api/v1/series/${encodeURIComponent(ref ?? '')}${preview ? '?preview=true' : ''}`),
+      api<Show>(
+        `/api/library/v1/series/${encodeURIComponent(ref ?? '')}${preview ? '?preview=true' : ''}`,
+      ),
   });
 }
 
@@ -115,7 +117,7 @@ export function useResolveSearch(query: string) {
     enabled,
     staleTime: 60_000,
     queryFn: () =>
-      api<Resolution>('/api/v1/series/resolve', {
+      api<Resolution>('/api/library/v1/series/resolve', {
         method: 'POST',
         body: JSON.stringify({ terms: [debounced] } satisfies ResolveRequest),
       }),
@@ -123,7 +125,7 @@ export function useResolveSearch(query: string) {
 }
 
 /**
- * Add a series to the library by metadata ref (POST /api/v1/series).
+ * Add a series to the library by metadata ref (POST /api/library/v1/series).
  * On success invalidates the library list so the new series lands in the
  * grid; callers navigate to the returned ref.
  */
@@ -131,7 +133,7 @@ export function useAddSeries() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: AddRequest) =>
-      api<AddResult>('/api/v1/series', {
+      api<AddResult>('/api/library/v1/series', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
@@ -143,7 +145,7 @@ export function useUpdateTags(ref: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (tags: string[]) =>
-      api<SeriesTags>(`/api/v1/series/${encodeURIComponent(ref)}/tags`, {
+      api<SeriesTags>(`/api/library/v1/series/${encodeURIComponent(ref)}/tags`, {
         method: 'PATCH',
         body: JSON.stringify({ tags } satisfies TagUpdate),
       }),

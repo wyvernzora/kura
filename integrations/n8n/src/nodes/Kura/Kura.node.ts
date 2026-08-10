@@ -230,7 +230,7 @@ export class Kura implements INodeType {
 				type: 'json',
 				default: '={{ $json.posts }}',
 				required: true,
-				description: 'The raw posts payload, forwarded as-is to /api/v1/releases/ingest',
+				description: 'The raw posts payload, forwarded as-is to /api/releases/v1/ingest',
 				displayOptions: { show: { resource: ['release'], operation: ['ingest'] } },
 			},
 			{
@@ -320,7 +320,7 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 				if (tags.length === 0) throw new Error('at least one tag expression is required');
 				const result = await call(
 					'PATCH',
-					`/api/v1/series/${encodeURIComponent(ref)}/tags`,
+					`/api/library/v1/series/${encodeURIComponent(ref)}/tags`,
 					{ tags },
 				);
 				out.push({ json: result, pairedItem: { item: i } });
@@ -350,7 +350,7 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 			out.push({ json: projectShow(result, includeSpecials, simplifyOutput), pairedItem: { item: i } });
 		} catch (error) {
 			if (shouldResolveNotFound(errorOnNotFound, error)) {
-				const result = await call('POST', '/api/v1/series/resolve', { terms: [ref] });
+				const result = await call('POST', '/api/library/v1/series/resolve', { terms: [ref] });
 				resolvedNotFound.push({
 					json: singleResolveCandidate(result, ref),
 					pairedItem: { item: i },
@@ -381,7 +381,7 @@ async function executeIndexer(
 	Logger.info('Kura indexer execution started', { resource, operation, item_count: items.length });
 
 	if (operation === 'queueStats') {
-		const stats = await call('GET', '/api/v1/releases/queue/stats');
+		const stats = await call('GET', '/api/releases/v1/queue/stats');
 		Logger.info('Kura queue stats fetched', {
 			available: stats.available,
 			leased: stats.leased,
@@ -391,7 +391,7 @@ async function executeIndexer(
 	}
 
 	if (operation === 'claim') {
-		const res = await call('POST', '/api/v1/releases/queue/claim', {
+		const res = await call('POST', '/api/releases/v1/queue/claim', {
 			limit: Number(this.getNodeParameter('limit', 0)),
 			leaseSeconds: Number(this.getNodeParameter('leaseSeconds', 0)),
 		});
@@ -405,7 +405,7 @@ async function executeIndexer(
 		try {
 			if (operation === 'ingest') {
 				const posts = this.getNodeParameter('posts', i) as IDataObject[];
-				const res = await call('POST', '/api/v1/releases/ingest', { posts });
+				const res = await call('POST', '/api/releases/v1/ingest', { posts });
 				Logger.info('Kura ingest completed', {
 					item_index: i,
 					post_count: Array.isArray(posts) ? posts.length : undefined,
@@ -419,7 +419,7 @@ async function executeIndexer(
 
 			if (operation === 'getMagnetLink') {
 				const infohash = String(this.getNodeParameter('infohash', i));
-				const res = await call('GET', `/api/v1/releases/${encodeURIComponent(infohash)}/magnet`);
+				const res = await call('GET', `/api/releases/v1/${encodeURIComponent(infohash)}/magnet`);
 				Logger.info('Kura magnet lookup completed', { item_index: i, infohash });
 				out.push({ json: res, pairedItem: { item: i } });
 				continue;
@@ -427,7 +427,7 @@ async function executeIndexer(
 
 			if (operation === 'get') {
 				const infohash = String(this.getNodeParameter('infohash', i));
-				const res = await call('GET', `/api/v1/releases/${encodeURIComponent(infohash)}`);
+				const res = await call('GET', `/api/releases/v1/${encodeURIComponent(infohash)}`);
 				Logger.info('Kura release lookup completed', { item_index: i, infohash });
 				out.push({ json: res, pairedItem: { item: i } });
 				continue;
@@ -520,7 +520,7 @@ async function listAll(call: HTTPCall, statuses: string[], airing: string, tags:
 		query.set('limit', String(PAGE_LIMIT));
 		if (cursor !== '') query.set('cursor', cursor);
 
-		const result = await call('GET', `/api/v1/series?${query.toString()}`);
+		const result = await call('GET', `/api/library/v1/series?${query.toString()}`);
 		rows.push(...arrayField(result, 'items'));
 		cursor = stringField(result, 'nextCursor');
 	} while (cursor !== '');
@@ -559,7 +559,7 @@ function queryFor(ctx: IExecuteFunctions, itemIndex: number): URLSearchParams {
 
 function showPath(ref: string, query: URLSearchParams): string {
 	const suffix = query.toString();
-	const path = `/api/v1/series/${encodeURIComponent(ref)}`;
+	const path = `/api/library/v1/series/${encodeURIComponent(ref)}`;
 	return suffix === '' ? path : `${path}?${suffix}`;
 }
 
@@ -655,7 +655,7 @@ async function submitOne(
 	itemIndex: number,
 ): Promise<IDataObject> {
 	try {
-		await call('POST', '/api/v1/releases/queue/submit', body);
+		await call('POST', '/api/releases/v1/queue/submit', body);
 		return { infohash: submitInfohash(body), ref: submitRef(body), ok: true };
 	} catch (error) {
 		if (statusCode(error) === 409) {

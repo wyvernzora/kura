@@ -1,6 +1,6 @@
 /**
  * Storybook-only fetch mock for the kura REST surface. Stories don't
- * have a real backend, so unmocked POSTs to `/api/v1/series/*\/scan`
+ * have a real backend, so unmocked POSTs to `/api/library/v1/series/*\/scan`
  * 404 and the scan hook flips to its kickoff-error state. We intercept
  * the two endpoints the scan flow uses and return canned responses so
  * clicking a story button exercises the full kickoff → poll → terminal
@@ -42,10 +42,10 @@ if (typeof window !== 'undefined') {
       const url = urlOf(input);
       const method = (init?.method ?? 'GET').toUpperCase();
 
-      // PATCH /api/v1/series/{ref}/tags → echo the additive expressions
-      // back as the stored tag set so the settings modal's mutation
-      // succeeds instead of 404ing when a story is clicked.
-      if (method === 'PATCH' && /\/api\/v1\/series\/.+\/tags$/.test(url)) {
+      // PATCH /api/library/v1/series/{ref}/tags → echo the additive
+      // expressions back as the stored tag set so the settings modal's
+      // mutation succeeds instead of 404ing when a story is clicked.
+      if (method === 'PATCH' && /\/api\/library\/v1\/series\/.+\/tags$/.test(url)) {
         const ref = decodeURIComponent(url.split('/').slice(-2)[0] ?? '');
         let tags: string[] = [];
         try {
@@ -57,44 +57,44 @@ if (typeof window !== 'undefined') {
         return jsonResponse({ ref, tags });
       }
 
-      // POST /api/v1/series/{ref}/scan → return a job handle ack.
-      if (method === 'POST' && /\/api\/v1\/series\/.+\/scan$/.test(url)) {
+      // POST /api/library/v1/series/{ref}/scan → return a job handle ack.
+      if (method === 'POST' && /\/api\/library\/v1\/series\/.+\/scan$/.test(url)) {
         const jobId = `sb-mock-${Math.random().toString(36).slice(2, 10)}`;
         return jsonResponse(
           {
             jobId,
             kind: 'scan',
-            statusURL: `/api/v1/jobs/${jobId}`,
-            streamURL: `/api/v1/jobs/${jobId}/stream`,
+            statusURL: `/api/library/v1/jobs/${jobId}`,
+            streamURL: `/api/library/v1/jobs/${jobId}/stream`,
             submittedAt: new Date().toISOString(),
           },
           202,
         );
       }
 
-      // POST /api/v1/library/scan and /reindex → job ack.
-      if (method === 'POST' && /\/api\/v1\/library\/(scan|reindex)$/.test(url)) {
+      // POST /api/library/v1/scan and /api/library/v1/reindex → job ack.
+      if (method === 'POST' && /\/api\/library\/v1\/(scan|reindex)$/.test(url)) {
         const kind = url.endsWith('/scan') ? 'scan_all' : 'reindex';
         const jobId = `sb-mock-${Math.random().toString(36).slice(2, 10)}`;
         return jsonResponse(
           {
             jobId,
             kind,
-            statusURL: `/api/v1/jobs/${jobId}`,
-            streamURL: `/api/v1/jobs/${jobId}/stream`,
+            statusURL: `/api/library/v1/jobs/${jobId}`,
+            streamURL: `/api/library/v1/jobs/${jobId}/stream`,
             submittedAt: new Date().toISOString(),
           },
           202,
         );
       }
 
-      // GET /api/v1/jobs/{id} → if a story has seeded `kura.libraryJob`
+      // GET /api/library/v1/jobs/{id} → if a story has seeded `kura.libraryJob`
       // pointing at this jobId, keep returning a running state with
       // synthetic progress so the gear-menu running view stays visible
       // for the snapshot. Otherwise fall through to the default
       // terminal-succeeded shape that lets idle stories complete the
       // kickoff cycle without lingering.
-      if (method === 'GET' && /\/api\/v1\/jobs\/[^/]+$/.test(url)) {
+      if (method === 'GET' && /\/api\/library\/v1\/jobs\/[^/]+$/.test(url)) {
         const id = url.split('/').pop() ?? '';
         const libraryRecord = readLibraryJobRecord();
         if (libraryRecord && libraryRecord.jobId === id) {

@@ -88,8 +88,8 @@ func newHarness(t *testing.T) *harness {
 
 	opts := client.Options{RequestTimeout: 5 * time.Second, MaxResponseBytes: 1 << 20}
 	s := New("test",
-		client.New(strings.TrimPrefix(libSrv.URL, "http://"), opts),
-		client.New(strings.TrimPrefix(relSrv.URL, "http://"), opts), nil)
+		client.New(strings.TrimPrefix(libSrv.URL, "http://"), "/api/library/v1", opts),
+		client.New(strings.TrimPrefix(relSrv.URL, "http://"), "/api/releases/v1", opts), nil)
 
 	ct, st := mcpsdk.NewInMemoryTransports()
 	go func() { _, _ = s.sdk.Connect(context.Background(), st, nil) }()
@@ -120,22 +120,22 @@ func TestToolsCallTheirDocumentedRestEndpoint(t *testing.T) {
 		method     string
 		path       string
 	}{
-		{"resolve_series", map[string]any{"terms": []string{"bocchi"}}, false, "POST", "/api/v1/series/resolve"},
-		{"list_series", map[string]any{}, false, "GET", "/api/v1/series"},
-		{"get_series", map[string]any{"ref": "tvdb:42"}, false, "GET", "/api/v1/series/tvdb:42"},
-		{"update_series_tags", map[string]any{"ref": "tvdb:42", "tags": []string{"x"}}, false, "PATCH", "/api/v1/series/tvdb:42/tags"},
-		{"add_series", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/v1/series"},
-		{"import_series", map[string]any{"ref": "tvdb:42", "directory": "Show"}, false, "POST", "/api/v1/series/import"},
-		{"scan_series", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/v1/series/tvdb:42/scan"},
-		{"stage_series_media", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/v1/series/tvdb:42/stage"},
-		{"reset_series_staging", map[string]any{"ref": "tvdb:42", "all": true}, false, "POST", "/api/v1/series/tvdb:42/reset"},
-		{"plan_series_reconcile", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/v1/series/tvdb:42/reconcile/plan"},
-		{"apply_series_reconcile", map[string]any{"ref": "tvdb:42", "token": "t"}, false, "POST", "/api/v1/series/tvdb:42/reconcile/apply"},
-		{"get_job", map[string]any{"jobId": "01J"}, false, "GET", "/api/v1/jobs/01J"},
-		{"list_inbox", map[string]any{}, false, "GET", "/api/v1/inbox"},
-		{"list_releases", map[string]any{}, true, "GET", "/api/v1/releases"},
-		{"get_release", map[string]any{"infohash": "abc"}, true, "GET", "/api/v1/releases/abc"},
-		{"get_magnet", map[string]any{"infohash": "abc"}, true, "GET", "/api/v1/releases/abc/magnet"},
+		{"resolve_series", map[string]any{"terms": []string{"bocchi"}}, false, "POST", "/api/library/v1/series/resolve"},
+		{"list_series", map[string]any{}, false, "GET", "/api/library/v1/series"},
+		{"get_series", map[string]any{"ref": "tvdb:42"}, false, "GET", "/api/library/v1/series/tvdb:42"},
+		{"update_series_tags", map[string]any{"ref": "tvdb:42", "tags": []string{"x"}}, false, "PATCH", "/api/library/v1/series/tvdb:42/tags"},
+		{"add_series", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/library/v1/series"},
+		{"import_series", map[string]any{"ref": "tvdb:42", "directory": "Show"}, false, "POST", "/api/library/v1/series/import"},
+		{"scan_series", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/library/v1/series/tvdb:42/scan"},
+		{"stage_series_media", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/library/v1/series/tvdb:42/stage"},
+		{"reset_series_staging", map[string]any{"ref": "tvdb:42", "all": true}, false, "POST", "/api/library/v1/series/tvdb:42/reset"},
+		{"plan_series_reconcile", map[string]any{"ref": "tvdb:42"}, false, "POST", "/api/library/v1/series/tvdb:42/reconcile/plan"},
+		{"apply_series_reconcile", map[string]any{"ref": "tvdb:42", "token": "t"}, false, "POST", "/api/library/v1/series/tvdb:42/reconcile/apply"},
+		{"get_job", map[string]any{"jobId": "01J"}, false, "GET", "/api/library/v1/jobs/01J"},
+		{"list_inbox", map[string]any{}, false, "GET", "/api/library/v1/inbox"},
+		{"list_releases", map[string]any{}, true, "GET", "/api/releases/v1"},
+		{"get_release", map[string]any{"infohash": "abc"}, true, "GET", "/api/releases/v1/abc"},
+		{"get_magnet", map[string]any{"infohash": "abc"}, true, "GET", "/api/releases/v1/abc/magnet"},
 	} {
 		t.Run(tc.tool, func(t *testing.T) {
 			h := newHarness(t)
@@ -250,7 +250,7 @@ func TestAsyncToolsReturnOnlyJobID(t *testing.T) {
 		t.Run(tc.tool, func(t *testing.T) {
 			h := newHarness(t)
 			h.library.reply(http.StatusAccepted,
-				`{"jobId":"01JOB","kind":"scan","statusUrl":"/api/v1/jobs/01JOB","streamUrl":"/api/v1/jobs/01JOB/stream","submittedAt":"2026-01-01T00:00:00Z"}`)
+				`{"jobId":"01JOB","kind":"scan","statusUrl":"/api/library/v1/jobs/01JOB","streamUrl":"/api/library/v1/jobs/01JOB/stream","submittedAt":"2026-01-01T00:00:00Z"}`)
 			res := h.call(t, tc.tool, tc.args)
 			if res.IsError {
 				t.Fatalf("unexpected error: %s", firstText(res))

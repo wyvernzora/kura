@@ -7,7 +7,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// handleInboxList serves GET /api/v1/inbox.
+// handleInboxList serves GET /api/library/v1/inbox.
 //
 // Query:
 //

@@ -37,7 +37,7 @@ type JobError struct {
 	Data    map[string]any `json:"data,omitempty"`
 }
 
-// StreamJob opens an SSE connection to /api/v1/jobs/{job}/stream and
+// StreamJob opens an SSE connection to /api/library/v1/jobs/{job}/stream and
 // invokes onEvent for each event until the terminal result/error
 // arrives or ctx cancels. Returns nil after a clean terminal event;
 // returns the wrapped server error for terminal failures.
@@ -79,7 +79,7 @@ func (c *Client) StreamJob(ctx context.Context, jobID string, onEvent func(JobEv
 // handler is hand-rolled rather than routed through Do, so the Accept
 // and bearer headers are attached here instead of inherited.
 func buildJobStreamRequest(ctx context.Context, c *Client, jobID string) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/v1/jobs/"+jobID+"/stream", http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/api/library/v1/jobs/"+jobID+"/stream", http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func finalErrorFor(ev JobEvent) error {
 	return nil
 }
 
-// PollJob polls GET /api/v1/jobs/{id} until the job reaches a
+// PollJob polls GET /api/library/v1/jobs/{id} until the job reaches a
 // terminal state or ctx cancels. Calls onProgress for each new
 // progress snapshot. Returns the raw result JSON on success or a
 // decoded ErrorEnvelope on failure.
@@ -188,7 +188,7 @@ func (c *Client) PollJob(ctx context.Context, jobID string, interval time.Durati
 			Result   json.RawMessage `json:"result,omitempty"`
 			Error    *JobError       `json:"error,omitempty"`
 		}
-		if err := c.Do(ctx, http.MethodGet, "/api/v1/jobs/"+jobID, nil, nil, &status); err != nil {
+		if err := c.Do(ctx, http.MethodGet, "/api/library/v1/jobs/"+jobID, nil, nil, &status); err != nil {
 			return nil, err
 		}
 		if status.Progress != nil && (lastProgress == nil || *lastProgress != *status.Progress) && onProgress != nil {

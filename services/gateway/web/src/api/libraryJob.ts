@@ -82,7 +82,7 @@ export function useLibraryJob(): LibraryJobState {
         return;
       }
       try {
-        const status = await api<JobStatus>(`/api/v1/jobs/${encodeURIComponent(jobId)}`);
+        const status = await api<JobStatus>(`/api/library/v1/jobs/${encodeURIComponent(jobId)}`);
         if (cancelled) {
           return;
         }
@@ -173,10 +173,10 @@ export function useLibraryJob(): LibraryJobState {
   );
 
   const startScan = useCallback(() => {
-    start('scan', '/api/v1/library/scan');
+    start('scan', '/api/library/v1/scan');
   }, [start]);
   const startReindex = useCallback(() => {
-    start('reindex', '/api/v1/library/reindex');
+    start('reindex', '/api/library/v1/reindex');
   }, [start]);
 
   if (!record) {

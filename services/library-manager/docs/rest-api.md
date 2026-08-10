@@ -2,7 +2,7 @@
 
 Set `server.rest` in the library-manager TOML config to run the REST
 transport. All endpoints are
-under `/api/v1/`.
+under `/api/library/v1/`.
 
 For underlying terms, see [concepts.md](concepts.md). For the
 operations each endpoint implements, see
@@ -52,37 +52,37 @@ SeriesRef in the request body as `directory`.
 | Method | Path | Body | Response | Headers |
 |--------|------|------|----------|---------|
 | GET    | `/healthz` | — | `{ok, version, libraryRoot, uptimeMs, startedAt}` | — |
-| GET    | `/api/v1/library` | — | Library summary | ETag |
-| GET    | `/api/v1/series` | — | Paginated `ListResult` | ETag, query: `status`, `airing`, `tags`, `cursor`, `limit` |
-| GET    | `/api/v1/series/{ref}` | — | `Show` (series + episodes) | ETag, query: `episodes`, `status`, `source`, `resolution` |
-| PATCH  | `/api/v1/series/{ref}/tags` | `{tags[]}` | `{ref, tags[]}` | — |
-| POST   | `/api/v1/series` | `{ref, directory?, ordering?}` | Series spine | — |
-| POST   | `/api/v1/series/import` | `{ref, directory, force?, ordering?}` | Series spine | — |
-| POST   | `/api/v1/series/{ref}/reset` | `{episode?, trash?, extras?, all?}` | Reset summary | — |
-| POST   | `/api/v1/series/{ref}/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 {jobId, kind, statusUrl, streamUrl, submittedAt}` | async |
-| POST   | `/api/v1/series/{ref}/stage` | `{episodes[{episode, media, source?, companions?, replace?, attrs?}], trash[], extras[]}` | `202 Job` | async |
-| POST   | `/api/v1/series/{ref}/reconcile/plan` | — | `{token, changes[], trashItems[], extras[]}` | — |
-| POST   | `/api/v1/series/{ref}/reconcile/apply` | `{token}` | `202 Job` | async |
-| POST   | `/api/v1/series/{ref}/reconcile/recover` | — | — | — |
-| POST   | `/api/v1/series/resolve` | `{terms[]}` | Resolve candidates | — |
-| GET    | `/api/v1/series/{ref}/trash` | — | Trash listing | ETag |
-| GET    | `/api/v1/trash` | — | Library-wide trash | ETag |
-| POST   | `/api/v1/series/{ref}/trash/{ulid}/restore` | — | Trash restore result | — |
-| DELETE | `/api/v1/series/{ref}/trash` | — | Trash empty result | — |
-| DELETE | `/api/v1/trash` | — | Library-wide empty result | — |
-| POST   | `/api/v1/library/reindex` | — | `202 Job` | async |
-| POST   | `/api/v1/library/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 Job` | async |
-| GET    | `/api/v1/inbox` | — | Inbox listing | ETag |
-| GET    | `/api/v1/jobs/{job}` | — | Job status | — |
-| GET    | `/api/v1/jobs/{job}/stream` | — | Server-Sent Events | 30 min max, 250 ms poll interval |
+| GET    | `/api/library/v1` | — | Library summary | ETag |
+| GET    | `/api/library/v1/series` | — | Paginated `ListResult` | ETag, query: `status`, `airing`, `tags`, `cursor`, `limit` |
+| GET    | `/api/library/v1/series/{ref}` | — | `Show` (series + episodes) | ETag, query: `episodes`, `status`, `source`, `resolution` |
+| PATCH  | `/api/library/v1/series/{ref}/tags` | `{tags[]}` | `{ref, tags[]}` | — |
+| POST   | `/api/library/v1/series` | `{ref, directory?, ordering?}` | Series spine | — |
+| POST   | `/api/library/v1/series/import` | `{ref, directory, force?, ordering?}` | Series spine | — |
+| POST   | `/api/library/v1/series/{ref}/reset` | `{episode?, trash?, extras?, all?}` | Reset summary | — |
+| POST   | `/api/library/v1/series/{ref}/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 {jobId, kind, statusUrl, streamUrl, submittedAt}` | async |
+| POST   | `/api/library/v1/series/{ref}/stage` | `{episodes[{episode, media, source?, companions?, replace?, attrs?}], trash[], extras[]}` | `202 Job` | async |
+| POST   | `/api/library/v1/series/{ref}/reconcile/plan` | — | `{token, changes[], trashItems[], extras[]}` | — |
+| POST   | `/api/library/v1/series/{ref}/reconcile/apply` | `{token}` | `202 Job` | async |
+| POST   | `/api/library/v1/series/{ref}/reconcile/recover` | — | — | — |
+| POST   | `/api/library/v1/series/resolve` | `{terms[]}` | Resolve candidates | — |
+| GET    | `/api/library/v1/series/{ref}/trash` | — | Trash listing | ETag |
+| GET    | `/api/library/v1/trash` | — | Library-wide trash | ETag |
+| POST   | `/api/library/v1/series/{ref}/trash/{ulid}/restore` | — | Trash restore result | — |
+| DELETE | `/api/library/v1/series/{ref}/trash` | — | Trash empty result | — |
+| DELETE | `/api/library/v1/trash` | — | Library-wide empty result | — |
+| POST   | `/api/library/v1/reindex` | — | `202 Job` | async |
+| POST   | `/api/library/v1/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 Job` | async |
+| GET    | `/api/library/v1/inbox` | — | Inbox listing | ETag |
+| GET    | `/api/library/v1/jobs/{job}` | — | Job status | — |
+| GET    | `/api/library/v1/jobs/{job}/stream` | — | Server-Sent Events | 30 min max, 250 ms poll interval |
 
 Episode stage entries accept optional `attrs`, a flat string map stored on
-the staged media record. `GET /api/v1/series/{ref}` returns `attrs` on active
+the staged media record. `GET /api/library/v1/series/{ref}` returns `attrs` on active
 and staged media records when present; attrs are not queryable or indexed.
 Active and staged media records also expose optional `dimensions` (the raw
 `WIDTHxHEIGHT` value) and `modifiedAt` (the persisted file modification time in
 RFC 3339 format) alongside the folded `resolution` label.
-`GET /api/v1/series/{ref}?episodes=...` accepts `ALL`, `NONE`,
+`GET /api/library/v1/series/{ref}?episodes=...` accepts `ALL`, `NONE`,
 `AIRING_SEASON`, `S<N>`, `S<N>E<E>`, or `S<N>E<A>-<B>`. Empty means `ALL`.
 `AIRING_SEASON` uses the same airing/tail window as list `isAiring` and
 composes with `status`, `source`, and `resolution`.
@@ -96,7 +96,7 @@ validation. `PATCH .../tags` applies plain expressions as additions and
 {"tags":["priority","!maintenance-disabled"]}
 ```
 
-`GET /api/v1/series?tags=priority%20!maintenance-disabled` applies a
+`GET /api/library/v1/series?tags=priority%20!maintenance-disabled` applies a
 conjunctive filter: every plain tag must be present and every `!tag` must be
 absent. Multiple `tags` query parameters are concatenated. List and show
 responses expose the stored tag set when non-empty.
@@ -114,8 +114,8 @@ Mutating long workflows (`scan`, `stage`, `reconcile apply`,
 {
   "jobId": "01HQF3XK...",
   "kind": "reconcile_apply",
-  "statusUrl": "/api/v1/jobs/01HQF3XK...",
-  "streamUrl": "/api/v1/jobs/01HQF3XK.../stream",
+  "statusUrl": "/api/library/v1/jobs/01HQF3XK...",
+  "streamUrl": "/api/library/v1/jobs/01HQF3XK.../stream",
   "submittedAt": "2026-05-09T12:34:56Z"
 }
 ```

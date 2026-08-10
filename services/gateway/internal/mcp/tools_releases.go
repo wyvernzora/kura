@@ -10,7 +10,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// listReleasesIn mirrors GET /api/v1/releases' query parameters.
+// listReleasesIn mirrors GET /api/releases/v1' query parameters.
 type listReleasesIn struct {
 	Ref    string `json:"ref,omitempty" jsonschema:"optional opaque metadata ref in provider:id form; omit to list recent matched releases across all refs"`
 	Since  string `json:"since,omitempty" jsonschema:"RFC3339 timestamp; when present, page by first-matched time instead of publication time"`
@@ -50,7 +50,7 @@ func registerReleaseTools(srv *mcpsdk.Server, s *Server) {
 		q.Set("limit", strconv.Itoa(limit))
 
 		var out map[string]any
-		err := s.releases.Get(ctx, "/releases", q, &out)
+		err := s.releases.Get(ctx, "", q, &out)
 		s.observe(ctx, "list_releases", start, err, "ref", in.Ref, "limit", limit)
 		if err != nil {
 			return errorResult(err), nil, nil
@@ -65,7 +65,7 @@ func registerReleaseTools(srv *mcpsdk.Server, s *Server) {
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in infohashIn) (*mcpsdk.CallToolResult, map[string]any, error) {
 		start := time.Now()
 		var out map[string]any
-		err := s.releases.Get(ctx, "/releases/"+url.PathEscape(in.Infohash), nil, &out)
+		err := s.releases.Get(ctx, "/"+url.PathEscape(in.Infohash), nil, &out)
 		s.observe(ctx, "get_release", start, err, "infohash", in.Infohash)
 		if err != nil {
 			return errorResult(err), nil, nil
@@ -80,7 +80,7 @@ func registerReleaseTools(srv *mcpsdk.Server, s *Server) {
 	}, func(ctx context.Context, _ *mcpsdk.CallToolRequest, in infohashIn) (*mcpsdk.CallToolResult, map[string]any, error) {
 		start := time.Now()
 		var out map[string]any
-		err := s.releases.Get(ctx, "/releases/"+url.PathEscape(in.Infohash)+"/magnet", nil, &out)
+		err := s.releases.Get(ctx, "/"+url.PathEscape(in.Infohash)+"/magnet", nil, &out)
 		// The magnet URI itself is never logged.
 		s.observe(ctx, "get_magnet", start, err, "infohash", in.Infohash)
 		if err != nil {

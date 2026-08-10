@@ -20,7 +20,8 @@ trigger:
   node because n8n triggers are structurally distinct node types.
 
 The package targets the v2 node contract: one gateway base URL, canonical
-`ref` fields, camelCase request and response fields, and `/api/v1` routes.
+`ref` fields, camelCase request and response fields, and per-service
+`/api/library/v1` and `/api/releases/v1` routes.
 Version 1 workflows must be migrated before installing this package.
 
 ## Workflow migration

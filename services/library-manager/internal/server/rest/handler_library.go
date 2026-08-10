@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// libraryResponse is the GET /api/v1/library body. Server-level
+// libraryResponse is the GET /api/library/v1 body. Server-level
 // summary independent of any series. Used by WebUI dashboard chrome
 // + CLI library introspection.
 type libraryResponse struct {

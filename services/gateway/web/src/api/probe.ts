@@ -5,7 +5,7 @@ import { useSession } from '@/state/session';
  * actually kura rather than a proxy interstitial. Lightweight, and the
  * response is useful to warm-cache for chrome.
  */
-const PROBE_PATH = '/api/v1/library';
+const PROBE_PATH = '/api/library/v1';
 
 type ProbeReason =
   /** Response shape suggests a proxy intercepted (HTML body, 302). */

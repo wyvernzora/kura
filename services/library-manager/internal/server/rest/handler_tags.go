@@ -7,7 +7,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/pkg/api"
 )
 
-// handleTagsUpdate serves PATCH /api/v1/series/{ref}/tags. Plain tag
+// handleTagsUpdate serves PATCH /api/library/v1/series/{ref}/tags. Plain tag
 // expressions add a tag; expressions prefixed with ! remove it.
 func (s *Server) handleTagsUpdate(w http.ResponseWriter, r *http.Request) {
 	ref, err := s.resolveRefPath(r.PathValue("ref"))

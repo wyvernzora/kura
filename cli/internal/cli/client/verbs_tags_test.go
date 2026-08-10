@@ -33,7 +33,7 @@ func TestUpdateTagsRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateTags: %v", err)
 	}
-	if gotMethod != http.MethodPatch || gotPath != "/api/v1/series/tvdb:42/tags" {
+	if gotMethod != http.MethodPatch || gotPath != "/api/library/v1/series/tvdb:42/tags" {
 		t.Fatalf("request = %s %s", gotMethod, gotPath)
 	}
 	if gotBody != `{"tags":["Priority","!Disabled"]}` {

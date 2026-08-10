@@ -72,7 +72,7 @@
         "iconColor": "semi-dark-orange",
         "expr": "kura_library_index_rebuilding > 0",
         "titleFormat": "index rebuilding (library 503 window)",
-        "textFormat": "kura_library_index_rebuilding = 1 — cold rebuilds answer 503 server_not_ready on /api/v1/*",
+        "textFormat": "kura_library_index_rebuilding = 1 — cold rebuilds answer 503 server_not_ready on /api/library/v1/*",
         "step": "30s",
         "useValueForTime": false
       },

@@ -990,7 +990,7 @@ func statGID(path string) (uint64, error) {
 // resolveSeriesRefForFixture maps either a metadata ref
 // (provider:id) or a literal series ref to the underlying SeriesRef
 // the harness needs to compute on-disk paths. Metadata refs trigger
-// a /api/v1/series/{ref} round-trip and read `.directory` from the
+// a /api/library/v1/series/{ref} round-trip and read `.directory` from the
 // response. Literal series refs pass through unchanged. Used by the
 // fixture commands kura_series_dir and kura_write_series_file so
 // scenarios can keep passing $KURA_LAST_REF after the metadata-ref
@@ -999,7 +999,7 @@ func resolveSeriesRefForFixture(b *e2eBinary, raw string) (string, error) {
 	if !strings.Contains(raw, ":") {
 		return raw, nil
 	}
-	resp, err := http.Get(b.url + "/api/v1/series/" + raw)
+	resp, err := http.Get(b.url + "/api/library/v1/series/" + raw)
 	if err != nil {
 		return "", fmt.Errorf("fixture lookup %q: %w", raw, err)
 	}
@@ -1110,7 +1110,7 @@ func restStageAttrs(ctx context.Context, b *e2eBinary, ref, episode, media strin
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.url+"/api/v1/series/"+ref+"/stage", bytes.NewReader(raw))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, b.url+"/api/library/v1/series/"+ref+"/stage", bytes.NewReader(raw))
 	if err != nil {
 		return "", err
 	}
@@ -1148,7 +1148,7 @@ func pollRESTJob(ctx context.Context, b *e2eBinary, jobID string) ([]byte, error
 	defer ticker.Stop()
 	deadline := time.After(5 * time.Second)
 	for {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.url+"/api/v1/jobs/"+jobID, http.NoBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.url+"/api/library/v1/jobs/"+jobID, http.NoBody)
 		if err != nil {
 			return nil, err
 		}

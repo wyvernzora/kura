@@ -436,8 +436,8 @@ exposed identically across surfaces.
 - **CLI** blocks on the job and renders progress inline. The operator
   sees no behavioral difference from a synchronous call.
 - **REST** returns `202 Accepted` with `{jobId, statusUrl, streamUrl}`.
-  Clients poll `GET /api/v1/jobs/{id}` or stream
-  `GET /api/v1/jobs/{id}/stream` (Server-Sent Events).
+  Clients poll `GET /api/library/v1/jobs/{id}` or stream
+  `GET /api/library/v1/jobs/{id}/stream` (Server-Sent Events).
 - **Agents** receive a job handle and poll `get_job` through the gateway.
 
 Lifecycle: each job has a ULID, kind (`scan` / `reconcile_apply` / …),

@@ -11,7 +11,7 @@ const (
 	SubmitStatusSuppressed SubmitStatus = "suppressed"
 )
 
-// ClaimRequest is the POST /api/v1/releases/queue/claim body.
+// ClaimRequest is the POST /api/releases/v1/queue/claim body.
 //
 // Limit defaults to 1 and is capped at 500. LeaseSeconds is required: a claim
 // without a lease would hold work indefinitely on a crashed worker.
@@ -48,7 +48,7 @@ type ClaimResponse struct {
 	Items []ClaimItem `json:"items"`
 }
 
-// SubmitRequest is the POST /api/v1/releases/queue/submit body.
+// SubmitRequest is the POST /api/releases/v1/queue/submit body.
 //
 // Ref is required when Status is matched and meaningless otherwise. Confidence
 // is optional even for a match — an external matcher that does not score its
@@ -71,7 +71,7 @@ type SubmitResponse struct {
 	Ok bool `json:"ok"`
 }
 
-// QueueStats is the GET /api/v1/releases/queue/stats response.
+// QueueStats is the GET /api/releases/v1/queue/stats response.
 //
 // Exhausted is the operator intervention signal: those releases will not be
 // re-offered without a deliberate reset.

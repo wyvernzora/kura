@@ -2,8 +2,9 @@
 #
 # Leaf addresses are deliberately absent: the bridge reads
 # KURA_LIBRARY_UPSTREAM and KURA_RELEASES_UPSTREAM, the same two variables
-# Caddy interpolates, and derives both the /api/v1 base and the /healthz probe
-# from each. One declaration per leaf, nothing to desync.
+# Caddy interpolates, and pairs each with its fixed REST prefix
+# (/api/library/v1, /api/releases/v1) plus the /healthz probe. One
+# declaration per leaf, nothing to desync.
 #
 # There is no version key either — the bridge stamps its version from ldflags,
 # as both leaves do. A ConfigMap value would lag the image tag and make

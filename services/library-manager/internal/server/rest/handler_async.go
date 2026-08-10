@@ -17,19 +17,19 @@ type jobSubmissionResponse struct {
 	SubmittedAt time.Time `json:"submittedAt"`
 }
 
-// scanRequest is the POST /api/v1/series/{ref}/scan body.
+// scanRequest is the POST /api/library/v1/series/{ref}/scan body.
 type scanRequest struct {
 	Refresh      bool   `json:"refresh,omitempty"`
 	MetadataOnly bool   `json:"metadataOnly,omitempty"`
 	Ordering     string `json:"ordering,omitempty"`
 }
 
-// applyRequest is the POST /api/v1/series/{ref}/reconcile/apply body.
+// applyRequest is the POST /api/library/v1/series/{ref}/reconcile/apply body.
 type applyRequest struct {
 	Token string `json:"token"`
 }
 
-// stageRequest is the POST /api/v1/series/{ref}/stage body. Mirrors
+// stageRequest is the POST /api/library/v1/series/{ref}/stage body. Mirrors
 // workflow.StageInput; transports parse domain refs at the boundary.
 type stageRequest struct {
 	Episodes []stageEpisode `json:"episodes,omitempty"`
@@ -164,8 +164,8 @@ func writeJobAck(w http.ResponseWriter, id, kind string, submittedAt time.Time) 
 	writeJSON(w, http.StatusAccepted, jobSubmissionResponse{
 		JobID:       id,
 		Kind:        kind,
-		StatusURL:   "/api/v1/jobs/" + id,
-		StreamURL:   "/api/v1/jobs/" + id + "/stream",
+		StatusURL:   "/api/library/v1/jobs/" + id,
+		StreamURL:   "/api/library/v1/jobs/" + id + "/stream",
 		SubmittedAt: submittedAt,
 	})
 }

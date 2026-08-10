@@ -17,7 +17,7 @@ import (
 func testServer(t *testing.T) *mcpsdk.ClientSession {
 	t.Helper()
 	opts := client.Options{RequestTimeout: time.Second, MaxResponseBytes: 1 << 20}
-	s := New("test", client.New("127.0.0.1:1", opts), client.New("127.0.0.1:1", opts), nil)
+	s := New("test", client.New("127.0.0.1:1", "/api/library/v1", opts), client.New("127.0.0.1:1", "/api/releases/v1", opts), nil)
 
 	ct, st := mcpsdk.NewInMemoryTransports()
 	go func() { _, _ = s.sdk.Connect(context.Background(), st, nil) }()
@@ -31,7 +31,7 @@ func testServer(t *testing.T) *mcpsdk.ClientSession {
 
 func TestHandlerExpiresIdleSessions(t *testing.T) {
 	opts := client.Options{RequestTimeout: time.Second, MaxResponseBytes: 1 << 20}
-	s := New("test", client.New("127.0.0.1:1", opts), client.New("127.0.0.1:1", opts), nil)
+	s := New("test", client.New("127.0.0.1:1", "/api/library/v1", opts), client.New("127.0.0.1:1", "/api/releases/v1", opts), nil)
 	httpServer := httptest.NewServer(s.Handler(50 * time.Millisecond))
 	t.Cleanup(httpServer.Close)
 

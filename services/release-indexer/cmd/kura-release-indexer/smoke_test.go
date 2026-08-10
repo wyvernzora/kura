@@ -75,13 +75,13 @@ func TestSmoke(t *testing.T) {
 				SizeBytes:   1234,
 			}},
 		})
-		resp, err := http.Post(baseURL+"/api/v1/releases/ingest", "application/json", bytes.NewReader(ingestBody))
+		resp, err := http.Post(baseURL+"/api/releases/v1/ingest", "application/json", bytes.NewReader(ingestBody))
 		if err != nil {
-			t.Fatalf("POST /api/v1/releases/ingest: %v", err)
+			t.Fatalf("POST /api/releases/v1/ingest: %v", err)
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("POST /api/v1/releases/ingest = %d, want 200", resp.StatusCode)
+			t.Fatalf("POST /api/releases/v1/ingest = %d, want 200", resp.StatusCode)
 		}
 		var summary api.IngestSummary
 		if err := json.NewDecoder(resp.Body).Decode(&summary); err != nil {
@@ -91,26 +91,26 @@ func TestSmoke(t *testing.T) {
 			t.Fatalf("/ingest summary = %+v, want batch.new=1 and queue.available>=1", summary)
 		}
 
-		magnetResp, err := http.Get(baseURL + "/api/v1/releases/" + smokeHexInfohash + "/magnet")
+		magnetResp, err := http.Get(baseURL + "/api/releases/v1/" + smokeHexInfohash + "/magnet")
 		if err != nil {
-			t.Fatalf("GET /api/v1/releases/{infohash}/magnet: %v", err)
+			t.Fatalf("GET /api/releases/v1/{infohash}/magnet: %v", err)
 		}
 		defer magnetResp.Body.Close()
 		if magnetResp.StatusCode != http.StatusOK {
-			t.Fatalf("GET /api/v1/releases/{infohash}/magnet = %d, want 200", magnetResp.StatusCode)
+			t.Fatalf("GET /api/releases/v1/{infohash}/magnet = %d, want 200", magnetResp.StatusCode)
 		}
 		var magnet struct {
 			Infohash string `json:"infohash"`
 			Magnet   string `json:"magnet"`
 		}
 		if err := json.NewDecoder(magnetResp.Body).Decode(&magnet); err != nil {
-			t.Fatalf("decode /api/v1/releases/{infohash}/magnet: %v", err)
+			t.Fatalf("decode /api/releases/v1/{infohash}/magnet: %v", err)
 		}
 		if magnet.Infohash != smokeHexInfohash || magnet.Magnet != "magnet:?xt=urn:btih:"+smokeHexInfohash+"&tr=udp://smoke:80" {
-			t.Fatalf("/api/v1/releases/{infohash}/magnet = %+v, want stored magnet", magnet)
+			t.Fatalf("/api/releases/v1/{infohash}/magnet = %+v, want stored magnet", magnet)
 		}
 
-		claimResp, err := http.Post(baseURL+"/api/v1/releases/queue/claim", "application/json", bytes.NewReader(mustJSON(t, map[string]any{
+		claimResp, err := http.Post(baseURL+"/api/releases/v1/queue/claim", "application/json", bytes.NewReader(mustJSON(t, map[string]any{
 			"limit": 5, "leaseSeconds": 60,
 		})))
 		if err != nil {
@@ -130,10 +130,10 @@ func TestSmoke(t *testing.T) {
 			t.Fatalf("decode /queue/claim: %v", err)
 		}
 		if len(claim.Items) != 1 || claim.Items[0].Infohash != smokeHexInfohash || claim.Items[0].ClaimToken == 0 {
-			t.Fatalf("/api/v1/releases/queue/claim = %+v, want smoke release with token", claim.Items)
+			t.Fatalf("/api/releases/v1/queue/claim = %+v, want smoke release with token", claim.Items)
 		}
 
-		submitResp, err := http.Post(baseURL+"/api/v1/releases/queue/submit", "application/json", bytes.NewReader(mustJSON(t, map[string]any{
+		submitResp, err := http.Post(baseURL+"/api/releases/v1/queue/submit", "application/json", bytes.NewReader(mustJSON(t, map[string]any{
 			"infohash":   claim.Items[0].Infohash,
 			"claimToken": claim.Items[0].ClaimToken,
 			"status":     "matched",
@@ -148,7 +148,7 @@ func TestSmoke(t *testing.T) {
 			t.Fatalf("POST /submit = %d, want 200", submitResp.StatusCode)
 		}
 
-		releaseResp, err := http.Get(baseURL + "/api/v1/releases/" + smokeHexInfohash)
+		releaseResp, err := http.Get(baseURL + "/api/releases/v1/" + smokeHexInfohash)
 		if err != nil {
 			t.Fatalf("GET /releases/{infohash}: %v", err)
 		}
@@ -170,10 +170,10 @@ func TestSmoke(t *testing.T) {
 			t.Fatalf("decode /releases/{infohash}: %v", err)
 		}
 		if release.Infohash != smokeHexInfohash || release.MatchStatus != "matched" || len(release.RawItems) != 1 || len(release.MatchEvents) != 1 {
-			t.Fatalf("/api/v1/releases/{infohash} = %+v, want matched release detail", release)
+			t.Fatalf("/api/releases/v1/{infohash} = %+v, want matched release detail", release)
 		}
 
-		statsResp, err := http.Get(baseURL + "/api/v1/releases/queue/stats")
+		statsResp, err := http.Get(baseURL + "/api/releases/v1/queue/stats")
 		if err != nil {
 			t.Fatalf("GET /queue/stats: %v", err)
 		}
@@ -183,7 +183,7 @@ func TestSmoke(t *testing.T) {
 			t.Fatalf("decode /queue/stats: %v", err)
 		}
 		if stats["matched"] != 1 || stats["available"] != 0 {
-			t.Fatalf("/api/v1/releases/queue/stats = %+v, want matched=1 available=0", stats)
+			t.Fatalf("/api/releases/v1/queue/stats = %+v, want matched=1 available=0", stats)
 		}
 	})
 
@@ -221,7 +221,7 @@ func TestSmoke(t *testing.T) {
 		}
 
 		// And the write API is not reachable from the metrics listener.
-		iResp, err := http.Post("http://"+metricsAddr+"/api/v1/releases/ingest",
+		iResp, err := http.Post("http://"+metricsAddr+"/api/releases/v1/ingest",
 			"application/json", bytes.NewReader([]byte(`{"posts":[]}`)))
 		if err != nil {
 			t.Fatalf("POST ingest on metrics listener: %v", err)
@@ -233,9 +233,9 @@ func TestSmoke(t *testing.T) {
 	})
 
 	t.Run("suite-headers", func(t *testing.T) {
-		resp, err := http.Get(baseURL + "/api/v1/releases")
+		resp, err := http.Get(baseURL + "/api/releases/v1")
 		if err != nil {
-			t.Fatalf("GET /api/v1/releases: %v", err)
+			t.Fatalf("GET /api/releases/v1: %v", err)
 		}
 		defer resp.Body.Close()
 		if got := resp.Header.Get("X-Kura-Version"); got == "" {

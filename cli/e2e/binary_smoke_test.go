@@ -29,7 +29,7 @@ func TestE2EBinary_Smoke(t *testing.T) {
 		t.Errorf("health status: got %d want 200", resp.StatusCode)
 	}
 
-	resp2, err := http.Get(b.url + "/api/v1/library")
+	resp2, err := http.Get(b.url + "/api/library/v1")
 	if err != nil {
 		t.Fatalf("GET /library: %v", err)
 	}

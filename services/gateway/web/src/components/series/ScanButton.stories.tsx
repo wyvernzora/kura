@@ -11,9 +11,9 @@ import { clearScanRecord, type ScanRecord, writeScanRecord } from '@/lib/scanSta
  * unique metadataRef so the four states render simultaneously without
  * fighting over the same key.
  *
- * The hook polls `/api/v1/jobs/{id}` while running. The Storybook
- * preview installs a global fetch mock for `/api/v1/series/*\/scan`
- * + `/api/v1/jobs/*` so clicking the button in a story exercises the
+ * The hook polls `/api/library/v1/jobs/{id}` while running. The Storybook
+ * preview installs a global fetch mock for `/api/library/v1/series/*\/scan`
+ * + `/api/library/v1/jobs/*` so clicking the button in a story exercises the
  * full kickoff → poll → terminal cycle without a real backend.
  */
 

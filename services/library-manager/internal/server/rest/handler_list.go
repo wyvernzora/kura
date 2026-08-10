@@ -15,7 +15,7 @@ const (
 	maxListMaxResults     = 1000
 )
 
-// handleList serves GET /api/v1/series.
+// handleList serves GET /api/library/v1/series.
 //
 // Query:
 //

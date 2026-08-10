@@ -17,7 +17,7 @@ func TestListReleasesMapsQueryParams(t *testing.T) {
 	h := New(st)
 
 	req := httptest.NewRequest(http.MethodGet,
-		"/api/v1/releases?ref=tvdb:123&limit=7&since=2026-06-24T12:00:00Z&cursor=abc", http.NoBody)
+		"/api/releases/v1?ref=tvdb:123&limit=7&since=2026-06-24T12:00:00Z&cursor=abc", http.NoBody)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 
@@ -46,7 +46,7 @@ func TestListReleasesMapsQueryParams(t *testing.T) {
 func TestListReleasesRejectsBadQueryParams(t *testing.T) {
 	for _, q := range []string{"?limit=nope", "?limit=-1", "?since=yesterday"} {
 		rec := httptest.NewRecorder()
-		New(&fakeStore{}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/releases"+q, http.NoBody))
+		New(&fakeStore{}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/releases/v1"+q, http.NoBody))
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("%s: status = %d, want 400", q, rec.Code)
 		}

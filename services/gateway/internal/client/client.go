@@ -65,16 +65,16 @@ type Options struct {
 	MaxResponseBytes int64
 }
 
-// New builds a client for an upstream given as host:port. The /api/v1 base and
-// the /healthz probe are both derived here so callers cannot spell either
-// inconsistently.
-func New(upstream string, opts Options) *Client {
+// New builds a client for an upstream given as host:port. base is the
+// service's REST prefix (e.g. /api/library/v1); it and the /healthz probe
+// are both fixed here so callers cannot spell either inconsistently.
+func New(upstream, base string, opts Options) *Client {
 	upstream = strings.TrimSuffix(strings.TrimSpace(upstream), "/")
 	if !strings.Contains(upstream, "://") {
 		upstream = "http://" + upstream
 	}
 	return &Client{
-		baseURL:   upstream + "/api/v1",
+		baseURL:   upstream + base,
 		healthURL: upstream + "/healthz",
 		http: &http.Client{
 			Transport: &http.Transport{

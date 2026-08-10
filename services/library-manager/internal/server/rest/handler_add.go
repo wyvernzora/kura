@@ -8,7 +8,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// addRequest is the POST /api/v1/series body. Mirrors the MCP
+// addRequest is the POST /api/library/v1/series body. Mirrors the MCP
 // add_series tool shape: `ref` is the metadata ref (resolved upstream
 // via /resolve), `directory` overrides the new on-disk directory
 // name, `ordering` pins the spine ordering.
@@ -18,7 +18,7 @@ type addRequest struct {
 	Ordering  string `json:"ordering,omitempty"`
 }
 
-// importRequest is the POST /api/v1/series/import body. Mirrors
+// importRequest is the POST /api/library/v1/series/import body. Mirrors
 // import_series: `ref` is the metadata ref, `directory` is the existing
 // directory under the library root to adopt.
 type importRequest struct {

@@ -23,18 +23,18 @@ func scrape(t *testing.T, m *Metrics) string {
 func TestWrapHTTPRecordsRoutePattern(t *testing.T) {
 	m := New("v-test")
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/series/{ref}", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /api/library/v1/series/{ref}", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	})
 	h := m.WrapHTTP(mux)
 
-	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v1/series/tvdb:1", http.NoBody))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/library/v1/series/tvdb:1", http.NoBody))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/nowhere", http.NoBody))
 
 	body := scrape(t, m)
 	for _, want := range []string{
 		`kura_library_build_info{version="v-test"} 1`,
-		`kura_library_http_requests_total{method="GET",route="/api/v1/series/{ref}",status="418"} 1`,
+		`kura_library_http_requests_total{method="GET",route="/api/library/v1/series/{ref}",status="418"} 1`,
 		`kura_library_http_requests_total{method="GET",route="other",status="404"} 1`,
 	} {
 		if !strings.Contains(body, want) {

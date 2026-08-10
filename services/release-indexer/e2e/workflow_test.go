@@ -223,7 +223,7 @@ func waitForAvailable(t *testing.T, indexerURL string, want int) {
 func claimOne(t *testing.T, indexerURL, wantInfohash string, leaseSeconds int) int64 {
 	t.Helper()
 	var claim claimResponse
-	postJSON(t, indexerURL+"/api/v1/releases/queue/claim", map[string]any{
+	postJSON(t, indexerURL+"/api/releases/v1/queue/claim", map[string]any{
 		"limit":        1,
 		"leaseSeconds": leaseSeconds,
 	}, http.StatusOK, &claim)
@@ -246,7 +246,7 @@ func claimOne(t *testing.T, indexerURL, wantInfohash string, leaseSeconds int) i
 func assertNoClaim(t *testing.T, indexerURL, note string) {
 	t.Helper()
 	var claim claimResponse
-	postJSON(t, indexerURL+"/api/v1/releases/queue/claim", map[string]any{
+	postJSON(t, indexerURL+"/api/releases/v1/queue/claim", map[string]any{
 		"limit":        1,
 		"leaseSeconds": 1,
 	}, http.StatusOK, &claim)
@@ -263,12 +263,12 @@ func submitOK(t *testing.T, indexerURL string, body map[string]any) {
 func assertSubmitStatus(t *testing.T, indexerURL string, wantStatus int, body map[string]any) {
 	t.Helper()
 	var out map[string]any
-	postJSON(t, indexerURL+"/api/v1/releases/queue/submit", body, wantStatus, &out)
+	postJSON(t, indexerURL+"/api/releases/v1/queue/submit", body, wantStatus, &out)
 }
 
 func queueStats(t *testing.T, indexerURL string) queueStatsResponse {
 	t.Helper()
-	resp, err := http.Get(indexerURL + "/api/v1/releases/queue/stats")
+	resp, err := http.Get(indexerURL + "/api/releases/v1/queue/stats")
 	if err != nil {
 		t.Fatalf("GET /queue/stats: %v", err)
 	}
@@ -294,7 +294,7 @@ func assertConsumerAPI(t *testing.T, ctx context.Context, indexerURL, wantMagnet
 	t.Helper()
 
 	var list listReleasesResponse
-	getJSON(t, ctx, indexerURL+"/api/v1/releases?ref=tvdb:12345&limit=10", http.StatusOK, &list)
+	getJSON(t, ctx, indexerURL+"/api/releases/v1?ref=tvdb:12345&limit=10", http.StatusOK, &list)
 	if len(list.Releases) != 1 {
 		t.Fatalf("list returned %d releases, want 1", len(list.Releases))
 	}
@@ -310,18 +310,18 @@ func assertConsumerAPI(t *testing.T, ctx context.Context, indexerURL, wantMagnet
 	}
 
 	var empty listReleasesResponse
-	getJSON(t, ctx, indexerURL+"/api/v1/releases?ref=tvdb:99999&limit=10", http.StatusOK, &empty)
+	getJSON(t, ctx, indexerURL+"/api/releases/v1?ref=tvdb:99999&limit=10", http.StatusOK, &empty)
 	if len(empty.Releases) != 0 {
 		t.Fatalf("list for an unmatched ref = %+v, want none", empty.Releases)
 	}
 
 	var magnet magnetResponse
-	getJSON(t, ctx, indexerURL+"/api/v1/releases/"+matchInfohash+"/magnet", http.StatusOK, &magnet)
+	getJSON(t, ctx, indexerURL+"/api/releases/v1/"+matchInfohash+"/magnet", http.StatusOK, &magnet)
 	if magnet.Magnet != wantMagnet {
 		t.Fatalf("magnet = %q, want %q", magnet.Magnet, wantMagnet)
 	}
 	// An unknown infohash is a 404, not an empty body.
-	getJSON(t, ctx, indexerURL+"/api/v1/releases/"+unknownInfohash+"/magnet", http.StatusNotFound, nil)
+	getJSON(t, ctx, indexerURL+"/api/releases/v1/"+unknownInfohash+"/magnet", http.StatusNotFound, nil)
 }
 
 func getJSON(t *testing.T, ctx context.Context, url string, wantStatus int, out any) {

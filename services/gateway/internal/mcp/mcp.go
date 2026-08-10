@@ -27,8 +27,10 @@ const (
 	// product, one name — the leaves are an implementation detail.
 	serverName = "kura"
 
-	// Endpoint is the streamable-HTTP path. It versions jointly with
-	// /api/v1: one axis, both bump together.
+	// Endpoint is the streamable-HTTP path. Its version is the gateway's
+	// own axis: the leaf REST surfaces version independently under
+	// /api/<service>/v1, but the MCP surface is gateway-composed and
+	// bumps on its own schedule.
 	Endpoint = "/mcp/v1"
 
 	// responseBudget bounds the two projections that can carry an

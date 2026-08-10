@@ -10,7 +10,7 @@ import (
 func TestHandleApply_RequiresToken(t *testing.T) {
 	srv := newTestServer(t)
 	body := strings.NewReader(`{}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/reconcile/apply", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/library/v1/series/foo/reconcile/apply", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -22,7 +22,7 @@ func TestHandleApply_RequiresToken(t *testing.T) {
 func TestHandleStage_RequiresAtLeastOneItem(t *testing.T) {
 	srv := newTestServer(t)
 	body := strings.NewReader(`{}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/stage", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/library/v1/series/foo/stage", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -34,7 +34,7 @@ func TestHandleStage_RequiresAtLeastOneItem(t *testing.T) {
 func TestHandleStage_BadEpisodeRef(t *testing.T) {
 	srv := newTestServer(t)
 	body := strings.NewReader(`{"episodes":[{"episode":"oops","mediaPath":"/x"}]}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/series/foo/stage", body)
+	req := httptest.NewRequest(http.MethodPost, "/api/library/v1/series/foo/stage", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)

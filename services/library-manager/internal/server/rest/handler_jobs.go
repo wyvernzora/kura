@@ -29,7 +29,7 @@ const (
 
 var jobIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-]{1,128}$`)
 
-// jobStatus is the GET /api/v1/jobs/{job} response shape. Mirrors the
+// jobStatus is the GET /api/library/v1/jobs/{job} response shape. Mirrors the
 // MCP tool_job_status projection so REST and MCP describe jobs the
 // same way. Per Product.md "Selectors, not paths," the response
 // surfaces the metadata ref (looked up via index) rather than the
@@ -60,7 +60,7 @@ type jobError struct {
 	Data    map[string]any `json:"data,omitempty"`
 }
 
-// handleJobStatus serves GET /api/v1/jobs/{job}.
+// handleJobStatus serves GET /api/library/v1/jobs/{job}.
 func (s *Server) handleJobStatus(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("job")
 	if !jobIDPattern.MatchString(id) {
@@ -121,7 +121,7 @@ func projectJobError(err error) *jobError {
 	return &jobError{Kind: errkind.KindInternal, Message: err.Error()}
 }
 
-// handleJobStream serves GET /api/v1/jobs/{job}/stream.
+// handleJobStream serves GET /api/library/v1/jobs/{job}/stream.
 //
 // SSE events:
 //

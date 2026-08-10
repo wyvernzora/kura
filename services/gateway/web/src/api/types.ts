@@ -65,7 +65,7 @@ export const ApiErrorKinds = {
 
 /**
  * `GET /api/v1/health` — returned for liveness probes. The boot probe
- * deliberately hits `/api/v1/library` instead, so that a proxy
+ * deliberately hits `/api/library/v1` instead, so that a proxy
  * interstitial is distinguishable from a real response.
  *
  * Hand-written: the Go side is `handler_health.go:healthResponse`,
@@ -81,7 +81,7 @@ export interface HealthResponse {
 }
 
 /**
- * `GET /api/v1/library` — the boot probe targets this endpoint: a 200
+ * `GET /api/library/v1` — the boot probe targets this endpoint: a 200
  * with valid JSON means kura answered, while HTML, a redirect, or a
  * 401 means the fronting proxy answered instead.
  *
@@ -97,7 +97,7 @@ export interface LibraryResponse {
 }
 
 /**
- * `POST /api/v1/series/resolve` request body. Hand-written: request shapes
+ * `POST /api/library/v1/series/resolve` request body. Hand-written: request shapes
  * have not been hoisted into a shared Go package yet.
  */
 export interface ResolveRequest {
@@ -105,7 +105,7 @@ export interface ResolveRequest {
 }
 
 /**
- * `POST /api/v1/series` request body. Hand-written: request shapes have
+ * `POST /api/library/v1/series` request body. Hand-written: request shapes have
  * not been hoisted into a shared Go package yet. `ref` is a metadata ref
  * (provider:id); `directory` / `ordering` are optional overrides.
  */

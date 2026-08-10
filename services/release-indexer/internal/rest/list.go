@@ -9,7 +9,7 @@ import (
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
 )
 
-// handleListReleases serves GET /api/v1/releases: matched releases, newest
+// handleListReleases serves GET /api/releases/v1: matched releases, newest
 // first, optionally narrowed to one ref. The store owns the limit default and
 // cap, so an omitted limit is passed through as zero rather than guessed at
 // here.

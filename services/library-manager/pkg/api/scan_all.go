@@ -1,6 +1,6 @@
 package api
 
-// ScanAllResult is the terminal payload of POST /api/v1/library/scan.
+// ScanAllResult is the terminal payload of POST /api/library/v1/scan.
 // Aggregates the outcome of fanning per-series scans across the
 // tracked library — total dispatched, succeeded, failed, and the
 // per-series failure detail for any that didn't succeed. Per-series

@@ -121,7 +121,7 @@ func run() error {
 	return runHTTP(ctx, logger, cfg.Addr, cfg.MetricsAddr, st, healthz, metricsSrv, crawls, crawlers)
 }
 
-// runHTTP mounts the API routes under /api/v1/releases plus /healthz on one
+// runHTTP mounts the API routes under /api/releases/v1 plus /healthz on one
 // listener, and /metrics on its own.
 func runHTTP(
 	ctx context.Context,
@@ -141,9 +141,9 @@ func runHTTP(
 	for source, crawler := range crawlers {
 		restAPI.RegisterCrawler(source, crawler)
 	}
-	mux.Handle("/api/v1/releases", restAPI)
-	mux.Handle("/api/v1/releases/", restAPI)
-	mux.Handle("/api/v1/sources/", restAPI)
+	mux.Handle("/api/releases/v1", restAPI)
+	mux.Handle("/api/releases/v1/", restAPI)
+	mux.Handle("/api/releases/v1/sources/", restAPI)
 
 	srv := &http.Server{Addr: addr, Handler: logHTTP(logger, metricsSrv.HTTP, suiteHeaders(version, metricsSrv.HTTP.Wrap(mux)))}
 
@@ -329,7 +329,7 @@ func parseLogLevel(s string) (slog.Level, error) {
 }
 
 // sourceCrawler is what both consumers of a crawler need: the scheduled loop
-// walks it by time, and POST /api/v1/sources/{source}/crawl consumes
+// walks it by time, and POST /api/releases/v1/sources/{source}/crawl consumes
 // cursor-addressed chunks.
 type sourceCrawler interface {
 	CrawlChunk(ctx context.Context, pageSize int, cursor string, lookback time.Duration) (crawl.CrawlResponse, error)

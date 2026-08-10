@@ -34,7 +34,7 @@ func (c *Crawler) CrawlSince(ctx context.Context, oldest time.Time, emit func([]
 }
 
 // CrawlChunk consumes exactly pageSize posts from the cursor's resume point,
-// per the chunked backfill contract behind POST /api/v1/sources/nyaa/crawl.
+// per the chunked backfill contract behind POST /api/releases/v1/sources/nyaa/crawl.
 func (c *Crawler) CrawlChunk(ctx context.Context, pageSize int, cursor string, lookback time.Duration) (crawl.CrawlResponse, error) {
 	return c.shared().CrawlChunk(ctx, pageSize, cursor, lookback)
 }

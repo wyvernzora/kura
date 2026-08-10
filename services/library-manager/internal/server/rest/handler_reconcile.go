@@ -7,7 +7,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// recoverRequest is the POST /api/v1/series/{ref}/reconcile/recover body.
+// recoverRequest is the POST /api/library/v1/series/{ref}/reconcile/recover body.
 type recoverRequest struct {
 	Force bool `json:"force,omitempty"`
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/wyvernzora/kura/services/library-manager/internal/workflow"
 )
 
-// resetRequest is the POST /api/v1/series/{ref}/reset body.
+// resetRequest is the POST /api/library/v1/series/{ref}/reset body.
 //
 // Episode and All are mutually exclusive on the staged-episode side;
 // trashIds and extraIds drop staged trash/extras records by ULID.
