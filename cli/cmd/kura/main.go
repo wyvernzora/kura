@@ -24,6 +24,7 @@ type cli struct {
 	Reset     resetCmd         `cmd:"" help:"Remove staged media from a tracked episode."`
 	Stage     stageCmd         `cmd:"" help:"Stage episode, trash, or extra intent for a series."`
 	Tag       tagCmd           `cmd:"" help:"Update opaque workflow tags on a series."`
+	Tape      tapeCmd          `cmd:"" help:"Consult, inspect, and run tape backups."`
 	Trash     trashCmd         `cmd:"" help:"Manage per-series trash entries."`
 }
 

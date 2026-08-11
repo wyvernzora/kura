@@ -1,0 +1,7 @@
+# tape_consult_sizing: repeatable --blank declarations reach the consult and
+# the R19 bring-N-blanks sizing line renders.
+# kura_e2e_config server=tape
+
+kura_tape consult --blank BLK001L6 --blank BLK002L6
+stdout 'Roster covers 100.0 GiB of 300.0 GiB pending; bring ~2 blank LTO-6.'
+stdout 'ABC123L6: tvdb:alpha, tvdb:beta \(100\.0 GiB\)'

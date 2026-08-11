@@ -1,0 +1,12 @@
+# tape_run_verbatim: a validated belief draft executes with the same series
+# list the persisted consult roster promised, without an approval step.
+# kura_e2e_config server=tape
+
+kura_tape consult
+stdout 'ABC123L6: tvdb:alpha, tvdb:beta \(100\.0 GiB\)'
+
+kura_tape run ABC123L6
+stdout 'Executed fill plan 01BX5ZZKBKACTAV9WEVGEMMVRZ on ABC123L6.'
+stdout 'Series:'
+stdout 'tvdb:alpha'
+stdout 'tvdb:beta'

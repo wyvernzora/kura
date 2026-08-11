@@ -1,0 +1,21 @@
+# tape_plan_stub_refusals: every §2 flat refusal keeps its exact code string
+# through the REST envelope and CLI error presentation.
+# kura_e2e_config server=tape
+
+! kura_tape plan DIV001L6
+stderr '^divergence_deferred:'
+
+! kura_tape plan ADP001L6
+stderr '^adoption_deferred:'
+
+! kura_tape plan IDN001L6
+stderr '^identity_unconfirmed:'
+
+! kura_tape plan CMP001L6
+stderr '^compaction_deferred:'
+
+! kura_tape plan SYN001L6
+stderr '^sync_deferred:'
+
+! kura_tape plan REC001L6
+stderr '^recovery_deferred:'

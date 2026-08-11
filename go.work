@@ -6,4 +6,5 @@ use (
 	./services/gateway
 	./services/library-manager
 	./services/release-indexer
+	./services/tape-backup
 )

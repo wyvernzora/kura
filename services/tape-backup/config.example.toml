@@ -1,0 +1,68 @@
+# This table and all its fields are optional.
+[server]
+
+# Optional; control plane only. Default = ":8080".
+addr = ":8080"
+
+# Optional; default = "info". Allowed: debug, info, warn, error.
+log_level = "info"
+
+
+# This table and all its fields are optional. The bearer token itself never
+# belongs in TOML: KURA_TOKEN overrides the token file.
+[auth]
+
+# Optional. Set true only when an authenticating proxy provides the gate.
+# Default = false.
+disabled = false
+
+# Optional. Existing tokens are read from this path; when absent, a token is
+# generated here with mode 0600. Default = "/var/lib/kura/token".
+token_path = "/var/lib/kura/token"
+
+# The key itself is mounted separately and never belongs in TOML.
+[encryption]
+
+# Optional path to the Secret-mounted 64-character lowercase hex AES-256 key.
+# One trailing newline is allowed. Default = "/etc/kura/tape.key".
+key_file = "/etc/kura/tape.key"
+
+
+# This table and both fields are required. The library is mounted read-only.
+[library]
+
+# Required; absolute path to the library root.
+root = "/media/anime/series"
+
+# Required; library-manager REST base URL. Its bearer token is supplied through
+# the KURA_TOKEN environment variable.
+url = "http://kura-library-manager:8080"
+
+
+# This table and its field are required.
+[state]
+
+# Required; absolute path for tape-backup-owned catalogs, plans, and status.
+root = "/var/lib/kura/backup"
+
+
+# This table and all its fields are optional.
+[tape]
+
+# Optional; tape sessions only. Default = "/mnt/ltfs".
+ltfs_root = "/mnt/ltfs"
+
+# Optional; tape sessions only. Default = "/dev/nst0". An empty value means
+# this pod has no drive.
+drive_device = "/dev/nst0"
+
+# Optional; executor only. Bytes reserved beyond the planned payload.
+# Default = 1073741824 (1 GiB).
+free_space_margin = 1073741824
+
+# Optional; executor only. Go duration. Default = "30m".
+idle_timeout = "30m"
+
+# Optional; executor only. Snapshot boundaries per explicit LTFS sync.
+# Default = 1 (per-snapshot).
+flush_cadence = 1

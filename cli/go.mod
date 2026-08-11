@@ -10,6 +10,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.3.1
 	github.com/wyvernzora/kura/services/library-manager v0.0.0-00010101000000-000000000000
 	github.com/wyvernzora/kura/services/release-indexer v0.0.0-00010101000000-000000000000
+	github.com/wyvernzora/kura/services/tape-backup v0.0.0-00010101000000-000000000000
 	golang.org/x/term v0.44.0
 	golang.org/x/tools v0.47.0
 	rsc.io/script v0.0.2
@@ -34,3 +35,5 @@ require (
 replace github.com/wyvernzora/kura/services/library-manager => ../services/library-manager
 
 replace github.com/wyvernzora/kura/services/release-indexer => ../services/release-indexer
+
+replace github.com/wyvernzora/kura/services/tape-backup => ../services/tape-backup

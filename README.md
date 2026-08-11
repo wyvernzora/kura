@@ -18,7 +18,7 @@ One repo, several services, one version line:
 | [`services/library-manager`](services/library-manager/) | The library manager: scans, stages, and reconciles an anime library; REST API |
 | [`services/release-indexer`](services/release-indexer/) | Release indexer: durable store + match work queue over raw releases (DMHY, Nyaa crawlers) |
 | [`integrations/n8n`](integrations/n8n/) | Custom n8n nodes for the suite — n8n drives the acquisition pipeline |
-| `kura-backup-agent` *(planned)* | LTO tape archival: a bounded context of the library manager plus an agent binary on the tape VM |
+| [`services/tape-backup`](services/tape-backup/) | LTO tape archival: one peer service hosting REST, planning, catalog state, and in-process tape sessions on the tape node |
 | [`services/gateway`](services/gateway/) | Suite gateway: Caddy + MCP bridge + SPA, one origin over every service API |
 
 The unified API cutover is operator-driven; its ordered procedure is

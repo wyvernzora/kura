@@ -15,6 +15,7 @@ section are relative to that service's directory unless they start with
 | `services/library-manager/` | kura core: library manager, REST API (no embedded UI, no MCP — the gateway serves that) |
 | `services/release-indexer/` | release indexer with built-in `sources/{dmhy,nyaa}` crawlers |
 | `services/gateway/` | suite gateway: Caddy + MCP bridge + SPA, one origin over every service API |
+| `services/tape-backup/` | LTO tape archival: control plane + ephemeral executor (planned) |
 | `integrations/n8n/` | the suite n8n node package: one Kura node (series/release/queue resources) + a queue trigger |
 | `prompts/` | reserved: versioned agent/matcher prompts |
 | `deploy/` | reserved: deployment manifests |
@@ -43,9 +44,11 @@ Conventional Commits v1.0.0, subject ≤72 chars, enforced by
 `.githooks/check-commit-subject.sh` via lefthook and CI:
 
 - Types: feat, fix, docs, refactor, test, build, ci, chore, perf, revert.
-- Scopes (closed enum): `library`, `indexer`, `gateway`, `backup`, `repo`,
-  `deps`, `release`, `n8n`, `deploy`, `cli`. Scope says where; type says what
-  kind. Adding a scope is a deliberate one-line change to the hook.
+- Scopes (closed enum): `library`, `indexer`, `gateway`, `tape`, `repo`,
+  `deps`, `release`, `n8n`, `deploy`, `cli`. Scope says where; type says
+  what kind. Service scopes are shorthands of their directory
+  (`library-manager`, `release-indexer`, `tape-backup`). Changing the enum
+  is a deliberate one-line change to the hook.
 - Merge commits and `fixup!`/`squash!` markers are exempt.
 - Commit messages must not mention Claude/AI tooling —
   `.githooks/block-ai-brand-commit-msg.sh` rejects them. No
@@ -229,6 +232,7 @@ When the user corrects your approach, append a one-line rule here before ending 
 - Treat LTO as operator-assisted homelab archival for valuable-but-replaceable data; prefer visible manual recovery conflicts and operator-approved risk over high-availability protocols or automatic conflict resolution.
 - Keep library-manager serve settings in strict TOML; reserve environment variables for the TVDB secret, stable host identity, client discovery, and the local `path` command.
 - For deployment-shaped E2E, reproduce known load-bearing topology including client placement, Service DNS and HTTP Host through proxy hops, TLS/auth boundaries, and network reachability; production containers reached through host loopback are not cluster-network proof.
+- When adjudicating a defect or design issue, first propose the removal/restatement that makes the defective state unrepresentable; fix inside the existing mechanism only when a named requirement blocks removal. ("If a question only produces bad answers, the question is bad — restate it or make it moot.")
 
 ---
 

@@ -1,7 +1,7 @@
 # Kura monorepo — root orchestration. Each module owns its Makefile;
 # these targets fan out.
 
-MODULES := services/library-manager services/release-indexer services/gateway services/gateway/web cli integrations/n8n
+MODULES := services/library-manager services/release-indexer services/gateway services/gateway/web services/tape-backup cli integrations/n8n
 
 .PHONY: check build test service-e2e product-e2e e2e
 

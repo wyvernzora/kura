@@ -2,10 +2,14 @@ package client
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	tapeapi "github.com/wyvernzora/kura/services/tape-backup/pkg/api"
 )
 
 func TestClient_Do_DecodesError(t *testing.T) {
@@ -76,6 +80,75 @@ func TestClient_DiscoveryHint(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "is it running") {
 		t.Errorf("hint missing: %v", err)
+	}
+}
+
+func TestTapeVerbTimeouts(t *testing.T) {
+	transport := &deadlineTransport{}
+	c := New("http://tape.example")
+	c.HTTPClient.Transport = transport
+
+	if _, err := c.TapeRun(t.Context(), tapeapi.PlanRequest{}); err != nil {
+		t.Fatalf("TapeRun() error = %v", err)
+	}
+	if transport.hasDeadline {
+		t.Fatal("TapeRun() request has a deadline, want no client timeout")
+	}
+	if c.HTTPClient.Timeout != defaultTimeout {
+		t.Fatalf(
+			"original client timeout after TapeRun() = %s, want %s",
+			c.HTTPClient.Timeout,
+			defaultTimeout,
+		)
+	}
+
+	if _, err := c.TapeStatus(t.Context()); err != nil {
+		t.Fatalf("TapeStatus() error = %v", err)
+	}
+	assertDefaultDeadline(t, transport)
+
+	if _, err := c.TapeConsult(t.Context(), nil); err != nil {
+		t.Fatalf("TapeConsult() error = %v", err)
+	}
+	assertDefaultDeadline(t, transport)
+}
+
+type deadlineTransport struct {
+	hasDeadline bool
+	remaining   time.Duration
+}
+
+func (t *deadlineTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	deadline, ok := request.Context().Deadline()
+	t.hasDeadline = ok
+	if ok {
+		t.remaining = time.Until(deadline)
+	} else {
+		t.remaining = 0
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("{}")),
+		Request:    request,
+	}, nil
+}
+
+func assertDefaultDeadline(t *testing.T, transport *deadlineTransport) {
+	t.Helper()
+	if !transport.hasDeadline {
+		t.Fatal("request has no deadline, want default client timeout")
+	}
+	const tolerance = time.Second
+	if transport.remaining < defaultTimeout-tolerance ||
+		transport.remaining > defaultTimeout {
+		t.Fatalf(
+			"request deadline remaining = %s, want within %s of %s",
+			transport.remaining,
+			tolerance,
+			defaultTimeout,
+		)
 	}
 }
 

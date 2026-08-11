@@ -1,0 +1,79 @@
+name: ci-tape
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/tape-backup/**"
+      - "go.work"
+      - ".github/workflows/ci-tape.yml"
+  pull_request:
+    paths:
+      - "services/tape-backup/**"
+      - "go.work"
+      - ".github/workflows/ci-tape.yml"
+
+concurrency:
+  group: ci-tape-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: go
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: services/tape-backup
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: services/tape-backup/go.mod
+          cache: true
+
+      # gofmt drift check: -l lists offenders without mutation.
+      - name: gofmt
+        run: |
+          drift=$(gofmt -l cmd internal)
+          if [ -n "$drift" ]; then
+            echo "::error::gofmt drift in:" >&2
+            echo "$drift" >&2
+            exit 1
+          fi
+
+      # Workspace drift check runs at the monorepo root: a `use` added
+      # without `go work sync`, or sync-promoted versions missing from a
+      # module's standalone go.sum, would otherwise pass silently.
+      - name: go work sync drift
+        working-directory: .
+        run: |
+          go work sync
+          git diff --exit-code
+
+      - name: go vet
+        env:
+          GOWORK: "off"
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9
+        env:
+          GOWORK: "off"
+        with:
+          version: v2.12.2
+          install-mode: goinstall
+          working-directory: services/tape-backup
+
+      - name: go test
+        env:
+          GOWORK: "off"
+        run: go test -race -count=1 ./...
+
+      - name: go build
+        env:
+          GOWORK: "off"
+        run: go build ./...
