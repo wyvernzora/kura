@@ -1,9 +1,14 @@
-name: release
+name: publish
 
-# Repo-wide versioning: one v* tag releases every service image at that
-# version. Replaces the per-repo release workflows.
+# Main is a suite-level deployment channel: after every applicable CI workflow
+# passes, all component images are rebuilt from the same commit and their
+# mutable :main tags advance together. Version tags remain optional releases.
 
 on:
+  workflow_run:
+    workflows: [ci-product]
+    types: [completed]
+    branches: [main]
   push:
     tags:
       - "v*.*.*"
@@ -14,6 +19,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: publish-${{ github.event_name == 'workflow_run' && 'main' || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+
 permissions:
   actions: read
   contents: write
@@ -21,72 +30,139 @@ permissions:
 
 jobs:
   verify:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.verify.outputs.version }}
       sha: ${{ steps.verify.outputs.sha }}
+      publish: ${{ steps.verify.outputs.publish }}
+      release: ${{ steps.verify.outputs.release }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           fetch-depth: 0
 
-      - name: Resolve version
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            version="${{ inputs.version }}"
-          else
-            version="${GITHUB_REF_NAME}"
-          fi
-          if [[ ! "$version" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
-            echo "version must look like v0.6.0, got $version" >&2
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      # Path-filtered service CI runs may legitimately not exist for a
-      # given commit. The always-running lint and full-product workflows
-      # are therefore the release gate after proving the tag is on main.
-      - name: Verify release commit is on main with passing CI
+      - name: Resolve publication and verify CI
         id: verify
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          VERSION: ${{ steps.version.outputs.version }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          git fetch --force --no-tags origin \
-            "+refs/tags/$VERSION:refs/tags/$VERSION" \
-            +refs/heads/main:refs/remotes/origin/main
+          set -euo pipefail
 
-          tagged_sha="$(git rev-parse "$VERSION^{commit}")"
-          echo "sha=$tagged_sha" >> "$GITHUB_OUTPUT"
-          if ! git merge-base --is-ancestor "$tagged_sha" origin/main; then
-            echo "::error::Release tag $VERSION points to $tagged_sha, which is not reachable from origin/main."
-            exit 1
-          fi
+          git fetch --force --no-tags origin +refs/heads/main:refs/remotes/origin/main
 
-          for workflow in ci-lint.yml ci-product.yml; do
-            ci_run_url="$(
-              gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs" \
-                --method GET \
-                -f branch=main \
-                -f event=push \
-                -f head_sha="$tagged_sha" \
-                -f status=completed \
-                --jq '.workflow_runs[] | select(.conclusion == "success") | .html_url' |
-                head -n 1
-            )"
-            if [ -z "$ci_run_url" ]; then
-              echo "::error::Release commit $tagged_sha does not have a successful $workflow push run on main."
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            sha="$WORKFLOW_RUN_SHA"
+            tip_sha="$(git rev-parse origin/main)"
+            if [ "$sha" != "$tip_sha" ]; then
+              echo "Superseded main commit $sha; current tip is $tip_sha."
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            version="main-${sha:0:7}"
+            release=false
+
+            # ci-product is normally the slowest workflow, but do not rely on
+            # that timing. Wait for every applicable ci-* push run for this
+            # commit and publish only when the latest run of each is green.
+            deadline=$((SECONDS + 1800))
+            while :; do
+              runs="$(
+                gh api "repos/$REPOSITORY/actions/runs" \
+                  --method GET \
+                  -f branch=main \
+                  -f event=push \
+                  -f head_sha="$sha" \
+                  -f per_page=100
+              )"
+              latest_runs="$(
+                jq -c '
+                  [.workflow_runs[] | select(.name | startswith("ci-"))]
+                  | sort_by(.name)
+                  | group_by(.name)
+                  | map(max_by(.run_number))
+                ' <<<"$runs"
+              )"
+
+              failed="$(
+                jq -r '.[] | select(.status == "completed" and .conclusion != "success") | "\(.name): \(.conclusion) \(.html_url)"' \
+                  <<<"$latest_runs"
+              )"
+              if [ -n "$failed" ]; then
+                echo "::error::Main commit $sha has failed CI:"
+                echo "$failed"
+                exit 1
+              fi
+
+              pending="$(jq -r '.[] | select(.status != "completed") | .name' <<<"$latest_runs")"
+              lint_green="$(jq -r 'any(.[]; .name == "ci-lint" and .conclusion == "success")' <<<"$latest_runs")"
+              product_green="$(jq -r 'any(.[]; .name == "ci-product" and .conclusion == "success")' <<<"$latest_runs")"
+              if [ -z "$pending" ] && [ "$lint_green" = true ] && [ "$product_green" = true ]; then
+                jq -r '.[] | "\(.name) passed: \(.html_url)"' <<<"$latest_runs"
+                break
+              fi
+
+              if (( SECONDS >= deadline )); then
+                echo "::error::Timed out waiting for all CI on main commit $sha."
+                exit 1
+              fi
+              echo "Waiting for all CI on $sha. Pending: ${pending:-required workflow registration}"
+              sleep 30
+            done
+          else
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              version="${{ inputs.version }}"
+            else
+              version="$GITHUB_REF_NAME"
+            fi
+            if [[ ! "$version" =~ ^v[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+              echo "version must look like v0.6.0, got $version" >&2
               exit 1
             fi
-            echo "$workflow passed: $ci_run_url"
-          done
 
-          echo "Release commit $tagged_sha is on main and passed required CI."
+            git fetch --force --no-tags origin "+refs/tags/$version:refs/tags/$version"
+            sha="$(git rev-parse "$version^{commit}")"
+            release=true
+
+            if ! git merge-base --is-ancestor "$sha" origin/main; then
+              echo "::error::Release tag $version points to $sha, which is not reachable from origin/main."
+              exit 1
+            fi
+
+            for workflow in ci-lint.yml ci-product.yml; do
+              ci_run_url="$(
+                gh api "repos/$REPOSITORY/actions/workflows/$workflow/runs" \
+                  --method GET \
+                  -f branch=main \
+                  -f event=push \
+                  -f head_sha="$sha" \
+                  -f status=completed \
+                  --jq '.workflow_runs[] | select(.conclusion == "success") | .html_url' |
+                  head -n 1
+              )"
+              if [ -z "$ci_run_url" ]; then
+                echo "::error::Release commit $sha does not have a successful $workflow push run on main."
+                exit 1
+              fi
+              echo "$workflow passed: $ci_run_url"
+            done
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Publishing Kura suite $version from $sha."
 
   publish-library:
     needs: verify
+    if: needs.verify.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -108,8 +184,9 @@ jobs:
         with:
           images: ghcr.io/wyvernzora/kura/library-manager
           tags: |
-            type=raw,value=${{ needs.verify.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=main,enable=${{ needs.verify.outputs.release != 'true' }}
+            type=raw,value=${{ needs.verify.outputs.version }},enable=${{ needs.verify.outputs.release == 'true' }}
+            type=raw,value=latest,enable=${{ needs.verify.outputs.release == 'true' }}
           labels: |
             org.opencontainers.image.title=kura-server
             org.opencontainers.image.description=Anime-first library manager
@@ -134,6 +211,7 @@ jobs:
 
   publish-n8n:
     needs: verify
+    if: needs.verify.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -155,8 +233,9 @@ jobs:
         with:
           images: ghcr.io/wyvernzora/kura/n8n-nodes
           tags: |
-            type=raw,value=${{ needs.verify.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=main,enable=${{ needs.verify.outputs.release != 'true' }}
+            type=raw,value=${{ needs.verify.outputs.version }},enable=${{ needs.verify.outputs.release == 'true' }}
+            type=raw,value=latest,enable=${{ needs.verify.outputs.release == 'true' }}
           labels: |
             org.opencontainers.image.title=kura-n8n-nodes
             org.opencontainers.image.description=Kura suite custom nodes for n8n (init container)
@@ -182,6 +261,7 @@ jobs:
 
   publish-gateway:
     needs: verify
+    if: needs.verify.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -203,8 +283,9 @@ jobs:
         with:
           images: ghcr.io/wyvernzora/kura/gateway
           tags: |
-            type=raw,value=${{ needs.verify.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=main,enable=${{ needs.verify.outputs.release != 'true' }}
+            type=raw,value=${{ needs.verify.outputs.version }},enable=${{ needs.verify.outputs.release == 'true' }}
+            type=raw,value=latest,enable=${{ needs.verify.outputs.release == 'true' }}
           labels: |
             org.opencontainers.image.title=kura-gateway
             org.opencontainers.image.description=Kura suite gateway (Caddy + MCP bridge + SPA)
@@ -229,6 +310,7 @@ jobs:
 
   publish-releases:
     needs: verify
+    if: needs.verify.outputs.publish == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -260,8 +342,9 @@ jobs:
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=raw,value=${{ needs.verify.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=main,enable=${{ needs.verify.outputs.release != 'true' }}
+            type=raw,value=${{ needs.verify.outputs.version }},enable=${{ needs.verify.outputs.release == 'true' }}
+            type=raw,value=latest,enable=${{ needs.verify.outputs.release == 'true' }}
           labels: |
             org.opencontainers.image.title=${{ matrix.component }}
             org.opencontainers.image.description=${{ matrix.description }}
@@ -287,8 +370,30 @@ jobs:
           cache-to: type=gha,mode=max,scope=release-${{ matrix.component }}
           provenance: false
 
+  cleanup-untagged:
+    needs: [verify, publish-library, publish-n8n, publish-gateway, publish-releases]
+    if: needs.verify.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - kura/library-manager
+          - kura/n8n-nodes
+          - kura/gateway
+          - kura/release-indexer
+    steps:
+      - name: Delete untagged versions, keep last 10
+        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
+        with:
+          package-name: ${{ matrix.package }}
+          package-type: container
+          delete-only-untagged-versions: "true"
+          min-versions-to-keep: 10
+
   github-release:
     needs: [verify, publish-library, publish-n8n, publish-gateway, publish-releases]
+    if: needs.verify.outputs.release == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

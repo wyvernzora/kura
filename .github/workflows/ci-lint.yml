@@ -1,8 +1,8 @@
 name: ci-lint
 
 # Commit-subject lint for the whole monorepo. No paths filter: this is the
-# one workflow that runs on every push/PR, so release verification can rely
-# on it existing for any commit.
+# one workflow that runs on every push/PR, so publication verification can
+# rely on it existing for any commit.
 
 on:
   push:
