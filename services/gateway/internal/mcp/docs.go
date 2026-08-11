@@ -159,7 +159,14 @@ what you want when catching up on what was matched recently.
 
 Returns at most 100 releases regardless of the limit requested; page with the
 returned nextCursor. sizeBytes and confidence are null when unrecorded — that
-is not the same as zero. Magnets are not included; use get_magnet.`
+is not the same as zero. Magnets are not included; use get_magnet.
+
+A cursor belongs to the call that produced it: it is bound to that ref and to
+whether since was present, because those select different orderings. Pass back
+the nextCursor from the response you just received, with the same ref and the
+same since argument. Reusing one against a different series, or after adding or
+dropping since, is rejected as invalid_cursor rather than silently ignored — so
+when you change either, start again with no cursor.`
 
 const docGetRelease = `Get one release with its full context.
 
