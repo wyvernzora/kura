@@ -5,7 +5,7 @@ go 1.26.3
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/pelletier/go-toml/v2 v2.3.1
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	golang.org/x/text v0.38.0
 )
 
