@@ -219,7 +219,8 @@ export class Kura implements INodeType {
 				name: 'errorOnNotFound',
 				type: 'boolean',
 				default: true,
-				description: 'Whether to throw an error when Kura has no series for the metadata ref',
+				description:
+					'Whether to throw when Kura has no series for the ref. When off, an untracked ref is emitted on the second output instead; a ref resolving to several series still throws.',
 				displayOptions: { show: { resource: ['series'], operation: ['show'] } },
 			},
 
@@ -352,7 +353,7 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 			if (shouldResolveNotFound(errorOnNotFound, error)) {
 				const result = await call('POST', '/api/library/v1/series/resolve', { terms: [ref] });
 				resolvedNotFound.push({
-					json: singleResolveCandidate(result, ref),
+					json: untrackedItem(result, ref),
 					pairedItem: { item: i },
 				});
 				continue;
@@ -486,12 +487,17 @@ export function isNotFoundError(error: unknown): boolean {
 	);
 }
 
-export function singleResolveCandidate(result: IDataObject, ref: string): IDataObject {
+// A ref Kura does not track is exactly the case errorOnNotFound=false exists
+// to make branchable, so zero candidates emits the ref rather than throwing.
+// Ambiguity is a different condition: several candidates means the ref
+// resolves to more than one series, and quietly picking one would be worse
+// than failing.
+export function untrackedItem(result: IDataObject, ref: string): IDataObject {
 	const candidates = arrayField(result, 'candidates');
-	if (candidates.length !== 1) {
+	if (candidates.length > 1) {
 		throw new Error(`resolve returned ${candidates.length} candidates for ref ${ref}`);
 	}
-	return candidates[0];
+	return candidates.length === 0 ? { ref } : candidates[0];
 }
 
 type HTTPCall = (method: IHttpRequestMethods, path: string, body?: IDataObject) => Promise<IDataObject>;

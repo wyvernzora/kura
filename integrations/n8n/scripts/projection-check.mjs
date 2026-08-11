@@ -7,7 +7,7 @@ const {
 	projectRow,
 	projectShow,
 	shouldResolveNotFound,
-	singleResolveCandidate,
+	untrackedItem,
 	splitTagExpressions,
 } = require('../dist/nodes/Kura/Kura.node.js');
 
@@ -230,7 +230,7 @@ assert.equal(shouldResolveNotFound(false, { httpCode: '404' }), true);
 assert.equal(shouldResolveNotFound(true, { httpCode: '404' }), false);
 assert.equal(shouldResolveNotFound(false, { httpCode: '500' }), false);
 assert.deepEqual(
-	singleResolveCandidate(
+	untrackedItem(
 		{
 			candidates: [
 				{
@@ -246,9 +246,14 @@ assert.deepEqual(
 		preferredTitle: 'Bookworm',
 	},
 );
+// errorOnNotFound=false promises absence is branchable, so an unresolvable
+// ref emits rather than throwing — this is the shape the untracked output
+// carries when Kura knows nothing about the ref at all.
+assert.deepEqual(untrackedItem({ candidates: [] }, 'tvdb:404'), { ref: 'tvdb:404' });
+// Ambiguity is not absence: picking one of several silently would be worse.
 assert.throws(
-	() => singleResolveCandidate({ candidates: [] }, 'tvdb:404'),
-	/resolve returned 0 candidates for ref tvdb:404/,
+	() => untrackedItem({ candidates: [{ ref: 'tvdb:1' }, { ref: 'tvdb:2' }] }, 'tvdb:404'),
+	/resolve returned 2 candidates for ref tvdb:404/,
 );
 
 console.log('projection-check ok');

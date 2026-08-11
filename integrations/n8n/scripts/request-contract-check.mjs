@@ -200,6 +200,32 @@ function request(method, path, body) {
 	assert.deepEqual(output, [[], [{ json: { ref: REF, preferredTitle: 'Bookworm' }, pairedItem: { item: 0 } }]]);
 }
 
+// A ref Kura has never heard of is the whole point of errorOnNotFound=false:
+// it must reach the untracked output, not abort the run.
+{
+	const notFound = Object.assign(new Error('not found'), { statusCode: 404 });
+	const { calls, output } = await execute(
+		{
+			resource: 'series',
+			operation: 'show',
+			ref: REF,
+			episodes: '',
+			status: [],
+			source: '',
+			resolution: '',
+			includeSpecials: false,
+			simplifyOutput: true,
+			errorOnNotFound: false,
+		},
+		[notFound, { candidates: [] }],
+	);
+	assert.deepEqual(calls, [
+		request('GET', '/api/library/v1/series/tvdb%3A370070'),
+		request('POST', '/api/library/v1/series/resolve', { terms: [REF] }),
+	]);
+	assert.deepEqual(output, [[], [{ json: { ref: REF }, pairedItem: { item: 0 } }]]);
+}
+
 {
 	const { calls, output } = await execute(
 		{
