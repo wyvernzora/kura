@@ -5,7 +5,7 @@ go 1.26.3
 require (
 	github.com/felixge/httpsnoop v1.1.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/pelletier/go-toml/v2 v2.3.1
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
