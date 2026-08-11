@@ -38,7 +38,13 @@ type Config struct {
 	RequestTimeout   time.Duration
 	ComponentTimeout time.Duration
 	MaxResponseBytes int64
-	SessionTimeout   time.Duration
+	// SessionTimeout expires idle MCP sessions. The SDK's timer is
+	// refcounted by POSTs only, so an open SSE stream does not hold a
+	// session open: the value must exceed the longest gap between a
+	// client's tool calls, not just its connection lifetime. It is also
+	// the only reclaim path we have — n8n's MCP client closes locally and
+	// never sends DELETE — so it cannot be disabled.
+	SessionTimeout time.Duration
 
 	LibraryUpstream  string
 	ReleasesUpstream string
@@ -52,7 +58,7 @@ func Defaults() Config {
 		RequestTimeout:   30 * time.Second,
 		ComponentTimeout: time.Second,
 		MaxResponseBytes: 1 << 20,
-		SessionTimeout:   5 * time.Minute,
+		SessionTimeout:   2 * time.Hour,
 	}
 }
 

@@ -25,4 +25,12 @@ max_response_bytes = 1048576
 component_timeout = "1s"
 
 [mcp]
-session_timeout = "5m"
+# Idle MCP sessions are reclaimed after this long. The SDK's timer is
+# refcounted by POSTs only, so an open SSE stream does not keep a session
+# alive: the value must exceed the longest gap between a client's tool
+# calls. Long enough that no live client reaches it, short enough to
+# reclaim after a client crash. It cannot be disabled — n8n's MCP client
+# closes locally and never sends DELETE, so this is the only reclaim path.
+# Generous rather than tight because clients do not recover from a legal
+# session termination: https://github.com/modelcontextprotocol/typescript-sdk/issues/1708
+session_timeout = "2h"

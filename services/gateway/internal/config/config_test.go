@@ -119,6 +119,60 @@ func TestMetricsAddressDefaultAndOverride(t *testing.T) {
 	}
 }
 
+// The session timeout is the only reclaim path for MCP sessions — n8n's
+// client never sends DELETE — and it must outlive the longest gap between a
+// client's tool calls. A ConfigMap-mounted gateway.toml is how a deployment
+// retunes it, so the file has to win over the baked default.
+func TestSessionTimeoutDefaultAndFileOverride(t *testing.T) {
+	vars := map[string]string{EnvLibraryUpstream: "lib:8080", EnvReleasesUpstream: "rel:8080"}
+
+	cfg, err := Load(filepath.Join(t.TempDir(), "nope.toml"), env(vars))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SessionTimeout != 2*time.Hour {
+		t.Fatalf("default session_timeout = %s, want 2h", cfg.SessionTimeout)
+	}
+
+	path := filepath.Join(t.TempDir(), "gateway.toml")
+	if err := os.WriteFile(path, []byte("[mcp]\nsession_timeout = \"45m\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(path, env(vars))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.SessionTimeout != 45*time.Minute {
+		t.Fatalf("session_timeout = %s, want 45m", cfg.SessionTimeout)
+	}
+}
+
+// A ConfigMap typo must fail startup rather than silently fall back to a
+// value the operator did not choose.
+func TestLoadRejectsUnusableSessionTimeout(t *testing.T) {
+	for name, body := range map[string]string{
+		"not a duration": "[mcp]\nsession_timeout = \"forever\"\n",
+		"non-positive":   "[mcp]\nsession_timeout = \"0s\"\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "gateway.toml")
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Load(path, env(map[string]string{
+				EnvLibraryUpstream:  "lib:8080",
+				EnvReleasesUpstream: "rel:8080",
+			}))
+			if err == nil {
+				t.Fatal("unusable session_timeout accepted, want error")
+			}
+			if !strings.Contains(err.Error(), "session_timeout") {
+				t.Fatalf("error = %q, want it to name session_timeout", err)
+			}
+		})
+	}
+}
+
 func TestValidateRejectsMetricsAddressCollision(t *testing.T) {
 	for name, metrics := range map[string]string{
 		"identical": "127.0.0.1:8081",
