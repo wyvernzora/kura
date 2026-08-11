@@ -15,7 +15,7 @@ require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/mattn/go-isatty v0.0.24
 	github.com/nssteinbrenner/anitogo v1.0.0
-	github.com/oklog/ulid/v2 v2.1.1
+	github.com/oklog/ulid/v2 v2.1.2
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/sync v0.21.0
 	golang.org/x/sys v0.46.0
