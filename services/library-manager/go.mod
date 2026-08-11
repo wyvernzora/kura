@@ -12,7 +12,7 @@ require (
 require (
 	cloud.google.com/go v0.123.0
 	github.com/google/renameio/v2 v2.0.2
-	github.com/lmittmann/tint v1.1.3
+	github.com/lmittmann/tint v1.2.0
 	github.com/mattn/go-isatty v0.0.24
 	github.com/nssteinbrenner/anitogo v1.0.0
 	github.com/oklog/ulid/v2 v2.1.2
