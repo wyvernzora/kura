@@ -3,6 +3,11 @@ name: publish
 # Main is a suite-level deployment channel: after every applicable CI workflow
 # passes, all component images are rebuilt from the same commit and their
 # mutable :main tags advance together. Version tags remain optional releases.
+#
+# Nothing here prunes ghcr. Downstream repos pin :main by digest — the form
+# Renovate can track and bump on its own — so the manifest :main just moved
+# off of is still load-bearing even though it is now untagged, and deleting
+# it 404s their builds. Storage is free; do not add a cleanup job back.
 
 on:
   workflow_run:
@@ -369,27 +374,6 @@ jobs:
           cache-from: type=gha,scope=release-${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=release-${{ matrix.component }}
           provenance: false
-
-  cleanup-untagged:
-    needs: [verify, publish-library, publish-n8n, publish-gateway, publish-releases]
-    if: needs.verify.outputs.publish == 'true'
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - kura/library-manager
-          - kura/n8n-nodes
-          - kura/gateway
-          - kura/release-indexer
-    steps:
-      - name: Delete untagged versions, keep last 10
-        uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5
-        with:
-          package-name: ${{ matrix.package }}
-          package-type: container
-          delete-only-untagged-versions: "true"
-          min-versions-to-keep: 10
 
   github-release:
     needs: [verify, publish-library, publish-n8n, publish-gateway, publish-releases]
