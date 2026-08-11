@@ -7,7 +7,7 @@ require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/oklog/ulid/v2 v2.1.2
-	github.com/pelletier/go-toml/v2 v2.3.1
+	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/wyvernzora/kura/services/library-manager v0.0.0-00010101000000-000000000000
 	github.com/wyvernzora/kura/services/release-indexer v0.0.0-00010101000000-000000000000
 	golang.org/x/term v0.45.0
