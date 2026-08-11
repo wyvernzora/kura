@@ -21,7 +21,7 @@ import (
 func newServerLogger(w io.Writer, rawLevel string) *slog.Logger {
 	level := parseLogLevel(rawLevel)
 	if file, ok := w.(*os.File); ok && isatty.IsTerminal(file.Fd()) {
-		return slog.New(tint.NewHandler(w, &tint.Options{
+		return slog.New(tint.NewTextHandler(w, &tint.Options{
 			Level:      level,
 			TimeFormat: time.Kitchen,
 		}))
