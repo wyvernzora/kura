@@ -11,7 +11,7 @@ require (
 	github.com/wyvernzora/kura/services/library-manager v0.0.0-00010101000000-000000000000
 	github.com/wyvernzora/kura/services/release-indexer v0.0.0-00010101000000-000000000000
 	golang.org/x/term v0.45.0
-	golang.org/x/tools v0.47.0
+	golang.org/x/tools v0.48.0
 	rsc.io/script v0.0.2
 )
 
