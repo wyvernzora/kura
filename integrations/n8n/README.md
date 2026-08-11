@@ -16,8 +16,11 @@ trigger:
     through the unified gateway.
 - **Kura Queue Trigger** — polling trigger that claims release-indexer
   queue work on n8n's standard poll schedule and stays idle (no
-  execution) when nothing is claimable. Kept separate from the action
-  node because n8n triggers are structurally distinct node types.
+  execution) when nothing is claimable. Emits one item per claim, each
+  carrying its own `infohash` and `claimToken`, so a workflow binds a
+  submission to the claim it came from rather than restating identity.
+  Kept separate from the action node because n8n triggers are
+  structurally distinct node types.
 
 The package targets the v2 node contract: one gateway base URL, canonical
 `ref` fields, camelCase request and response fields, and per-service
@@ -32,6 +35,10 @@ Version 1 workflows must be migrated before installing this package.
 - Replace `lease_seconds` with `leaseSeconds`.
 - Re-add or update each Kura node to type version 2. The package intentionally
   does not retain the pre-gateway v1 transport.
+- Update **Kura Queue Trigger** to type version 3 and drop whatever unwrapped
+  its old `{items, count}` envelope: it now emits one item per claim. Set
+  `leaseSeconds` explicitly — the default suits a fast consumer, not one that
+  spends minutes per claim.
 
 ## Build
 

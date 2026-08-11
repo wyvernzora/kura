@@ -82,7 +82,7 @@ function request(method, path, body) {
 	assert.equal(credential.test.request.url, '/api/v1/health');
 	assert.equal(new Kura().description.version, 2);
 	assert.deepEqual(new Kura().description.credentials, [{ name: 'kuraApi', required: true }]);
-	assert.equal(new KuraQueueTrigger().description.version, 2);
+	assert.equal(new KuraQueueTrigger().description.version, 3);
 	assert.deepEqual(new KuraQueueTrigger().description.credentials, [
 		{ name: 'kuraApi', required: true },
 	]);
@@ -391,7 +391,33 @@ function request(method, path, body) {
 	assert.deepEqual(test.calls, [
 		request('POST', '/api/releases/v1/queue/claim', { limit: 3, leaseSeconds: 120 }),
 	]);
-	assert.deepEqual(output, [[{ json: { items: [{ infohash: HASH, claimToken: 42, rawItems: [] }], count: 1 } }]]);
+	assert.deepEqual(output, [[{ json: { infohash: HASH, claimToken: 42, rawItems: [] } }]]);
+}
+
+// Each claim is its own n8n item, carrying the identity a submission has to
+// fence on — so a workflow binds claimToken from the paired item instead of
+// asking a model to restate it.
+{
+	const second = 'abcdef0123456789abcdef0123456789abcdef01';
+	const test = harness({
+		parameters: { limit: 3, leaseSeconds: 120 },
+		responses: [
+			{
+				items: [
+					{ infohash: HASH, claimToken: 42, rawItems: [] },
+					{ infohash: second, claimToken: 43, rawItems: [] },
+				],
+			},
+		],
+	});
+	const output = await KuraQueueTrigger.prototype.poll.call(test.context);
+	test.assertDone();
+	assert.deepEqual(output, [
+		[
+			{ json: { infohash: HASH, claimToken: 42, rawItems: [] } },
+			{ json: { infohash: second, claimToken: 43, rawItems: [] } },
+		],
+	]);
 }
 
 {

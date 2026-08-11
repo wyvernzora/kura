@@ -12,8 +12,13 @@ const CRED = 'kuraApi';
 
 /**
  * Kura Queue Trigger — polls by claiming release-indexer queue work. It stays
- * idle when no work is claimable and emits one batch item when work exists.
- * The poll schedule comes from n8n's standard polling UI.
+ * idle when no work is claimable and emits one item per claim when work
+ * exists. The poll schedule comes from n8n's standard polling UI.
+ *
+ * Claims are emitted individually because batching is a transport detail of
+ * the claim API, not something every consumer should have to unwrap: each
+ * item carries its own infohash and claimToken, so a workflow can bind a
+ * submission back to the claim it came from without restating identity.
  */
 export class KuraQueueTrigger implements INodeType {
 	description: INodeTypeDescription = {
@@ -24,7 +29,7 @@ export class KuraQueueTrigger implements INodeType {
 			dark: 'file:../../assets/kura.dark.svg',
 		},
 		group: ['trigger'],
-		version: 2,
+		version: 3,
 		subtitle: '={{"claim: " + $parameter["limit"]}}',
 		description: 'Claims Kura release-indexer queue work when releases are available',
 		codex: {
@@ -45,7 +50,7 @@ export class KuraQueueTrigger implements INodeType {
 				name: 'limit',
 				type: 'number',
 				typeOptions: { minValue: 1 },
-				default: 10,
+				default: 1,
 				description: 'Max releases to claim per poll',
 			},
 			{
@@ -53,7 +58,8 @@ export class KuraQueueTrigger implements INodeType {
 				name: 'leaseSeconds',
 				type: 'number',
 				default: 300,
-				description: 'Lease length; honored if supplied, else a server default',
+				description:
+					'Lease length in seconds. Must exceed this workflow worst case from claim through submit; a lease that expires mid-processing makes submit fail with a stale-claim conflict.',
 			},
 		],
 	};
@@ -85,6 +91,6 @@ export class KuraQueueTrigger implements INodeType {
 		}
 
 		Logger.info('Kura queue trigger emitted claims', { claimed_count: claimed.length });
-		return [[{ json: { items: claimed, count: claimed.length } }]];
+		return [claimed.map((claim) => ({ json: claim }))];
 	}
 }
