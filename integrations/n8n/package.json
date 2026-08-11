@@ -45,7 +45,7 @@
     "@n8n/eslint-plugin-community-nodes": "0.28.0",
     "@typescript-eslint/parser": "8.66.0",
     "@types/node": "^24.0.0",
-    "eslint": "9.29.0",
+    "eslint": "9.39.5",
     "n8n-workflow": "2.28.1",
     "typescript": "^6.0.0"
   }
