@@ -248,6 +248,48 @@ function request(method, path, body) {
 }
 
 {
+	const secondRef = 'tvdb:404';
+	const { calls, output } = await execute(
+		{
+			resource: 'series',
+			operation: 'scan',
+			ref: (itemIndex) => (itemIndex === 0 ? REF : secondRef),
+			metadataOnly: (itemIndex) => itemIndex === 0,
+			refresh: (itemIndex) => itemIndex === 1,
+			ordering: (itemIndex) => (itemIndex === 0 ? '' : 'dvd'),
+		},
+		[
+			{ jobId: 'scan-1', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-1' },
+			{ jobId: 'scan-2', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-2' },
+		],
+		[{ json: { ref: REF } }, { json: { ref: secondRef } }],
+	);
+	assert.deepEqual(calls, [
+		request('POST', '/api/library/v1/series/tvdb%3A370070/scan', {
+			metadataOnly: true,
+			refresh: false,
+		}),
+		request('POST', '/api/library/v1/series/tvdb%3A404/scan', {
+			metadataOnly: false,
+			refresh: true,
+			ordering: 'dvd',
+		}),
+	]);
+	assert.deepEqual(output, [
+		[
+			{
+				json: { jobId: 'scan-1', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-1' },
+				pairedItem: { item: 0 },
+			},
+			{
+				json: { jobId: 'scan-2', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-2' },
+				pairedItem: { item: 1 },
+			},
+		],
+	]);
+}
+
+{
 	const posts = [
 		{
 			title: 'Bookworm 01',

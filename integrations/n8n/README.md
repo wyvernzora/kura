@@ -4,7 +4,7 @@ Custom n8n nodes for the Kura suite — one package, one action node, one
 trigger:
 
 - **Kura** node — resources × operations over the suite APIs:
-  - **Series** (library-manager): List actionable series, Show series
+  - **Series** (library-manager): List actionable series, Scan series, Show series
     state (with an optional second "untracked" output that resolves
     unknown refs), Update Tags.
   - **Release** (release-indexer): Ingest raw posts, Get a release, Get

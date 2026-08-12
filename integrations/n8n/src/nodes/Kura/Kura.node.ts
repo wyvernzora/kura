@@ -66,6 +66,7 @@ export class Kura implements INodeType {
 				displayOptions: { show: { resource: ['series'] } },
 				options: [
 					{ name: 'List', value: 'list', action: 'List actionable series' },
+					{ name: 'Scan', value: 'scan', action: 'Scan a series' },
 					{ name: 'Show', value: 'show', action: 'Show series state' },
 					{ name: 'Update Tags', value: 'updateTags', action: 'Update tags on a series' },
 				],
@@ -152,7 +153,42 @@ export class Kura implements INodeType {
 				default: '={{$json.ref}}',
 				required: true,
 				description: 'Kura canonical ref, for example tvdb:370070',
-				displayOptions: { show: { resource: ['series'], operation: ['show', 'updateTags'] } },
+				displayOptions: { show: { resource: ['series'], operation: ['scan', 'show', 'updateTags'] } },
+			},
+			{
+				displayName: 'Metadata Only',
+				name: 'metadataOnly',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether to refresh the provider spine, artwork, aliases, and search data without scanning files',
+				displayOptions: { show: { resource: ['series'], operation: ['scan'] } },
+			},
+			{
+				displayName: 'Refresh Media',
+				name: 'refresh',
+				type: 'boolean',
+				default: false,
+				description:
+					'Whether to re-probe active media even when file size and modification time are unchanged',
+				displayOptions: { show: { resource: ['series'], operation: ['scan'] } },
+			},
+			{
+				displayName: 'Ordering',
+				name: 'ordering',
+				type: 'options',
+				options: [
+					{ name: 'Keep Existing', value: '' },
+					{ name: 'Absolute', value: 'absolute' },
+					{ name: 'Alternate', value: 'alternate' },
+					{ name: 'Default', value: 'default' },
+					{ name: 'DVD', value: 'dvd' },
+					{ name: 'Official', value: 'official' },
+					{ name: 'Regional', value: 'regional' },
+				],
+				default: '',
+				description: 'Episode ordering to pin while refreshing the provider spine',
+				displayOptions: { show: { resource: ['series'], operation: ['scan'] } },
 			},
 			{
 				displayName: 'Tag Changes',
@@ -323,6 +359,35 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 					'PATCH',
 					`/api/library/v1/series/${encodeURIComponent(ref)}/tags`,
 					{ tags },
+				);
+				out.push({ json: result, pairedItem: { item: i } });
+			} catch (error) {
+				if (this.continueOnFail()) {
+					out.push({ json: { error: (error as Error).message }, pairedItem: { item: i } });
+					continue;
+				}
+				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex: i });
+			}
+		}
+		return [out];
+	}
+
+	if (operation === 'scan') {
+		const items = this.getInputData();
+		const out: INodeExecutionData[] = [];
+		for (let i = 0; i < items.length; i++) {
+			const ref = this.getNodeParameter('ref', i) as string;
+			const body: IDataObject = {
+				metadataOnly: this.getNodeParameter('metadataOnly', i) as boolean,
+				refresh: this.getNodeParameter('refresh', i) as boolean,
+			};
+			const ordering = this.getNodeParameter('ordering', i) as string;
+			if (ordering !== '') body.ordering = ordering;
+			try {
+				const result = await call(
+					'POST',
+					`/api/library/v1/series/${encodeURIComponent(ref)}/scan`,
+					body,
 				);
 				out.push({ json: result, pairedItem: { item: i } });
 			} catch (error) {
