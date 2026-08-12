@@ -7,10 +7,11 @@ import type {
 	INodeTypeDescription,
 	JsonObject,
 } from 'n8n-workflow';
-import { LoggerProxy as Logger, NodeApiError, NodeConnectionTypes } from 'n8n-workflow';
+import { LoggerProxy as Logger, NodeApiError, NodeConnectionTypes, sleep } from 'n8n-workflow';
 
 const CRED = 'kuraApi';
 const PAGE_LIMIT = 1000;
+const JOB_POLL_INTERVAL_MS = 500;
 const ACTIONABLE_STATUSES = new Set(['complete', 'incomplete']);
 
 export class Kura implements INodeType {
@@ -384,11 +385,12 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 			const ordering = this.getNodeParameter('ordering', i) as string;
 			if (ordering !== '') body.ordering = ordering;
 			try {
-				const result = await call(
+				const handle = await call(
 					'POST',
 					`/api/library/v1/series/${encodeURIComponent(ref)}/scan`,
 					body,
 				);
+				const result = await waitForJob(call, stringField(handle, 'jobId'));
 				out.push({ json: result, pairedItem: { item: i } });
 			} catch (error) {
 				if (this.continueOnFail()) {
@@ -566,6 +568,28 @@ export function untrackedItem(result: IDataObject, ref: string): IDataObject {
 }
 
 type HTTPCall = (method: IHttpRequestMethods, path: string, body?: IDataObject) => Promise<IDataObject>;
+
+async function waitForJob(call: HTTPCall, jobId: string): Promise<IDataObject> {
+	if (jobId === '') throw new Error('Kura scan submission did not return a job ID');
+	const path = `/api/library/v1/jobs/${encodeURIComponent(jobId)}`;
+	for (;;) {
+		const status = await call('GET', path);
+		const state = stringField(status, 'state');
+		if (state === 'succeeded') return status;
+		if (state === 'failed') {
+			const jobError = objectField(status, 'error');
+			const kind = jobError ? stringField(jobError, 'kind') : '';
+			const message = jobError ? stringField(jobError, 'message') : '';
+			throw new Error(
+				[kind, message].filter((part) => part !== '').join(': ') || 'Kura scan job failed',
+			);
+		}
+		if (state !== 'queued' && state !== 'running') {
+			throw new Error(`Kura scan job returned unknown state ${JSON.stringify(state)}`);
+		}
+		await sleep(JOB_POLL_INTERVAL_MS);
+	}
+}
 
 function callFactory(ctx: IExecuteFunctions, credentials: IDataObject): HTTPCall {
 	const baseUrl = String(credentials.baseUrl).replace(/\/+$/, '');

@@ -260,7 +260,22 @@ function request(method, path, body) {
 		},
 		[
 			{ jobId: 'scan-1', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-1' },
+			{ jobId: 'scan-1', kind: 'scan', state: 'running' },
+			{
+				jobId: 'scan-1',
+				kind: 'scan',
+				ref: REF,
+				state: 'succeeded',
+				result: { synced: [], skipped: [], orphanSlots: [] },
+			},
 			{ jobId: 'scan-2', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-2' },
+			{
+				jobId: 'scan-2',
+				kind: 'scan',
+				ref: secondRef,
+				state: 'succeeded',
+				result: { synced: [], skipped: [], orphanSlots: [] },
+			},
 		],
 		[{ json: { ref: REF } }, { json: { ref: secondRef } }],
 	);
@@ -269,24 +284,68 @@ function request(method, path, body) {
 			metadataOnly: true,
 			refresh: false,
 		}),
+		request('GET', '/api/library/v1/jobs/scan-1'),
+		request('GET', '/api/library/v1/jobs/scan-1'),
 		request('POST', '/api/library/v1/series/tvdb%3A404/scan', {
 			metadataOnly: false,
 			refresh: true,
 			ordering: 'dvd',
 		}),
+		request('GET', '/api/library/v1/jobs/scan-2'),
 	]);
 	assert.deepEqual(output, [
 		[
 			{
-				json: { jobId: 'scan-1', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-1' },
+				json: {
+					jobId: 'scan-1',
+					kind: 'scan',
+					ref: REF,
+					state: 'succeeded',
+					result: { synced: [], skipped: [], orphanSlots: [] },
+				},
 				pairedItem: { item: 0 },
 			},
 			{
-				json: { jobId: 'scan-2', kind: 'scan', statusUrl: '/api/library/v1/jobs/scan-2' },
+				json: {
+					jobId: 'scan-2',
+					kind: 'scan',
+					ref: secondRef,
+					state: 'succeeded',
+					result: { synced: [], skipped: [], orphanSlots: [] },
+				},
 				pairedItem: { item: 1 },
 			},
 		],
 	]);
+}
+
+{
+	let thrown;
+	try {
+		await execute(
+			{
+				resource: 'series',
+				operation: 'scan',
+				ref: REF,
+				metadataOnly: true,
+				refresh: false,
+				ordering: '',
+			},
+			[
+				{ jobId: 'scan-failed', kind: 'scan' },
+				{
+					jobId: 'scan-failed',
+					kind: 'scan',
+					state: 'failed',
+					error: { kind: 'provider', message: 'TVDB unavailable' },
+				},
+			],
+		);
+	} catch (error) {
+		thrown = error;
+	}
+	assert.equal(thrown?.constructor.name, 'NodeApiError');
+	assert.match(thrown?.message ?? '', /provider: TVDB unavailable/);
 }
 
 {
