@@ -15,7 +15,7 @@ import (
 type showCmd struct {
 	JSON       bool     `name:"json" help:"Print machine-readable JSON instead of a human summary."`
 	Episodes   string   `name:"episodes" help:"Episode selector: ALL, NONE, AIRING_SEASON, S<N>, S<N>E<E>, or S<N>E<A>-<B>. Specials = S0."`
-	Status     []string `name:"status" help:"Repeatable. Restrict to episodes whose status is in this set (pending, missing, present, unavailable, staged, staged_replacement)."`
+	Status     []string `name:"status" help:"Repeatable. Restrict to episodes whose status is in this set (pending, missing, present, unavailable, staged)."`
 	Source     []string `name:"source" help:"Repeatable. Restrict to active media whose source is in this set (e.g. BluRay, WebRip)."`
 	Resolution []string `name:"resolution" help:"Repeatable. Restrict to active media whose resolution is in this set (e.g. 1080p, 720p)."`
 	Terms      []string `arg:"" required:"" help:"Resolver terms. Plain text or metadata refs such as tvdb:370070."`

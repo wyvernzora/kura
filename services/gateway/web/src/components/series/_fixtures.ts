@@ -121,19 +121,19 @@ const EP_S00E02: EpisodeShow = missingEp('S00E0002', 'OVA: 砂の城', '2024-04-
 
 const seasonOne: SeasonShow = {
   number: 1,
-  summary: { episodeCount: 4, present: 3, missing: 1, pending: 0, staged: 0, stagedReplacement: 0 },
+  summary: { episodeCount: 4, present: 3, missing: 1, pending: 0, staged: 0 },
   episodes: [EP_S01E01, EP_S01E02, EP_S01E03, EP_S01E04],
 };
 
 const seasonTwo: SeasonShow = {
   number: 2,
-  summary: { episodeCount: 3, present: 2, missing: 0, pending: 1, staged: 0, stagedReplacement: 0 },
+  summary: { episodeCount: 3, present: 2, missing: 0, pending: 1, staged: 0 },
   episodes: [EP_S02E01, EP_S02E02, EP_S02E03],
 };
 
 const specials: SeasonShow = {
   number: 0,
-  summary: { episodeCount: 2, present: 1, missing: 1, pending: 0, staged: 0, stagedReplacement: 0 },
+  summary: { episodeCount: 2, present: 1, missing: 1, pending: 0, staged: 0 },
   episodes: [EP_S00E01, EP_S00E02],
 };
 
@@ -171,7 +171,6 @@ export const FIXTURE_SHOW_COMPLETE_SINGLE: Show = {
         missing: 0,
         pending: 0,
         staged: 0,
-        stagedReplacement: 0,
       },
       episodes: [
         presentEp({
@@ -249,7 +248,7 @@ export const FIXTURE_EPISODE_PRESENT_RICH: EpisodeShow = {
 export const FIXTURE_EPISODE_STAGED_REPLACEMENT: EpisodeShow = {
   episode: 'S01E0003',
   aired: '2023-10-13',
-  status: 'staged_replacement',
+  status: 'staged',
   preferredTitle: '小さな約束',
   canonicalTitle: 'A Small Promise',
   active: {
@@ -334,7 +333,7 @@ export const FIXTURE_EPISODE_STAGED_ONLY: EpisodeShow = {
 
 export const FIXTURE_EPISODE_IN_PLACE: EpisodeShow = {
   ...FIXTURE_EPISODE_PRESENT_RICH,
-  status: 'staged_replacement',
+  status: 'staged',
   active: {
     ...FIXTURE_EPISODE_PRESENT_RICH.active!,
     companions: [],
@@ -358,7 +357,7 @@ export const FIXTURE_EPISODE_IN_PLACE: EpisodeShow = {
 export const FIXTURE_EPISODE_LONG_PATHS: EpisodeShow = {
   episode: 'S01E0012',
   aired: '2023-12-22',
-  status: 'staged_replacement',
+  status: 'staged',
   preferredTitle: '長い旅路の果てに待っていたもの',
   canonicalTitle: 'What Waited at the End of the Long, Winding Journey Home',
   active: {

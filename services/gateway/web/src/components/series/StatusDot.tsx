@@ -21,10 +21,7 @@ interface StatusDotProps {
  */
 export function StatusDot({ status, staged, className }: StatusDotProps) {
   const baseLabel = EPISODE_STATUS_LABEL[status];
-  const label =
-    staged && status !== 'staged' && status !== 'staged_replacement'
-      ? `${baseLabel} · staged change pending`
-      : baseLabel;
+  const label = staged && status !== 'staged' ? `${baseLabel} · staged change pending` : baseLabel;
   return (
     <span
       role="img"

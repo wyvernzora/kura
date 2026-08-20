@@ -32,7 +32,7 @@ stdout '"source":"BluRay"'
 
 # Staged record visible alongside the still-extant active record.
 kura_show $KURA_LAST_REF
-stdout '"status":"staged_replacement"'
+stdout '"status":"staged"'
 
 # Reconcile + apply: file renamed in place; active updated to BluRay.
 kura_plan $KURA_LAST_REF

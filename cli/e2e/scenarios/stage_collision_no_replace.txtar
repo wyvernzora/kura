@@ -14,7 +14,7 @@ stdout '"status":"present"'
 kura_mkfile ep1_v2.mp4
 ! kura_stage $KURA_LAST_REF S01E0001 ep1_v2.mp4
 
-# Slot must stay present, not staged_replacement.
+# Slot must stay present: the collision was rejected, so nothing staged.
 kura_show $KURA_LAST_REF
 stdout '"status":"present"'
-! stdout '"status":"staged_replacement"'
+stdout '"status":"present"'

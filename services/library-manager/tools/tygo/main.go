@@ -28,7 +28,7 @@ var enumOverrides = []enumOverride{
 	},
 	{
 		from: "export type Status = string;",
-		to:   `export type Status = "pending" | "missing" | "present" | "staged" | "staged_replacement";`,
+		to:   `export type Status = "pending" | "missing" | "present" | "staged";`,
 	},
 	{
 		from: "export type ScanStatus = string;",

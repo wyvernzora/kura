@@ -13,7 +13,7 @@ import {
 
 describe('episode status maps', () => {
   it('covers every status value with a label and dot color', () => {
-    for (const s of ['present', 'staged', 'staged_replacement', 'missing', 'pending'] as const) {
+    for (const s of ['present', 'staged', 'missing', 'pending'] as const) {
       expect(EPISODE_STATUS_LABEL[s]).toBeTruthy();
       expect(EPISODE_STATUS_DOT_BG[s]).toBeTruthy();
     }
@@ -24,7 +24,6 @@ describe('episode status maps', () => {
     expect(isDimmedStatus('present')).toBe(false);
     expect(isDimmedStatus('missing')).toBe(false);
     expect(isDimmedStatus('staged')).toBe(false);
-    expect(isDimmedStatus('staged_replacement')).toBe(false);
   });
 });
 
@@ -34,7 +33,6 @@ describe('episodeSubText', () => {
     expect(episodeSubText('pending')).toBe('not yet aired');
     expect(episodeSubText('present')).toBeNull();
     expect(episodeSubText('staged')).toBeNull();
-    expect(episodeSubText('staged_replacement')).toBeNull();
   });
 });
 

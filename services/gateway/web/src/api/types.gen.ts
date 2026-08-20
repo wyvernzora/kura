@@ -630,7 +630,6 @@ export interface SeasonSummary {
   present: number /* int */;
   missing: number /* int */;
   staged: number /* int */;
-  stagedReplacement: number /* int */;
   pending: number /* int */;
 }
 /**
@@ -766,7 +765,7 @@ unexported helpers.
  * Status is the observed state of one episode at the time a read
  * workflow ran. Mirrors Product.md § "Episode State (Observed)."
  */
-export type Status = 'pending' | 'missing' | 'present' | 'staged' | 'staged_replacement';
+export type Status = 'pending' | 'missing' | 'present' | 'staged';
 /**
  * StatusPending: episode air date is in the future and no media is
  * recorded.
@@ -784,14 +783,11 @@ export const StatusMissing: Status = 'missing';
 export const StatusPresent: Status = 'present';
 /**
  * StatusStaged: episode has a staged media record awaiting
- * reconcile (no active record present).
+ * reconcile. Whether an active record is also present — i.e. whether
+ * reconcile will replace a file or just re-record facts about one —
+ * is visible in the episode's records, not in its status.
  */
 export const StatusStaged: Status = 'staged';
-/**
- * StatusStagedReplacement: episode has both an active record and a
- * staged record; reconcile will replace the active one.
- */
-export const StatusStagedReplacement: Status = 'staged_replacement';
 
 //////////
 // source: tags.go

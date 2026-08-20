@@ -405,7 +405,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 	r1, v1 := mk(1, 1, api.StatusPresent, "BluRay")
 	r2, v2 := mk(1, 2, api.StatusMissing, "")
 	r3, v3 := mk(2, 1, api.StatusPresent, "WebRip")
-	r4, v4 := mk(3, 1, api.StatusStagedReplacement, "")
+	r4, v4 := mk(3, 1, api.StatusStaged, "")
 
 	cases := []struct {
 		name   string
@@ -433,7 +433,7 @@ func TestEpisodeFilter_SelectorAndStatus(t *testing.T) {
 			want:   []refs.Episode{r2},
 		},
 		{
-			name:   "status staged includes staged replacement",
+			name:   "status staged",
 			filter: episodeFilter{statuses: statusSet([]api.Status{api.StatusStaged})},
 			want:   []refs.Episode{r4},
 		},

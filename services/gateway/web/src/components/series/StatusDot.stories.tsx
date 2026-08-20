@@ -13,11 +13,11 @@ const meta: Meta<typeof StatusDot> = {
 export default meta;
 type Story = StoryObj<typeof StatusDot>;
 
-const STATUSES: EpisodeStatus[] = ['present', 'staged', 'staged_replacement', 'missing', 'pending'];
+const STATUSES: EpisodeStatus[] = ['present', 'staged', 'missing', 'pending'];
 
 /**
  * Resting variants — no staged change pending. `staged` shares the
- * missing color (no file on disk yet); `staged_replacement` shares
+ * missing color (no file on disk yet); `staged` carries
  * the present color (file present, swap queued). The amber pulse
  * never lights up here — see WithStagedHalo for that overlay.
  */

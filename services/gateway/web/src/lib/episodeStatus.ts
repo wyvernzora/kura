@@ -8,7 +8,6 @@ import type { EpisodeStatus } from '@/api/types';
 export const EPISODE_STATUS_LABEL: Record<EpisodeStatus, string> = {
   present: 'Present',
   staged: 'Staged · awaiting reconcile',
-  staged_replacement: 'Staged replacement · awaiting reconcile',
   missing: 'Missing · no file on disk',
   pending: 'Pending · not yet aired',
 };
@@ -37,28 +36,22 @@ export const EPISODE_STATUS_BADGE: Record<
     icon: 'move_to_inbox',
     className: 'bg-status-incomplete/16 text-status-staged-fg',
   },
-  staged_replacement: {
-    label: 'Staged replacement',
-    icon: 'swap_horiz',
-    className: 'bg-status-incomplete/16 text-status-staged-fg',
-  },
 };
 
 /**
  * Status dot color, expressed as a Tailwind utility against the
  * existing kura status palette so light/dark theming flips for free.
  *
- * Staged states keep the base color of the on-disk reality so the
- * row reads at a glance: `staged` (no active record yet) shares the
- * missing color, `staged_replacement` (active record about to be
- * swapped) shares the present color. The pending-change signal is
+ * `staged` carries its own swatch rather than borrowing the on-disk
+ * reality's: the status no longer says whether an active record sits
+ * underneath, so neither the present nor the missing color would be
+ * true for every staged episode. The pending-change signal is also
  * carried by the amber outer glow on the dot itself (StatusDot's
- * `staged` prop), not by the base swatch.
+ * `staged` prop).
  */
 export const EPISODE_STATUS_DOT_BG: Record<EpisodeStatus, string> = {
   present: 'bg-status-complete',
-  staged: 'bg-status-error',
-  staged_replacement: 'bg-status-complete',
+  staged: 'bg-status-incomplete',
   missing: 'bg-status-error',
   pending: 'bg-status-airing',
 };

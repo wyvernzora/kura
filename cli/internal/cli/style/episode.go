@@ -21,7 +21,7 @@ func EpisodeStatus(status string, styled bool) string {
 		return Green(value)
 	case string(api.StatusPending):
 		return Dim(Gray(value))
-	case string(api.StatusStaged), string(api.StatusStagedReplacement):
+	case string(api.StatusStaged):
 		return Yellow(value)
 	default:
 		return value

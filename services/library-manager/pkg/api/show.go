@@ -72,12 +72,11 @@ type SeasonShow struct {
 // SeasonSummary is the per-season status rollup. Computed over the
 // filter-applied Episodes slice; see SeasonShow doc.
 type SeasonSummary struct {
-	EpisodeCount      int `json:"episodeCount"`
-	Present           int `json:"present"`
-	Missing           int `json:"missing"`
-	Staged            int `json:"staged"`
-	StagedReplacement int `json:"stagedReplacement"`
-	Pending           int `json:"pending"`
+	EpisodeCount int `json:"episodeCount"`
+	Present      int `json:"present"`
+	Missing      int `json:"missing"`
+	Staged       int `json:"staged"`
+	Pending      int `json:"pending"`
 }
 
 // EpisodeShow is one episode row with computed status and the active /

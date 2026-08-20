@@ -265,7 +265,7 @@ func (f episodeFilter) match(ref refs.Episode, view api.EpisodeShow) bool {
 		return false
 	}
 	if len(f.statuses) > 0 {
-		if _, ok := f.statuses[view.Status]; !ok && !matchesCollapsedStatus(f.statuses, view.Status) {
+		if _, ok := f.statuses[view.Status]; !ok {
 			return false
 		}
 	}
@@ -312,14 +312,6 @@ func showEpisodeFilter(
 		filter.selector = selector
 	}
 	return filter, false
-}
-
-func matchesCollapsedStatus(statuses map[api.Status]struct{}, status api.Status) bool {
-	if status != api.StatusStagedReplacement {
-		return false
-	}
-	_, ok := statuses[api.StatusStaged]
-	return ok
 }
 
 func statusSet(in []api.Status) map[api.Status]struct{} {
@@ -430,8 +422,6 @@ func summarizeSeason(eps []api.EpisodeShow) api.SeasonSummary {
 			out.Missing++
 		case api.StatusStaged:
 			out.Staged++
-		case api.StatusStagedReplacement:
-			out.StagedReplacement++
 		case api.StatusPending:
 			out.Pending++
 		}
@@ -440,9 +430,6 @@ func summarizeSeason(eps []api.EpisodeShow) api.SeasonSummary {
 }
 
 func computeEpisodeStatus(episode domainseries.Episode, now time.Time) api.Status {
-	if episode.Active != nil && episode.Staged != nil {
-		return api.StatusStagedReplacement
-	}
 	if episode.Staged != nil {
 		return api.StatusStaged
 	}
