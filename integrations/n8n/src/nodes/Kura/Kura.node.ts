@@ -12,6 +12,11 @@ import { LoggerProxy as Logger, NodeApiError, NodeConnectionTypes, sleep } from 
 const CRED = 'kuraApi';
 const PAGE_LIMIT = 1000;
 const JOB_POLL_INTERVAL_MS = 500;
+// A job that never reaches a terminal state would otherwise pin this execution
+// forever, and a library-wide scan is now polled the same way a single-series
+// one is. The cap is generous enough for a full metadata refresh and still
+// bounded, so a stuck job fails loudly instead of stacking executions.
+const JOB_POLL_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const ACTIONABLE_STATUSES = new Set(['complete', 'incomplete']);
 
 export class Kura implements INodeType {
@@ -68,6 +73,7 @@ export class Kura implements INodeType {
 				options: [
 					{ name: 'List', value: 'list', action: 'List actionable series' },
 					{ name: 'Scan', value: 'scan', action: 'Scan a series' },
+					{ name: 'Scan Library', value: 'scanAll', action: 'Scan the whole library' },
 					{ name: 'Show', value: 'show', action: 'Show series state' },
 					{ name: 'Update Tags', value: 'updateTags', action: 'Update tags on a series' },
 				],
@@ -87,6 +93,7 @@ export class Kura implements INodeType {
 						action: 'Get a release magnet link',
 					},
 					{ name: 'Ingest', value: 'ingest', action: 'Ingest releases' },
+					{ name: 'Set Status', value: 'setStatus', action: 'Set a release match status' },
 				],
 				default: 'ingest',
 			},
@@ -163,7 +170,7 @@ export class Kura implements INodeType {
 				default: false,
 				description:
 					'Whether to refresh the provider spine, artwork, aliases, and search data without scanning files',
-				displayOptions: { show: { resource: ['series'], operation: ['scan'] } },
+				displayOptions: { show: { resource: ['series'], operation: ['scan', 'scanAll'] } },
 			},
 			{
 				displayName: 'Refresh Media',
@@ -172,7 +179,7 @@ export class Kura implements INodeType {
 				default: false,
 				description:
 					'Whether to re-probe active media even when file size and modification time are unchanged',
-				displayOptions: { show: { resource: ['series'], operation: ['scan'] } },
+				displayOptions: { show: { resource: ['series'], operation: ['scan', 'scanAll'] } },
 			},
 			{
 				displayName: 'Ordering',
@@ -190,6 +197,16 @@ export class Kura implements INodeType {
 				default: '',
 				description: 'Episode ordering to pin while refreshing the provider spine',
 				displayOptions: { show: { resource: ['series'], operation: ['scan'] } },
+			},
+			{
+				displayName: 'Concurrency',
+				name: 'concurrency',
+				type: 'number',
+				typeOptions: { minValue: 0 },
+				default: 0,
+				description:
+					'Series scanned in parallel. 0 uses the server default, which is tuned to stay inside provider rate limits.',
+				displayOptions: { show: { resource: ['series'], operation: ['scanAll'] } },
 			},
 			{
 				displayName: 'Tag Changes',
@@ -277,7 +294,34 @@ export class Kura implements INodeType {
 				type: 'string',
 				default: '={{ $json.infohash }}',
 				required: true,
-				displayOptions: { show: { resource: ['release'], operation: ['get', 'getMagnetLink'] } },
+				displayOptions: {
+					show: { resource: ['release'], operation: ['get', 'getMagnetLink', 'setStatus'] },
+				},
+			},
+			{
+				displayName: 'Match Status',
+				// NOT `status`: that key is already taken by the series Show
+				// episode-status filter, and n8n's properties array is one flat
+				// namespace (displayOptions gate visibility, not storage), so
+				// sharing it would round-trip a multiOptions array into this
+				// field and back.
+				name: 'matchStatus',
+				type: 'options',
+				// Constrained to what the indexer's transition table accepts.
+				// Every other match status belongs to the matcher's claim-fenced
+				// submit path, which this operation deliberately cannot reach.
+				options: [{ name: 'Dead', value: 'dead' }],
+				default: 'dead',
+				description: 'Match status to set. Only matched releases can be marked dead.',
+				displayOptions: { show: { resource: ['release'], operation: ['setStatus'] } },
+			},
+			{
+				displayName: 'Reason',
+				name: 'reason',
+				type: 'string',
+				default: '',
+				description: 'Optional note recorded to the release match event audit trail',
+				displayOptions: { show: { resource: ['release'], operation: ['setStatus'] } },
 			},
 
 			// ----- queue (release-indexer) -----
@@ -371,6 +415,35 @@ async function executeSeries(this: IExecuteFunctions): Promise<INodeExecutionDat
 			}
 		}
 		return [out];
+	}
+
+	if (operation === 'scanAll') {
+		// Library-wide, so it runs once per node execution rather than once
+		// per item: fanning it out over N input items would submit N library
+		// scans. The server does not reject those — same-kind submissions
+		// join the running job, and a cross-kind collision (a concurrent
+		// reindex) acks 202 with an empty job id — so the single submission
+		// here is what keeps the behaviour well defined.
+		const body: IDataObject = {
+			metadataOnly: this.getNodeParameter('metadataOnly', 0) as boolean,
+			refresh: this.getNodeParameter('refresh', 0) as boolean,
+		};
+		const concurrency = this.getNodeParameter('concurrency', 0) as number;
+		if (concurrency > 0) body.concurrency = concurrency;
+		try {
+			const handle = await call('POST', '/api/library/v1/scan', body);
+			const jobId = stringField(handle, 'jobId');
+			const status = await waitForJob(call, jobId);
+			// The tally sits nested under the terminal job status; surfacing
+			// it flat would drop the job id an operator needs to correlate.
+			Logger.info('Kura library scan completed', { job_id: jobId });
+			return [[{ json: status }]];
+		} catch (error) {
+			if (this.continueOnFail()) {
+				return [[{ json: { error: (error as Error).message } }]];
+			}
+			throw new NodeApiError(this.getNode(), error as JsonObject);
+		}
 	}
 
 	if (operation === 'scan') {
@@ -493,6 +566,22 @@ async function executeIndexer(
 				continue;
 			}
 
+			if (operation === 'setStatus') {
+				const infohash = String(this.getNodeParameter('infohash', i));
+				const status = String(this.getNodeParameter('matchStatus', i));
+				const body: IDataObject = { status };
+				const reason = String(this.getNodeParameter('reason', i));
+				if (reason !== '') body.reason = reason;
+				const res = await call(
+					'PUT',
+					`/api/releases/v1/${encodeURIComponent(infohash)}/status`,
+					body,
+				);
+				Logger.info('Kura release status set', { item_index: i, infohash, status });
+				out.push({ json: res, pairedItem: { item: i } });
+				continue;
+			}
+
 			if (operation === 'get') {
 				const infohash = String(this.getNodeParameter('infohash', i));
 				const res = await call('GET', `/api/releases/v1/${encodeURIComponent(infohash)}`);
@@ -572,6 +661,7 @@ type HTTPCall = (method: IHttpRequestMethods, path: string, body?: IDataObject) 
 async function waitForJob(call: HTTPCall, jobId: string): Promise<IDataObject> {
 	if (jobId === '') throw new Error('Kura scan submission did not return a job ID');
 	const path = `/api/library/v1/jobs/${encodeURIComponent(jobId)}`;
+	const deadline = Date.now() + JOB_POLL_TIMEOUT_MS;
 	for (;;) {
 		const status = await call('GET', path);
 		const state = stringField(status, 'state');
@@ -586,6 +676,11 @@ async function waitForJob(call: HTTPCall, jobId: string): Promise<IDataObject> {
 		}
 		if (state !== 'queued' && state !== 'running') {
 			throw new Error(`Kura scan job returned unknown state ${JSON.stringify(state)}`);
+		}
+		if (Date.now() >= deadline) {
+			throw new Error(
+				`Kura scan job ${jobId} did not finish within ${JOB_POLL_TIMEOUT_MS}ms (last state ${state})`,
+			);
 		}
 		await sleep(JOB_POLL_INTERVAL_MS);
 	}

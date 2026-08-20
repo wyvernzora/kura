@@ -531,4 +531,140 @@ function request(method, path, body) {
 	assert.equal(output, null);
 }
 
+// --- series: scanAll ---
+// Library-wide, so two input items must still produce exactly ONE scan
+// submission: fanning out would launch competing library scans.
+{
+	const { calls, output } = await execute(
+		{
+			resource: 'series',
+			operation: 'scanAll',
+			metadataOnly: true,
+			refresh: false,
+			concurrency: 0,
+		},
+		[
+			{ jobId: 'scanall-1', kind: 'scanAll', statusUrl: '/api/library/v1/jobs/scanall-1' },
+			{ jobId: 'scanall-1', kind: 'scanAll', state: 'running' },
+			{
+				jobId: 'scanall-1',
+				kind: 'scanAll',
+				state: 'succeeded',
+				result: { scanned: 412, failed: 0, series: [] },
+			},
+		],
+		[{ json: {} }, { json: {} }],
+	);
+	assert.deepEqual(calls, [
+		// concurrency 0 is omitted so the server default applies.
+		request('POST', '/api/library/v1/scan', { metadataOnly: true, refresh: false }),
+		request('GET', '/api/library/v1/jobs/scanall-1'),
+		request('GET', '/api/library/v1/jobs/scanall-1'),
+	]);
+	// The terminal tally is surfaced nested under the job status, keeping the
+	// job id available for correlation.
+	assert.deepEqual(output, [
+		[
+			{
+				json: {
+					jobId: 'scanall-1',
+					kind: 'scanAll',
+					state: 'succeeded',
+					result: { scanned: 412, failed: 0, series: [] },
+				},
+			},
+		],
+	]);
+}
+
+// An explicit concurrency rides through; 0 means "server default" and must not.
+{
+	const { calls } = await execute(
+		{
+			resource: 'series',
+			operation: 'scanAll',
+			metadataOnly: false,
+			refresh: true,
+			concurrency: 8,
+		},
+		[
+			{ jobId: 'scanall-2', kind: 'scanAll' },
+			{ jobId: 'scanall-2', kind: 'scanAll', state: 'succeeded', result: {} },
+		],
+		[{ json: {} }],
+	);
+	assert.deepEqual(calls, [
+		request('POST', '/api/library/v1/scan', {
+			metadataOnly: false,
+			refresh: true,
+			concurrency: 8,
+		}),
+		request('GET', '/api/library/v1/jobs/scanall-2'),
+	]);
+}
+
+// --- release: setStatus ---
+{
+	const second = 'abcdefabcdefabcdefabcdefabcdefabcdefabcd';
+	const { calls, output } = await execute(
+		{
+			resource: 'release',
+			operation: 'setStatus',
+			infohash: (itemIndex) => (itemIndex === 0 ? HASH : second),
+			matchStatus: 'dead',
+			// An empty reason is omitted rather than sent as "".
+			reason: (itemIndex) => (itemIndex === 0 ? 'stalled at 0%' : ''),
+		},
+		[{ ok: true }, { ok: true }],
+		[{ json: {} }, { json: {} }],
+	);
+	assert.deepEqual(calls, [
+		request('PUT', `/api/releases/v1/${HASH}/status`, {
+			status: 'dead',
+			reason: 'stalled at 0%',
+		}),
+		request('PUT', `/api/releases/v1/${second}/status`, { status: 'dead' }),
+	]);
+	assert.deepEqual(output, [
+		[
+			{ json: { ok: true }, pairedItem: { item: 0 } },
+			{ json: { ok: true }, pairedItem: { item: 1 } },
+		],
+	]);
+}
+
+// --- node description invariant: parameter names are one flat namespace ---
+// n8n stores every property by `name` regardless of displayOptions, so two
+// properties sharing a name share a storage slot: a value set under one
+// operation round-trips into the other, across incompatible types. This is
+// invisible to the per-operation scenarios above, which read parameters from
+// a flat map keyed by name and therefore cannot reproduce the collision.
+// Two properties sharing a `name` share one storage slot: n8n keys saved
+// values by name alone, and displayOptions gate visibility only. A value set
+// under one operation therefore round-trips into the other — across types
+// (a multiOptions array arriving where a string is read) or within one (a
+// stale enum value from a disjoint option set). Both are bugs, so the rule
+// is a flat no-duplicates.
+//
+// `operation` is the one legitimate exception: declaring it once per resource
+// is the n8n idiom, and n8n resets it when the resource changes.
+const SHARED_PARAM_NAMES = new Set(['operation']);
+{
+	const byName = new Map();
+	for (const prop of new Kura().description.properties) {
+		if (SHARED_PARAM_NAMES.has(prop.name)) continue;
+		if (!byName.has(prop.name)) byName.set(prop.name, []);
+		byName.get(prop.name).push(prop);
+	}
+	for (const [name, props] of byName) {
+		if (props.length > 1) {
+			assert.fail(
+				`node parameter ${JSON.stringify(name)} is declared ${props.length} times — by ` +
+					`${props.map((p) => `${JSON.stringify(p.displayName)} (${p.type})`).join(' and ')} ` +
+					`— and they share one storage slot`,
+			);
+		}
+	}
+}
+
 console.log('request-contract-check ok');
