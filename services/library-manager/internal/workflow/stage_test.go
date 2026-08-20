@@ -388,9 +388,12 @@ func TestStage_SeriesMediaInPlaceOverride(t *testing.T) {
 	}
 }
 
-// TestStage_SeriesMediaRequiresReplace rejects series: media when
-// replace is false (no contract for "stage but don't promote").
-func TestStage_SeriesMediaRequiresReplace(t *testing.T) {
+// TestStage_InPlaceOverrideNeedsNoReplace stages an episode's own
+// active media back over itself — the metadata-correction path, e.g.
+// fixing a wrong source. Nothing is displaced and no trash is emitted,
+// so --replace must not be required: that flag means "a different file
+// takes this slot, trash the old one", which is not what happens here.
+func TestStage_InPlaceOverrideNeedsNoReplace(t *testing.T) {
 	deps, ref, _, _ := seedStageDeps(t)
 	seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
 	rel := "Season 1/episode-1.mkv"
@@ -417,8 +420,31 @@ func TestStage_SeriesMediaRequiresReplace(t *testing.T) {
 			Replace: false,
 		}},
 	})
-	if _, err := j.Wait(context.Background()); err == nil {
-		t.Fatal("Stage with series: media + replace=false succeeded; want error")
+	res, err := j.Wait(context.Background())
+	if err != nil {
+		t.Fatalf("in-place stage without replace: %v", err)
+	}
+	if len(res.Episodes) != 1 || res.Episodes[0].Episode != e1 {
+		t.Fatalf("episodes = %+v, want one result for %s", res.Episodes, e1)
+	}
+	// The staged record must point back at the same file, which is what
+	// makes this an override rather than a replacement.
+	reloaded, err := seriesfile.Load(deps.LibRoot, ref)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	ep := reloaded.Episodes[e1]
+	if ep.Staged == nil {
+		t.Fatal("no staged record written")
+	}
+	if ep.Active == nil {
+		t.Fatal("active record disappeared; an in-place override must not displace it")
+	}
+	// The seeded active path is absolute while the workflow persists the
+	// series:-tagged form, so compare the file they name, not the encoding.
+	if !strings.HasSuffix(ep.Staged.Path, rel) {
+		t.Fatalf("staged path = %q, want it to name %q — an in-place override stages the file already in the slot",
+			ep.Staged.Path, rel)
 	}
 }
 

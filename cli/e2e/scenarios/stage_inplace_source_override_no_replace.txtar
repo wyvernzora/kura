@@ -1,0 +1,34 @@
+# stage_inplace_source_override_no_replace: correcting an episode's
+# metadata by re-staging its OWN active file must not require --replace.
+# Nothing is displaced — the staged media is the file already in the slot,
+# so no trash is emitted and the flag has nothing to act on. Requiring it
+# trained the operator to pass a destructive flag for a safe edit.
+#
+# Regression for the owner report of 2026-08-20.
+
+kura_add stub:1001
+
+# Stage and apply an initial file whose name carries no source token,
+# so the active record lands with Unknown.
+kura_mkfile ep1.mp4
+kura_stage $KURA_LAST_REF S01E0001 ep1.mp4
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"source":"Unknown"'
+
+# The fix: in-place override with NO --replace is accepted.
+kura_stage_inplace_source_noreplace $KURA_LAST_REF S01E0001 BluRay
+stdout '"source":"BluRay"'
+
+# Active record survives alongside the staged one — an override, not a
+# replacement.
+kura_show $KURA_LAST_REF
+stdout '"status":"staged"'
+
+# Apply renames in place and the active record carries the new source.
+kura_plan $KURA_LAST_REF
+kura_apply $KURA_LAST_REF $KURA_PLAN_TOKEN
+kura_show $KURA_LAST_REF
+stdout '"status":"present"'
+stdout '"source":"BluRay"'

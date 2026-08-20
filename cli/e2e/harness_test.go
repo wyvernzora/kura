@@ -432,6 +432,28 @@ func newEngine(t *testing.T, b *e2eBinary) *script.Engine {
 		},
 	)
 
+	// ── kura_stage_inplace_source_noreplace ───────────────────────────────
+	// Same in-place metadata override, but WITHOUT --replace. Nothing is
+	// displaced when the staged media is the file already in the slot, so
+	// the destructive flag must not be required to correct metadata.
+	cmds["kura_stage_inplace_source_noreplace"] = script.Command(
+		script.CmdUsage{Summary: "in-place source override, no --replace", Args: "<ref> <ep> <source>"},
+		func(s *script.State, args ...string) (script.WaitFunc, error) {
+			if len(args) != 3 {
+				return nil, fmt.Errorf("kura_stage_inplace_source_noreplace: expected <ref> <ep> <source>")
+			}
+			ref := s.ExpandEnv(args[0], false)
+			mediaSel, err := lookupActiveFile(s.Context(), b, ref, args[1])
+			if err != nil {
+				return nil, fmt.Errorf("kura_stage_inplace_source_noreplace: %w", err)
+			}
+			out, errOut, runErr := b.run(s.Context(), "stage", "episode", "--json", "--source", args[2], ref, args[1], mediaSel)
+			return func(s *script.State) (string, string, error) {
+				return compactIfJSON(out), errOut, runErr
+			}, nil
+		},
+	)
+
 	// ── kura_stage_trash ──────────────────────────────────────────────────
 	cmds["kura_stage_trash"] = script.Command(
 		script.CmdUsage{Summary: "stage a file for trash", Args: "<ref> <rel_path>"},

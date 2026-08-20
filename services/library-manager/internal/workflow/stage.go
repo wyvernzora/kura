@@ -392,8 +392,10 @@ func validateOneEpisodeItem(
 		return resolvedEpisodeItem{}, err
 	}
 	// In-place override: series: media targeting THIS episode's active
-	// record. Companions are preserved from the active record; replace
-	// is required because the active record's facts will be replaced.
+	// record. Companions are preserved from the active record. Replace is
+	// NOT required: this branch's own condition proves the media is the
+	// file already in the slot, so nothing is displaced and no trash is
+	// emitted — only the recorded facts about that file change.
 	if item.Media.Scheme == selector.Series && episodeState.Active != nil && pathsEquivalentNFC(mediaPath, episodeState.Active.Path) {
 		return validateInPlaceOverride(seriesRoot, item, episodeState, mediaPath, index)
 	}
@@ -488,9 +490,6 @@ func validateInPlaceOverride(
 	mediaPath string,
 	index int,
 ) (resolvedEpisodeItem, error) {
-	if !item.Replace {
-		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: series: media (in-place override) requires replace=true", index)
-	}
 	if len(item.Companions) > 0 {
 		return resolvedEpisodeItem{}, fmt.Errorf("episodes[%d]: series: media targeting the active record must omit companions; existing companions are preserved", index)
 	}
