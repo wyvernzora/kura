@@ -17,6 +17,10 @@ go test -tags=conformance ./...
 | Single release detail is available over REST and dispatch, includes raw evidence and chronological match history, keeps magnet in detail, and orders `raw_items` by `id ASC` plus `match_events` by `created_at ASC, id ASC` | `TestAPIShape_GetReleaseDetail` |
 | Release detail preserves absent facts as explicit JSON `null` (`ref`, `confidence`, `first_matched_at`, `magnet`, `size_bytes`, `url`), always renders `raw_items`/`match_events`/`sources` as arrays, and excludes lease internals (`claim_token`, `claimed_at`, `lease_expires_at`) | `TestAPIShape_GetReleaseExplicitNullsAndNoLeaseInternals` |
 | `GET /api/releases/v1/{infohash}` maps malformed infohashes to `400 invalid_input` and unknown releases to `404 no_such_release` | `TestAPIShape_GetReleaseRESTErrors` |
+| `matched -> dead` applies, records the reason to `match_events`, and preserves `ref` and `first_matched_at` | `TestDeadStatus_MatchedToDeadIsAllowedAndAudited` |
+| Re-setting a status a release already has is an idempotent no-op that appends no second `match_events` row | `TestDeadStatus_RepeatIsAnIdempotentNoOp` |
+| Transitions outside the table (`unmatched -> dead`, `dead -> matched`) are `ErrInvalidTransition`, and a missing release is `ErrNoSuchRelease` | `TestDeadStatus_TransitionsOutsideTheTableAreRejected` |
+| A dead release stops resolving a magnet (proven against a matched pre-condition), moves from the `matched` to the `dead` count in `queue/stats`, and drops out of `list_releases` | `TestDeadStatus_MagnetGateAndQueueCounts` |
 | A stale `claim_token` cannot submit after a newer claim | `TestAPIShape_StaleClaimTokenRejected` |
 | Repeated `unmatched` submissions exhaust after the configured max attempts | `TestAPIShape_UnmatchedExhaustsAfterMaxAttempts` |
 | Migrations and the runtime pool land every migrated table, the goose version table, and the `match_status` enum in the configured `database.schema` and nothing in `public` | `TestConfiguredSchemaOwnsMigrationObjects` |
@@ -29,7 +33,7 @@ go test -tags=conformance ./...
 | `kura crawl`: automatic bounded cursor loop, stdout checkpoints, and exact resume command through terminal response | `cli/cmd/kura` `TestCrawl*`, `cli/internal/cli/client` `TestCrawlSource*` (unit); `e2e` `TestEndToEndWorkflowCrawlCLI` |
 
 The real-binary smoke test covers startup migrations, `/healthz`, `/api/releases/v1/ingest`,
-`/api/releases/v1/{infohash}/magnet`, `/api/releases/v1/{infohash}`, `/api/releases/v1/queue/claim`, `/api/releases/v1/queue/submit`, `/api/releases/v1/queue/stats`
+`/api/releases/v1/{infohash}/magnet` (including its pre-match `409 not_matched` gate), `/api/releases/v1/{infohash}`, `/api/releases/v1/queue/claim`, `/api/releases/v1/queue/submit`, `/api/releases/v1/queue/stats`
 registration/call, removed worker path rejection, fail-fast bind behavior, strict TOML
 startup, an in-process scheduled Nyaa crawl, direct ingest, and bounded shutdown.
 The Docker e2e runs the consolidated release-indexer against fake DMHY and PostgreSQL,

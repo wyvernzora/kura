@@ -46,6 +46,8 @@ Release statuses are deliberately small:
 - `matched`: matched to a canonical ref the user cares about.
 - `suppressed`: not wanted, matched or not.
 - `exhausted`: too many failed attempts; no longer offered as work.
+- `dead`: matched, but the torrent proved undownloadable. Terminal curation state set by
+  the operator, never by the matcher; there is no transition back in v1.
 
 No `defer`, `escalate`, `reopen`, `next_eligible_at`, recheck state, provenance fields,
 or matcher attributes exist in this pass.
@@ -57,10 +59,11 @@ or matcher attributes exist in this pass.
 | `GET` | `/api/releases/v1` | List matched releases, newest first; optionally narrowed to one ref. |
 | `POST` | `/api/releases/v1/ingest` | Accept a batch of crawler posts. |
 | `POST` | `/api/releases/v1/sources/{source}/crawl` | Consume one count-and-cursor source chunk and ingest it directly (operator backfill). |
-| `GET` | `/api/releases/v1/{infohash}/magnet` | Get the stored magnet URI for one release. |
+| `GET` | `/api/releases/v1/{infohash}/magnet` | Get the stored magnet URI for one release, only while it is `matched`. |
+| `PUT` | `/api/releases/v1/{infohash}/status` | Operator status change; `matched -> dead` is the only allowed transition. |
 | `GET` | `/api/releases/v1/{infohash}` | Get one release detail, raw source evidence, and match history. |
 | `POST` | `/api/releases/v1/queue/claim` | Lease claimable unmatched releases. |
-| `GET` | `/api/releases/v1/queue/stats` | Return queue/status counts, including exhausted. |
+| `GET` | `/api/releases/v1/queue/stats` | Return queue/status counts, including exhausted and dead. |
 | `POST` | `/api/releases/v1/queue/submit` | Submit `matched`, `unmatched`, or `suppressed` for a claim. |
 | `GET` | `/healthz` | DB ping; returns `{ok, version}`. |
 | `GET` | `/metrics` | Prometheus metrics. Served on `server.metrics_addr`, not the API listener. |
@@ -134,6 +137,17 @@ unmatched result becomes `exhausted`. Expired unmatched rows at or above the cap
 marked exhausted before new claims are offered. Claim crashes do not increment
 `attempt_count`.
 
+`PUT /api/releases/v1/{infohash}/status` is the operator path out of a bad match and is
+fenced by an explicit transition table whose only row is `matched -> dead`. It carries no
+claim token because it touches no lease: every allowed target is terminal and leases exist
+only on unmatched rows. Setting the status a release already has is an idempotent no-op that
+appends no second `match_events` row. The endpoint accepts only `dead` as a target — any other
+status is rejected at the request boundary with `400 invalid_request`, so it never reaches the
+table — and a `dead` target from a source the table does not carry is `409 invalid_transition`.
+Together those keep the matcher's claim-fenced submit the only route to `matched`/`suppressed`. The
+transition preserves `ref`, `confidence`, and `first_matched_at` — the match history is why a
+dead release is not re-selected — and records the optional `reason` to `match_events`.
+
 `GET /api/releases/v1/{infohash}` returns the single-release full context view:
 representative release fields, `matchStatus`, nullable derived fields (`magnet`,
 `sizeBytes`, `ref`, `confidence`, `firstMatchedAt`), `attemptCount`,
@@ -152,4 +166,8 @@ This service serves REST only. Agent-facing MCP tools — `list_releases`,
 the endpoints above. The gateway owns the tool names, schemas, annotations, and
 error projection; nothing here should grow a second copy of them.
 
-The REST `/api/releases/v1/{infohash}/magnet` endpoint returns `{ "infohash": "...", "magnet": "..." }`.
+The REST `/api/releases/v1/{infohash}/magnet` endpoint returns `{ "infohash": "...", "magnet": "..." }`,
+and serves it only while the release is `matched`. A known release in any other status is
+`409 not_matched` with the current `matchStatus` in the error `data`; an unknown infohash stays
+`404 not_found`. Release detail is unaffected — it is a management surface, not a pipeline one,
+so it keeps returning the stored `magnet` regardless of status.

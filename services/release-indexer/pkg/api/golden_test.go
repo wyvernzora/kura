@@ -214,6 +214,21 @@ func cases() map[string]any {
 			Data: map[string]any{"reason": "migrations in progress"},
 		},
 		"error_internal": api.Error{Kind: api.KindInternal, Message: "internal error"},
+		"set_status_request": api.SetStatusRequest{
+			Status: api.MatchStatusDead,
+			Reason: "stalled at 0% for 14 days",
+		},
+		"error_not_matched": api.Error{
+			Kind: api.KindNotMatched, Message: "release is dead, not matched",
+			Data: map[string]any{
+				"infohash":    "0123456789abcdef0123456789abcdef01234567",
+				"matchStatus": "dead",
+			},
+		},
+		"error_invalid_transition": api.Error{
+			Kind: api.KindInvalidTransition, Message: "unmatched -> dead is not an allowed transition",
+			Data: map[string]any{"infohash": "0123456789abcdef0123456789abcdef01234567"},
+		},
 	}
 }
 

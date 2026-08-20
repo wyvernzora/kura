@@ -1,0 +1,7 @@
+{
+  "kind": "invalid_transition",
+  "message": "unmatched -\u003e dead is not an allowed transition",
+  "data": {
+    "infohash": "0123456789abcdef0123456789abcdef01234567"
+  }
+}

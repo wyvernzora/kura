@@ -114,6 +114,33 @@ func (d *Dispatcher) SubmitTyped(ctx context.Context, req api.SubmitRequest) err
 	return nil
 }
 
+func (d *Dispatcher) SetStatus(ctx context.Context, input []byte) ([]byte, error) {
+	var req api.SetStatusRequest
+	if err := json.Unmarshal(input, &req); err != nil {
+		return nil, err
+	}
+	if err := d.SetStatusTyped(ctx, "", req); err != nil {
+		return nil, err
+	}
+	return []byte(`{"ok":true}`), nil
+}
+
+// SetStatusTyped applies an operator status change. The transition table in
+// the store is the validation; this layer only rejects statuses outside the
+// closed vocabulary, so an unknown label never reaches SQL as a cast error.
+func (d *Dispatcher) SetStatusTyped(ctx context.Context, infohash string, req api.SetStatusRequest) error {
+	switch req.Status {
+	case api.MatchStatusDead:
+	default:
+		return fmt.Errorf("%w: invalid status %q", ErrInvalidInput, req.Status)
+	}
+	return d.store.SetStatus(ctx, store.SetStatusParams{
+		Infohash: infohash,
+		Status:   string(req.Status),
+		Reason:   req.Reason,
+	})
+}
+
 func (d *Dispatcher) QueueStats(ctx context.Context, input []byte) ([]byte, error) {
 	out, err := d.QueueStatsTyped(ctx)
 	if err != nil {
@@ -134,6 +161,7 @@ func (d *Dispatcher) QueueStatsTyped(ctx context.Context) (api.QueueStats, error
 		Matched:    qs.Matched,
 		Suppressed: qs.Suppressed,
 		Exhausted:  qs.Exhausted,
+		Dead:       qs.Dead,
 	}, nil
 }
 
@@ -281,6 +309,8 @@ func ErrorKind(err error) string {
 		return api.KindNoActiveLease
 	case errors.Is(err, store.ErrStaleLease):
 		return api.KindStaleLease
+	case errors.Is(err, store.ErrInvalidTransition):
+		return api.KindInvalidTransition
 	case errors.Is(err, cursor.ErrInvalidRef):
 		return api.KindInvalidRef
 	case errors.Is(err, cursor.ErrInvalidCursor):

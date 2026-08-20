@@ -399,6 +399,89 @@ func (s *Store) Submit(ctx context.Context, p store.SubmitParams) error { //noli
 	return nil
 }
 
+// statusTransitions IS the state-machine validation for SetStatus: a
+// transition exists here or it is rejected. Two boundaries keep this from
+// becoming queue control. Transitions the matcher's claim-fenced submit path
+// owns (unmatched -> matched/suppressed) are deliberately absent, so submit
+// stays the only route to them; and because every allowed target is terminal
+// and only matched rows are eligible, no lease-clearing is needed — claim
+// leases exist only on unmatched rows.
+//
+// Adding a transition later (exhausted -> unmatched to requeue, say) is a row
+// here plus a test, not an API change.
+var statusTransitions = map[string]map[string]bool{
+	"matched": {"dead": true},
+}
+
+func (s *Store) SetStatus(ctx context.Context, p store.SetStatusParams) error {
+	now := s.clock.Now()
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("set_status: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // best-effort cleanup after commit/error.
+
+	var currentStatus string
+	err = tx.QueryRow(ctx, `
+		SELECT match_status
+		FROM releases
+		WHERE infohash = $1
+		FOR UPDATE
+	`, p.Infohash).Scan(&currentStatus)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return fmt.Errorf("set_status %s: %w", p.Infohash, store.ErrNoSuchRelease)
+	}
+	if err != nil {
+		return fmt.Errorf("set_status %s: load status: %w", p.Infohash, err)
+	}
+
+	// Idempotent no-op: natural PUT semantics, and it keeps a retried call
+	// from appending a second audit row for a transition already made.
+	if currentStatus == p.Status {
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("set_status %s: commit: %w", p.Infohash, err)
+		}
+		return nil
+	}
+
+	if !statusTransitions[currentStatus][p.Status] {
+		return fmt.Errorf("set_status %s: %s -> %s: %w",
+			p.Infohash, currentStatus, p.Status, store.ErrInvalidTransition)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE releases SET
+			match_status = $2,
+			updated_at = $3
+		WHERE infohash = $1
+	`, p.Infohash, p.Status, now); err != nil {
+		return fmt.Errorf("set_status %s: update: %w", p.Infohash, err)
+	}
+
+	// ref, confidence and first_matched_at are deliberately preserved: the
+	// match history is why a dead release is not re-selected, and erasing it
+	// would make the row indistinguishable from one that never matched.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO match_events (infohash, status, ref, confidence, reason, created_at)
+		VALUES ($1, $2, NULL, NULL, $3, $4)
+	`, p.Infohash, p.Status, nullableReason(p.Reason), now); err != nil {
+		return fmt.Errorf("set_status %s: append match_event: %w", p.Infohash, err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("set_status %s: commit: %w", p.Infohash, err)
+	}
+	return nil
+}
+
+func nullableReason(reason string) any {
+	if reason == "" {
+		return nil
+	}
+	return reason
+}
+
 func validateSubmit(p store.SubmitParams) error {
 	switch p.Status {
 	case "matched":
@@ -442,9 +525,10 @@ func (s *Store) QueueStats(ctx context.Context) (store.QueueStats, error) {
 			count(*) FILTER (WHERE match_status = 'unmatched'),
 			count(*) FILTER (WHERE match_status = 'matched'),
 			count(*) FILTER (WHERE match_status = 'suppressed'),
-			count(*) FILTER (WHERE match_status = 'exhausted')
+			count(*) FILTER (WHERE match_status = 'exhausted'),
+			count(*) FILTER (WHERE match_status = 'dead')
 		FROM releases
-	`, now, s.cfg.QueueMaxAttempts).Scan(&qs.Available, &qs.Leased, &qs.Unmatched, &qs.Matched, &qs.Suppressed, &qs.Exhausted)
+	`, now, s.cfg.QueueMaxAttempts).Scan(&qs.Available, &qs.Leased, &qs.Unmatched, &qs.Matched, &qs.Suppressed, &qs.Exhausted, &qs.Dead)
 	if err != nil {
 		return store.QueueStats{}, fmt.Errorf("queue stats: %w", err)
 	}
@@ -659,7 +743,7 @@ func (s *Store) ResolveMagnets(ctx context.Context, infohashes []string) (map[st
 	rows, err := s.pool.Query(ctx, `
 		SELECT infohash, magnet
 		FROM releases
-		WHERE infohash = ANY($1) AND magnet IS NOT NULL
+		WHERE infohash = ANY($1) AND magnet IS NOT NULL AND match_status = 'matched'
 	`, infohashes)
 	if err != nil {
 		return nil, fmt.Errorf("resolve_magnets: %w", err)

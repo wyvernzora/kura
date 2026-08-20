@@ -60,6 +60,7 @@ func NewWithMetricsAndLogger(s store.Store, m *metrics.Metrics, logger *slog.Log
 	mux.HandleFunc("/api/releases/v1/queue/stats", h.handleQueueStats)
 	mux.HandleFunc("/api/releases/v1/queue/submit", h.handleSubmit)
 	mux.HandleFunc("/api/releases/v1/{infohash}/magnet", h.handleGetMagnet)
+	mux.HandleFunc("/api/releases/v1/{infohash}/status", h.handleSetStatus)
 	mux.HandleFunc("/api/releases/v1/{infohash}", h.handleGetRelease)
 	h.mux = mux
 	return h
@@ -111,7 +112,7 @@ func (h *Handler) writeDispatchError(w http.ResponseWriter, infohash string, err
 	switch kind {
 	case api.KindNotFound:
 		writeError(w, http.StatusNotFound, kind, err.Error(), data)
-	case api.KindNoActiveLease, api.KindStaleLease:
+	case api.KindNoActiveLease, api.KindStaleLease, api.KindInvalidTransition:
 		writeError(w, http.StatusConflict, kind, err.Error(), data)
 	case api.KindInvalidRef, api.KindInvalidCursor, api.KindInvalidRequest:
 		writeError(w, http.StatusBadRequest, kind, err.Error(), data)

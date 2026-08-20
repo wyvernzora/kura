@@ -25,14 +25,23 @@ type Error struct {
 // `no_such_release`; those retire into KindInvalidRequest (or a specific
 // invalid_* kind) and KindNotFound respectively.
 const (
-	KindInvalidRequest     = "invalid_request"
-	KindMethodNotAllowed   = "method_not_allowed"
-	KindInvalidRef         = "invalid_ref"
-	KindInvalidCursor      = "invalid_cursor"
-	KindBatchTooLarge      = "batch_too_large"
-	KindNotFound           = "not_found"
-	KindNoActiveLease      = "no_active_lease"
-	KindStaleLease         = "stale_lease"
+	KindInvalidRequest   = "invalid_request"
+	KindMethodNotAllowed = "method_not_allowed"
+	KindInvalidRef       = "invalid_ref"
+	KindInvalidCursor    = "invalid_cursor"
+	KindBatchTooLarge    = "batch_too_large"
+	KindNotFound         = "not_found"
+	KindNoActiveLease    = "no_active_lease"
+	KindStaleLease       = "stale_lease"
+	// KindInvalidTransition marks a status change the transition table does
+	// not allow (HTTP 409). The message names the attempted transition.
+	KindInvalidTransition = "invalid_transition"
+	// KindNotMatched marks a magnet fetch for a release that exists but is
+	// not matched (HTTP 409). The release is real — 404 would mislead — but
+	// the download pipeline is only ever supposed to hold matched releases,
+	// so reaching this gate means a stale selection or an upstream bug; the
+	// body carries matchStatus so the failure is self-diagnosing.
+	KindNotMatched         = "not_matched"
 	KindBackendUnavailable = "backend_unavailable"
 	KindServerNotReady     = "server_not_ready"
 	// KindUpstreamError marks a server-side crawl whose upstream page fetch

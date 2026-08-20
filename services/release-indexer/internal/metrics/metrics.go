@@ -63,11 +63,14 @@ func (m *HTTP) route(path string) string {
 		return route
 	}
 	// Collapse the infohash so the label stays low-cardinality, but keep
-	// the magnet sub-resource distinct from release detail — they are
-	// different traffic and merging them hides one behind the other.
+	// the sub-resources distinct from release detail — they are different
+	// traffic and merging them hides one behind the other.
 	if rest, ok := strings.CutPrefix(path, releasePrefix); ok && rest != "" {
 		if hash, found := strings.CutSuffix(rest, "/magnet"); found && !strings.Contains(hash, "/") {
 			return releasePrefix + "{infohash}/magnet"
+		}
+		if hash, found := strings.CutSuffix(rest, "/status"); found && !strings.Contains(hash, "/") {
+			return releasePrefix + "{infohash}/status"
 		}
 		if !strings.Contains(rest, "/") {
 			return releasePrefix + "{infohash}"
@@ -402,6 +405,7 @@ func (c *queueCollector) Collect(ch chan<- prometheus.Metric) {
 		"matched":    qs.Matched,
 		"suppressed": qs.Suppressed,
 		"exhausted":  qs.Exhausted,
+		"dead":       qs.Dead,
 	} {
 		ch <- prometheus.MustNewConstMetric(queueItemsDesc, prometheus.GaugeValue, float64(value), state)
 	}

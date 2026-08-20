@@ -10,7 +10,21 @@ const (
 	MatchStatusMatched    MatchStatus = "matched"
 	MatchStatusSuppressed MatchStatus = "suppressed"
 	MatchStatusExhausted  MatchStatus = "exhausted"
+	// MatchStatusDead marks a release whose torrent proved undownloadable.
+	// It is a terminal curation state, not a queue state: the matcher never
+	// submits it, list/claim paths already exclude it by status, and there
+	// is no transition back in v1.
+	MatchStatusDead MatchStatus = "dead"
 )
+
+// SetStatusRequest is the PUT /api/releases/v1/{infohash}/status body.
+//
+// Reason is optional and is recorded to match_events, the existing audit
+// trail — the transition needs no new columns.
+type SetStatusRequest struct {
+	Status MatchStatus `json:"status"`
+	Reason string      `json:"reason,omitempty"`
+}
 
 // ReleaseItem is one row of GET /api/releases/v1.
 //

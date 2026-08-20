@@ -4,5 +4,6 @@
   "unmatched": 14,
   "matched": 900,
   "suppressed": 3,
-  "exhausted": 1
+  "exhausted": 1,
+  "dead": 0
 }

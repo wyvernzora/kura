@@ -10,6 +10,9 @@ var (
 	ErrNoSuchRelease = errors.New("indexer: no such release")
 	ErrNoActiveLease = errors.New("indexer: no active lease")
 	ErrStaleLease    = errors.New("indexer: stale lease")
+	// ErrInvalidTransition reports a status change the transition table
+	// does not allow. The wrapping error names the attempted transition.
+	ErrInvalidTransition = errors.New("indexer: invalid status transition")
 )
 
 type Clock interface {
@@ -25,6 +28,7 @@ type Store interface {
 	IngestN(ctx context.Context, p IngestParams) (IngestOutcome, error)
 	Claim(ctx context.Context, p ClaimParams) (ClaimResult, error)
 	Submit(ctx context.Context, p SubmitParams) error
+	SetStatus(ctx context.Context, p SetStatusParams) error
 	QueueStats(ctx context.Context) (QueueStats, error)
 	CatalogStats(ctx context.Context) (CatalogStats, error)
 	ListReleases(ctx context.Context, q ReleaseQuery) (ReleasePage, error)
@@ -77,6 +81,15 @@ type SubmitParams struct {
 	Reason     string
 }
 
+// SetStatusParams is one operator-driven status change. It is deliberately
+// not claim-fenced: the transition table excludes every transition the
+// matcher's claim path owns, so the two routes cannot collide.
+type SetStatusParams struct {
+	Infohash string
+	Status   string
+	Reason   string
+}
+
 type QueueStats struct {
 	Available  int
 	Leased     int
@@ -84,6 +97,7 @@ type QueueStats struct {
 	Matched    int
 	Suppressed int
 	Exhausted  int
+	Dead       int
 }
 
 type CatalogStats struct {

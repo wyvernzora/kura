@@ -91,23 +91,28 @@ func TestSmoke(t *testing.T) {
 			t.Fatalf("/ingest summary = %+v, want batch.new=1 and queue.available>=1", summary)
 		}
 
-		magnetResp, err := http.Get(baseURL + "/api/releases/v1/" + smokeHexInfohash + "/magnet")
+		// Pre-match the magnet gate must refuse with 409 not_matched: the
+		// release exists but is not part of any download pipeline yet. The
+		// 200 path is asserted after submit, below.
+		gatedResp, err := http.Get(baseURL + "/api/releases/v1/" + smokeHexInfohash + "/magnet")
 		if err != nil {
-			t.Fatalf("GET /api/releases/v1/{infohash}/magnet: %v", err)
+			t.Fatalf("GET /api/releases/v1/{infohash}/magnet (pre-match): %v", err)
 		}
-		defer magnetResp.Body.Close()
-		if magnetResp.StatusCode != http.StatusOK {
-			t.Fatalf("GET /api/releases/v1/{infohash}/magnet = %d, want 200", magnetResp.StatusCode)
+		defer gatedResp.Body.Close()
+		if gatedResp.StatusCode != http.StatusConflict {
+			t.Fatalf("GET /api/releases/v1/{infohash}/magnet (pre-match) = %d, want 409", gatedResp.StatusCode)
 		}
-		var magnet struct {
-			Infohash string `json:"infohash"`
-			Magnet   string `json:"magnet"`
+		var gated struct {
+			Kind string `json:"kind"`
+			Data struct {
+				MatchStatus string `json:"matchStatus"`
+			} `json:"data"`
 		}
-		if err := json.NewDecoder(magnetResp.Body).Decode(&magnet); err != nil {
-			t.Fatalf("decode /api/releases/v1/{infohash}/magnet: %v", err)
+		if err := json.NewDecoder(gatedResp.Body).Decode(&gated); err != nil {
+			t.Fatalf("decode gated magnet response: %v", err)
 		}
-		if magnet.Infohash != smokeHexInfohash || magnet.Magnet != "magnet:?xt=urn:btih:"+smokeHexInfohash+"&tr=udp://smoke:80" {
-			t.Fatalf("/api/releases/v1/{infohash}/magnet = %+v, want stored magnet", magnet)
+		if gated.Kind != "not_matched" || gated.Data.MatchStatus != "unmatched" {
+			t.Fatalf("gated magnet response = %+v, want not_matched/unmatched", gated)
 		}
 
 		claimResp, err := http.Post(baseURL+"/api/releases/v1/queue/claim", "application/json", bytes.NewReader(mustJSON(t, map[string]any{
@@ -146,6 +151,25 @@ func TestSmoke(t *testing.T) {
 		defer submitResp.Body.Close()
 		if submitResp.StatusCode != http.StatusOK {
 			t.Fatalf("POST /submit = %d, want 200", submitResp.StatusCode)
+		}
+
+		magnetResp, err := http.Get(baseURL + "/api/releases/v1/" + smokeHexInfohash + "/magnet")
+		if err != nil {
+			t.Fatalf("GET /api/releases/v1/{infohash}/magnet: %v", err)
+		}
+		defer magnetResp.Body.Close()
+		if magnetResp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /api/releases/v1/{infohash}/magnet = %d, want 200", magnetResp.StatusCode)
+		}
+		var magnet struct {
+			Infohash string `json:"infohash"`
+			Magnet   string `json:"magnet"`
+		}
+		if err := json.NewDecoder(magnetResp.Body).Decode(&magnet); err != nil {
+			t.Fatalf("decode /api/releases/v1/{infohash}/magnet: %v", err)
+		}
+		if magnet.Infohash != smokeHexInfohash || magnet.Magnet != "magnet:?xt=urn:btih:"+smokeHexInfohash+"&tr=udp://smoke:80" {
+			t.Fatalf("/api/releases/v1/{infohash}/magnet = %+v, want stored magnet", magnet)
 		}
 
 		releaseResp, err := http.Get(baseURL + "/api/releases/v1/" + smokeHexInfohash)

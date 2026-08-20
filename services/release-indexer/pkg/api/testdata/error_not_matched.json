@@ -1,0 +1,8 @@
+{
+  "kind": "not_matched",
+  "message": "release is dead, not matched",
+  "data": {
+    "infohash": "0123456789abcdef0123456789abcdef01234567",
+    "matchStatus": "dead"
+  }
+}

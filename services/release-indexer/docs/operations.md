@@ -11,7 +11,7 @@ KURA_RELEASES_DATABASE_URL=postgres://… \
   ./bin/kura-release-indexer --config ./config.example.toml
 ```
 
-One process serves `/api/releases/v1/ingest`, `/api/releases/v1/sources/{source}/crawl`, `/api/releases/v1/{infohash}/magnet`, `/api/releases/v1/{infohash}`,
+One process serves `/api/releases/v1/ingest`, `/api/releases/v1/sources/{source}/crawl`, `/api/releases/v1/{infohash}/magnet`, `/api/releases/v1/{infohash}/status`, `/api/releases/v1/{infohash}`,
 `/api/releases/v1/queue/claim`, `/api/releases/v1/queue/stats`, `/api/releases/v1/queue/submit`, and `/healthz` on
 `server.addr`, and runs every enabled source crawler. `/metrics` is served on a
 second listener, `server.metrics_addr`, and is the only thing on it.
@@ -89,10 +89,14 @@ external producer        -> POST /api/releases/v1/ingest (escape hatch)
 n8n                       -> POST /api/releases/v1/queue/claim
 n8n                       -> matcher agent
 n8n                       -> POST /api/releases/v1/queue/submit
+n8n maintenance           -> PUT /api/releases/v1/{infohash}/status (matched -> dead)
 consumer agent            -> gateway MCP list_releases / get_release / get_magnet
 ```
 
 `/api/releases/v1/queue/stats.exhausted` is the operator intervention signal for matcher work.
+`/api/releases/v1/queue/stats.dead` counts releases retired with
+`PUT /api/releases/v1/{infohash}/status` after their torrent proved undownloadable; the
+only accepted transition is `matched -> dead`, and there is no way back in v1.
 
 ## Backfill
 

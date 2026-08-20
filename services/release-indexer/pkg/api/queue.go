@@ -82,4 +82,5 @@ type QueueStats struct {
 	Matched    int `json:"matched"`
 	Suppressed int `json:"suppressed"`
 	Exhausted  int `json:"exhausted"`
+	Dead       int `json:"dead"`
 }

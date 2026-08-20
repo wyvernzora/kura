@@ -23,7 +23,7 @@ The release-indexer exposes Prometheus metrics at `/metrics`.
 | `kura_indexer_source_crawl_duration_seconds` | histogram | `source` | End-to-end scheduled crawl and ingest duration. |
 | `kura_indexer_source_crawl_posts_total` | counter | `source` | Posts emitted by scheduled crawls (all walked pages). |
 | `kura_indexer_source_last_success_timestamp_seconds` | gauge | `source` | Unix time of the last fully successful scheduled crawl+ingest. The series is absent until a source's first success since boot (and always absent for disabled sources), so pair the `time() - gauge` staleness panel/alert with an `absent()`-aware expression and a `for:` window longer than one crawl interval. |
-| `kura_indexer_queue_items` | gauge | `state` | Current release queue/status counts. States are `claimable`, `leased`, `unmatched`, `matched`, `suppressed`, and `exhausted`. |
+| `kura_indexer_queue_items` | gauge | `state` | Current release queue/status counts. States are `claimable`, `leased`, `unmatched`, `matched`, `suppressed`, `exhausted`, and `dead`. |
 | `kura_indexer_queue_stats_scrape_ok` | gauge | none | `1` when queue stats were readable during scrape, otherwise `0`. |
 | `kura_indexer_catalog_raw_posts` | gauge | none | Current row count in `raw_items`. |
 | `kura_indexer_catalog_infohashes` | gauge | none | Current row count in `releases`; one row per unique infohash. |

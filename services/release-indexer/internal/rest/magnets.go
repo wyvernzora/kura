@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -47,9 +48,32 @@ func (h *Handler) handleGetMagnet(w http.ResponseWriter, r *http.Request) {
 	}
 	magnet, ok := out.Magnets[ih]
 	if !ok {
-		h.log(r, slog.LevelInfo, "magnet lookup missed", "infohash", ih)
-		writeError(w, http.StatusNotFound, api.KindNotFound, store.ErrNoSuchRelease.Error(),
-			map[string]any{"infohash": ih})
+		// One extra query, on the miss path only, splits "unknown infohash"
+		// from "known but not matched": the pipeline treats those very
+		// differently (garbage input vs a selection that went stale, e.g.
+		// the pruner marked it dead between list and fetch).
+		detail, derr := h.dispatch.GetReleaseTyped(r.Context(), dispatch.GetReleaseRequest{Infohash: ih})
+		switch {
+		case derr == nil:
+			h.log(r, slog.LevelInfo, "magnet lookup gated",
+				"infohash", ih, "match_status", detail.MatchStatus)
+			writeError(w, http.StatusConflict, api.KindNotMatched,
+				fmt.Sprintf("release is %s, not matched", detail.MatchStatus),
+				map[string]any{"infohash": ih, "matchStatus": detail.MatchStatus})
+		case dispatch.ErrorKind(derr) == api.KindNotFound:
+			h.log(r, slog.LevelInfo, "magnet lookup missed", "infohash", ih)
+			writeError(w, http.StatusNotFound, api.KindNotFound, store.ErrNoSuchRelease.Error(),
+				map[string]any{"infohash": ih})
+		default:
+			// A store failure must not be reported as a missing release:
+			// the pipeline would drop a release that exists.
+			h.log(r, dispatchLogLevel(derr), "magnet lookup failed",
+				"infohash", ih,
+				"code", dispatch.ErrorKind(derr),
+				"err", derr,
+			)
+			h.writeDispatchError(w, ih, derr)
+		}
 		return
 	}
 	h.log(r, slog.LevelInfo, "magnet lookup completed", "infohash", ih)
