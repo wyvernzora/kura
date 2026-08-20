@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
 )
@@ -101,5 +103,49 @@ func TestTokenLoginIsSingleflight(t *testing.T) {
 	defer mu.Unlock()
 	if loginCalls != 1 {
 		t.Fatalf("login calls = %d, want 1", loginCalls)
+	}
+}
+
+func TestClientPacesSustainedRequestsAtTheLimiterRate(t *testing.T) {
+	server := newTestServer(t, nil)
+	defer server.Close()
+
+	p, err := New("test-key", Options{
+		BaseURL:    server.URL,
+		HTTPClient: server.Client(),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if p.client.limiter == nil {
+		t.Fatal("client has no limiter; every TVDB request would go out unthrottled")
+	}
+	// Aggressive test rate so the assertion holds in wall-clock terms
+	// without slowing the suite: burst 1 means every request after the
+	// first must wait a full interval, so 4 requests take >= 3 intervals.
+	p.client.limiter = rate.NewLimiter(rate.Limit(100), 1)
+
+	start := time.Now()
+	for range 4 {
+		if _, err := p.Search(context.Background(), textnorm.NFC("honzuki"), provider.SearchOptions{}); err != nil {
+			t.Fatalf("Search: %v", err)
+		}
+	}
+	elapsed := time.Since(start)
+	if want := 30 * time.Millisecond; elapsed < want {
+		t.Fatalf("4 sustained requests finished in %s, want >= %s under a 100/s burst-1 limiter", elapsed, want)
+	}
+}
+
+func TestNewClientDefaultsToThePolitenessRate(t *testing.T) {
+	p, err := New("test-key", Options{})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := p.client.limiter.Limit(); got != defaultRateLimit {
+		t.Fatalf("limiter rate = %v, want %v", got, defaultRateLimit)
+	}
+	if got := p.client.limiter.Burst(); got != defaultRateBurst {
+		t.Fatalf("limiter burst = %d, want %d", got, defaultRateBurst)
 	}
 }

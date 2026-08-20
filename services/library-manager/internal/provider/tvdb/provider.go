@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
 	"github.com/wyvernzora/kura/services/library-manager/internal/textnorm"
 )
@@ -21,6 +23,11 @@ const (
 	defaultURL          = "https://api4.thetvdb.com/v4"
 	defaultHTTPTimeout  = 30 * time.Second
 	defaultRefreshAhead = 24 * time.Hour
+	// TVDB publishes no official rate limit; 10 req/s sustained is a
+	// deliberate politeness floor for bulk work, and the burst lets an
+	// interactive single-series lookup (2-4 requests) run without waiting.
+	defaultRateLimit = rate.Limit(10)
+	defaultRateBurst = 20
 )
 
 // Options configures a TVDB metadata source.

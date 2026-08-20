@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/wyvernzora/kura/services/library-manager/internal/provider"
 )
 
@@ -20,6 +22,7 @@ type client struct {
 	baseURL            string
 	httpClient         *http.Client
 	tokenRefreshBefore time.Duration
+	limiter            *rate.Limiter
 
 	mu          sync.Mutex
 	bearerToken string
@@ -47,6 +50,7 @@ func newClient(apiKey string, opts Options) *client {
 		baseURL:            baseURL,
 		httpClient:         httpClient,
 		tokenRefreshBefore: refreshBefore,
+		limiter:            rate.NewLimiter(defaultRateLimit, defaultRateBurst),
 	}
 }
 
@@ -75,6 +79,15 @@ func (c *client) doJSON(ctx context.Context, method, path string, values url.Val
 
 	// Two attempts: initial + one retry after a 401 clears the token.
 	for attempt := range 2 {
+		// TVDB publishes no rate limit, so this is a politeness floor,
+		// not a quota: the burst absorbs interactive single-series
+		// lookups without adding latency, while sustained bulk work
+		// (a library-wide metadata rescan is ~2.5-3k requests) settles
+		// at the steady rate instead of whatever ScanAll concurrency
+		// happens to produce.
+		if err := c.limiter.Wait(ctx); err != nil {
+			return fmt.Errorf("tvdb: rate limit wait: %w", err)
+		}
 		var payload io.Reader
 		if encoded != nil {
 			payload = bytes.NewReader(encoded)
