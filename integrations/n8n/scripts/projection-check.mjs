@@ -33,6 +33,7 @@ assert.deepEqual(
 		status: 'incomplete',
 		isAiring: true,
 		staged: false,
+		lastScanned: '2026-04-20T03:00:00Z',
 		tags: ['priority'],
 	},
 );

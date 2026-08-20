@@ -726,6 +726,11 @@ export function projectRow(row: IDataObject, simplifyOutput = true): IDataObject
 		status: row.status,
 		isAiring: Boolean(row.isAiring),
 		staged: Boolean(row.staged),
+		// Scan recency is kura-authored scheduling state; keeping it in the
+		// simplified projection lets rotation/rescan Code nodes stay off the
+		// heavy native rows. dropEmpty omits it for never-scanned series,
+		// matching the wire's omitempty.
+		lastScanned: row.lastScanned,
 	});
 	out.tags = stringArrayField(row, 'tags');
 	return out;
