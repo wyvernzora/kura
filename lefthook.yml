@@ -5,6 +5,14 @@ commit-msg:
     check-subject-format:
       run: ./.githooks/check-commit-subject.sh {1}
 
+# Push is where the workspace invariant last escaped: per-module checks pass,
+# CI's root-level `go work sync` drift check fails. Cheap enough (~1s) to run
+# on every push.
+pre-push:
+  commands:
+    go-work-sync:
+      run: make work-sync
+
 pre-commit:
   commands:
     gofmt-releases:

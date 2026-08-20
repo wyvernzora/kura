@@ -3,9 +3,31 @@
 
 MODULES := services/library-manager services/release-indexer services/gateway services/gateway/web cli integrations/n8n
 
-.PHONY: check build test service-e2e product-e2e e2e
+# Go modules in the workspace, checked standalone: the workspace resolves
+# dependencies the individual modules cannot, so a module can build here and
+# fail in CI, which runs each with GOWORK=off.
+GO_MODULES := services/library-manager services/release-indexer services/gateway cli
 
-check:
+.PHONY: check work-sync build test service-e2e product-e2e e2e
+
+# Workspace-level invariant, owned by no module: a dependency added in one
+# module leaves the other modules' go.mod/go.sum stale until `go work sync`
+# runs. Per-module `make check` cannot see it — the drift is between modules
+# — so it has to live at the root. Mirrors ci-releases' "go work sync drift"
+# step, which is where this last escaped to. Two distinct failure modes live
+# here: go.mod/go.sum drift between modules, and a sync-promoted version whose
+# /go.mod hash never landed in a module's standalone go.sum — the second only
+# shows up with GOWORK=off, which is how CI builds each module.
+work-sync:
+	@go work sync
+	@git diff --exit-code -- '*/go.mod' '*/go.sum' '**/go.mod' '**/go.sum' \
+	  || (echo "go.mod/go.sum drift: 'go work sync' changed files — review and commit them" >&2 && exit 1)
+	@for m in $(GO_MODULES); do \
+		(cd $$m && GOWORK=off go build ./... >/dev/null) \
+		  || (echo "$$m does not build standalone (GOWORK=off) — a sync-promoted version is likely missing its go.sum /go.mod hash; run: cd $$m && GOWORK=off go mod download <module>" >&2 && exit 1); \
+	done
+
+check: work-sync
 	@for s in $(MODULES); do \
 		echo "==> $$s check"; \
 		$(MAKE) -C $$s check || exit 1; \
