@@ -53,6 +53,15 @@ export const Expanded: Story = {
   ),
 };
 
+/** Trash route — the active treatment moves to the second nav item. */
+export const TrashActive: Story = {
+  render: () => (
+    <StoryRouter initialPath="/trash">
+      <Harness collapsed={false} />
+    </StoryRouter>
+  ),
+};
+
 /** Settings route — the active treatment moves to the bottom item. */
 export const SettingsActive: Story = {
   render: () => (

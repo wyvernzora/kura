@@ -199,19 +199,20 @@ function barChrome(scrolled: boolean): string {
 }
 
 /**
- * Slim Settings chrome for mobile. Settings has no search field, so
- * on desktop AppShell renders no bar at all; below `md` the hamburger
- * still has to live somewhere or the drawer becomes unreachable. The
- * bar's "Settings" title doubles as the page heading on mobile —
- * SettingsPage hides its h1 below `md` so the word appears once.
+ * Slim mobile chrome for the searchless pages (Settings, Trash). They
+ * have no search field, so on desktop AppShell renders no bar at all;
+ * below `md` the hamburger still has to live somewhere or the drawer
+ * becomes unreachable. The bar's title doubles as the page heading on
+ * mobile — those pages hide their own h1 below `md` so the word
+ * appears once.
  */
-export function SettingsMobileBar({ onMenu }: { onMenu: () => void }) {
+export function PageMobileBar({ title, onMenu }: { title: string; onMenu: () => void }) {
   const scrolled = useScrolled();
   return (
     <header className={cn(barChrome(scrolled), 'md:hidden')}>
       <div className="flex h-[72px] items-center gap-3 px-[18px]">
         <HamburgerButton onClick={onMenu} />
-        <span className="font-semibold text-[15px] text-ink tracking-[-0.2px]">Settings</span>
+        <span className="font-semibold text-[15px] text-ink tracking-[-0.2px]">{title}</span>
       </div>
     </header>
   );

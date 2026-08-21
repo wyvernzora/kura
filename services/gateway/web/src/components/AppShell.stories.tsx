@@ -42,6 +42,22 @@ export const DetailRoute: Story = {
 };
 
 /**
+ * Trash route — like Settings, a searchless page: no top bar on
+ * desktop, and the slim mobile bar titled "Trash" below `md`.
+ */
+export const TrashRoute: Story = {
+  render: () => (
+    <StoryRouter initialPath="/trash">
+      <AppShell>
+        <div className="mx-auto max-w-3xl px-6 py-12 text-muted text-sm">
+          Stub trash content. Real app renders the Trash page here.
+        </div>
+      </AppShell>
+    </StoryRouter>
+  ),
+};
+
+/**
  * Settings route — no top bar at all on desktop (the slim mobile bar
  * that replaces it only renders below `md`).
  */

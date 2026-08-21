@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react';
 
 import { MobileDrawer } from '@/components/MobileDrawer';
 import { Sidebar } from '@/components/Sidebar';
-import { SettingsMobileBar, TopBar } from '@/components/TopBar';
+import { PageMobileBar, TopBar } from '@/components/TopBar';
 import { useSuppressHoverOnScroll } from '@/lib/useSuppressHoverOnScroll';
 
 interface AppShellProps {
@@ -21,18 +21,28 @@ interface AppShellProps {
  * the drawer's open state is local because a persisted overlay is
  * never what the user wants on the next visit.
  *
- * Settings has no search, so it gets no top bar on desktop at all —
- * just the slim mobile bar that keeps the hamburger reachable.
+ * The searchless pages (Settings, Trash) get no top bar on desktop at
+ * all — just the slim mobile bar that keeps the hamburger reachable.
+ * `BARLESS_ROUTES` is the list, mapping each to its mobile title.
  *
  * Mounts the suppress-hover-on-scroll hook once for the whole app —
  * keeps the poster grid from churning :hover state while the user
  * scrolls.
  */
+/**
+ * Routes that render the slim mobile bar instead of the search top
+ * bar, and the title each one shows there.
+ */
+const BARLESS_ROUTES: Record<string, string> = {
+  '/settings': 'Settings',
+  '/trash': 'Trash',
+};
+
 export function AppShell({ children }: AppShellProps) {
   useSuppressHoverOnScroll();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const onSettings = pathname === '/settings';
+  const barlessTitle = BARLESS_ROUTES[pathname];
 
   function openDrawer() {
     setDrawerOpen(true);
@@ -42,7 +52,11 @@ export function AppShell({ children }: AppShellProps) {
     <div className="flex min-h-dvh bg-paper">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        {onSettings ? <SettingsMobileBar onMenu={openDrawer} /> : <TopBar onMenu={openDrawer} />}
+        {barlessTitle ? (
+          <PageMobileBar title={barlessTitle} onMenu={openDrawer} />
+        ) : (
+          <TopBar onMenu={openDrawer} />
+        )}
         <main className="flex-1">{children}</main>
       </div>
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
