@@ -2,12 +2,14 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { useResolveSearch } from '@/api/hooks';
 import { GearMenu } from '@/components/GearMenu';
 import { Logo } from '@/components/Logo';
 import { SearchField } from '@/components/SearchField';
+import { SearchScopeControl } from '@/components/SearchScope';
 import { cn } from '@/lib/cn';
 import { useScrolled } from '@/lib/useScrolled';
-import { useSearch } from '@/state/search';
+import { MIN_TVDB_QUERY_LENGTH, useSearch } from '@/state/search';
 
 interface TopBarProps {
   className?: string;
@@ -46,6 +48,19 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
   const setQuery = useSearch((s) => s.setQuery);
   const setOrigin = useSearch((s) => s.setOrigin);
   const clear = useSearch((s) => s.clear);
+  const scope = useSearch((s) => s.scope);
+  const setScope = useSearch((s) => s.setScope);
+
+  const trimmed = query.trim();
+  const searching = trimmed.length > 0;
+  const tvdbEligible = trimmed.length >= MIN_TVDB_QUERY_LENGTH;
+  // Prefetch: the resolve fires as soon as the query is long enough
+  // (its own debounce applies), regardless of scope — results are
+  // warm by the time the user opens the TVDB tab. Shares the
+  // react-query cache with the home route's reader, so this costs no
+  // extra request. Below the floor the hook receives '' and stays
+  // disabled.
+  const resolve = useResolveSearch(tvdbEligible ? trimmed : '');
 
   // Drive the leading slot off the route so callers don't have to
   // pass a mode prop down through AppShell. `useRouterState` returns
@@ -137,14 +152,26 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
       */}
       <div className="mx-auto grid h-[72px] max-w-[1920px] grid-cols-[1fr_minmax(0,560px)_1fr] items-center gap-3 px-[18px]">
         <div className="justify-self-start">{onDetailRoute ? <BackToLibrary /> : <Logo />}</div>
-        <SearchField
-          ref={searchRef}
-          className="w-full"
-          value={query}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          onClear={rewindClear}
-          placeholder="Search library — title or alias…"
-        />
+        {/* SearchField shrinks to make room for the scope control,
+            which only exists during an active search session. */}
+        <div className="flex min-w-0 items-center gap-2">
+          <SearchField
+            ref={searchRef}
+            className="min-w-0 flex-1"
+            value={query}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            onClear={rewindClear}
+            placeholder="Search library — title or alias…"
+          />
+          {searching && (
+            <SearchScopeControl
+              scope={scope}
+              onScope={setScope}
+              tvdbFetching={resolve.isFetching}
+              tvdbDisabled={!tvdbEligible}
+            />
+          )}
+        </div>
         <div className="flex items-center justify-self-end gap-1.5">
           <GearMenu />
         </div>

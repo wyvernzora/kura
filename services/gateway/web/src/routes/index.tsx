@@ -1,13 +1,15 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 
-import { useSeriesList } from '@/api/hooks';
-import type { ListRow } from '@/api/types';
-import { AddCandidates } from '@/components/AddCandidates';
+import { useResolveSearch, useSeriesList } from '@/api/hooks';
+import type { Candidate, ListRow } from '@/api/types';
 import { ClearFiltersButton } from '@/components/ClearFiltersButton';
+import { TvdbHintRow, TvdbSkeletonGrid } from '@/components/SearchScope';
 import { SortDropdown } from '@/components/SortDropdown';
 import { StatusFilterDropdown } from '@/components/StatusFilterDropdown';
 import { Card } from '@/components/ui/card';
+import { MaterialIcon } from '@/components/ui/material-icon';
+import { Poster } from '@/components/ui/poster';
 import { ValueFilterDropdown } from '@/components/ValueFilterDropdown';
 import { VirtualPosterGrid } from '@/components/VirtualPosterGrid';
 import {
@@ -20,7 +22,7 @@ import { searchLibrary } from '@/lib/searchLibrary';
 import type { Status } from '@/lib/status';
 import { useAutoDensity } from '@/lib/useAutoDensity';
 import { useLibraryFilters } from '@/state/library';
-import { useSearch } from '@/state/search';
+import { MIN_TVDB_QUERY_LENGTH, useSearch } from '@/state/search';
 
 export const Route = createFileRoute('/')({
   component: LibraryHome,
@@ -30,6 +32,8 @@ function LibraryHome() {
   const seriesQuery = useSeriesList();
   const query = useSearch((s) => s.query);
   const clearSearch = useSearch((s) => s.clear);
+  const scope = useSearch((s) => s.scope);
+  const setScope = useSearch((s) => s.setScope);
   const density = useAutoDensity();
   const navigate = useNavigate();
   const onSelect = useCallback(
@@ -71,14 +75,33 @@ function LibraryHome() {
   // matches; the threshold + minMatchCharLength inside searchLibrary
   // keep noise out.
   const isSearching = trimmed.length > 0;
+  const tvdbEligible = trimmed.length >= MIN_TVDB_QUERY_LENGTH;
 
   const allRows = seriesQuery.data ?? [];
 
-  // Metadata refs already in the library — used by AddCandidates to
-  // drop provider matches the user already owns.
+  // Metadata refs already in the library — drops provider matches the
+  // user already owns from the TVDB scope.
   const libraryRefs = useMemo(
     () => new Set(allRows.map((r) => r.ref).filter((ref): ref is string => !!ref)),
     [allRows],
+  );
+
+  // Same query key as TopBar's prefetch — one request, shared cache.
+  const resolve = useResolveSearch(tvdbEligible ? trimmed : '');
+  const candidates = useMemo(
+    () => (resolve.data?.candidates ?? []).filter((c) => !libraryRefs.has(c.ref)),
+    [resolve.data, libraryRefs],
+  );
+  // Resolved-and-empty is a distinct state from unresolved: it hides
+  // the hint row and swaps the no-matches CTA for a plain sentence.
+  const tvdbEmpty = resolve.isSuccess && !resolve.isFetching && candidates.length === 0;
+  const tvdbCount = resolve.isSuccess && !resolve.isFetching ? candidates.length : null;
+
+  const onPickCandidate = useCallback(
+    (c: Candidate) => {
+      void navigate({ to: '/series/$ref', params: { ref: c.ref }, search: { preview: true } });
+    },
+    [navigate],
   );
 
   const counts = useMemo(() => {
@@ -158,23 +181,53 @@ function LibraryHome() {
         </header>
       )}
 
-      {isSearching && <AddCandidates query={trimmed} libraryRefs={libraryRefs} />}
-
-      {isSearching && (
+      {isSearching && scope === 'library' && (
         <header className="mb-4 flex items-baseline gap-3 text-sm">
           <SearchSummary query={trimmed} matchCount={rows.length} />
         </header>
       )}
 
-      <LibraryBody
-        seriesPending={seriesQuery.isPending}
-        seriesError={seriesQuery.isError}
-        librarySize={allRows.length}
-        rows={rows}
-        density={density}
-        isSearching={isSearching}
-        onSelect={onSelect}
-      />
+      {isSearching && scope === 'library' && rows.length > 0 && tvdbEligible && (
+        <div className="flex flex-col">
+          <TvdbHintRow
+            fetching={resolve.isFetching}
+            count={tvdbCount}
+            onGo={() => setScope('tvdb')}
+          />
+        </div>
+      )}
+
+      {isSearching && scope === 'library' && rows.length === 0 && (
+        <NoLibraryMatches
+          query={trimmed}
+          tvdbEligible={tvdbEligible}
+          tvdbEmpty={tvdbEmpty}
+          tvdbCount={tvdbCount}
+          onGo={() => setScope('tvdb')}
+        />
+      )}
+
+      {isSearching && scope === 'tvdb' && (
+        <TvdbResults
+          query={trimmed}
+          fetching={resolve.isFetching}
+          empty={tvdbEmpty}
+          candidates={candidates}
+          onPick={onPickCandidate}
+        />
+      )}
+
+      {scope === 'library' && (
+        <LibraryBody
+          seriesPending={seriesQuery.isPending}
+          seriesError={seriesQuery.isError}
+          librarySize={allRows.length}
+          rows={rows}
+          density={density}
+          isSearching={isSearching}
+          onSelect={onSelect}
+        />
+      )}
     </div>
   );
 }
@@ -293,6 +346,93 @@ function CenteredCard({ title, body }: { title: string; body: string }) {
 interface SearchSummaryProps {
   query: string;
   matchCount: number;
+}
+
+interface NoLibraryMatchesProps {
+  query: string;
+  tvdbEligible: boolean;
+  tvdbEmpty: boolean;
+  tvdbCount: number | null;
+  onGo: () => void;
+}
+
+/**
+ * Library scope with zero fuzzy matches: a plain sentence plus a
+ * "See N on TVDB" jump when the provider has candidates. When TVDB
+ * also resolved to zero, says so instead of offering a dead-end
+ * button.
+ */
+function NoLibraryMatches({
+  query,
+  tvdbEligible,
+  tvdbEmpty,
+  tvdbCount,
+  onGo,
+}: NoLibraryMatchesProps) {
+  return (
+    <div className="flex flex-col items-start gap-3 py-8">
+      <span className="text-sm text-muted">
+        No library matches for “{query}”.
+        {tvdbEligible && tvdbEmpty && ' TVDB has no matches either.'}
+      </span>
+      {tvdbEligible && !tvdbEmpty && (
+        <button
+          type="button"
+          onClick={onGo}
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-line-soft bg-surface px-3 text-sm font-medium text-ink shadow-card transition-transform hover:-translate-y-px"
+        >
+          <MaterialIcon name="travel_explore" size={16} />
+          {tvdbCount !== null ? `See ${tvdbCount} on TVDB` : 'Search TVDB'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+interface TvdbResultsProps {
+  query: string;
+  fetching: boolean;
+  empty: boolean;
+  candidates: readonly Candidate[];
+  onPick: (c: Candidate) => void;
+}
+
+/**
+ * TVDB scope: a caption row (same h-8 + mb-4 box as TvdbHintRow so
+ * the grid does not jump when switching scopes) above a poster grid
+ * of provider candidates. Skeleton tiles while the resolve is in
+ * flight; a plain sentence when it resolved to nothing.
+ */
+function TvdbResults({ query, fetching, empty, candidates, onPick }: TvdbResultsProps) {
+  if (empty) {
+    return <p className="py-8 text-sm text-muted">TVDB has no other matches for “{query}”.</p>;
+  }
+  return (
+    <>
+      <div className="mb-4 flex h-8 items-center gap-2 text-[13px] text-muted">
+        {fetching && <MaterialIcon name="progress_activity" size={14} className="animate-spin" />}
+        {fetching
+          ? `Searching TVDB for “${query}”…`
+          : 'Not in your library — click a result to preview and add.'}
+      </div>
+      {fetching ? (
+        <TvdbSkeletonGrid />
+      ) : (
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))]">
+          {candidates.map((c) => (
+            <Poster
+              key={c.ref}
+              title={c.year ? `${c.preferredTitle} (${c.year})` : c.preferredTitle}
+              status="complete"
+              posterUrl={c.posterUrl}
+              posterThumbnailUrl={c.posterThumbnailUrl}
+              onClick={() => onPick(c)}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
 }
 
 function SearchSummary({ query, matchCount }: SearchSummaryProps) {
