@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import type { LibraryJobKind } from '@/lib/libraryJobState';
 import type { DensityPreference } from '@/lib/useAutoDensity';
 import { useDensityPreference } from '@/state/density';
+import { useSearchPrefs } from '@/state/searchPrefs';
 import { type Theme, useTheme } from '@/state/theme';
 
 const THEME_OPTIONS: ReadonlyArray<SegmentOption<Theme>> = [
@@ -43,6 +44,8 @@ export function SettingsPage() {
   const setTheme = useTheme((s) => s.setTheme);
   const density = useDensityPreference((s) => s.preference);
   const setDensity = useDensityPreference((s) => s.setPreference);
+  const animeOnly = useSearchPrefs((s) => s.animeOnly);
+  const setAnimeOnly = useSearchPrefs((s) => s.setAnimeOnly);
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-6 py-8">
@@ -72,6 +75,15 @@ export function SettingsPage() {
         </SettingsCard>
         <SettingsCard label="Library maintenance">
           <LibraryMaintenance />
+        </SettingsCard>
+        <SettingsCard label="Search">
+          <SettingRow inline label="Anime only" sub="Only include anime in TVDB search results">
+            <Switch
+              ariaLabel="Only include anime in TVDB search results"
+              checked={animeOnly}
+              onChange={setAnimeOnly}
+            />
+          </SettingRow>
         </SettingsCard>
       </div>
     </div>
@@ -159,6 +171,38 @@ function Segmented<T extends string>({ value, options, onChange, ariaLabel }: Se
         </button>
       ))}
     </div>
+  );
+}
+
+/** Toggle switch — the narrow control in a boolean setting row. */
+function Switch({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'relative h-[22px] w-[38px] shrink-0 cursor-pointer rounded-full transition-colors duration-[160ms]',
+        checked ? 'bg-status-complete' : 'bg-line',
+      )}
+    >
+      <span
+        className={cn(
+          'absolute top-[2px] h-[18px] w-[18px] rounded-full bg-surface shadow-card transition-[left] duration-[160ms]',
+          checked ? 'left-[18px]' : 'left-[2px]',
+        )}
+      />
+    </button>
   );
 }
 
