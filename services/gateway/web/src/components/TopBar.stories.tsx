@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import type { ReactElement } from 'react';
+import { withStoryProviders } from './_storyProviders';
 import { StoryRouter } from './_storyRouter';
 import { TopBar } from './TopBar';
 
@@ -9,6 +10,11 @@ const meta: Meta<typeof TopBar> = {
   parameters: {
     layout: 'fullscreen',
   },
+  // The hamburger only renders below `md`; the drawer it opens is
+  // owned by AppShell, so stories hand it a no-op.
+  args: { onMenu: () => {} },
+  // The TVDB resolve prefetch needs a QueryClient in context.
+  decorators: [withStoryProviders],
 };
 
 // TopBar reads the current route via useRouterState and renders a
@@ -88,8 +94,8 @@ export const SearchFocused: Story = {
 };
 
 /**
- * Series detail variant — leading slot swaps the kura logo for the
- * "← Library" pill. Search, theme + gear stay put.
+ * Series detail variant — the leading slot gains the "← Library"
+ * pill. The search field stays centered and put.
  */
 export const DetailRoute: Story = {
   args: { forceScrolled: false },
@@ -98,7 +104,7 @@ export const DetailRoute: Story = {
     <div className="min-h-[460px] bg-paper">
       <TopBar {...args} />
       <main className="mx-auto max-w-3xl px-6 py-6 text-sm text-muted">
-        Detail-route chrome: logo replaced with the back-to-library pill; the rest of the bar is
+        Detail-route chrome: the back-to-library pill fills the leading slot; the rest of the bar is
         unchanged.
       </main>
     </div>

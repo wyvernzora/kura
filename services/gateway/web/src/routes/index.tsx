@@ -20,7 +20,8 @@ import {
 } from '@/lib/library';
 import { searchLibrary } from '@/lib/searchLibrary';
 import type { Status } from '@/lib/status';
-import { useAutoDensity } from '@/lib/useAutoDensity';
+import { applyDensityPreference, type Density, useAutoDensity } from '@/lib/useAutoDensity';
+import { useDensityPreference } from '@/state/density';
 import { useLibraryFilters } from '@/state/library';
 import { MIN_TVDB_QUERY_LENGTH, useSearch } from '@/state/search';
 
@@ -34,7 +35,12 @@ function LibraryHome() {
   const clearSearch = useSearch((s) => s.clear);
   const scope = useSearch((s) => s.scope);
   const setScope = useSearch((s) => s.setScope);
-  const density = useAutoDensity();
+  // Viewport picks the bucket; the Settings preference can shift that
+  // pick one notch smaller (Appearance → Grid density).
+  const density = applyDensityPreference(
+    useAutoDensity(),
+    useDensityPreference((s) => s.preference),
+  );
   const navigate = useNavigate();
   const onSelect = useCallback(
     (row: ListRow) => {
@@ -237,7 +243,7 @@ interface LibraryBodyProps {
   seriesError: boolean;
   librarySize: number;
   rows: readonly ListRow[];
-  density: ReturnType<typeof useAutoDensity>;
+  density: Density;
   isSearching: boolean;
   onSelect: (row: ListRow) => void;
 }

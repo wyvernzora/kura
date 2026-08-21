@@ -3,16 +3,17 @@ import { ArrowLeft } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 import { useResolveSearch } from '@/api/hooks';
-import { GearMenu } from '@/components/GearMenu';
-import { Logo } from '@/components/Logo';
 import { SearchField } from '@/components/SearchField';
 import { SearchScopeControl } from '@/components/SearchScope';
+import { MaterialIcon } from '@/components/ui/material-icon';
 import { cn } from '@/lib/cn';
 import { useScrolled } from '@/lib/useScrolled';
 import { MIN_TVDB_QUERY_LENGTH, useSearch } from '@/state/search';
 
 interface TopBarProps {
   className?: string;
+  /** Opens the mobile navigation drawer. Owned by AppShell. */
+  onMenu: () => void;
   /**
    * Override the scroll-derived "scrolled" state. Used by Storybook
    * stories to render the sticky-on-scroll appearance without an
@@ -22,14 +23,20 @@ interface TopBarProps {
 }
 
 /**
- * Sticky top chrome. Logo (left) | search field (center) | gear
- * (right). 3-column grid (`1fr / auto / 1fr`) so the search field is
- * centered against the viewport instead of the leftover space — the
- * back-to-library pill is wider than the kura logo, and a flex-based
- * center would shift the field left when those side widths diverge.
+ * Sticky top chrome. Leading slot | search field (center) | empty
+ * trailing slot. 3-column grid (`1fr / minmax(0,560px) / 1fr`) on
+ * desktop so the search field is centered against the viewport
+ * instead of the leftover space — the back-to-library pill is wider
+ * than nothing at all, and a flex-based center would shift the field
+ * left when those side widths diverge. Below `md` the trailing slot
+ * is dropped entirely and the leading slot shrinks to its content:
+ * the hamburger has to sit flush left, and a 3-column grid on a
+ * 360 px viewport leaves the field too narrow to type in.
  *
- * On detail routes (`/series/$ref`) the leading slot swaps the kura
- * logo for a "back to library" button; everything else stays put.
+ * The leading slot carries the hamburger (mobile only — desktop nav
+ * lives in the sidebar) plus, on detail routes (`/series/$ref`), the
+ * "back to library" pill. There is no logo here: the kura mark is the
+ * sidebar's, and the drawer header's.
  *
  * At scrollY === 0 the bar is invisible chrome (paper bg, no
  * shadow, no border). On scroll: paper-tinted translucent bg,
@@ -39,7 +46,7 @@ interface TopBarProps {
  * library grid renders the matches; the originating path is captured
  * in the search store so `clear()` can return the user there.
  */
-export function TopBar({ className, forceScrolled }: TopBarProps) {
+export function TopBar({ className, onMenu, forceScrolled }: TopBarProps) {
   const detected = useScrolled();
   const scrolled = forceScrolled ?? detected;
   const navigate = useNavigate();
@@ -125,23 +132,7 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
   }
 
   return (
-    <header
-      className={cn(
-        'sticky top-0 z-50',
-        'transition-[box-shadow,background-color] duration-normal ease-out-soft',
-        scrolled
-          ? cn(
-              // backdrop-blur radius reduced from md (12 px) to sm
-              // (4 px) — the 12 px filter is GPU-expensive on weak
-              // iGPUs and runs every scroll frame. The smaller radius
-              // gives ~3× the throughput with similar visual.
-              'bg-topbar-scrolled backdrop-blur-sm backdrop-saturate-[1.8]',
-              'shadow-[0_1px_0_rgba(31,29,26,0.05),0_8px_16px_-10px_rgba(31,29,26,0.12)]',
-            )
-          : 'bg-paper',
-        className,
-      )}
-    >
+    <header className={cn(barChrome(scrolled), className)}>
       {/*
         Inner content caps at 1920 px and centers; the header
         background still spans the viewport so the scroll-shadow
@@ -150,8 +141,11 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
         mark sits equidistant from the top and the left when the
         bar isn't constrained to a column.
       */}
-      <div className="mx-auto grid h-[72px] max-w-[1920px] grid-cols-[1fr_minmax(0,560px)_1fr] items-center gap-3 px-[18px]">
-        <div className="justify-self-start">{onDetailRoute ? <BackToLibrary /> : <Logo />}</div>
+      <div className="mx-auto grid h-[72px] max-w-[1920px] grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-[18px] md:grid-cols-[1fr_minmax(0,560px)_1fr]">
+        <div className="flex items-center gap-2 justify-self-start">
+          <HamburgerButton onClick={onMenu} className="md:hidden" />
+          {onDetailRoute && <BackToLibrary />}
+        </div>
         {/* SearchField shrinks to make room for the scope control,
             which only exists during an active search session. */}
         <div className="flex min-w-0 items-center gap-2">
@@ -172,11 +166,76 @@ export function TopBar({ className, forceScrolled }: TopBarProps) {
             />
           )}
         </div>
-        <div className="flex items-center justify-self-end gap-1.5">
-          <GearMenu />
-        </div>
+        {/* Trailing slot: empty, but it holds the third grid column
+            open so the search field stays centered on the viewport.
+            Dropped below md, where the grid is 2-column. */}
+        <div className="hidden md:block" />
       </div>
     </header>
+  );
+}
+
+/**
+ * Sticky-bar shell shared by the top bar and the Settings mobile bar.
+ * At rest the bar is invisible chrome (paper bg); once the page
+ * scrolls it floats: paper-tinted translucent bg, backdrop blur +
+ * saturation, soft drop shadow underneath.
+ */
+function barChrome(scrolled: boolean): string {
+  return cn(
+    'sticky top-0 z-50',
+    'transition-[box-shadow,background-color] duration-normal ease-out-soft',
+    scrolled
+      ? cn(
+          // backdrop-blur radius reduced from md (12 px) to sm
+          // (4 px) — the 12 px filter is GPU-expensive on weak
+          // iGPUs and runs every scroll frame. The smaller radius
+          // gives ~3× the throughput with similar visual.
+          'bg-topbar-scrolled backdrop-blur-sm backdrop-saturate-[1.8]',
+          'shadow-[0_1px_0_rgba(31,29,26,0.05),0_8px_16px_-10px_rgba(31,29,26,0.12)]',
+        )
+      : 'bg-paper',
+  );
+}
+
+/**
+ * Slim Settings chrome for mobile. Settings has no search field, so
+ * on desktop AppShell renders no bar at all; below `md` the hamburger
+ * still has to live somewhere or the drawer becomes unreachable. The
+ * bar's "Settings" title doubles as the page heading on mobile —
+ * SettingsPage hides its h1 below `md` so the word appears once.
+ */
+export function SettingsMobileBar({ onMenu }: { onMenu: () => void }) {
+  const scrolled = useScrolled();
+  return (
+    <header className={cn(barChrome(scrolled), 'md:hidden')}>
+      <div className="flex h-[72px] items-center gap-3 px-[18px]">
+        <HamburgerButton onClick={onMenu} />
+        <span className="font-semibold text-[15px] text-ink tracking-[-0.2px]">Settings</span>
+      </div>
+    </header>
+  );
+}
+
+/**
+ * Drawer trigger. Deliberately matches SearchField's shell exactly —
+ * 38 px, radius 8, surface fill, card shadow, no border — so the two
+ * read as one control strip rather than a button beside a field.
+ */
+function HamburgerButton({ onClick, className }: { onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      aria-label="Open menu"
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-[38px] w-[38px] shrink-0 cursor-pointer items-center justify-center',
+        'rounded-[8px] bg-surface text-ink shadow-card',
+        className,
+      )}
+    >
+      <MaterialIcon name="menu" size={18} />
+    </button>
   );
 }
 

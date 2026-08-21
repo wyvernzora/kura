@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pickDensity } from './useAutoDensity';
+import { applyDensityPreference, pickDensity } from './useAutoDensity';
 
 describe('pickDensity', () => {
   it('xs for very narrow viewports', () => {
@@ -47,5 +47,30 @@ describe('pickDensity', () => {
 
   it('boundary at 480 picks sm, not xs', () => {
     expect(pickDensity(480).breakpoint).toBe('sm');
+  });
+});
+
+describe('applyDensityPreference', () => {
+  it('comfortable leaves the viewport pick alone', () => {
+    for (const w of [320, 720, 900, 1600]) {
+      expect(applyDensityPreference(pickDensity(w), 'comfortable')).toEqual(pickDensity(w));
+    }
+  });
+
+  it('compact shifts each bucket down one notch', () => {
+    expect(applyDensityPreference(pickDensity(1600), 'compact')).toEqual(pickDensity(900));
+    expect(applyDensityPreference(pickDensity(900), 'compact')).toEqual(pickDensity(720));
+    expect(applyDensityPreference(pickDensity(720), 'compact')).toEqual(pickDensity(320));
+  });
+
+  it('compact floors at xs', () => {
+    expect(applyDensityPreference(pickDensity(320), 'compact')).toEqual(pickDensity(320));
+  });
+
+  it('compact never grows the poster', () => {
+    for (const w of [320, 720, 900, 1600]) {
+      const auto = pickDensity(w);
+      expect(applyDensityPreference(auto, 'compact').minPoster).toBeLessThanOrEqual(auto.minPoster);
+    }
   });
 });
