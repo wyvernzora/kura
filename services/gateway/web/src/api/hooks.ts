@@ -12,7 +12,7 @@ import type {
   ResolveRequest,
   Show,
 } from './types';
-import type { SeriesTags, TagUpdate } from './types.gen';
+import type { SeriesTags, TagUpdate, TrashEmpty, TrashList } from './types.gen';
 
 const PAGE_SIZE = 100;
 
@@ -138,6 +138,57 @@ export function useAddSeries() {
         body: JSON.stringify(body),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['series'] }),
+  });
+}
+
+/**
+ * Library-wide trash listing. Fetched unfiltered: the age filter is a
+ * view control the user flips repeatedly, and refetching the whole
+ * list on each flip would trade a local array filter for a round trip.
+ * The listing is per-series rollups, so it stays small.
+ *
+ * The `olderThan` scope still reaches the server on the destructive
+ * path — see `useEmptyTrash` — so what gets deleted is decided there,
+ * not by whatever the client happened to render.
+ */
+export function useTrashList() {
+  return useQuery({
+    queryKey: ['trash'],
+    staleTime: 30_000,
+    queryFn: () => api<TrashList>('/api/library/v1/trash'),
+  });
+}
+
+export interface EmptyTrashInput {
+  /**
+   * Metadata ref of the series to empty. Omit to empty every indexed
+   * series — the library-wide route.
+   */
+  ref?: string;
+  /** Go duration string (hours), or undefined for no age filter. */
+  olderThan?: string;
+}
+
+/**
+ * Empty trash, per-series or library-wide. The same `olderThan` the
+ * listing is filtered by is sent to the server, so the destructive
+ * scope is enforced there rather than merely implied by the view.
+ *
+ * Only the trash list is invalidated afterwards: emptying deletes
+ * files that were already outside the active library layout, so no
+ * series row changes.
+ */
+export function useEmptyTrash() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ref, olderThan }: EmptyTrashInput) => {
+      const query = olderThan ? `?olderThan=${encodeURIComponent(olderThan)}` : '';
+      const path = ref
+        ? `/api/library/v1/series/${encodeURIComponent(ref)}/trash${query}`
+        : `/api/library/v1/trash${query}`;
+      return api<TrashEmpty>(path, { method: 'DELETE' });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['trash'] }),
   });
 }
 

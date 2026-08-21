@@ -49,7 +49,7 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-6 py-8">
-      {/* Below md the SettingsMobileBar already titles the page;
+      {/* Below md the PageMobileBar already titles the page;
           rendering the h1 too would say "Settings" twice in a row. */}
       <h1 className="hidden font-semibold text-[22px] text-ink tracking-[-0.3px] md:block">
         Settings

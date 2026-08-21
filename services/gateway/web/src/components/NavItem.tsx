@@ -5,8 +5,9 @@ import { MaterialIcon } from '@/components/ui/material-icon';
 import { cn } from '@/lib/cn';
 import { useAppDefaultReset } from '@/lib/useAppDefaultReset';
 import { useSearch } from '@/state/search';
+import { useTrashView } from '@/state/trashView';
 
-export type NavId = 'library' | 'settings';
+export type NavId = 'library' | 'trash' | 'settings';
 
 export interface NavEntry {
   id: NavId;
@@ -16,13 +17,13 @@ export interface NavEntry {
 }
 
 /**
- * Primary navigation. One entry today — releases / backups / jobs /
- * trash are not built yet, and a nav row that lands on a placeholder
- * is worse than no row. The array shape is what it is so adding one
- * later is a one-line change.
+ * Primary navigation. Releases / backups / jobs are not built yet, and
+ * a nav row that lands on a placeholder is worse than no row, so they
+ * are absent rather than disabled.
  */
 export const NAV: readonly NavEntry[] = [
   { id: 'library', label: 'Library', icon: 'video_library' },
+  { id: 'trash', label: 'Trash', icon: 'delete' },
 ];
 
 /** Pinned to the bottom of the sidebar / drawer, outside `NAV`. */
@@ -30,12 +31,18 @@ export const SETTINGS_ITEM: NavEntry = { id: 'settings', label: 'Settings', icon
 
 /**
  * Which nav entry the current route belongs to. `/series/$ref` is part
- * of the library section, so anything that isn't Settings highlights
- * Library.
+ * of the library section, so anything that isn't Trash or Settings
+ * highlights Library.
  */
 export function useActiveNavId(): NavId {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  return pathname === '/settings' ? 'settings' : 'library';
+  if (pathname === '/settings') {
+    return 'settings';
+  }
+  if (pathname === '/trash') {
+    return 'trash';
+  }
+  return 'library';
 }
 
 /**
@@ -45,9 +52,15 @@ export function useActiveNavId(): NavId {
  *   scroll) even when it is already the active entry — the library's
  *   feature default is the app default, so a second click is the
  *   user's escape hatch out of a filtered / scrolled view.
- * - Settings is a plain navigation; there is nothing to reset. It
- *   still clears the query because search is page-scoped chrome and
- *   Settings has no search field to hold it.
+ * - Trash follows the same rule for its own feature default: the age
+ *   filter and sort go back to the full listing even on a re-click,
+ *   so the destructive scope can never be narrowed by state the user
+ *   has forgotten setting.
+ * - Settings is a plain navigation; there is nothing to reset.
+ *
+ * Every non-Library entry clears the search query: search is
+ * page-scoped chrome and neither of those pages has a field to hold
+ * it.
  */
 export function useNavSelect(): (id: NavId) => void {
   const navigate = useNavigate();
@@ -60,6 +73,11 @@ export function useNavSelect(): (id: NavId) => void {
         return;
       }
       useSearch.getState().clear();
+      if (id === 'trash') {
+        useTrashView.getState().clear();
+        void navigate({ to: '/trash' });
+        return;
+      }
       void navigate({ to: '/settings' });
     },
     [navigate, reset],
