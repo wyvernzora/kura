@@ -125,6 +125,25 @@ export function useResolveSearch(query: string) {
 }
 
 /**
+ * One-shot resolve, for flows that confirm a specific series rather
+ * than search for one — the releases page's hand match sends the
+ * candidate's own metadata ref and reads back the provider record.
+ *
+ * A mutation rather than a query: it fires on an explicit pick, and
+ * its failure has to reach the caller so the API's message can be
+ * surfaced verbatim instead of being retried behind a spinner.
+ */
+export function useResolveSeries() {
+  return useMutation({
+    mutationFn: (terms: string[]) =>
+      api<Resolution>('/api/library/v1/series/resolve', {
+        method: 'POST',
+        body: JSON.stringify({ terms } satisfies ResolveRequest),
+      }),
+  });
+}
+
+/**
  * Add a series to the library by metadata ref (POST /api/library/v1/series).
  * On success invalidates the library list so the new series lands in the
  * grid; callers navigate to the returned ref.

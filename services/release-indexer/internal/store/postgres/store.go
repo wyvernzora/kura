@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -403,17 +406,32 @@ func (s *Store) Submit(ctx context.Context, p store.SubmitParams) error { //noli
 // transition exists here or it is rejected. Two boundaries keep this from
 // becoming queue control. Transitions the matcher's claim-fenced submit path
 // owns (unmatched -> matched/suppressed) are deliberately absent, so submit
-// stays the only route to them; and because every allowed target is terminal
-// and only matched rows are eligible, no lease-clearing is needed — claim
-// leases exist only on unmatched rows.
+// stays the only route to them; and no source state here carries a claim lease,
+// since leases exist only on unmatched rows.
 //
-// Adding a transition later (exhausted -> unmatched to requeue, say) is a row
-// here plus a test, not an API change.
+// The operator rows are what the release-attention surface acts through: a hand
+// match out of suppressed or exhausted, an affirm/correct of an existing
+// low-confidence match, and a requeue of an exhausted release back into the
+// claim queue.
 var statusTransitions = map[string]map[string]bool{
-	"matched": {"dead": true},
+	"matched":    {"dead": true, "matched": true},
+	"suppressed": {"matched": true},
+	"exhausted":  {"matched": true, "unmatched": true},
 }
 
+// operatorConfidence is the score an operator's own match records. A person
+// deciding by hand is certain by definition; this is not a matching threshold —
+// the indexer holds none.
+const operatorConfidence = 1.0
+
 func (s *Store) SetStatus(ctx context.Context, p store.SetStatusParams) error {
+	// A ref on a target that takes none is a malformed body whatever the row
+	// says, so it is refused before a transaction is opened for it.
+	if p.Status != "matched" && p.Ref != "" {
+		return fmt.Errorf("set_status %s: %s takes no ref: %w",
+			p.Infohash, p.Status, store.ErrRefForbidden)
+	}
+
 	now := s.clock.Now()
 
 	tx, err := s.pool.Begin(ctx)
@@ -423,12 +441,14 @@ func (s *Store) SetStatus(ctx context.Context, p store.SetStatusParams) error {
 	defer tx.Rollback(ctx) //nolint:errcheck // best-effort cleanup after commit/error.
 
 	var currentStatus string
+	var currentRef *string
+	var currentConfidence *float64
 	err = tx.QueryRow(ctx, `
-		SELECT match_status
+		SELECT match_status, ref, confidence
 		FROM releases
 		WHERE infohash = $1
 		FOR UPDATE
-	`, p.Infohash).Scan(&currentStatus)
+	`, p.Infohash).Scan(&currentStatus, &currentRef, &currentConfidence)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("set_status %s: %w", p.Infohash, store.ErrNoSuchRelease)
 	}
@@ -438,39 +458,119 @@ func (s *Store) SetStatus(ctx context.Context, p store.SetStatusParams) error {
 
 	// Idempotent no-op: natural PUT semantics, and it keeps a retried call
 	// from appending a second audit row for a transition already made.
-	if currentStatus == p.Status {
+	if isSetStatusNoOp(p, currentStatus, currentRef, currentConfidence) {
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("set_status %s: commit: %w", p.Infohash, err)
 		}
 		return nil
 	}
 
+	// The table is checked before the ref a `matched` target requires, so a
+	// transition that was never on offer is reported as the conflict it is
+	// rather than as a complaint about the body.
 	if !statusTransitions[currentStatus][p.Status] {
 		return fmt.Errorf("set_status %s: %s -> %s: %w",
 			p.Infohash, currentStatus, p.Status, store.ErrInvalidTransition)
 	}
-
-	if _, err := tx.Exec(ctx, `
-		UPDATE releases SET
-			match_status = $2,
-			updated_at = $3
-		WHERE infohash = $1
-	`, p.Infohash, p.Status, now); err != nil {
-		return fmt.Errorf("set_status %s: update: %w", p.Infohash, err)
+	if p.Status == "matched" {
+		if p.Ref == "" {
+			return fmt.Errorf("set_status %s: matched needs a ref: %w", p.Infohash, store.ErrRefRequired)
+		}
+		if err := cursor.ValidateRef(p.Ref); err != nil {
+			return fmt.Errorf("set_status %s: %w", p.Infohash, err)
+		}
 	}
 
-	// ref, confidence and first_matched_at are deliberately preserved: the
-	// match history is why a dead release is not re-selected, and erasing it
-	// would make the row indistinguishable from one that never matched.
+	if err := s.applySetStatus(ctx, tx, p, now); err != nil {
+		return err
+	}
+
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO match_events (infohash, status, ref, confidence, reason, created_at)
-		VALUES ($1, $2, NULL, NULL, $3, $4)
-	`, p.Infohash, p.Status, nullableReason(p.Reason), now); err != nil {
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, p.Infohash, p.Status, nullableRef(p.Status, p.Ref),
+		setStatusEventConfidence(p.Status), nullableReason(p.Reason), now); err != nil {
 		return fmt.Errorf("set_status %s: append match_event: %w", p.Infohash, err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("set_status %s: commit: %w", p.Infohash, err)
+	}
+	return nil
+}
+
+// applySetStatus writes the row change for one allowed transition. Each target
+// owns what it touches: a hand match records the ref an operator stands behind,
+// a requeue resets the exhaustion accounting that took the release out of the
+// queue, and dead changes only the status.
+func (s *Store) applySetStatus(ctx context.Context, tx pgx.Tx, p store.SetStatusParams, now time.Time) error {
+	var err error
+	switch p.Status {
+	case "matched":
+		_, err = tx.Exec(ctx, `
+			UPDATE releases SET
+				match_status = 'matched',
+				ref = $2,
+				confidence = $3,
+				first_matched_at = COALESCE(first_matched_at, $4),
+				claimed_at = NULL,
+				lease_expires_at = NULL,
+				updated_at = $4
+			WHERE infohash = $1
+		`, p.Infohash, p.Ref, operatorConfidence, now)
+	case "unmatched":
+		// Requeue. attempt_count and the lease columns are what kept the row
+		// out of the claim queue, so clearing them IS the requeue; leaving
+		// attempt_count in place would exhaust the release again on the next
+		// claim sweep without a single new attempt.
+		_, err = tx.Exec(ctx, `
+			UPDATE releases SET
+				match_status = 'unmatched',
+				attempt_count = 0,
+				claimed_at = NULL,
+				lease_expires_at = NULL,
+				updated_at = $2
+			WHERE infohash = $1
+		`, p.Infohash, now)
+	default:
+		// dead. ref, confidence and first_matched_at are deliberately
+		// preserved: the match history is why a dead release is not
+		// re-selected, and erasing it would make the row indistinguishable
+		// from one that never matched.
+		_, err = tx.Exec(ctx, `
+			UPDATE releases SET
+				match_status = $2,
+				updated_at = $3
+			WHERE infohash = $1
+		`, p.Infohash, p.Status, now)
+	}
+	if err != nil {
+		return fmt.Errorf("set_status %s: update: %w", p.Infohash, err)
+	}
+	return nil
+}
+
+// isSetStatusNoOp reports whether applying the request would change nothing,
+// which a retried PUT must not re-audit. For a hand match that means the row
+// already carries this ref AT operator confidence: an already-matched release
+// still holding the matcher's own lower score is an affirm to be applied, not a
+// repeat to be skipped, and a different ref is a correction.
+func isSetStatusNoOp(p store.SetStatusParams, currentStatus string, currentRef *string, currentConfidence *float64) bool {
+	if currentStatus != p.Status {
+		return false
+	}
+	if p.Status != "matched" {
+		return true
+	}
+	return currentRef != nil && *currentRef == p.Ref &&
+		currentConfidence != nil && *currentConfidence == operatorConfidence
+}
+
+// setStatusEventConfidence scores the audit row. Only an operator match carries
+// a score; dead and requeue record none.
+func setStatusEventConfidence(status string) any {
+	if status == "matched" {
+		return operatorConfidence
 	}
 	return nil
 }
@@ -567,9 +667,15 @@ func (s *Store) ListReleases(ctx context.Context, q store.ReleaseQuery) (store.R
 	if q.Since != nil {
 		path = cursor.PathDelta
 	}
+	binding := cursor.Binding{
+		Ref:           q.Ref,
+		Path:          path,
+		Statuses:      normalizeStatuses(q.Statuses),
+		MaxConfidence: q.MaxConfidence,
+	}
 	var seek *cursor.Cursor
 	if q.Cursor != "" {
-		c, err := cursor.Decode(q.Cursor, q.Ref, path)
+		c, err := cursor.Decode(q.Cursor, binding)
 		if err != nil {
 			return store.ReleasePage{}, cursor.ErrInvalidCursor
 		}
@@ -581,7 +687,7 @@ func (s *Store) ListReleases(ctx context.Context, q store.ReleaseQuery) (store.R
 		seekKey, seekHash, hasSeek = seek.Key, seek.Infohash, true
 	}
 
-	rows, err := s.listReleaseRows(ctx, q, path, seekKey, seekHash, hasSeek, fetch)
+	rows, err := s.listReleaseRows(ctx, q, binding, seekKey, seekHash, hasSeek, fetch)
 	if err != nil {
 		return store.ReleasePage{}, fmt.Errorf("list_releases %s: %w", q.Ref, err)
 	}
@@ -593,7 +699,7 @@ func (s *Store) ListReleases(ctx context.Context, q store.ReleaseQuery) (store.R
 	keyed, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (keyedRow, error) {
 		var kr keyedRow
 		err := row.Scan(&kr.item.Infohash, &kr.item.Ref, &kr.item.Title, &kr.item.SizeBytes,
-			&kr.item.PublishedAt, &kr.item.Confidence, &kr.item.Sources, &kr.key)
+			&kr.item.PublishedAt, &kr.item.Confidence, &kr.item.Sources, &kr.item.MatchStatus, &kr.key)
 		return kr, err
 	})
 	if err != nil {
@@ -612,7 +718,7 @@ func (s *Store) ListReleases(ctx context.Context, q store.ReleaseQuery) (store.R
 	if hasMore {
 		last := keyed[len(keyed)-1]
 		enc, err := cursor.Encode(cursor.Cursor{
-			Ref: q.Ref, Path: path, Key: last.key, Infohash: last.item.Infohash,
+			Binding: binding, Key: last.key, Infohash: last.item.Infohash,
 		})
 		if err != nil {
 			return store.ReleasePage{}, fmt.Errorf("list_releases %s: encode cursor: %w", q.Ref, err)
@@ -622,51 +728,64 @@ func (s *Store) ListReleases(ctx context.Context, q store.ReleaseQuery) (store.R
 	return store.ReleasePage{Releases: items, NextCursor: next}, nil
 }
 
-func (s *Store) listReleaseRows(ctx context.Context, q store.ReleaseQuery, path cursor.Path, seekKey time.Time, seekHash string, hasSeek bool, fetch int) (pgx.Rows, error) {
-	if path == cursor.PathCatalog {
-		if q.Ref == "" {
-			return s.pool.Query(ctx, `
-				SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
-					confidence, sources, published_at
-				FROM releases
-				WHERE match_status = 'matched'
-					AND (NOT $3 OR (published_at, infohash) < ($1, $2))
-				ORDER BY published_at DESC, infohash DESC
-				LIMIT $4
-			`, seekKey, seekHash, hasSeek, fetch)
-		}
-		return s.pool.Query(ctx, `
-			SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
-				confidence, sources, published_at
-			FROM releases
-			WHERE match_status = 'matched' AND ref = $1
-				AND (NOT $4 OR (published_at, infohash) < ($2, $3))
-			ORDER BY published_at DESC, infohash DESC
-			LIMIT $5
-		`, q.Ref, seekKey, seekHash, hasSeek, fetch)
+// normalizeStatuses sorts and deduplicates a status filter so two spellings of
+// the same filter produce the same cursor binding. An empty filter stays empty:
+// that is the matched-only default, not a filter over nothing.
+func normalizeStatuses(statuses []string) []string {
+	if len(statuses) == 0 {
+		return nil
 	}
-	if q.Ref == "" {
-		return s.pool.Query(ctx, `
-			SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
-				confidence, sources, first_matched_at
-			FROM releases
-			WHERE match_status = 'matched'
-				AND first_matched_at > $1
-				AND (NOT $4 OR (first_matched_at, infohash) < ($2, $3))
-			ORDER BY first_matched_at DESC, infohash DESC
-			LIMIT $5
-		`, *q.Since, seekKey, seekHash, hasSeek, fetch)
+	out := slices.Clone(statuses)
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// listReleaseRows builds the one page query. The predicates are optional and
+// independent, so the SQL is assembled rather than enumerated — sixteen literal
+// variants of the same statement is not a readability win.
+//
+// The unfiltered default keeps the literal `match_status = 'matched'` the
+// partial indexes are built on; a status filter is the operator surface's path
+// and pays an ordinary scan.
+func (s *Store) listReleaseRows(ctx context.Context, q store.ReleaseQuery, binding cursor.Binding, seekKey time.Time, seekHash string, hasSeek bool, fetch int) (pgx.Rows, error) {
+	keyCol := "published_at"
+	if binding.Path == cursor.PathDelta {
+		keyCol = "first_matched_at"
 	}
-	return s.pool.Query(ctx, `
+
+	args := make([]any, 0, 8)
+	arg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, `
 		SELECT infohash, COALESCE(ref, ''), title, size_bytes, published_at,
-			confidence, sources, first_matched_at
+			confidence, sources, match_status, %s
 		FROM releases
-		WHERE match_status = 'matched' AND ref = $1
-			AND first_matched_at > $2
-			AND (NOT $5 OR (first_matched_at, infohash) < ($3, $4))
-		ORDER BY first_matched_at DESC, infohash DESC
-		LIMIT $6
-	`, q.Ref, *q.Since, seekKey, seekHash, hasSeek, fetch)
+	`, keyCol)
+	if len(binding.Statuses) == 0 {
+		b.WriteString("\t\tWHERE match_status = 'matched'\n")
+	} else {
+		fmt.Fprintf(&b, "\t\tWHERE match_status = ANY(%s::match_status[])\n", arg(binding.Statuses))
+	}
+	if q.Ref != "" {
+		fmt.Fprintf(&b, "\t\t\tAND ref = %s\n", arg(q.Ref))
+	}
+	if q.Since != nil {
+		fmt.Fprintf(&b, "\t\t\tAND first_matched_at > %s\n", arg(*q.Since))
+	}
+	if binding.MaxConfidence != nil {
+		// Strictly less than, so an unscored (NULL) match is excluded: a row
+		// with no score is not a low-confidence row.
+		fmt.Fprintf(&b, "\t\t\tAND confidence < %s\n", arg(*binding.MaxConfidence))
+	}
+	fmt.Fprintf(&b, "\t\t\tAND (NOT %s OR (%s, infohash) < (%s, %s))\n",
+		arg(hasSeek), keyCol, arg(seekKey), arg(seekHash))
+	fmt.Fprintf(&b, "\t\tORDER BY %s DESC, infohash DESC\n\t\tLIMIT %s\n", keyCol, arg(fetch))
+
+	return s.pool.Query(ctx, b.String(), args...)
 }
 
 func (s *Store) GetRelease(ctx context.Context, infohash string) (store.ReleaseDetail, error) {

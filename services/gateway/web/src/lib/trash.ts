@@ -1,83 +1,25 @@
 import type { TrashEmpty, TrashSeriesEntry } from '@/api/types.gen';
+import { formatBytesDecimal, formatCompactAge, formatStampUTC } from '@/lib/format';
 
 /**
- * Trash page pure logic: byte / age / stamp formatting, the older-than
- * filter vocabulary, client-side filtering + sorting of the listing,
- * and the mapping from an empty response to a result-banner outcome.
+ * Trash page pure logic: the older-than filter vocabulary, client-side
+ * filtering + sorting of the listing, and the mapping from an empty
+ * response to a result-banner outcome.
  *
  * Everything here is a pure function so the page component holds only
  * view state and the tests can drive the rules directly.
  */
 
 const HOUR_MS = 3_600_000;
-const DAY_MS = 24 * HOUR_MS;
 
 /**
- * Decimal byte units, matching the CLI's rendering — a 1 TB disk is
- * sold as 1 TB, and trash sizes are read against disk capacity.
- * Sub-GB values round to whole units (a trashed episode is never
- * interesting at 0.1 MB resolution); GB and up keep one decimal until
- * they reach three digits.
+ * Size / age / stamp rendering. The implementations are shared with
+ * the releases page and live in `lib/format`; these names are what the
+ * trash surface and its tests call them.
  */
-export function formatTrashBytes(bytes: number): string {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit += 1;
-  }
-  const rendered =
-    unit >= 2
-      ? value >= 100
-        ? String(Math.round(value))
-        : value.toFixed(1)
-      : String(Math.round(value));
-  return `${rendered} ${units[unit]}`;
-}
-
-/**
- * Coarse elapsed-time label for trash ages: `m` under an hour, `h`
- * under a day, `d` under two months, `mo` beyond. Never renders `0m` —
- * a just-trashed entry reads as `1m`, since "0 minutes old" invites
- * the reading that the timestamp is missing.
- */
-export function formatTrashAge(elapsedMs: number): string {
-  if (elapsedMs < HOUR_MS) {
-    return `${Math.max(1, Math.round(elapsedMs / 60_000))}m`;
-  }
-  if (elapsedMs < DAY_MS) {
-    return `${Math.round(elapsedMs / HOUR_MS)}h`;
-  }
-  if (elapsedMs < 60 * DAY_MS) {
-    return `${Math.round(elapsedMs / DAY_MS)}d`;
-  }
-  return `${Math.round(elapsedMs / (30 * DAY_MS))}mo`;
-}
-
-/**
- * Compact `YYYY-MM-DD HH:MM` stamp, rendered in UTC. UTC rather than
- * the viewer's zone so the string is stable across machines (the unit
- * tests and the Storybook fixtures both depend on that) and so a
- * server timestamp carrying an offset doesn't silently render in a
- * third zone. The relative age beside it carries the "how long ago"
- * reading, which is the actionable half.
- *
- * Returns an empty string for missing / unparseable input so callers
- * can render nothing without checking.
- */
-export function formatTrashStamp(iso: string | undefined): string {
-  if (!iso) {
-    return '';
-  }
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) {
-    return '';
-  }
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const date = `${at.getUTCFullYear()}-${pad(at.getUTCMonth() + 1)}-${pad(at.getUTCDate())}`;
-  return `${date} ${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())}`;
-}
+export const formatTrashBytes = formatBytesDecimal;
+export const formatTrashAge = formatCompactAge;
+export const formatTrashStamp = formatStampUTC;
 
 /** Milliseconds since an entry was trashed. `0` when unparseable. */
 export function trashEntryAge(trashedAt: string, now: number): number {

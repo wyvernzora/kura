@@ -4,10 +4,11 @@ import { useCallback } from 'react';
 import { MaterialIcon } from '@/components/ui/material-icon';
 import { cn } from '@/lib/cn';
 import { useAppDefaultReset } from '@/lib/useAppDefaultReset';
+import { useReleasesView } from '@/state/releasesView';
 import { useSearch } from '@/state/search';
 import { useTrashView } from '@/state/trashView';
 
-export type NavId = 'library' | 'trash' | 'settings';
+export type NavId = 'library' | 'releases' | 'trash' | 'settings';
 
 export interface NavEntry {
   id: NavId;
@@ -17,12 +18,13 @@ export interface NavEntry {
 }
 
 /**
- * Primary navigation. Releases / backups / jobs are not built yet, and
- * a nav row that lands on a placeholder is worse than no row, so they
- * are absent rather than disabled.
+ * Primary navigation. Backups / jobs are not built yet, and a nav row
+ * that lands on a placeholder is worse than no row, so they are absent
+ * rather than disabled.
  */
 export const NAV: readonly NavEntry[] = [
   { id: 'library', label: 'Library', icon: 'video_library' },
+  { id: 'releases', label: 'Releases', icon: 'rss_feed' },
   { id: 'trash', label: 'Trash', icon: 'delete' },
 ];
 
@@ -31,13 +33,16 @@ export const SETTINGS_ITEM: NavEntry = { id: 'settings', label: 'Settings', icon
 
 /**
  * Which nav entry the current route belongs to. `/series/$ref` is part
- * of the library section, so anything that isn't Trash or Settings
- * highlights Library.
+ * of the library section, so anything that isn't Releases, Trash or
+ * Settings highlights Library.
  */
 export function useActiveNavId(): NavId {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (pathname === '/settings') {
     return 'settings';
+  }
+  if (pathname === '/releases') {
+    return 'releases';
   }
   if (pathname === '/trash') {
     return 'trash';
@@ -56,6 +61,9 @@ export function useActiveNavId(): NavId {
  *   filter and sort go back to the full listing even on a re-click,
  *   so the destructive scope can never be narrowed by state the user
  *   has forgotten setting.
+ * - Releases likewise returns to the attention set, so a re-click can
+ *   never leave the operator staring at a queue narrowed by a filter
+ *   they forgot they set.
  * - Settings is a plain navigation; there is nothing to reset.
  *
  * Every non-Library entry clears the search query: search is
@@ -73,6 +81,11 @@ export function useNavSelect(): (id: NavId) => void {
         return;
       }
       useSearch.getState().clear();
+      if (id === 'releases') {
+        useReleasesView.getState().clear();
+        void navigate({ to: '/releases' });
+        return;
+      }
       if (id === 'trash') {
         useTrashView.getState().clear();
         void navigate({ to: '/trash' });

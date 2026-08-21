@@ -13,6 +13,13 @@ image that carries all three live one level up in `services/gateway`.
   `KURA_RELEASES_UPSTREAM`.
 - `src/api/types.gen.ts` is generated from the library service's `pkg/api`
   response shapes (`make -C ../library-manager gen-ts`); CI enforces drift.
+- The release-indexer's wire types are NOT generated — tygo is wired to
+  the library service only. They are hand-written in
+  `src/api/releaseTypes.ts` and mirror
+  `services/release-indexer/pkg/api/{release,queue}.go`.
 
-Today the SPA covers the library service; releases and backup views land
-here as those services grow their surfaces.
+Today the SPA covers the library service plus the release indexer's
+attention queue (`/releases`); backup views land here as that service
+grows its surface. The gateway's single origin is the composition
+point — pages call each leaf API directly, and there are no
+aggregation endpoints.

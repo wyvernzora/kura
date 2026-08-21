@@ -1,9 +1,10 @@
 // Package cursor holds the pure-unit list_releases cursor + ref-shape helpers
 // (design §6, §13 "Unit"). The cursor is an opaque, server-encoded (base64)
-// ordered tuple that BINDS BOTH the ref AND the path (catalog vs delta) it was
-// issued for, so a malformed/undecodable cursor, one issued for a different ref,
-// or a cross-path replay (delta cursor without `since`, catalog cursor with
-// `since`) is an invalid_cursor error — never silently ignored (design §6). Ref
+// ordered tuple that BINDS every filter of the request it was issued for — ref,
+// path (catalog vs delta), status set, and confidence ceiling — so a
+// malformed/undecodable cursor, one issued for a different ref or filter, or a
+// cross-path replay (delta cursor without `since`, catalog cursor with `since`)
+// is an invalid_cursor error — never silently ignored (design §6). Ref
 // shape is validated as namespace:value (malformed => invalid_ref).
 //
 // These are pure functions the conformance unit tests call directly (design §13).
@@ -18,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
+	"slices"
 	"time"
 )
 
@@ -32,11 +34,13 @@ var refRe = regexp.MustCompile(`^[a-z][a-z0-9_-]*:.+$`)
 // Key is carried as RFC3339Nano so the time round-trips to nanosecond precision and
 // the seek predicate ((key, infohash) < (cursor.Key, cursor.Infohash)) is exact.
 type wireCursor struct {
-	V    int    `json:"v"`
-	Ref  string `json:"r"`
-	Path int    `json:"p"`
-	Key  string `json:"k"`
-	Hash string `json:"h"`
+	V             int      `json:"v"`
+	Ref           string   `json:"r"`
+	Path          int      `json:"p"`
+	Statuses      []string `json:"s,omitempty"`
+	MaxConfidence *float64 `json:"c,omitempty"`
+	Key           string   `json:"k"`
+	Hash          string   `json:"h"`
 }
 
 // cursorVersion is the opaque-cursor envelope version. Bumped only on an
@@ -67,13 +71,42 @@ const (
 	PathDelta
 )
 
+// Binding is the request identity a cursor is issued against. Every filter that
+// changes which rows the scan may return lives here, so replaying a page token
+// under different filters is rejected rather than silently paging a different
+// result set (design §6). Statuses is expected already normalized (sorted and
+// deduplicated) by the caller, so two spellings of the same filter compare equal.
+type Binding struct {
+	Ref           string   // the ref this cursor was issued for (must match the request)
+	Path          Path     // catalog vs delta (must match the request's since-presence)
+	Statuses      []string // the status filter; empty is the matched-only default
+	MaxConfidence *float64 // the confidence ceiling, when the request carried one
+}
+
+// Equal reports whether two bindings describe the same filtered scan.
+func (b Binding) Equal(other Binding) bool {
+	if b.Ref != other.Ref || b.Path != other.Path {
+		return false
+	}
+	if !slices.Equal(b.Statuses, other.Statuses) {
+		return false
+	}
+	switch {
+	case b.MaxConfidence == nil && other.MaxConfidence == nil:
+		return true
+	case b.MaxConfidence == nil || other.MaxConfidence == nil:
+		return false
+	default:
+		return *b.MaxConfidence == *other.MaxConfidence
+	}
+}
+
 // Cursor is the decoded ordered tuple. The primary key is published_at (catalog)
 // or first_matched_at (delta); Infohash is the PK tiebreak that disambiguates the
 // non-unique primary sort key so no row is skipped or duplicated across pages
-// (design §6). Ref + Path bind the cursor to its issuing request.
+// (design §6). The embedded Binding ties the cursor to its issuing request.
 type Cursor struct {
-	Ref      string    // the ref this cursor was issued for (must match the request)
-	Path     Path      // catalog vs delta (must match the request's since-presence)
+	Binding
 	Key      time.Time // published_at (catalog) or first_matched_at (delta)
 	Infohash string    // PK tiebreak
 }
@@ -84,11 +117,13 @@ type Cursor struct {
 // versioned wire envelope — opaque to the consumer, never parsed by it.
 func Encode(c Cursor) (string, error) {
 	payload := wireCursor{
-		V:    cursorVersion,
-		Ref:  c.Ref,
-		Path: int(c.Path),
-		Key:  c.Key.Format(time.RFC3339Nano),
-		Hash: c.Infohash,
+		V:             cursorVersion,
+		Ref:           c.Ref,
+		Path:          int(c.Path),
+		Statuses:      c.Statuses,
+		MaxConfidence: c.MaxConfidence,
+		Key:           c.Key.Format(time.RFC3339Nano),
+		Hash:          c.Infohash,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -98,13 +133,15 @@ func Encode(c Cursor) (string, error) {
 }
 
 // Decode parses an opaque cursor string and validates that it was issued for the
-// expected ref and path; a malformed/undecodable string, an unexpected version, a
-// ref mismatch, or a path mismatch is ErrInvalidCursor (design §6). The ref binding
-// rejects a cursor replayed against a different ref; the path binding rejects a
-// cross-path replay (a delta cursor without `since`, a catalog cursor with `since`),
-// since the two paths sort on different keys. Key is parsed from RFC3339Nano so it
-// round-trips exactly.
-func Decode(encoded, expectRef string, expectPath Path) (Cursor, error) {
+// expected binding; a malformed/undecodable string, an unexpected version, or any
+// binding mismatch is ErrInvalidCursor (design §6). The ref binding rejects a cursor
+// replayed against a different ref; the path binding rejects a cross-path replay (a
+// delta cursor without `since`, a catalog cursor with `since`), since the two paths
+// sort on different keys; the status and confidence bindings reject a cursor replayed
+// against a different filter, which would otherwise page a different result set from a
+// seek key that never belonged to it. Key is parsed from RFC3339Nano so it round-trips
+// exactly.
+func Decode(encoded string, want Binding) (Cursor, error) {
 	raw, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
 		return Cursor{}, ErrInvalidCursor
@@ -120,22 +157,19 @@ func Decode(encoded, expectRef string, expectPath Path) (Cursor, error) {
 	if err != nil {
 		return Cursor{}, ErrInvalidCursor
 	}
-	// Ref binding: a cursor issued for a different ref is invalid (never replayable
-	// across refs — §6).
-	if payload.Ref != expectRef {
+	got := Binding{
+		Ref:           payload.Ref,
+		Path:          Path(payload.Path),
+		Statuses:      payload.Statuses,
+		MaxConfidence: payload.MaxConfidence,
+	}
+	// Binding check: a cursor replayed against a different ref, path, status set,
+	// or confidence ceiling is invalid — it carries a seek key from a scan the
+	// current request is not running (§6).
+	if !got.Equal(want) {
 		return Cursor{}, ErrInvalidCursor
 	}
-	// Path binding: a catalog cursor replayed under the delta path (or vice versa) is
-	// a cross-path replay — invalid, since the two paths seek on different keys (§6).
-	if Path(payload.Path) != expectPath {
-		return Cursor{}, ErrInvalidCursor
-	}
-	return Cursor{
-		Ref:      payload.Ref,
-		Path:     Path(payload.Path),
-		Key:      key,
-		Infohash: payload.Hash,
-	}, nil
+	return Cursor{Binding: got, Key: key, Infohash: payload.Hash}, nil
 }
 
 // ValidateRef checks a ref against the namespace:value shape (design §4/§6). A

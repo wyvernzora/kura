@@ -21,8 +21,12 @@ const (
 //
 // Reason is optional and is recorded to match_events, the existing audit
 // trail — the transition needs no new columns.
+//
+// Ref carries the operator's hand match. It is required for a transition into
+// `matched` and rejected for every other target, which take no ref.
 type SetStatusRequest struct {
 	Status MatchStatus `json:"status"`
+	Ref    string      `json:"ref,omitempty"`
 	Reason string      `json:"reason,omitempty"`
 }
 
@@ -32,14 +36,18 @@ type SetStatusRequest struct {
 // the distinction matters: a release with no recorded size is not a release of
 // size zero, and an unscored match is not a match scored 0.0. The pre-migration
 // list query coerced both with COALESCE(..., 0) and lost that.
+//
+// MatchStatus is always populated: the list is no longer matched-only, so a row
+// has to say which state it is in.
 type ReleaseItem struct {
-	Infohash    string    `json:"infohash"`
-	Ref         string    `json:"ref"`
-	Title       string    `json:"title"`
-	SizeBytes   *int64    `json:"sizeBytes"`
-	PublishedAt time.Time `json:"publishedAt"`
-	Confidence  *float64  `json:"confidence"`
-	Sources     []string  `json:"sources"`
+	Infohash    string      `json:"infohash"`
+	Ref         string      `json:"ref"`
+	Title       string      `json:"title"`
+	SizeBytes   *int64      `json:"sizeBytes"`
+	PublishedAt time.Time   `json:"publishedAt"`
+	Confidence  *float64    `json:"confidence"`
+	Sources     []string    `json:"sources"`
+	MatchStatus MatchStatus `json:"matchStatus"`
 }
 
 // ReleaseList is the GET /api/releases/v1 response. Items is never null.

@@ -22,10 +22,12 @@ type Dispatcher struct {
 func New(s store.Store) *Dispatcher { return &Dispatcher{store: s} }
 
 type ListReleasesRequest struct {
-	Ref    string     `json:"ref,omitempty" jsonschema:"optional opaque metadata ref in namespace:value form; omit to list recent matched releases across all refs"`
-	Since  *time.Time `json:"since,omitempty" jsonschema:"RFC3339 timestamp; when present, page by first matched time"`
-	Limit  int        `json:"limit,omitempty" jsonschema:"maximum releases to return; server defaults and caps apply"`
-	Cursor string     `json:"cursor,omitempty" jsonschema:"opaque next_cursor from the previous response"`
+	Ref           string     `json:"ref,omitempty" jsonschema:"optional opaque metadata ref in namespace:value form; omit to list recent matched releases across all refs"`
+	Since         *time.Time `json:"since,omitempty" jsonschema:"RFC3339 timestamp; when present, page by first matched time"`
+	Statuses      []string   `json:"statuses,omitempty" jsonschema:"match statuses to include; omit for the matched-only default"`
+	MaxConfidence *float64   `json:"maxConfidence,omitempty" jsonschema:"exclusive confidence ceiling in (0,1]; unscored matches are excluded"`
+	Limit         int        `json:"limit,omitempty" jsonschema:"maximum releases to return; server defaults and caps apply"`
+	Cursor        string     `json:"cursor,omitempty" jsonschema:"opaque next_cursor from the previous response"`
 }
 
 type GetReleaseRequest struct {
@@ -126,17 +128,21 @@ func (d *Dispatcher) SetStatus(ctx context.Context, input []byte) ([]byte, error
 }
 
 // SetStatusTyped applies an operator status change. The transition table in
-// the store is the validation; this layer only rejects statuses outside the
-// closed vocabulary, so an unknown label never reaches SQL as a cast error.
+// the store is the validation — including the per-target ref rules, which are
+// checked after it so a transition that was never on offer is reported as such.
+// This layer only rejects targets outside the endpoint's vocabulary, so a label
+// the operator surface never sets (`suppressed`, which submit owns) is refused
+// at the boundary rather than by the table.
 func (d *Dispatcher) SetStatusTyped(ctx context.Context, infohash string, req api.SetStatusRequest) error {
 	switch req.Status {
-	case api.MatchStatusDead:
+	case api.MatchStatusDead, api.MatchStatusMatched, api.MatchStatusUnmatched:
 	default:
 		return fmt.Errorf("%w: invalid status %q", ErrInvalidInput, req.Status)
 	}
 	return d.store.SetStatus(ctx, store.SetStatusParams{
 		Infohash: infohash,
 		Status:   string(req.Status),
+		Ref:      req.Ref,
 		Reason:   req.Reason,
 	})
 }
@@ -177,12 +183,44 @@ func (d *Dispatcher) ListReleases(ctx context.Context, input []byte) ([]byte, er
 	return json.Marshal(out)
 }
 
+// validateListReleases rejects the filter combinations the store would
+// otherwise have to interpret. The status vocabulary is closed here so an
+// unknown label never reaches SQL as a cast error, and the confidence ceiling
+// is range-checked because a ceiling of 0 or above 1 filters nothing an
+// operator meant to ask for.
+//
+// `since` is the delta path and is matched-only by definition, so combining it
+// with either filter is a contradiction rather than a narrowing.
+func validateListReleases(req ListReleasesRequest) error {
+	filtered := len(req.Statuses) > 0 || req.MaxConfidence != nil
+	if filtered && req.Since != nil {
+		return fmt.Errorf("%w: since cannot be combined with status or maxConfidence", ErrInvalidInput)
+	}
+	for _, s := range req.Statuses {
+		switch api.MatchStatus(s) {
+		case api.MatchStatusUnmatched, api.MatchStatusMatched, api.MatchStatusSuppressed,
+			api.MatchStatusExhausted, api.MatchStatusDead:
+		default:
+			return fmt.Errorf("%w: invalid status %q", ErrInvalidInput, s)
+		}
+	}
+	if req.MaxConfidence != nil && (*req.MaxConfidence <= 0 || *req.MaxConfidence > 1) {
+		return fmt.Errorf("%w: maxConfidence must be in (0,1], got %v", ErrInvalidInput, *req.MaxConfidence)
+	}
+	return nil
+}
+
 func (d *Dispatcher) ListReleasesTyped(ctx context.Context, req ListReleasesRequest) (api.ReleaseList, error) {
+	if err := validateListReleases(req); err != nil {
+		return api.ReleaseList{}, err
+	}
 	page, err := d.store.ListReleases(ctx, store.ReleaseQuery{
-		Ref:    req.Ref,
-		Since:  req.Since,
-		Limit:  req.Limit,
-		Cursor: req.Cursor,
+		Ref:           req.Ref,
+		Since:         req.Since,
+		Statuses:      req.Statuses,
+		MaxConfidence: req.MaxConfidence,
+		Limit:         req.Limit,
+		Cursor:        req.Cursor,
 	})
 	if err != nil {
 		return api.ReleaseList{}, err
@@ -197,6 +235,7 @@ func (d *Dispatcher) ListReleasesTyped(ctx context.Context, req ListReleasesRequ
 			PublishedAt: r.PublishedAt,
 			Confidence:  r.Confidence,
 			Sources:     r.Sources,
+			MatchStatus: api.MatchStatus(r.MatchStatus),
 		})
 	}
 	if page.NextCursor != "" {
@@ -311,6 +350,8 @@ func ErrorKind(err error) string {
 		return api.KindStaleLease
 	case errors.Is(err, store.ErrInvalidTransition):
 		return api.KindInvalidTransition
+	case errors.Is(err, store.ErrRefRequired), errors.Is(err, store.ErrRefForbidden):
+		return api.KindInvalidRequest
 	case errors.Is(err, cursor.ErrInvalidRef):
 		return api.KindInvalidRef
 	case errors.Is(err, cursor.ErrInvalidCursor):

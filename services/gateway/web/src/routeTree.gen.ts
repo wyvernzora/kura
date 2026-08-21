@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrashRouteImport } from './routes/trash'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ReleasesRouteImport } from './routes/releases'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SeriesRefRouteImport } from './routes/series.$ref'
 
@@ -22,6 +23,11 @@ const TrashRoute = TrashRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReleasesRoute = ReleasesRouteImport.update({
+  id: '/releases',
+  path: '/releases',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,12 +43,14 @@ const SeriesRefRoute = SeriesRefRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/releases': typeof ReleasesRoute
   '/settings': typeof SettingsRoute
   '/trash': typeof TrashRoute
   '/series/$ref': typeof SeriesRefRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/releases': typeof ReleasesRoute
   '/settings': typeof SettingsRoute
   '/trash': typeof TrashRoute
   '/series/$ref': typeof SeriesRefRoute
@@ -50,20 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/releases': typeof ReleasesRoute
   '/settings': typeof SettingsRoute
   '/trash': typeof TrashRoute
   '/series/$ref': typeof SeriesRefRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/trash' | '/series/$ref'
+  fullPaths: '/' | '/releases' | '/settings' | '/trash' | '/series/$ref'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/trash' | '/series/$ref'
-  id: '__root__' | '/' | '/settings' | '/trash' | '/series/$ref'
+  to: '/' | '/releases' | '/settings' | '/trash' | '/series/$ref'
+  id: '__root__' | '/' | '/releases' | '/settings' | '/trash' | '/series/$ref'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ReleasesRoute: typeof ReleasesRoute
   SettingsRoute: typeof SettingsRoute
   TrashRoute: typeof TrashRoute
   SeriesRefRoute: typeof SeriesRefRoute
@@ -85,6 +95,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/releases': {
+      id: '/releases'
+      path: '/releases'
+      fullPath: '/releases'
+      preLoaderRoute: typeof ReleasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -104,6 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ReleasesRoute: ReleasesRoute,
   SettingsRoute: SettingsRoute,
   TrashRoute: TrashRoute,
   SeriesRefRoute: SeriesRefRoute,

@@ -13,6 +13,13 @@ var (
 	// ErrInvalidTransition reports a status change the transition table
 	// does not allow. The wrapping error names the attempted transition.
 	ErrInvalidTransition = errors.New("indexer: invalid status transition")
+	// ErrRefRequired reports an operator status change into `matched` that
+	// carried no ref. The ref IS the match; there is nothing to record
+	// without it.
+	ErrRefRequired = errors.New("indexer: ref required for this transition")
+	// ErrRefForbidden reports a ref supplied for a target that does not take
+	// one. Silently dropping it would let an operator believe a ref landed.
+	ErrRefForbidden = errors.New("indexer: ref not accepted for this transition")
 )
 
 type Clock interface {
@@ -84,9 +91,13 @@ type SubmitParams struct {
 // SetStatusParams is one operator-driven status change. It is deliberately
 // not claim-fenced: the transition table excludes every transition the
 // matcher's claim path owns, so the two routes cannot collide.
+//
+// Ref is the operator's hand match. It is required for a transition into
+// `matched` and rejected for every other target.
 type SetStatusParams struct {
 	Infohash string
 	Status   string
+	Ref      string
 	Reason   string
 }
 
@@ -106,11 +117,20 @@ type CatalogStats struct {
 	Refs       int
 }
 
+// ReleaseQuery is one page request against the release catalog.
+//
+// Statuses narrows the scan to those match statuses; empty keeps the
+// matched-only default the pipeline consumers depend on. MaxConfidence adds a
+// strict `confidence < x` ceiling, which excludes unscored (NULL) rows by
+// definition. Both are caller-supplied policy: the indexer holds no threshold
+// of its own.
 type ReleaseQuery struct {
-	Ref    string
-	Since  *time.Time
-	Limit  int
-	Cursor string
+	Ref           string
+	Since         *time.Time
+	Statuses      []string
+	MaxConfidence *float64
+	Limit         int
+	Cursor        string
 }
 
 type ReleasePage struct {
@@ -129,6 +149,7 @@ type ReleaseItem struct {
 	PublishedAt time.Time
 	Confidence  *float64
 	Sources     []string
+	MatchStatus string
 }
 
 type ReleaseDetail struct {
