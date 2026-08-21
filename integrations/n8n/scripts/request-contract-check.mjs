@@ -414,7 +414,7 @@ function request(method, path, body) {
 	assert.deepEqual(calls, [
 		request('POST', '/api/releases/v1/queue/claim', { limit: 4, leaseSeconds: 90 }),
 	]);
-	assert.deepEqual(output[0][0].json, { items: claim.items, count: 1 });
+	assert.deepEqual(output, [[{ json: claim.items[0] }]]);
 }
 
 {
@@ -433,13 +433,15 @@ function request(method, path, body) {
 		request('POST', '/api/releases/v1/queue/submit', accepted),
 		request('POST', '/api/releases/v1/queue/submit', stale),
 	]);
-	assert.deepEqual(output[0][0].json, {
-		items: [
-			{ infohash: HASH, ref: REF, ok: true },
-			{ infohash: stale.infohash, ref: '', ok: false, error: 'conflict' },
+	assert.deepEqual(output, [
+		[
+			{ json: { infohash: HASH, ref: REF, ok: true }, pairedItem: { item: 0 } },
+			{
+				json: { infohash: stale.infohash, ref: '', ok: false, error: 'conflict' },
+				pairedItem: { item: 0 },
+			},
 		],
-		count: 2,
-	});
+	]);
 }
 
 {

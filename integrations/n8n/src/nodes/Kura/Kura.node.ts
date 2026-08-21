@@ -538,7 +538,10 @@ async function executeIndexer(
 		});
 		const claimed = (res.items as IDataObject[]) ?? [];
 		Logger.info('Kura queue claim completed', { claimed_count: claimed.length });
-		return [[{ json: { items: claimed, count: claimed.length } }]];
+		// One native n8n item per claimed release, matching the queue
+		// trigger's shape. An empty claim emits nothing, which is the
+		// idiomatic "no work this round" signal downstream nodes expect.
+		return [claimed.map((claim) => ({ json: claim }))];
 	}
 
 	const out: INodeExecutionData[] = [];
@@ -600,10 +603,13 @@ async function executeIndexer(
 				submit_count: submitted.length,
 				conflict_count: submitted.filter((item) => item.ok === false).length,
 			});
-			out.push({
-				json: { items: submitted, count: submitted.length },
-				pairedItem: { item: i },
-			});
+			// One native n8n item per disposition rather than a wrapped
+			// {items, count} envelope: consumers branch on $json.ok / $json.ref
+			// directly, and a multi-disposition body fans out instead of
+			// hiding everything after items[0].
+			for (const result of submitted) {
+				out.push({ json: result, pairedItem: { item: i } });
+			}
 		} catch (error) {
 			const meta = {
 				resource,
