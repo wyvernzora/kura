@@ -451,7 +451,9 @@ trashing event completed.
 **Journey:**
 
 1. Operator calls `trash list <selector>` for one series, or
-   `trash list --all` for the entire library (full walk).
+   `trash list --all` for every indexed series. `--all` enumerates
+   the index, not the library directory tree: a directory kura does
+   not track is not kura's to report on or delete from.
    `--older-than DURATION` filters by age.
 2. Kura returns one entry per ULID directory, reading `meta.json`
    from each: ULID, slot, trashed-at timestamp, media file,

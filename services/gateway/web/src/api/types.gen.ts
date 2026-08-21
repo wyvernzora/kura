@@ -813,7 +813,9 @@ export interface SeriesTags {
 /**
  * TrashList is workflow.TrashList's response. Series are sorted by
  * SeriesRef; entries within each series are sorted by ULID
- * (chronological order since ULIDs are time-ordered).
+ * (chronological order since ULIDs are time-ordered). Library-wide
+ * listings cover indexed series only — trash under a directory the
+ * index has never seen is not kura's to report.
  */
 export interface TrashList {
   series: TrashSeriesEntry[];
@@ -821,10 +823,15 @@ export interface TrashList {
   totalBytes: number /* int64 */;
 }
 /**
- * TrashSeriesEntry rolls up trash for one series.
+ * TrashSeriesEntry rolls up trash for one series. Ref is the series'
+ * metadata ref, carried so clients can address the per-series routes
+ * (every /series/{ref} endpoint) without a second lookup — Directory
+ * alone identifies nothing they can call. Every listed series comes
+ * from the index, so Ref is always populated.
  */
 export interface TrashSeriesEntry {
   directory: string;
+  ref: string;
   entries: TrashEntry[];
   bytes: number /* int64 */;
 }
