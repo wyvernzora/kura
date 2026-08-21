@@ -1,3 +1,9 @@
+import {
+  FIXTURE_QUEUE_STATS,
+  FIXTURE_RELEASE_SERIES,
+  releaseDetailFixture,
+  releasePage,
+} from '../src/components/_releaseFixtures';
 import { trashListFixture } from '../src/components/_trashFixtures';
 
 /**
@@ -43,6 +49,85 @@ if (typeof window !== 'undefined') {
     window.fetch = async (input, init) => {
       const url = urlOf(input);
       const method = (init?.method ?? 'GET').toUpperCase();
+      const query = new URL(url, window.location.origin).searchParams;
+
+      // GET /api/library/v1/series → the library the releases page joins
+      // refs against and searches for hand-match candidates. A story can
+      // seed `window.__kuraSeriesList__` to narrow or empty it.
+      if (method === 'GET' && /\/api\/library\/v1\/series(\?.*)?$/.test(url)) {
+        return jsonResponse({ items: w.__kuraSeriesList__ ?? FIXTURE_RELEASE_SERIES });
+      }
+
+      // POST /api/library/v1/series/resolve → echo the requested ref back
+      // as a single candidate, the unique-match cardinality. A story
+      // seeds `window.__kuraResolve__` for the failure paths.
+      if (method === 'POST' && /\/api\/library\/v1\/series\/resolve$/.test(url)) {
+        const seeded = w.__kuraResolve__;
+        if (seeded?.status && seeded.status >= 400) {
+          return jsonResponse(seeded.body, seeded.status);
+        }
+        if (seeded) {
+          return jsonResponse(seeded);
+        }
+        let ref = '';
+        try {
+          const body = JSON.parse(String(init?.body ?? '{}')) as { terms?: string[] };
+          ref = body.terms?.[0] ?? '';
+        } catch {
+          // fall through to the empty-candidates response
+        }
+        const row = FIXTURE_RELEASE_SERIES.find((series) => series.ref === ref);
+        return jsonResponse({
+          candidates: row
+            ? [
+                {
+                  ref: row.ref,
+                  preferredTitle: row.title,
+                  canonicalTitle: row.canonicalTitle,
+                  year: 2023,
+                },
+              ]
+            : [],
+        });
+      }
+
+      // GET /api/releases/v1 → one page of the release fixtures, filtered
+      // the way the endpoint filters (status, maxConfidence, cursor).
+      if (method === 'GET' && /\/api\/releases\/v1(\?.*)?$/.test(url)) {
+        return jsonResponse(
+          releasePage(
+            {
+              status: query.get('status'),
+              maxConfidence: query.get('maxConfidence'),
+              cursor: query.get('cursor'),
+              limit: query.get('limit'),
+            },
+            w.__kuraReleases__,
+          ),
+        );
+      }
+
+      if (method === 'GET' && /\/api\/releases\/v1\/queue\/stats$/.test(url)) {
+        return jsonResponse(FIXTURE_QUEUE_STATS);
+      }
+
+      // PUT /api/releases/v1/{infohash}/status → the outcome a story asked
+      // for via `window.__kuraSetStatus__`, defaulting to acceptance.
+      if (method === 'PUT' && /\/api\/releases\/v1\/[^/]+\/status$/.test(url)) {
+        const outcome = w.__kuraSetStatus__;
+        if (outcome?.status && outcome.status >= 400) {
+          return jsonResponse(outcome.body, outcome.status);
+        }
+        return jsonResponse({ ok: true });
+      }
+
+      if (method === 'GET' && /\/api\/releases\/v1\/[^/?]+$/.test(url)) {
+        const infohash = url.split('/').pop() ?? '';
+        const detail = releaseDetailFixture(decodeURIComponent(infohash));
+        return detail
+          ? jsonResponse(detail)
+          : jsonResponse({ kind: 'not_found', message: `no release ${infohash}` }, 404);
+      }
 
       // GET /api/library/v1/trash → the shared trash fixtures, so the
       // /trash stories render a realistic listing. A story can override

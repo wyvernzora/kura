@@ -58,6 +58,23 @@ export const TrashRoute: Story = {
 };
 
 /**
+ * Releases route — searchless like Trash, but its mobile bar carries a
+ * trailing refresh button (the page's desktop header owns that control
+ * above `md`). Resize the canvas below `md` to see it.
+ */
+export const ReleasesRoute: Story = {
+  render: () => (
+    <StoryRouter initialPath="/releases">
+      <AppShell>
+        <div className="mx-auto max-w-3xl px-6 py-12 text-muted text-sm">
+          Stub releases content. Real app renders the Releases page here.
+        </div>
+      </AppShell>
+    </StoryRouter>
+  ),
+};
+
+/**
  * Settings route — no top bar at all on desktop (the slim mobile bar
  * that replaces it only renders below `md`).
  */

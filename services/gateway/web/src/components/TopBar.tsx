@@ -1,6 +1,6 @@
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef } from 'react';
 
 import { useResolveSearch } from '@/api/hooks';
 import { SearchField } from '@/components/SearchField';
@@ -199,44 +199,68 @@ function barChrome(scrolled: boolean): string {
 }
 
 /**
- * Slim mobile chrome for the searchless pages (Settings, Trash). They
- * have no search field, so on desktop AppShell renders no bar at all;
- * below `md` the hamburger still has to live somewhere or the drawer
- * becomes unreachable. The bar's title doubles as the page heading on
- * mobile — those pages hide their own h1 below `md` so the word
- * appears once.
+ * Slim mobile chrome for the searchless pages (Settings, Trash,
+ * Releases). They have no search field, so on desktop AppShell renders
+ * no bar at all; below `md` the hamburger still has to live somewhere
+ * or the drawer becomes unreachable. The bar's title doubles as the
+ * page heading on mobile — those pages hide their own h1 below `md` so
+ * the word appears once.
+ *
+ * `action` is an optional trailing control pinned to the right edge,
+ * mirroring the hamburger. Releases uses it for its refresh button:
+ * the page's own desktop header carries that control, but below `md`
+ * this bar is the only chrome there is.
  */
-export function PageMobileBar({ title, onMenu }: { title: string; onMenu: () => void }) {
+export function PageMobileBar({
+  title,
+  onMenu,
+  action,
+}: {
+  title: string;
+  onMenu: () => void;
+  action?: ReactNode;
+}) {
   const scrolled = useScrolled();
   return (
     <header className={cn(barChrome(scrolled), 'md:hidden')}>
       <div className="flex h-[72px] items-center gap-3 px-[18px]">
         <HamburgerButton onClick={onMenu} />
         <span className="font-semibold text-[15px] text-ink tracking-[-0.2px]">{title}</span>
+        {action && <div className="ml-auto flex items-center">{action}</div>}
       </div>
     </header>
   );
 }
 
 /**
- * Drawer trigger. Deliberately matches SearchField's shell exactly —
- * 38 px, radius 8, surface fill, card shadow, no border — so the two
- * read as one control strip rather than a button beside a field.
+ * Page-bar control shell. Deliberately matches SearchField's shell
+ * exactly — 38 px, radius 8, surface fill, card shadow, no border — so
+ * the bar reads as one control strip rather than loose buttons.
  */
-function HamburgerButton({ onClick, className }: { onClick: () => void; className?: string }) {
+export function PageBarIconButton({
+  className,
+  type,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      type="button"
-      aria-label="Open menu"
-      onClick={onClick}
+      type={type ?? 'button'}
       className={cn(
         'inline-flex h-[38px] w-[38px] shrink-0 cursor-pointer items-center justify-center',
         'rounded-[8px] bg-surface text-ink shadow-card',
         className,
       )}
-    >
+      {...props}
+    />
+  );
+}
+
+/** Drawer trigger. */
+function HamburgerButton({ onClick, className }: { onClick: () => void; className?: string }) {
+  return (
+    <PageBarIconButton aria-label="Open menu" onClick={onClick} className={className}>
       <MaterialIcon name="menu" size={18} />
-    </button>
+    </PageBarIconButton>
   );
 }
 

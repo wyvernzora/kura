@@ -224,6 +224,30 @@ input[type="search"]::-webkit-search-decoration {
 }
 
 /*
+ * Entrance for the releases page's floating toast. The trash banner
+ * sits inline in the document and needs none; a toast that appears
+ * over the bottom-right corner does, or it reads as a repaint.
+ */
+.kura-toast-in {
+  animation: kura-toast-enter 180ms ease-out both;
+}
+@keyframes kura-toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kura-toast-in {
+    animation: none;
+  }
+}
+
+/*
  * Drain bar along the bottom edge of a self-expiring result banner —
  * the trash page's success / nothing-matched outcomes. Runs for the
  * same 6 s the dismiss timer does, so the bar reaching zero and the

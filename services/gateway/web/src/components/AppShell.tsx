@@ -3,7 +3,9 @@ import { type ReactNode, useState } from 'react';
 
 import { MobileDrawer } from '@/components/MobileDrawer';
 import { Sidebar } from '@/components/Sidebar';
-import { PageMobileBar, TopBar } from '@/components/TopBar';
+import { PageBarIconButton, PageMobileBar, TopBar } from '@/components/TopBar';
+import { MaterialIcon } from '@/components/ui/material-icon';
+import { RELEASES_REFRESH_EVENT } from '@/lib/releases';
 import { useSuppressHoverOnScroll } from '@/lib/useSuppressHoverOnScroll';
 
 interface AppShellProps {
@@ -21,9 +23,10 @@ interface AppShellProps {
  * the drawer's open state is local because a persisted overlay is
  * never what the user wants on the next visit.
  *
- * The searchless pages (Settings, Trash) get no top bar on desktop at
- * all — just the slim mobile bar that keeps the hamburger reachable.
- * `BARLESS_ROUTES` is the list, mapping each to its mobile title.
+ * The searchless pages (Settings, Trash, Releases) get no top bar on
+ * desktop at all — just the slim mobile bar that keeps the hamburger
+ * reachable. `BARLESS_ROUTES` is the list, mapping each to its mobile
+ * title.
  *
  * Mounts the suppress-hover-on-scroll hook once for the whole app —
  * keeps the poster grid from churning :hover state while the user
@@ -36,6 +39,7 @@ interface AppShellProps {
 const BARLESS_ROUTES: Record<string, string> = {
   '/settings': 'Settings',
   '/trash': 'Trash',
+  '/releases': 'Releases',
 };
 
 export function AppShell({ children }: AppShellProps) {
@@ -53,7 +57,11 @@ export function AppShell({ children }: AppShellProps) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         {barlessTitle ? (
-          <PageMobileBar title={barlessTitle} onMenu={openDrawer} />
+          <PageMobileBar
+            title={barlessTitle}
+            onMenu={openDrawer}
+            action={pathname === '/releases' ? <ReleasesRefreshButton /> : undefined}
+          />
         ) : (
           <TopBar onMenu={openDrawer} />
         )}
@@ -61,5 +69,25 @@ export function AppShell({ children }: AppShellProps) {
       </div>
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </div>
+  );
+}
+
+/**
+ * Releases refreshes explicitly — no polling, no realtime. Its own
+ * desktop header carries the labelled button, but below `md` the page
+ * has no header of its own and this bar is the only chrome there is.
+ *
+ * The shell owns the bar, so the button announces the request on the
+ * window and the route listens, rather than a refresh callback being
+ * threaded down through AppShell for one page's sake.
+ */
+function ReleasesRefreshButton() {
+  return (
+    <PageBarIconButton
+      aria-label="Refresh releases"
+      onClick={() => window.dispatchEvent(new Event(RELEASES_REFRESH_EVENT))}
+    >
+      <MaterialIcon name="refresh" size={18} />
+    </PageBarIconButton>
   );
 }
