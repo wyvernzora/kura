@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -47,7 +45,7 @@ type TrashRestoreInput struct {
 }
 
 // TrashList enumerates trash entries for one series (Ref) or across
-// the whole library (All). OlderThan filters to entries trashed at
+// every indexed series (All). OlderThan filters to entries trashed at
 // least that long before Now (or deps.Now()).
 func TrashList(ctx context.Context, deps Deps, in TrashListInput) (api.TrashList, error) {
 	progress.Start(ctx, "trash-list", "Scanning trash", 0)
@@ -69,6 +67,12 @@ func TrashList(ctx context.Context, deps Deps, in TrashListInput) (api.TrashList
 		}
 		seriesRoot := paths.SeriesDir(deps.LibRoot, ref)
 		entry := api.TrashSeriesEntry{Directory: ref, Entries: make([]api.TrashEntry, 0, len(metas))}
+		// Targets come from the index, so the row is always there;
+		// the lookup only fetches the metadata ref clients need to
+		// call the per-series routes.
+		if row, ok := deps.Index.GetRow(ref); ok {
+			entry.Ref = row.Metadata
+		}
 		for _, meta := range metas {
 			if !trashAgePasses(meta.TrashedAt, now, in.OlderThan) {
 				continue
@@ -91,9 +95,9 @@ func TrashList(ctx context.Context, deps Deps, in TrashListInput) (api.TrashList
 	return out, nil
 }
 
-// TrashEmpty deletes trash entries for one series (Ref) or across the
-// whole library (All). OlderThan filters to entries trashed at least
-// that long before Now (or deps.Now()).
+// TrashEmpty deletes trash entries for one series (Ref) or across
+// every indexed series (All). OlderThan filters to entries trashed at
+// least that long before Now (or deps.Now()).
 func TrashEmpty(ctx context.Context, deps Deps, in TrashEmptyInput) (api.TrashEmpty, error) {
 	progress.Start(ctx, "trash-empty", "Scanning trash", 0)
 	refsList, err := trashTargetSeries(ctx, deps, in.Ref, in.All)
@@ -277,6 +281,11 @@ func refuseIfClaimed(deps Deps, ref refs.Series) error {
 	return nil
 }
 
+// trashTargetSeries resolves a trash invocation to the series it acts
+// on. All mode enumerates the index, not the library directory tree: a
+// directory the index has never seen is not under kura's control, so
+// its `.kura/trash` is not kura's to list or delete. Ordering follows
+// the series ref, per the TrashList contract.
 func trashTargetSeries(ctx context.Context, deps Deps, ref refs.Series, all bool) ([]refs.Series, error) {
 	if all && !ref.IsZero() {
 		return nil, errors.New("workflow: trash invocation cannot pass both Ref and All")
@@ -287,34 +296,17 @@ func trashTargetSeries(ctx context.Context, deps Deps, ref refs.Series, all bool
 	if !all {
 		return []refs.Series{ref}, nil
 	}
-	dir, err := os.Open(deps.LibRoot)
+	// Snapshot (not Rows) so a cold rebuild surfaces ErrNotReady
+	// instead of quietly reporting an empty library — the same
+	// contract List and ScanAll rely on.
+	rows, err := deps.Index.Snapshot()
 	if err != nil {
 		return nil, err
 	}
-	defer dir.Close()
-	var out []refs.Series
-	scanned := 0
-	for {
-		entries, readErr := dir.ReadDir(64)
-		if readErr != nil && !errors.Is(readErr, io.EOF) {
-			return nil, readErr
-		}
-		for _, entry := range entries {
-			name := entry.Name()
-			if !entry.IsDir() || strings.HasPrefix(name, ".") {
-				continue
-			}
-			scanned++
-			progress.Update(ctx, "trash-walk", fmt.Sprintf("Scanning %s", name), scanned, 0)
-			parsed, err := refs.ParseSeries(name)
-			if err != nil {
-				continue
-			}
-			out = append(out, parsed)
-		}
-		if errors.Is(readErr, io.EOF) {
-			break
-		}
+	out := make([]refs.Series, 0, len(rows))
+	for i, row := range rows {
+		progress.Update(ctx, "trash-walk", fmt.Sprintf("Scanning %s", row.Series), i+1, len(rows))
+		out = append(out, row.Series)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
 	return out, nil
