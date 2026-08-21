@@ -85,6 +85,12 @@ export function TrashPage() {
   const [confirm, setConfirm] = useState<EmptyTarget | null>(null);
   const [openDirectory, setOpenDirectory] = useState<string | null>(null);
   const [result, setResult] = useState<TrashOutcome | null>(null);
+  // What the in-flight empty is deleting, captured at confirm time.
+  // Deleting a terabyte of trash takes the server a while, and the
+  // confirm dialog closes immediately — this feeds the progress
+  // banner that fills the gap until the result lands.
+  const [inFlight, setInFlight] = useState<{ entries: number; bytes: number } | null>(null);
+  const emptying = empty.isPending;
   // Stable identity so the banner's self-expire timer isn't restarted
   // by unrelated re-renders (sort flips, dropdown opens).
   const dismissResult = useCallback(() => setResult(null), []);
@@ -110,6 +116,10 @@ export function TrashPage() {
   async function runEmpty(target: EmptyTarget) {
     setConfirm(null);
     setOpenDirectory(null);
+    setInFlight({
+      entries: trashTotalEntries(target.groups),
+      bytes: trashTotalBytes(target.groups),
+    });
     const ref = target.scope === 'series' ? target.groups[0]?.ref : undefined;
     try {
       setResult(trashOutcome(await empty.mutateAsync({ ref, olderThan })));
@@ -126,6 +136,8 @@ export function TrashPage() {
           error: apiErrorMessage(err, 'empty failed'),
         })),
       });
+    } finally {
+      setInFlight(null);
     }
   }
 
@@ -135,6 +147,7 @@ export function TrashPage() {
         groups={live}
         now={now}
         loading={listing.isPending}
+        busy={emptying}
         onEmptyAll={() => setConfirm({ scope: 'all', groups: scopedGroups() })}
       />
 
@@ -188,7 +201,14 @@ export function TrashPage() {
         </div>
       )}
 
-      {result && (
+      {emptying && inFlight && (
+        <EmptyingBanner
+          entries={inFlight.entries}
+          bytes={inFlight.bytes}
+          topGap={live.length === 0}
+        />
+      )}
+      {!emptying && result && (
         <ResultBanner
           result={result}
           scopeNote={
@@ -199,7 +219,9 @@ export function TrashPage() {
         />
       )}
 
-      {listing.isPending ? null : live.length === 0 ? (
+      {listing.isPending ? (
+        <TrashListSkeleton />
+      ) : live.length === 0 ? (
         <TrashBlank
           icon="delete"
           title="Trash is empty"
@@ -230,6 +252,7 @@ export function TrashPage() {
               key={group.directory}
               group={group}
               now={now}
+              emptyDisabled={emptying}
               onOpen={() => setOpenDirectory(group.directory)}
               onEmpty={() => setConfirm({ scope: 'series', groups: scopedGroups(group.directory) })}
             />
@@ -240,6 +263,7 @@ export function TrashPage() {
       <SeriesDetail
         group={open}
         now={now}
+        emptyDisabled={emptying}
         onClose={() => setOpenDirectory(null)}
         onEmpty={() =>
           open && setConfirm({ scope: 'series', groups: scopedGroups(open.directory) })
@@ -265,15 +289,19 @@ function TrashHeader({
   groups,
   now,
   loading,
+  busy,
   onEmptyAll,
 }: {
   groups: readonly TrashSeriesEntry[];
   now: number;
   loading: boolean;
+  /** An empty mutation is in flight — hold further destructive input. */
+  busy: boolean;
   onEmptyAll: () => void;
 }) {
   const entries = trashTotalEntries(groups);
   const filled = entries > 0;
+  const disabled = !filled || loading || busy;
   return (
     <header className="rounded-[14px] border border-line-soft bg-surface p-5 shadow-card">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
@@ -287,11 +315,11 @@ function TrashHeader({
         <button
           type="button"
           onClick={onEmptyAll}
-          disabled={!filled || loading}
+          disabled={disabled}
           className={cn(
             'inline-flex h-9 shrink-0 items-center gap-2 self-start rounded-md border px-3 text-sm font-medium shadow-card',
             'transition-[transform,box-shadow,background-color] duration-[160ms] ease-out',
-            !filled || loading
+            disabled
               ? 'cursor-not-allowed border-line-soft bg-paper text-muted opacity-60'
               : 'cursor-pointer border-status-error/40 bg-surface text-status-error hover:-translate-y-px hover:bg-status-error hover:text-status-error-fg hover:shadow-card-hover',
           )}
@@ -300,22 +328,23 @@ function TrashHeader({
           Empty trash
         </button>
       </div>
-      {/* Empty stats render an em dash rather than a computed "0 B" /
-          "1m", which would read as a measurement of nothing. */}
+      {/* Loading renders shimmer stubs; a settled-but-empty trash
+          renders an em dash rather than a computed "0 B" / "1m",
+          which would read as a measurement of nothing. */}
       <div className="mt-5 grid grid-cols-3 gap-x-6 gap-y-5 border-line-soft border-t pt-5">
         <Stat
           label="On disk"
-          value={filled ? formatTrashBytes(trashTotalBytes(groups)) : '—'}
+          value={loading ? null : filled ? formatTrashBytes(trashTotalBytes(groups)) : '—'}
           sub={filled ? 'media + companions' : undefined}
         />
         <Stat
           label="Series"
-          value={filled ? String(groups.length) : '—'}
+          value={loading ? null : filled ? String(groups.length) : '—'}
           sub={filled ? 'with trashed files' : undefined}
         />
         <Stat
           label="Oldest"
-          value={filled ? formatTrashAge(trashOldestAge(groups, now)) : '—'}
+          value={loading ? null : filled ? formatTrashAge(trashOldestAge(groups, now)) : '—'}
           sub={filled ? 'since trashing' : undefined}
         />
       </div>
@@ -323,14 +352,50 @@ function TrashHeader({
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+/** `value: null` renders a shimmer stub (the listing is still loading). */
+function Stat({ label, value, sub }: { label: string; value: string | null; sub?: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span className="font-mono text-[9.5px] text-muted uppercase tracking-[1px]">{label}</span>
-      <span className="font-semibold text-[19px] text-ink leading-none tracking-[-0.4px] tabular-nums">
-        {value}
-      </span>
+      {value === null ? (
+        <SkelBlock className="h-[19px] w-16 rounded-[4px]" />
+      ) : (
+        <span className="font-semibold text-[19px] text-ink leading-none tracking-[-0.4px] tabular-nums">
+          {value}
+        </span>
+      )}
       {sub && <span className="text-[11.5px] text-muted leading-[1.35]">{sub}</span>}
+    </div>
+  );
+}
+
+function SkelBlock({ className }: { className?: string }) {
+  return <div aria-hidden="true" className={cn('animate-pulse bg-line-soft', className)} />;
+}
+
+/**
+ * Placeholder for the series listing while the trash query loads —
+ * a terabyte-scale trash walk takes the server a few seconds, and a
+ * blank page reads as "no trash". Same card geometry as the loaded
+ * rows so the layout doesn't jump when data resolves.
+ */
+function TrashListSkeleton() {
+  return (
+    <div className="mt-5 overflow-hidden rounded-[12px] border border-line-soft bg-surface shadow-card">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: skeleton stubs have no real identity
+          key={i}
+          className="flex items-center gap-3 border-line-soft border-b px-4 py-3 last:border-b-0"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <SkelBlock className="h-[14px] w-48 max-w-[60%] rounded-[4px]" />
+          </div>
+          <SkelBlock className="hidden h-[12px] w-[72px] rounded-[4px] sm:block" />
+          <SkelBlock className="h-[26px] w-[88px] rounded-[4px]" />
+          <SkelBlock className="h-[30px] w-[34px] rounded-md" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -398,11 +463,13 @@ function TriggerPill({
 function SeriesRow({
   group,
   now,
+  emptyDisabled,
   onOpen,
   onEmpty,
 }: {
   group: TrashSeriesEntry;
   now: number;
+  emptyDisabled: boolean;
   onOpen: () => void;
   onEmpty: () => void;
 }) {
@@ -439,12 +506,15 @@ function SeriesRow({
       <button
         type="button"
         onClick={onEmpty}
+        disabled={emptyDisabled}
         title={`Empty trash for ${group.directory}`}
         aria-label={`Empty trash for ${group.directory}`}
         className={cn(
-          'inline-flex h-[30px] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-line-soft bg-paper px-2.5',
+          'inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-md border border-line-soft bg-paper px-2.5',
           'font-medium text-[12.5px] text-muted transition-colors duration-[120ms]',
-          'hover:border-status-error hover:bg-status-error hover:text-status-error-fg',
+          emptyDisabled
+            ? 'cursor-not-allowed opacity-50'
+            : 'cursor-pointer hover:border-status-error hover:bg-status-error hover:text-status-error-fg',
         )}
       >
         <MaterialIcon name="delete_forever" size={15} />
@@ -462,11 +532,13 @@ function SeriesRow({
 function SeriesDetail({
   group,
   now,
+  emptyDisabled,
   onClose,
   onEmpty,
 }: {
   group: TrashSeriesEntry | undefined;
   now: number;
+  emptyDisabled: boolean;
   onClose: () => void;
   onEmpty: () => void;
 }) {
@@ -512,10 +584,13 @@ function SeriesDetail({
               <button
                 type="button"
                 onClick={onEmpty}
+                disabled={emptyDisabled}
                 className={cn(
-                  'ml-auto inline-flex h-[28px] cursor-pointer items-center gap-1.5 rounded-md border border-status-error/40 px-2.5',
+                  'ml-auto inline-flex h-[28px] items-center gap-1.5 rounded-md border border-status-error/40 px-2.5',
                   'font-medium text-[12px] text-status-error transition-colors',
-                  'hover:bg-status-error hover:text-status-error-fg',
+                  emptyDisabled
+                    ? 'cursor-not-allowed opacity-50'
+                    : 'cursor-pointer hover:bg-status-error hover:text-status-error-fg',
                 )}
               >
                 <MaterialIcon name="delete_forever" size={14} />
@@ -688,6 +763,42 @@ function EmptyConfirm({
         </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+/**
+ * In-flight strip shown while an empty mutation runs. Same shell as
+ * ResultBanner so the result replaces it in place. No dismiss and no
+ * drain bar — the operation cannot be cancelled and has no known
+ * duration (deleting a terabyte of trash takes the server a while).
+ */
+function EmptyingBanner({
+  entries,
+  bytes,
+  topGap,
+}: {
+  entries: number;
+  bytes: number;
+  topGap: boolean;
+}) {
+  return (
+    <div className={cn('mb-4 flex items-start gap-2.5', topGap && 'mt-5')}>
+      <div className="relative flex w-full items-start gap-2.5 overflow-hidden rounded-[10px] border border-line-soft bg-surface px-4 py-3 shadow-card">
+        <MaterialIcon
+          name="progress_activity"
+          size={16}
+          className="mt-px shrink-0 animate-spin text-muted"
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <p className="font-medium text-[13px] text-ink">
+            Emptying {entries} {entries === 1 ? 'entry' : 'entries'} ({formatTrashBytes(bytes)})…
+          </p>
+          <p className="text-[12px] text-muted">
+            Deleting files from disk — large trash can take a while.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

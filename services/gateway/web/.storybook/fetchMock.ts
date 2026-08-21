@@ -47,16 +47,24 @@ if (typeof window !== 'undefined') {
       // GET /api/library/v1/trash → the shared trash fixtures, so the
       // /trash stories render a realistic listing. A story can override
       // the payload (empty trash, a specific failure) by seeding
-      // `window.__kuraTrashList__` before it mounts.
+      // `window.__kuraTrashList__` before it mounts; the sentinel
+      // 'never' hangs the request forever to pin the loading skeleton.
       if (method === 'GET' && /\/api\/library\/v1\/trash$/.test(url)) {
+        if (w.__kuraTrashList__ === 'never') {
+          return new Promise<Response>(() => {});
+        }
         return jsonResponse(w.__kuraTrashList__ ?? trashListFixture());
       }
 
       // DELETE on either trash route → the outcome a story asked for
       // via `window.__kuraTrashEmpty__`, defaulting to a plausible
       // success so clicking through the confirm gate lands somewhere.
+      // 'never' hangs the mutation to pin the emptying-in-flight state.
       if (method === 'DELETE' && /\/api\/library\/v1\/(series\/.+\/)?trash(\?.*)?$/.test(url)) {
         const outcome = w.__kuraTrashEmpty__;
+        if (outcome === 'never') {
+          return new Promise<Response>(() => {});
+        }
         if (outcome?.status && outcome.status >= 400) {
           return jsonResponse(outcome.body, outcome.status);
         }

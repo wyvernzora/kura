@@ -21,8 +21,10 @@ function Harness({
   emptyResult,
   maxAgeHours = 0,
 }: {
-  list?: TrashList;
-  emptyResult?: TrashEmpty | { status: number; body: unknown };
+  /** `'never'` hangs the listing request — pins the loading skeleton. */
+  list?: TrashList | 'never';
+  /** `'never'` hangs the DELETE — pins the emptying-in-flight banner. */
+  emptyResult?: TrashEmpty | { status: number; body: unknown } | 'never';
   maxAgeHours?: number;
 }) {
   // Lazy init runs once, before the query hook's first fetch.
@@ -76,6 +78,29 @@ type Story = StoryObj<typeof TrashPage>;
 /** Default view — full listing, no age filter, size-descending. */
 export const FullListing: Story = {
   render: () => <Harness />,
+};
+
+/**
+ * Listing still loading — shimmer stubs for the stats and rows.
+ * Terabyte-scale trash takes the server a few seconds to walk, and a
+ * blank page would read as "no trash".
+ */
+export const Loading: Story = {
+  render: () => <Harness list="never" />,
+};
+
+/**
+ * Empty mutation in flight — the spinner banner holds the gap between
+ * the confirm closing and the result landing; every Empty affordance
+ * is disabled meanwhile.
+ */
+export const Emptying: Story = {
+  render: () => <Harness emptyResult="never" />,
+  play: async ({ canvasElement }) => {
+    await clickWhenReady(() => buttonByText(canvasElement, 'Empty trash'));
+    // The confirm dialog portals outside the canvas.
+    await clickWhenReady(() => buttonByText(document, 'Empty permanently'));
+  },
 };
 
 /** Nothing held at all. Stats render em dashes; pills are absent. */
