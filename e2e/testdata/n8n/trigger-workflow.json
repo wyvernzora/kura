@@ -59,7 +59,7 @@
         "parameters": {
           "resource": "release",
           "operation": "get",
-          "infohash": "={{ $json.items[0].infohash }}"
+          "infohash": "={{ $json.infohash }}"
         },
         "credentials": {
           "kuraApi": {

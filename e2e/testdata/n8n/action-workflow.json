@@ -43,7 +43,7 @@
         "parameters": {
           "resource": "queue",
           "operation": "submit",
-          "body": "={{ { output: { items: $json.items.map(item => ({ infohash: item.infohash, claimToken: item.claimToken, status: 'matched', ref: 'tvdb:12345', confidence: 1, reason: 'n8n product e2e' })) } } }}"
+          "body": "={{ { infohash: $json.infohash, claimToken: $json.claimToken, status: 'matched', ref: 'tvdb:12345', confidence: 1, reason: 'n8n product e2e' } }}"
         },
         "credentials": {
           "kuraApi": {
@@ -61,7 +61,7 @@
         "parameters": {
           "resource": "release",
           "operation": "get",
-          "infohash": "={{ $json.items[0].infohash }}"
+          "infohash": "={{ $json.infohash }}"
         },
         "credentials": {
           "kuraApi": {
