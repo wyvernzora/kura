@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TrashRouteImport } from './routes/trash'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SeriesRefRouteImport } from './routes/series.$ref'
 
+const TrashRoute = TrashRouteImport.update({
+  id: '/trash',
+  path: '/trash',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -32,35 +38,46 @@ const SeriesRefRoute = SeriesRefRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/trash': typeof TrashRoute
   '/series/$ref': typeof SeriesRefRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/trash': typeof TrashRoute
   '/series/$ref': typeof SeriesRefRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/trash': typeof TrashRoute
   '/series/$ref': typeof SeriesRefRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/settings' | '/series/$ref'
+  fullPaths: '/' | '/settings' | '/trash' | '/series/$ref'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/series/$ref'
-  id: '__root__' | '/' | '/settings' | '/series/$ref'
+  to: '/' | '/settings' | '/trash' | '/series/$ref'
+  id: '__root__' | '/' | '/settings' | '/trash' | '/series/$ref'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
+  TrashRoute: typeof TrashRoute
   SeriesRefRoute: typeof SeriesRefRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/trash': {
+      id: '/trash'
+      path: '/trash'
+      fullPath: '/trash'
+      preLoaderRoute: typeof TrashRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
+  TrashRoute: TrashRoute,
   SeriesRefRoute: SeriesRefRoute,
 }
 export const routeTree = rootRouteImport

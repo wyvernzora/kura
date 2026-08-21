@@ -1,3 +1,5 @@
+import { trashListFixture } from '../src/components/_trashFixtures';
+
 /**
  * Storybook-only fetch mock for the kura REST surface. Stories don't
  * have a real backend, so unmocked POSTs to `/api/library/v1/series/*\/scan`
@@ -41,6 +43,32 @@ if (typeof window !== 'undefined') {
     window.fetch = async (input, init) => {
       const url = urlOf(input);
       const method = (init?.method ?? 'GET').toUpperCase();
+
+      // GET /api/library/v1/trash → the shared trash fixtures, so the
+      // /trash stories render a realistic listing. A story can override
+      // the payload (empty trash, a specific failure) by seeding
+      // `window.__kuraTrashList__` before it mounts.
+      if (method === 'GET' && /\/api\/library\/v1\/trash$/.test(url)) {
+        return jsonResponse(w.__kuraTrashList__ ?? trashListFixture());
+      }
+
+      // DELETE on either trash route → the outcome a story asked for
+      // via `window.__kuraTrashEmpty__`, defaulting to a plausible
+      // success so clicking through the confirm gate lands somewhere.
+      if (method === 'DELETE' && /\/api\/library\/v1\/(series\/.+\/)?trash(\?.*)?$/.test(url)) {
+        const outcome = w.__kuraTrashEmpty__;
+        if (outcome?.status && outcome.status >= 400) {
+          return jsonResponse(outcome.body, outcome.status);
+        }
+        return jsonResponse(
+          outcome ?? {
+            series: [],
+            totalEntries: 12,
+            attempts: 12,
+            reclaimedBytes: 18_400_000_000,
+          },
+        );
+      }
 
       // PATCH /api/library/v1/series/{ref}/tags → echo the additive
       // expressions back as the stored tag set so the settings modal's

@@ -33,6 +33,11 @@ export const Open: Story = {
   render: () => <Harness initialPath="/" />,
 };
 
+/** Open over the trash route — the second nav item is active. */
+export const OpenOnTrash: Story = {
+  render: () => <Harness initialPath="/trash" />,
+};
+
 /** Open over the settings route — the bottom item is active instead. */
 export const OpenOnSettings: Story = {
   render: () => <Harness initialPath="/settings" />,

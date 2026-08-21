@@ -224,6 +224,32 @@ input[type="search"]::-webkit-search-decoration {
 }
 
 /*
+ * Drain bar along the bottom edge of a self-expiring result banner —
+ * the trash page's success / nothing-matched outcomes. Runs for the
+ * same 6 s the dismiss timer does, so the bar reaching zero and the
+ * banner leaving are one event rather than two that nearly agree.
+ * Under reduced motion it freezes full: the banner still self-expires,
+ * it just stops animating the countdown.
+ */
+.kura-toast-bar {
+  animation: kura-toast-drain 6000ms linear forwards;
+}
+@keyframes kura-toast-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kura-toast-bar {
+    animation: none;
+    transform: scaleX(1);
+  }
+}
+
+/*
  * Material Symbols Outlined — recipe from
  * https://fonts.google.com/icons (the documented one-liner).
  * 'liga' enables the ligature-driven glyph lookup so writing the
