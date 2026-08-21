@@ -45,7 +45,8 @@ Release statuses are deliberately small:
 - `unmatched`: not matched yet and claimable when not leased and under the failed-attempt cap.
 - `matched`: matched to a canonical ref the user cares about.
 - `suppressed`: not wanted, matched or not.
-- `exhausted`: too many failed attempts; no longer offered as work.
+- `exhausted`: too many failed attempts; no longer offered as work until an operator
+  hand matches it or requeues it.
 - `dead`: matched, but the torrent proved undownloadable. Terminal curation state set by
   the operator, never by the matcher; there is no transition back in v1.
 
@@ -56,11 +57,11 @@ or matcher attributes exist in this pass.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/releases/v1` | List matched releases, newest first; optionally narrowed to one ref. |
+| `GET` | `/api/releases/v1` | List releases, newest first; matched-only by default, optionally narrowed by ref, match status, or confidence ceiling. |
 | `POST` | `/api/releases/v1/ingest` | Accept a batch of crawler posts. |
 | `POST` | `/api/releases/v1/sources/{source}/crawl` | Consume one count-and-cursor source chunk and ingest it directly (operator backfill). |
 | `GET` | `/api/releases/v1/{infohash}/magnet` | Get the stored magnet URI for one release, only while it is `matched`. |
-| `PUT` | `/api/releases/v1/{infohash}/status` | Operator status change; `matched -> dead` is the only allowed transition. |
+| `PUT` | `/api/releases/v1/{infohash}/status` | Operator status change, fenced by the transition table below. |
 | `GET` | `/api/releases/v1/{infohash}` | Get one release detail, raw source evidence, and match history. |
 | `POST` | `/api/releases/v1/queue/claim` | Lease claimable unmatched releases. |
 | `GET` | `/api/releases/v1/queue/stats` | Return queue/status counts, including exhausted and dead. |
@@ -98,6 +99,24 @@ Crawler posts and ingest posts use the same shape:
 
 `ref` is required only for `matched`. `confidence` is meaningful for successful
 `matched` and `suppressed` submissions. `reason` is plain debugging text.
+
+`GET /api/releases/v1` returns matched releases when it is given no filters —
+the pipeline consumers read it that way and that default does not move. Two
+optional parameters widen it for the operator surface:
+
+- `status`: a comma-separated list of match statuses (`status=exhausted,suppressed`).
+  Any value outside the closed vocabulary is `400 invalid_request`.
+- `maxConfidence`: a float in `(0,1]` adding a strict `confidence < x`, which
+  excludes unscored matches — no score is not a low score. The ceiling is the
+  caller's policy; the indexer holds no threshold of its own.
+
+Both compose with `ref` and `limit` and keep the newest-first cursor paging.
+Neither may be combined with `since`: that is the delta path, which is
+matched-only by definition, so the combination is `400 invalid_request`. The
+opaque cursor binds the status set and the confidence ceiling exactly as it
+binds ref and path, so a cursor replayed under different filters is
+`invalid_cursor` rather than a page of some other result set. Every row carries
+`matchStatus`, since the list is no longer single-status.
 
 ## Source scheduling
 
@@ -137,16 +156,42 @@ unmatched result becomes `exhausted`. Expired unmatched rows at or above the cap
 marked exhausted before new claims are offered. Claim crashes do not increment
 `attempt_count`.
 
-`PUT /api/releases/v1/{infohash}/status` is the operator path out of a bad match and is
-fenced by an explicit transition table whose only row is `matched -> dead`. It carries no
-claim token because it touches no lease: every allowed target is terminal and leases exist
-only on unmatched rows. Setting the status a release already has is an idempotent no-op that
-appends no second `match_events` row. The endpoint accepts only `dead` as a target — any other
-status is rejected at the request boundary with `400 invalid_request`, so it never reaches the
-table — and a `dead` target from a source the table does not carry is `409 invalid_transition`.
-Together those keep the matcher's claim-fenced submit the only route to `matched`/`suppressed`. The
-transition preserves `ref`, `confidence`, and `first_matched_at` — the match history is why a
-dead release is not re-selected — and records the optional `reason` to `match_events`.
+`PUT /api/releases/v1/{infohash}/status` is the operator path out of a bad or stalled
+match and is fenced by an explicit transition table:
+
+| From | To | What it is |
+| --- | --- | --- |
+| `matched` | `dead` | The torrent proved undownloadable. Terminal. |
+| `matched` | `matched` | Affirm or correct an auto-match (requires `ref`). |
+| `suppressed` | `matched` | Hand match out of suppression (requires `ref`). |
+| `exhausted` | `matched` | Hand match after the matcher gave up (requires `ref`). |
+| `exhausted` | `unmatched` | Requeue: hand the release back to the matcher. |
+
+It carries no claim token because it touches no lease: no source state in the table
+carries one, since leases exist only on unmatched rows. The endpoint accepts only
+`dead`, `matched`, and `unmatched` as targets — any other status is rejected at the
+request boundary with `400 invalid_request`, so `suppressed` never reaches the table and
+the matcher's claim-fenced submit stays the only route to it. A target the table does not
+carry from the current status is `409 invalid_transition` naming both ends.
+
+`ref` is required for a transition into `matched` and rejected for every other target.
+A ref on a target that takes none is `400 invalid_request` regardless of the row's state,
+because it is a malformed body; the ref that `matched` requires is checked *after* the
+table, so a transition that was never on offer is reported as the conflict it is rather
+than as a complaint about the body. A supplied ref is shape-validated exactly as queue
+submit validates one — opaque, never resolved.
+
+Each target owns what it writes. A hand match records the operator's `ref` at confidence
+`1.0` (a person deciding by hand is certain by definition — this is not a matching
+threshold) and stamps `first_matched_at` if it was unset. A requeue clears `attempt_count`
+and the lease columns, which is what puts the release back in front of the claim queue;
+without that reset the next claim sweep would re-exhaust it without one new attempt.
+`dead` changes only the status, preserving `ref`, `confidence`, and `first_matched_at` —
+the match history is why a dead release is not re-selected. Every applied transition
+appends one `match_events` row with the target status, the ref and score it recorded, and
+the optional `reason`. A request asking for the state the row is already in is an
+idempotent no-op that appends no second row; for a hand match that means the same ref
+*at* operator confidence, so affirming a low-confidence auto-match still applies.
 
 `GET /api/releases/v1/{infohash}` returns the single-release full context view:
 representative release fields, `matchStatus`, nullable derived fields (`magnet`,

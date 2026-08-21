@@ -48,6 +48,7 @@ func cases() map[string]any {
 				PublishedAt: ts("2026-07-27T12:34:56.123456Z"),
 				Confidence:  ptr(0.98),
 				Sources:     []string{"dmhy"},
+				MatchStatus: api.MatchStatusMatched,
 			}},
 			NextCursor: ptr("b3BhcXVl"),
 		},
@@ -63,6 +64,21 @@ func cases() map[string]any {
 				PublishedAt: ts("2026-07-27T12:34:56.123456Z"),
 				Confidence:  nil,
 				Sources:     []string{},
+				MatchStatus: api.MatchStatusMatched,
+			}},
+		},
+		// The attention surface's row: a release the list now returns because
+		// it asked for a non-matched status, carrying no ref and no score.
+		"release_list_exhausted": api.ReleaseList{
+			Items: []api.ReleaseItem{{
+				Infohash:    "fedcba9876543210fedcba9876543210fedcba98",
+				Ref:         "",
+				Title:       "[Group] Unknown - 01",
+				SizeBytes:   ptr(int64(1503238553)),
+				PublishedAt: ts("2026-07-27T12:34:56.123456Z"),
+				Confidence:  nil,
+				Sources:     []string{"nyaa"},
+				MatchStatus: api.MatchStatusExhausted,
 			}},
 		},
 		"release_detail": api.ReleaseDetail{
@@ -217,6 +233,13 @@ func cases() map[string]any {
 		"set_status_request": api.SetStatusRequest{
 			Status: api.MatchStatusDead,
 			Reason: "stalled at 0% for 14 days",
+		},
+		// The hand-match body: `ref` is present only for a transition into
+		// matched, and omitted everywhere else.
+		"set_status_request_match": api.SetStatusRequest{
+			Status: api.MatchStatusMatched,
+			Ref:    "tvdb:370070",
+			Reason: "matched by hand from the release attention list",
 		},
 		"error_not_matched": api.Error{
 			Kind: api.KindNotMatched, Message: "release is dead, not matched",

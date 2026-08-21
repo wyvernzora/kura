@@ -25,6 +25,7 @@ type fakeStore struct {
 	infohashes      []string
 	releaseInfohash string
 	releaseQuery    store.ReleaseQuery
+	releasePage     store.ReleasePage
 	setStatus       store.SetStatusParams
 	setStatusErr    error
 	noMagnets       bool
@@ -64,7 +65,7 @@ func (f *fakeStore) CatalogStats(context.Context) (store.CatalogStats, error) {
 }
 func (f *fakeStore) ListReleases(_ context.Context, q store.ReleaseQuery) (store.ReleasePage, error) {
 	f.releaseQuery = q
-	return store.ReleasePage{}, nil
+	return f.releasePage, nil
 }
 func (f *fakeStore) GetRelease(_ context.Context, infohash string) (store.ReleaseDetail, error) {
 	f.releaseInfohash = infohash
@@ -242,12 +243,12 @@ func TestSetStatusRejectsStatusOutsideTheVocabulary(t *testing.T) {
 	st := &fakeStore{}
 	req := httptest.NewRequest(http.MethodPut,
 		"/api/releases/v1/0123456789abcdef0123456789abcdef01234567/status",
-		strings.NewReader(`{"status":"matched"}`))
+		strings.NewReader(`{"status":"suppressed"}`))
 	rec := httptest.NewRecorder()
 
 	New(st).ServeHTTP(rec, req)
 
-	// matched is a real match_status but not one this endpoint offers:
+	// suppressed is a real match_status but not one this endpoint offers:
 	// submit owns it, and letting it through here would bypass the
 	// claim fence.
 	if rec.Code != http.StatusBadRequest {
@@ -280,6 +281,70 @@ func TestSetStatusReportsInvalidTransitionAsConflict(t *testing.T) {
 	// The message names both ends so an operator can see what was refused.
 	if !strings.Contains(body.Message, "unmatched -> dead") {
 		t.Fatalf("message = %q, want it to name the attempted transition", body.Message)
+	}
+}
+
+// The hand-match body carries the ref the operator picked; the endpoint passes
+// it down untouched alongside the normalized infohash.
+func TestSetStatusForwardsTheHandMatchRef(t *testing.T) {
+	st := &fakeStore{}
+	req := httptest.NewRequest(http.MethodPut,
+		"/api/releases/v1/0123456789abcdef0123456789abcdef01234567/status",
+		strings.NewReader(`{"status":"matched","ref":"tvdb:370070","reason":"hand matched"}`))
+	rec := httptest.NewRecorder()
+
+	New(st).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; response %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if st.setStatus.Status != "matched" || st.setStatus.Ref != "tvdb:370070" {
+		t.Fatalf("params = %+v, want matched with the ref preserved", st.setStatus)
+	}
+}
+
+// Requeue is the other operator row: exhausted back to unmatched, no ref.
+func TestSetStatusForwardsRequeue(t *testing.T) {
+	st := &fakeStore{}
+	req := httptest.NewRequest(http.MethodPut,
+		"/api/releases/v1/0123456789abcdef0123456789abcdef01234567/status",
+		strings.NewReader(`{"status":"unmatched","reason":"new source posting"}`))
+	rec := httptest.NewRecorder()
+
+	New(st).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; response %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if st.setStatus.Status != "unmatched" || st.setStatus.Ref != "" {
+		t.Fatalf("params = %+v, want unmatched with no ref", st.setStatus)
+	}
+}
+
+// A ref rule broken is a bad request, not a conflict: the transition was on
+// offer, the body was wrong.
+func TestSetStatusReportsRefRuleViolationsAsBadRequest(t *testing.T) {
+	for _, sentinel := range []error{store.ErrRefRequired, store.ErrRefForbidden} {
+		t.Run(sentinel.Error(), func(t *testing.T) {
+			st := &fakeStore{setStatusErr: fmt.Errorf("set_status abc: %w", sentinel)}
+			req := httptest.NewRequest(http.MethodPut,
+				"/api/releases/v1/0123456789abcdef0123456789abcdef01234567/status",
+				strings.NewReader(`{"status":"matched","ref":"tvdb:1"}`))
+			rec := httptest.NewRecorder()
+
+			New(st).ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want %d; response %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+			}
+			var body api.Error
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if body.Kind != api.KindInvalidRequest {
+				t.Fatalf("kind = %q, want %q", body.Kind, api.KindInvalidRequest)
+			}
+		})
 	}
 }
 

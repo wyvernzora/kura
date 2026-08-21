@@ -4,18 +4,23 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wyvernzora/kura/services/release-indexer/internal/dispatch"
 )
 
-// handleListReleases serves GET /api/releases/v1: matched releases, newest
-// first, optionally narrowed to one ref. The store owns the limit default and
-// cap, so an omitted limit is passed through as zero rather than guessed at
-// here.
+// handleListReleases serves GET /api/releases/v1: releases newest first,
+// optionally narrowed to one ref. The store owns the limit default and cap, so
+// an omitted limit is passed through as zero rather than guessed at here.
 //
 // `since` switches the query to the delta path (page by first-matched time)
 // rather than the catalog path; that choice lives in the store too.
+//
+// `status` and `maxConfidence` are the operator surface's filters: an omitted
+// `status` keeps the matched-only default the pipeline consumers depend on, and
+// the confidence ceiling is the caller's policy — the indexer has no threshold
+// of its own. Both are shape-parsed here and meaning-checked in dispatch.
 func (h *Handler) handleListReleases(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.log(r, slog.LevelDebug, "list releases rejected", "reason", "method_not_allowed", "method", r.Method)
@@ -45,6 +50,18 @@ func (h *Handler) handleListReleases(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Since = &since
+	}
+	if raw := q.Get("status"); raw != "" {
+		req.Statuses = strings.Split(raw, ",")
+	}
+	if raw := q.Get("maxConfidence"); raw != "" {
+		maxConfidence, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			h.log(r, slog.LevelDebug, "list releases rejected", "reason", "invalid_max_confidence", "maxConfidence", raw)
+			writeInvalidRequest(w, "maxConfidence must be a number in (0,1]", nil)
+			return
+		}
+		req.MaxConfidence = &maxConfidence
 	}
 
 	out, err := h.dispatch.ListReleasesTyped(r.Context(), req)

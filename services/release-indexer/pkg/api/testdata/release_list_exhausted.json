@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "infohash": "fedcba9876543210fedcba9876543210fedcba98",
+      "ref": "",
+      "title": "[Group] Unknown - 01",
+      "sizeBytes": 1503238553,
+      "publishedAt": "2026-07-27T12:34:56.123456Z",
+      "confidence": null,
+      "sources": [
+        "nyaa"
+      ],
+      "matchStatus": "exhausted"
+    }
+  ]
+}

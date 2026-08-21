@@ -49,6 +49,7 @@ func (h *Handler) handleSetStatus(w http.ResponseWriter, r *http.Request) {
 		h.log(r, dispatchLogLevel(err), "set status failed",
 			"infohash", ih,
 			"status", req.Status,
+			"ref", req.Ref,
 			"reason_len", len(req.Reason),
 			"code", dispatch.ErrorKind(err),
 			"err", err,
