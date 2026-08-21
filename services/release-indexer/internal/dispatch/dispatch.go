@@ -130,12 +130,14 @@ func (d *Dispatcher) SetStatus(ctx context.Context, input []byte) ([]byte, error
 // SetStatusTyped applies an operator status change. The transition table in
 // the store is the validation — including the per-target ref rules, which are
 // checked after it so a transition that was never on offer is reported as such.
-// This layer only rejects targets outside the endpoint's vocabulary, so a label
-// the operator surface never sets (`suppressed`, which submit owns) is refused
-// at the boundary rather than by the table.
+// This layer only rejects labels outside the closed MatchStatus vocabulary, so
+// garbage never reaches SQL as a cast error. Suppression out of unmatched
+// remains submit-only, but that fence is the table's (no unmatched row), not
+// this boundary's.
 func (d *Dispatcher) SetStatusTyped(ctx context.Context, infohash string, req api.SetStatusRequest) error {
 	switch req.Status {
-	case api.MatchStatusDead, api.MatchStatusMatched, api.MatchStatusUnmatched:
+	case api.MatchStatusDead, api.MatchStatusMatched, api.MatchStatusUnmatched,
+		api.MatchStatusSuppressed:
 	default:
 		return fmt.Errorf("%w: invalid status %q", ErrInvalidInput, req.Status)
 	}

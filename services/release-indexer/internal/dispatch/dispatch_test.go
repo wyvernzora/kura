@@ -125,10 +125,11 @@ func TestListReleasesAcceptsTheFiltersItServes(t *testing.T) {
 	}
 }
 
-// The endpoint's vocabulary is narrower than MatchStatus: suppressed is the
-// matcher's to set through the claim-fenced submit path.
+// Labels outside the closed MatchStatus vocabulary are refused before the
+// store, so garbage never reaches SQL as a cast error. (Which *transitions*
+// are on offer per source state is the store table's job, not this boundary's.)
 func TestSetStatusRejectsTargetsTheEndpointDoesNotOffer(t *testing.T) {
-	for _, status := range []api.MatchStatus{"suppressed", "", "defer", "DEAD"} {
+	for _, status := range []api.MatchStatus{"", "defer", "DEAD"} {
 		t.Run(string(status), func(t *testing.T) {
 			st := &recordingStore{}
 			err := New(st).SetStatusTyped(context.Background(), "abc",
