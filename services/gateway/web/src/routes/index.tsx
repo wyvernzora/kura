@@ -12,6 +12,7 @@ import { MaterialIcon } from '@/components/ui/material-icon';
 import { Poster } from '@/components/ui/poster';
 import { ValueFilterDropdown } from '@/components/ValueFilterDropdown';
 import { VirtualPosterGrid } from '@/components/VirtualPosterGrid';
+import { isAnimeCandidate } from '@/lib/isAnimeCandidate';
 import {
   countMultiValuedField,
   filterByMultiValuedField,
@@ -24,6 +25,7 @@ import { applyDensityPreference, type Density, useAutoDensity } from '@/lib/useA
 import { useDensityPreference } from '@/state/density';
 import { useLibraryFilters } from '@/state/library';
 import { MIN_TVDB_QUERY_LENGTH, useSearch } from '@/state/search';
+import { useSearchPrefs } from '@/state/searchPrefs';
 
 export const Route = createFileRoute('/')({
   component: LibraryHome,
@@ -94,9 +96,13 @@ function LibraryHome() {
 
   // Same query key as TopBar's prefetch — one request, shared cache.
   const resolve = useResolveSearch(tvdbEligible ? trimmed : '');
+  const animeOnly = useSearchPrefs((s) => s.animeOnly);
   const candidates = useMemo(
-    () => (resolve.data?.candidates ?? []).filter((c) => !libraryRefs.has(c.ref)),
-    [resolve.data, libraryRefs],
+    () =>
+      (resolve.data?.candidates ?? []).filter(
+        (c) => !libraryRefs.has(c.ref) && (!animeOnly || isAnimeCandidate(c)),
+      ),
+    [resolve.data, libraryRefs, animeOnly],
   );
   // Resolved-and-empty is a distinct state from unresolved: it hides
   // the hint row and swaps the no-matches CTA for a plain sentence.
