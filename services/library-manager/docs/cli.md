@@ -106,7 +106,7 @@ filters.
 
 | Verb | Purpose |
 |------|---------|
-| `kura trash list <selector> \| --all [--older-than DURATION]` | Enumerate trashed entries for one series or library-wide. |
+| `kura trash list <selector> \| --all [--older-than DURATION]` | Enumerate trashed entries for one series, or for every indexed series with `--all`. |
 | `kura trash empty <selector> \| --all --confirm [--older-than DURATION]` | Permanently delete trashed files. `--all` requires `--confirm`. |
 | `kura trash restore <selector> <ULID>` | Move a trashed entry's files back to their recorded paths. Run `scan` afterward to re-adopt. |
 

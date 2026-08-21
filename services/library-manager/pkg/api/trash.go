@@ -8,18 +8,25 @@ import (
 
 // TrashList is workflow.TrashList's response. Series are sorted by
 // SeriesRef; entries within each series are sorted by ULID
-// (chronological order since ULIDs are time-ordered).
+// (chronological order since ULIDs are time-ordered). Library-wide
+// listings cover indexed series only — trash under a directory the
+// index has never seen is not kura's to report.
 type TrashList struct {
 	Series       []TrashSeriesEntry `json:"series"`
 	TotalEntries int                `json:"totalEntries"`
 	TotalBytes   int64              `json:"totalBytes"`
 }
 
-// TrashSeriesEntry rolls up trash for one series.
+// TrashSeriesEntry rolls up trash for one series. Ref is the series'
+// metadata ref, carried so clients can address the per-series routes
+// (every /series/{ref} endpoint) without a second lookup — Directory
+// alone identifies nothing they can call. Every listed series comes
+// from the index, so Ref is always populated.
 type TrashSeriesEntry struct {
-	Directory refs.Series  `json:"directory"`
-	Entries   []TrashEntry `json:"entries"`
-	Bytes     int64        `json:"bytes"`
+	Directory refs.Series   `json:"directory"`
+	Ref       refs.Metadata `json:"ref"`
+	Entries   []TrashEntry  `json:"entries"`
+	Bytes     int64         `json:"bytes"`
 }
 
 // TrashEntry mirrors trashfile.Meta in surface-friendly shape.
