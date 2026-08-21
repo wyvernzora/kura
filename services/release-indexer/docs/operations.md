@@ -59,6 +59,21 @@ automatically before the HTTP listener binds. A migration failure aborts startup
 a database already at head is a no-op. The database URL remains in
 `KURA_RELEASES_DATABASE_URL`, not TOML.
 
+The `pg_trgm` extension is a prerequisite: the claim path ranks precedents with
+trigram similarity, and migration `00004` builds a GiST trigram index. In the k2
+deployment the kura `DatabaseClaim` installs it declaratively into the service
+schema (`extensions: [{name: pg_trgm, schema: releases}]`), which makes the
+migration's `CREATE EXTENSION IF NOT EXISTS` a no-op there; the statement is what
+covers superuser environments that have no such declaration, such as the
+conformance testcontainers.
+
+The extension must live in a schema the service can see. The connection's
+`search_path` is exactly `database.schema`, so an extension installed into `public`
+while the service runs against another schema is invisible: migration `00004` then
+fails at startup with `operator class "gist_trgm_ops" does not exist for access
+method "gist"`. Install it into `database.schema` (or leave the schema at the one the
+declarative install targets) rather than relying on `public` being reachable.
+
 `database.schema` defaults to `releases`; values must match
 `[a-z_][a-z0-9_]{0,62}`. The service creates the schema when it is missing and
 explicitly sets it as `search_path` for both the Goose migration connection and the

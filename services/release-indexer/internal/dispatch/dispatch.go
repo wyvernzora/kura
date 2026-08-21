@@ -75,12 +75,25 @@ func (d *Dispatcher) ClaimTyped(ctx context.Context, req api.ClaimRequest) (api.
 				PublishedAt: ri.PublishedAt,
 			})
 		}
+		precedents := make([]api.ClaimPrecedent, 0, len(it.Precedents))
+		for _, p := range it.Precedents {
+			precedents = append(precedents, api.ClaimPrecedent{
+				Infohash:    p.Infohash,
+				Title:       p.Title,
+				MatchStatus: api.MatchStatus(p.MatchStatus),
+				Ref:         p.Ref,
+				Reason:      p.Reason,
+				Similarity:  p.Similarity,
+				PublishedAt: p.PublishedAt,
+			})
+		}
 		out.Items = append(out.Items, api.ClaimItem{
 			Infohash:       it.Infohash,
 			ClaimToken:     it.ClaimToken,
 			AttemptCount:   it.AttemptCount,
 			LeaseExpiresAt: it.LeaseExpires,
 			RawItems:       raw,
+			Precedents:     precedents,
 		})
 	}
 	return out, nil
