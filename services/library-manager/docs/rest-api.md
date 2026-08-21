@@ -66,10 +66,10 @@ SeriesRef in the request body as `directory`.
 | POST   | `/api/library/v1/series/{ref}/reconcile/recover` | — | — | — |
 | POST   | `/api/library/v1/series/resolve` | `{terms[]}` | Resolve candidates | — |
 | GET    | `/api/library/v1/series/{ref}/trash` | — | Trash listing | ETag |
-| GET    | `/api/library/v1/trash` | — | Library-wide trash | ETag |
+| GET    | `/api/library/v1/trash` | — | Trash across every indexed series | ETag |
 | POST   | `/api/library/v1/series/{ref}/trash/{ulid}/restore` | — | Trash restore result | — |
 | DELETE | `/api/library/v1/series/{ref}/trash` | — | Trash empty result | — |
-| DELETE | `/api/library/v1/trash` | — | Library-wide empty result | — |
+| DELETE | `/api/library/v1/trash` | — | Empty result across every indexed series | — |
 | POST   | `/api/library/v1/reindex` | — | `202 Job` | async |
 | POST   | `/api/library/v1/scan` | `{refresh?, metadataOnly?, ordering?}` | `202 Job` | async |
 | GET    | `/api/library/v1/inbox` | — | Inbox listing | ETag |
