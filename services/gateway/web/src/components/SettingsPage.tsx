@@ -46,8 +46,12 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-[720px] px-6 py-8">
-      <h1 className="font-semibold text-[22px] text-ink tracking-[-0.3px]">Settings</h1>
-      <div className="mt-5 flex flex-col gap-4">
+      {/* Below md the SettingsMobileBar already titles the page;
+          rendering the h1 too would say "Settings" twice in a row. */}
+      <h1 className="hidden font-semibold text-[22px] text-ink tracking-[-0.3px] md:block">
+        Settings
+      </h1>
+      <div className="mt-5 flex flex-col gap-4 max-md:mt-0">
         <SettingsCard label="Appearance">
           <SettingRow label="Theme">
             <Segmented
@@ -201,6 +205,7 @@ function LibraryMaintenance() {
           done={done}
           current={job.progress?.current ?? 0}
           total={job.progress?.total ?? 0}
+          message={job.progress?.message ?? ''}
         />
       ) : (
         <>
@@ -226,11 +231,23 @@ interface JobProgressProps {
   done: boolean;
   current: number;
   total: number;
+  message: string;
 }
 
-function JobProgress({ kind, done, current, total }: JobProgressProps) {
+/**
+ * Meta row ports the gear menu's information layout: the series
+ * currently being processed on the left, the done/total counter on
+ * the right. Scan progress carries bare series names; reindex
+ * messages arrive as "Indexing <ref>" — the verb is dropped since the
+ * title line above already says what is running. Names truncate with
+ * a trailing ellipsis: the leading words are the recognizable part of
+ * a series title. The done beat drops the row — the hook discards
+ * progress at terminal, and made-up numbers are worse than none.
+ */
+function JobProgress({ kind, done, current, total, message }: JobProgressProps) {
+  const series = message.replace(/^Indexing\s+/, '');
   // The server reports totals only once it has walked the tree; until
-  // then there is no percentage to show, so the bar sweeps instead.
+  // then there is no ratio to draw, so the bar sweeps instead.
   const indeterminate = !done && total <= 0;
   const percent = total > 0 ? Math.round(Math.min(1, current / total) * 100) : 0;
 
@@ -255,10 +272,13 @@ function JobProgress({ kind, done, current, total }: JobProgressProps) {
         />
       </div>
       {!done && (
-        <div className="font-mono text-[11px] text-muted tabular-nums">
-          {indeterminate
-            ? `${current.toLocaleString()} files`
-            : `${current.toLocaleString()} / ${total.toLocaleString()} files · ${percent}%`}
+        <div className="flex items-baseline justify-between gap-2.5 font-mono text-[11px] text-muted">
+          <span className="min-w-0 flex-1 truncate">{series || '…'}</span>
+          <span className="shrink-0 font-semibold text-ink tabular-nums">
+            {indeterminate
+              ? current.toLocaleString()
+              : `${current.toLocaleString()} / ${total.toLocaleString()}`}
+          </span>
         </div>
       )}
     </div>

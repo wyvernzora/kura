@@ -132,23 +132,7 @@ export function TopBar({ className, onMenu, forceScrolled }: TopBarProps) {
   }
 
   return (
-    <header
-      className={cn(
-        'sticky top-0 z-50',
-        'transition-[box-shadow,background-color] duration-normal ease-out-soft',
-        scrolled
-          ? cn(
-              // backdrop-blur radius reduced from md (12 px) to sm
-              // (4 px) — the 12 px filter is GPU-expensive on weak
-              // iGPUs and runs every scroll frame. The smaller radius
-              // gives ~3× the throughput with similar visual.
-              'bg-topbar-scrolled backdrop-blur-sm backdrop-saturate-[1.8]',
-              'shadow-[0_1px_0_rgba(31,29,26,0.05),0_8px_16px_-10px_rgba(31,29,26,0.12)]',
-            )
-          : 'bg-paper',
-        className,
-      )}
-    >
+    <header className={cn(barChrome(scrolled), className)}>
       {/*
         Inner content caps at 1920 px and centers; the header
         background still spans the viewport so the scroll-shadow
@@ -192,13 +176,39 @@ export function TopBar({ className, onMenu, forceScrolled }: TopBarProps) {
 }
 
 /**
+ * Sticky-bar shell shared by the top bar and the Settings mobile bar.
+ * At rest the bar is invisible chrome (paper bg); once the page
+ * scrolls it floats: paper-tinted translucent bg, backdrop blur +
+ * saturation, soft drop shadow underneath.
+ */
+function barChrome(scrolled: boolean): string {
+  return cn(
+    'sticky top-0 z-50',
+    'transition-[box-shadow,background-color] duration-normal ease-out-soft',
+    scrolled
+      ? cn(
+          // backdrop-blur radius reduced from md (12 px) to sm
+          // (4 px) — the 12 px filter is GPU-expensive on weak
+          // iGPUs and runs every scroll frame. The smaller radius
+          // gives ~3× the throughput with similar visual.
+          'bg-topbar-scrolled backdrop-blur-sm backdrop-saturate-[1.8]',
+          'shadow-[0_1px_0_rgba(31,29,26,0.05),0_8px_16px_-10px_rgba(31,29,26,0.12)]',
+        )
+      : 'bg-paper',
+  );
+}
+
+/**
  * Slim Settings chrome for mobile. Settings has no search field, so
  * on desktop AppShell renders no bar at all; below `md` the hamburger
- * still has to live somewhere or the drawer becomes unreachable.
+ * still has to live somewhere or the drawer becomes unreachable. The
+ * bar's "Settings" title doubles as the page heading on mobile —
+ * SettingsPage hides its h1 below `md` so the word appears once.
  */
 export function SettingsMobileBar({ onMenu }: { onMenu: () => void }) {
+  const scrolled = useScrolled();
   return (
-    <header className="sticky top-0 z-50 bg-paper md:hidden">
+    <header className={cn(barChrome(scrolled), 'md:hidden')}>
       <div className="flex h-[72px] items-center gap-3 px-[18px]">
         <HamburgerButton onClick={onMenu} />
         <span className="font-semibold text-[15px] text-ink tracking-[-0.2px]">Settings</span>
