@@ -10,9 +10,9 @@ import type { ReactNode } from 'react';
 /**
  * Decorator helper for stories that render TanStack Router primitives
  * (`<Link>`, `useNavigate`, `useRouterState`, etc.). Spins up a tiny
- * memory router with stub `/` and `/series/$ref` routes that just
- * render the story content. The production routeTree is intentionally
- * not wired here — story isolation is the point.
+ * memory router with stub `/`, `/series/$ref`, and `/settings` routes
+ * that just render the story content. The production routeTree is
+ * intentionally not wired here — story isolation is the point.
  *
  * Pass `initialPath` (default `/`) to seed the memory history at a
  * specific route so route-aware components render their detail-mode
@@ -42,8 +42,13 @@ export function StoryRouter({
     path: '/series/$ref',
     component: () => <>{children}</>,
   });
+  const settingsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/settings',
+    component: () => <>{children}</>,
+  });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([indexRoute, seriesRoute]),
+    routeTree: rootRoute.addChildren([indexRoute, seriesRoute, settingsRoute]),
     history: createMemoryHistory({ initialEntries: [initialPath] }),
   });
   return <RouterProvider router={router} />;

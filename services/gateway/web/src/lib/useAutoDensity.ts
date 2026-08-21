@@ -69,6 +69,36 @@ export function pickDensity(width: number): Density {
 }
 
 /**
+ * User-chosen grid density (Settings → Appearance). `comfortable` is
+ * the viewport's own pick; `compact` asks for smaller posters.
+ */
+export type DensityPreference = 'comfortable' | 'compact';
+
+/** One notch down the bucket ladder. `xs` is already the floor. */
+const COMPACT_BREAKPOINT: Record<DensityBreakpoint, DensityBreakpoint> = {
+  xs: 'xs',
+  sm: 'xs',
+  md: 'sm',
+  lg: 'md',
+};
+
+/**
+ * Pure function — folds the user's density preference into the
+ * viewport-derived bucket. `compact` reuses the next-smaller bucket
+ * wholesale (poster width, gaps, and the `dense` label treatment)
+ * rather than inventing a parallel set of numbers, so the two
+ * preferences stay visually consistent with each other at every
+ * viewport. Exported for unit testing.
+ */
+export function applyDensityPreference(density: Density, preference: DensityPreference): Density {
+  if (preference === 'comfortable') {
+    return density;
+  }
+  const target = COMPACT_BREAKPOINT[density.breakpoint];
+  return BUCKETS.find((b) => b.density.breakpoint === target)?.density ?? density;
+}
+
+/**
  * Subscribes to window resize and returns the current density bucket.
  * Falls back to the `md` bucket during SSR / before hydration so the
  * first frame doesn't pop layout once the real width arrives.
