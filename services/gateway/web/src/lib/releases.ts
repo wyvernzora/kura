@@ -97,19 +97,21 @@ export function isLowConfidence(
   return status === 'matched' && confidence != null && confidence < LOW_CONFIDENCE;
 }
 
-export type ReleaseActionId = 'match' | 'affirm' | 'requeue';
+export type ReleaseActionId = 'match' | 'affirm' | 'requeue' | 'suppress';
 
 export interface ReleaseAction {
   id: ReleaseActionId;
   icon: string;
   label: string;
   primary?: boolean;
+  /** Discard rather than resolve: rendered right-aligned in error tones. */
+  discard?: boolean;
 }
 
 /**
  * What the operator may do to a release in this state.
  *
- *   exhausted        Hand match (primary) · Requeue
+ *   exhausted        Hand match (primary) · Requeue · Suppress (discard)
  *   suppressed       Hand match (primary)
  *   matched, low     Affirm match (primary) · Correct match
  *   matched          Correct match
@@ -127,6 +129,7 @@ export function releaseActions(
     return [
       { id: 'match', icon: 'link', label: 'Hand match', primary: true },
       { id: 'requeue', icon: 'restart_alt', label: 'Requeue' },
+      { id: 'suppress', icon: 'block', label: 'Suppress', discard: true },
     ];
   }
   if (status === 'suppressed') {

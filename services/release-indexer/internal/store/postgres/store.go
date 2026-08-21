@@ -411,12 +411,14 @@ func (s *Store) Submit(ctx context.Context, p store.SubmitParams) error { //noli
 //
 // The operator rows are what the release-attention surface acts through: a hand
 // match out of suppressed or exhausted, an affirm/correct of an existing
-// low-confidence match, and a requeue of an exhausted release back into the
-// claim queue.
+// low-confidence match, a requeue of an exhausted release back into the claim
+// queue, and a discard of an exhausted release into suppressed. Suppression
+// out of unmatched stays submit-only — an operator discards what the matcher
+// already gave up on, not what is still in the queue.
 var statusTransitions = map[string]map[string]bool{
 	"matched":    {"dead": true, "matched": true},
 	"suppressed": {"matched": true},
-	"exhausted":  {"matched": true, "unmatched": true},
+	"exhausted":  {"matched": true, "unmatched": true, "suppressed": true},
 }
 
 // operatorConfidence is the score an operator's own match records. A person
@@ -533,10 +535,10 @@ func (s *Store) applySetStatus(ctx context.Context, tx pgx.Tx, p store.SetStatus
 			WHERE infohash = $1
 		`, p.Infohash, now)
 	default:
-		// dead. ref, confidence and first_matched_at are deliberately
-		// preserved: the match history is why a dead release is not
-		// re-selected, and erasing it would make the row indistinguishable
-		// from one that never matched.
+		// dead or suppressed. ref, confidence, first_matched_at and
+		// attempt_count are deliberately preserved: the match history is why
+		// a dead release is not re-selected, and a suppressed release keeps
+		// the accounting that led the operator to discard it.
 		_, err = tx.Exec(ctx, `
 			UPDATE releases SET
 				match_status = $2,

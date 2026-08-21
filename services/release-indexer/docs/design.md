@@ -166,13 +166,15 @@ match and is fenced by an explicit transition table:
 | `suppressed` | `matched` | Hand match out of suppression (requires `ref`). |
 | `exhausted` | `matched` | Hand match after the matcher gave up (requires `ref`). |
 | `exhausted` | `unmatched` | Requeue: hand the release back to the matcher. |
+| `exhausted` | `suppressed` | Discard: the operator decides against the release. |
 
 It carries no claim token because it touches no lease: no source state in the table
-carries one, since leases exist only on unmatched rows. The endpoint accepts only
-`dead`, `matched`, and `unmatched` as targets — any other status is rejected at the
-request boundary with `400 invalid_request`, so `suppressed` never reaches the table and
-the matcher's claim-fenced submit stays the only route to it. A target the table does not
-carry from the current status is `409 invalid_transition` naming both ends.
+carries one, since leases exist only on unmatched rows. The endpoint accepts every
+label in the closed `MatchStatus` vocabulary as a target — anything else is rejected at
+the request boundary with `400 invalid_request` so garbage never reaches SQL. Which
+transitions are on offer is entirely the table's: `unmatched → suppressed` has no row,
+so the matcher's claim-fenced submit stays the only route out of the queue. A target the
+table does not carry from the current status is `409 invalid_transition` naming both ends.
 
 `ref` is required for a transition into `matched` and rejected for every other target.
 A ref on a target that takes none is `400 invalid_request` regardless of the row's state,

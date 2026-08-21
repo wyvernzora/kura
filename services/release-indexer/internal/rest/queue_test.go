@@ -243,14 +243,14 @@ func TestSetStatusRejectsStatusOutsideTheVocabulary(t *testing.T) {
 	st := &fakeStore{}
 	req := httptest.NewRequest(http.MethodPut,
 		"/api/releases/v1/0123456789abcdef0123456789abcdef01234567/status",
-		strings.NewReader(`{"status":"suppressed"}`))
+		strings.NewReader(`{"status":"defer"}`))
 	rec := httptest.NewRecorder()
 
 	New(st).ServeHTTP(rec, req)
 
-	// suppressed is a real match_status but not one this endpoint offers:
-	// submit owns it, and letting it through here would bypass the
-	// claim fence.
+	// A label outside the closed MatchStatus vocabulary is refused at the
+	// boundary; which transitions each real status offers is the store
+	// table's decision.
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d; response %s", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}

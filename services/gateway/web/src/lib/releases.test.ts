@@ -71,9 +71,12 @@ describe('releaseActions', () => {
   const ids = (status: Parameters<typeof releaseActions>[0], confidence: number | null) =>
     releaseActions(status, confidence).map((action) => action.id);
 
-  it('offers hand match and requeue for exhausted, hand match first', () => {
-    expect(ids('exhausted', 0.62)).toEqual(['match', 'requeue']);
+  it('offers hand match, requeue, and suppress for exhausted', () => {
+    expect(ids('exhausted', 0.62)).toEqual(['match', 'requeue', 'suppress']);
     expect(releaseActions('exhausted', 0.62)[0]?.primary).toBe(true);
+    // Suppress is the discard: rendered apart from and unlike the
+    // constructive actions.
+    expect(releaseActions('exhausted', 0.62)[2]?.discard).toBe(true);
   });
 
   it('offers only hand match for suppressed — there is no unsuppress', () => {

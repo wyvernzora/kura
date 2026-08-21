@@ -162,7 +162,8 @@ export function ReleasesPage() {
     }
     const { action, release } = pending;
     setPending(null);
-    const target: MatchStatus = action === 'requeue' ? 'unmatched' : 'matched';
+    const target: MatchStatus =
+      action === 'requeue' ? 'unmatched' : action === 'suppress' ? 'suppressed' : 'matched';
     const ref = action === 'affirm' ? (release.ref ?? undefined) : input.ref;
     try {
       await setStatus.mutateAsync({
@@ -180,7 +181,9 @@ export function ReleasesPage() {
             ? `Matched to ${ref}`
             : action === 'affirm'
               ? 'Match affirmed at 100% confidence'
-              : 'Requeued — back in the claim queue',
+              : action === 'suppress'
+                ? 'Suppressed — out of the attention queue'
+                : 'Requeued — back in the claim queue',
         detail:
           action === 'affirm'
             ? `${release.ref} · recorded to match_events`
@@ -696,7 +699,9 @@ function ReleaseDetailView({
                   'transition-[transform,box-shadow,background-color,color] duration-[160ms] ease-out hover:-translate-y-px hover:shadow-card-hover',
                   action.primary
                     ? 'bg-ink text-paper'
-                    : 'border border-line-soft bg-surface text-ink',
+                    : action.discard
+                      ? 'ml-auto border border-status-error/40 bg-surface text-status-error hover:bg-status-error hover:text-status-error-fg'
+                      : 'border border-line-soft bg-surface text-ink',
                 )}
               >
                 <MaterialIcon name={action.icon} size={16} />
@@ -1155,13 +1160,17 @@ interface ResolvedSeries {
   episodes: number;
 }
 
-const ACTION_COPY: Record<'affirm' | 'requeue', { title: string; icon: string; cta: string }> = {
+const ACTION_COPY: Record<
+  'affirm' | 'requeue' | 'suppress',
+  { title: string; icon: string; cta: string }
+> = {
   affirm: { title: 'Affirm match', icon: 'verified', cta: 'Affirm match' },
   requeue: { title: 'Requeue release', icon: 'restart_alt', cta: 'Requeue' },
+  suppress: { title: 'Suppress release', icon: 'block', cta: 'Suppress' },
 };
 
 /**
- * Confirm gate for the two ref-less actions. Every transition confirms
+ * Confirm gate for the ref-less actions. Every transition confirms
  * before mutating and takes an optional reason recorded to
  * match_events.
  */
@@ -1184,7 +1193,9 @@ function ActionDialog({
   const body =
     action === 'affirm'
       ? 'Keeps the current ref and records it as an operator match. Operator matches are certain, so the release leaves the low-confidence set at 100%.'
-      : `Returns this release to unmatched and clears its exhaustion accounting (${release.attemptCount} attempts), so the claim queue offers it again.`;
+      : action === 'suppress'
+        ? 'Takes this release out of the attention queue for good: suppressed is inspection material, and the only way back is a hand match — there is no unsuppress.'
+        : `Returns this release to unmatched and clears its exhaustion accounting (${release.attemptCount} attempts), so the claim queue offers it again.`;
   return (
     <DialogPrimitive.Root open onOpenChange={(next) => !next && onCancel()}>
       <DialogPrimitive.Portal>

@@ -441,8 +441,10 @@ func TestOperatorStatus_RESTContract(t *testing.T) {
 			wantStatus: http.StatusConflict, wantKind: api.KindInvalidTransition,
 		},
 		{
-			name: "suppressed is not an operator target", infohash: opIH3, body: `{"status":"suppressed"}`,
-			wantStatus: http.StatusBadRequest, wantKind: api.KindInvalidRequest,
+			// The claim fence is the table's: unmatched -> suppressed has
+			// no row, so submit stays the only route out of the queue.
+			name: "suppress out of the queue is a table miss", infohash: opIH3, body: `{"status":"suppressed"}`,
+			wantStatus: http.StatusConflict, wantKind: api.KindInvalidTransition,
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -472,4 +474,62 @@ func TestOperatorStatus_RESTContract(t *testing.T) {
 				len(before.MatchEvents), len(after.MatchEvents))
 		}
 	})
+}
+
+// Suppress is the attention surface's discard: an exhausted release the
+// operator decides against goes to suppressed rather than being matched or
+// requeued. The accounting that led there is preserved, and suppression out
+// of unmatched stays submit-only — the operator discards what the matcher
+// gave up on, not what is still in the queue.
+func TestOperatorStatus_SuppressAnExhaustedRelease(t *testing.T) {
+	ctx := context.Background()
+	clock := &fakeClock{now: time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)}
+	st := newConformanceStoreWithClock(t, clock)
+
+	exhaustOne(t, ctx, st, clock, opIH1, "op-suppress")
+	attempts := mustGetRelease(t, ctx, st, opIH1).AttemptCount
+
+	// suppressed takes no ref, whatever the source state.
+	err := st.SetStatus(ctx, store.SetStatusParams{Infohash: opIH1, Status: "suppressed", Ref: "tvdb:1"})
+	if !errors.Is(err, store.ErrRefForbidden) {
+		t.Fatalf("suppress with ref err = %v, want ErrRefForbidden", err)
+	}
+
+	if err := st.SetStatus(ctx, store.SetStatusParams{
+		Infohash: opIH1, Status: "suppressed", Reason: "batch posting, not library content",
+	}); err != nil {
+		t.Fatalf("SetStatus exhausted -> suppressed: %v", err)
+	}
+	detail := mustGetRelease(t, ctx, st, opIH1)
+	if detail.MatchStatus != "suppressed" {
+		t.Fatalf("MatchStatus = %q, want suppressed", detail.MatchStatus)
+	}
+	if detail.AttemptCount != attempts {
+		t.Fatalf("AttemptCount = %d, want %d preserved — suppression is a verdict, not a reset",
+			detail.AttemptCount, attempts)
+	}
+	event := lastMatchEvent(t, detail)
+	if event.Status != "suppressed" || event.Ref != nil || event.Confidence != nil {
+		t.Fatalf("last match_event = %+v, want status=suppressed with nil ref and confidence", event)
+	}
+	if event.Reason == nil || *event.Reason != "batch posting, not library content" {
+		t.Fatalf("last match_event reason = %v, want the operator's reason", event.Reason)
+	}
+
+	// A retried PUT is a no-op, not a second audit row.
+	if err := st.SetStatus(ctx, store.SetStatusParams{Infohash: opIH1, Status: "suppressed"}); err != nil {
+		t.Fatalf("repeat suppress err = %v, want an idempotent no-op", err)
+	}
+	if after := mustGetRelease(t, ctx, st, opIH1); len(after.MatchEvents) != len(detail.MatchEvents) {
+		t.Fatalf("match_events grew from %d to %d on a repeat PUT",
+			len(detail.MatchEvents), len(after.MatchEvents))
+	}
+
+	// unmatched -> suppressed has no row: submit remains the only route out
+	// of the queue, so the claim fence cannot be bypassed by hand.
+	seedRelease(t, ctx, st, opIH2, "op-suppress-unmatched", clock.now)
+	err = st.SetStatus(ctx, store.SetStatusParams{Infohash: opIH2, Status: "suppressed"})
+	if !errors.Is(err, store.ErrInvalidTransition) {
+		t.Fatalf("unmatched -> suppressed err = %v, want ErrInvalidTransition", err)
+	}
 }
