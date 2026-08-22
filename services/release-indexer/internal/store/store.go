@@ -77,6 +77,21 @@ type ClaimedRelease struct {
 	AttemptCount int
 	LeaseExpires time.Time
 	RawItems     []RawItemDetail
+	Precedents   []Precedent
+}
+
+// Precedent is a decided release (matched or suppressed) near the claimed one
+// by title similarity. Ref and Reason are nullable: only a matched release
+// carries a ref, and a reason exists only when the deciding submission
+// supplied one.
+type Precedent struct {
+	Infohash    string
+	Title       string
+	MatchStatus string
+	Ref         *string
+	Reason      *string
+	Similarity  float64
+	PublishedAt time.Time
 }
 
 type SubmitParams struct {

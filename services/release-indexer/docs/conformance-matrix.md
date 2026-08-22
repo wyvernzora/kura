@@ -34,6 +34,8 @@ go test -tags=conformance ./...
 | Per-target ref rules: `matched` without a ref is `ErrRefRequired`, with a malformed ref `ErrInvalidRef`, and `unmatched`/`dead` carrying a ref is `ErrRefForbidden` | `TestOperatorStatus_RefRules` |
 | Transitions outside the table stay `ErrInvalidTransition` with or without a ref (`unmatched -> matched`, `suppressed -> unmatched`, `suppressed -> dead`, `matched -> unmatched`, `dead -> *`) | `TestOperatorStatus_TransitionsOutsideTheTableStayConflicts` |
 | Over REST: hand match and requeue return 200, ref-rule violations are `400`, a malformed ref is `400 invalid_ref`, a table miss is `409 invalid_transition` (including suppressing an unmatched release), and a repeat hand match appends no second audit row | `TestOperatorStatus_RESTContract` |
+| A claim ships the top-3 `matched`/`suppressed` releases nearest its title, ordered by similarity descending, each with its score, ref and suppression reason, and never `unmatched`, `exhausted`, or the claimed release itself | `TestClaimPrecedents_RanksDecidedReleasesByTitleSimilarity` |
+| A claim against a catalog with nothing decided renders `precedents` as `[]`, not null | `TestClaimPrecedents_EmptyArrayWhenNothingIsDecided` |
 | A stale `claim_token` cannot submit after a newer claim | `TestAPIShape_StaleClaimTokenRejected` |
 | Repeated `unmatched` submissions exhaust after the configured max attempts | `TestAPIShape_UnmatchedExhaustsAfterMaxAttempts` |
 | Migrations and the runtime pool land every migrated table, the goose version table, and the `match_status` enum in the configured `database.schema` and nothing in `public` | `TestConfiguredSchemaOwnsMigrationObjects` |

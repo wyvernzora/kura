@@ -22,12 +22,33 @@ type ClaimRequest struct {
 
 // ClaimItem is one leased release. ClaimToken fences the later submit: a
 // disposition carrying a stale token is rejected rather than applied.
+//
+// Precedents is the top-K decided releases nearest this one by title, with
+// their scores — data, not a verdict. The indexer applies no similarity
+// cutoff: deciding which precedent is close enough to carry forward is
+// matcher policy, and putting a threshold here would put matching heuristics
+// in the store. Never null; a catalog with no decided releases yields [].
 type ClaimItem struct {
-	Infohash       string         `json:"infohash"`
-	ClaimToken     int64          `json:"claimToken"`
-	AttemptCount   int            `json:"attemptCount"`
-	LeaseExpiresAt time.Time      `json:"leaseExpiresAt"`
-	RawItems       []ClaimRawItem `json:"rawItems"`
+	Infohash       string           `json:"infohash"`
+	ClaimToken     int64            `json:"claimToken"`
+	AttemptCount   int              `json:"attemptCount"`
+	LeaseExpiresAt time.Time        `json:"leaseExpiresAt"`
+	RawItems       []ClaimRawItem   `json:"rawItems"`
+	Precedents     []ClaimPrecedent `json:"precedents"`
+}
+
+// ClaimPrecedent is one previously decided release — matched or suppressed —
+// offered as context for the claimed one, with the trigram similarity of its
+// title. Ref is set only for a matched precedent and Reason only when the
+// deciding submission carried one; both stay explicit null otherwise.
+type ClaimPrecedent struct {
+	Infohash    string      `json:"infohash"`
+	Title       string      `json:"title"`
+	MatchStatus MatchStatus `json:"matchStatus"`
+	Ref         *string     `json:"ref"`
+	Reason      *string     `json:"reason"`
+	Similarity  float64     `json:"similarity"`
+	PublishedAt time.Time   `json:"publishedAt"`
 }
 
 // ClaimRawItem is the evidence shipped with a claim. It is deliberately

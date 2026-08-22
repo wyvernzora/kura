@@ -83,8 +83,50 @@ Crawler posts and ingest posts use the same shape:
 }
 ```
 
-`/api/releases/v1/queue/claim` returns `claimToken`, `attemptCount`, `leaseExpiresAt`, and linked
-`rawItems`. `/api/releases/v1/queue/submit` accepts:
+`/api/releases/v1/queue/claim` returns `claimToken`, `attemptCount`, `leaseExpiresAt`, linked
+`rawItems`, and `precedents`:
+
+```json
+{
+  "infohash": "0123456789abcdef0123456789abcdef01234567",
+  "claimToken": 12,
+  "attemptCount": 0,
+  "leaseExpiresAt": "2026-06-24T12:05:00Z",
+  "rawItems": [
+    {
+      "id": 42,
+      "source": "dmhy",
+      "sourceId": "721238",
+      "title": "raw release title",
+      "url": "https://share.dmhy.org/topics/view/721238_example.html",
+      "publishedAt": "2026-06-24T12:00:00Z"
+    }
+  ],
+  "precedents": [
+    {
+      "infohash": "89abcdef0123456789abcdef0123456789abcdef",
+      "title": "[Group] Example - 00 (WebRip 1080p)",
+      "matchStatus": "matched",
+      "ref": "tvdb:123",
+      "reason": null,
+      "similarity": 0.87,
+      "publishedAt": "2026-06-17T12:00:00Z"
+    }
+  ]
+}
+```
+
+`precedents` is the three `matched` or `suppressed` releases nearest the claimed title
+by pg_trgm trigram similarity, each with its score and, for a suppression, the reason
+recorded with it. The indexer applies no cutoff: which score is close enough to carry a
+prior decision forward is matcher policy, and a threshold here would put a matching
+heuristic in the store. Trigram similarity carries decisions forward within a naming
+lineage — the same group's next episode, another re-encode of a title already
+suppressed — and does not bridge translations, so a romaji and an English title for the
+same series do not precede each other. The array is never null: a catalog with nothing
+decided yields `[]`.
+
+`/api/releases/v1/queue/submit` accepts:
 
 ```json
 {

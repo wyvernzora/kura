@@ -26,11 +26,43 @@ const (
 	maxMagnetsBatch      = 500
 )
 
+// claimPrecedentLimit is the top-K of decided releases shipped with a claim.
+// It is a constant, not a knob: the matcher applies its own cutoff to the
+// scores, so a per-request K would only vary how much context it can ignore.
+const claimPrecedentLimit = 3
+
 const rawItemsByInfohashSQL = `
 	SELECT id, source, source_id, title, NULLIF(url, ''), published_at, ingested_at
 	FROM raw_items
 	WHERE infohash = $1
 	ORDER BY id ASC
+`
+
+// precedentsByTitleSQL ranks decided releases against each claimed title. The
+// lateral's `<->` is trigram distance (1 - similarity), so its ordering and
+// the outer similarity DESC agree; the outer clause is what makes the order
+// the join emits contractual rather than incidental. The reason lives in
+// match_events, so it comes from the latest event carrying the release's
+// current status.
+const precedentsByTitleSQL = `
+	SELECT c.infohash, p.infohash, p.title, p.match_status, p.ref, p.reason, p.similarity, p.published_at
+	FROM unnest($1::text[], $2::text[]) AS c(infohash, title)
+	JOIN LATERAL (
+		SELECT r.infohash, r.title, r.match_status::text AS match_status, r.ref,
+			(
+				SELECT me.reason FROM match_events me
+				WHERE me.infohash = r.infohash AND me.status = r.match_status
+				ORDER BY me.created_at DESC, me.id DESC
+				LIMIT 1
+			) AS reason,
+			similarity(r.title, c.title)::double precision AS similarity,
+			r.published_at
+		FROM releases r
+		WHERE r.match_status IN ('matched','suppressed')
+		ORDER BY r.title <-> c.title, r.published_at DESC
+		LIMIT $3
+	) p ON TRUE
+	ORDER BY p.similarity DESC, p.published_at DESC
 `
 
 type StoreConfig struct {
@@ -239,9 +271,9 @@ func (s *Store) Claim(ctx context.Context, p store.ClaimParams) (store.ClaimResu
 				updated_at = $1
 			FROM claimable c
 			WHERE r.infohash = c.infohash
-			RETURNING r.infohash, r.claim_token, r.attempt_count, r.lease_expires_at, r.published_at
+			RETURNING r.infohash, r.claim_token, r.attempt_count, r.lease_expires_at, r.title, r.published_at
 		)
-		SELECT infohash, claim_token, attempt_count, lease_expires_at
+		SELECT infohash, claim_token, attempt_count, lease_expires_at, title
 		FROM leased
 		ORDER BY published_at DESC, infohash DESC
 	`, now, limit, leaseExpires, s.cfg.QueueMaxAttempts)
@@ -254,14 +286,26 @@ func (s *Store) Claim(ctx context.Context, p store.ClaimParams) (store.ClaimResu
 		token        int64
 		attemptCount int
 		leaseExpires time.Time
+		title        string
 	}
 	claimed, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (claimedRow, error) {
 		var cr claimedRow
-		err := row.Scan(&cr.infohash, &cr.token, &cr.attemptCount, &cr.leaseExpires)
+		err := row.Scan(&cr.infohash, &cr.token, &cr.attemptCount, &cr.leaseExpires, &cr.title)
 		return cr, err
 	})
 	if err != nil {
 		return store.ClaimResult{}, fmt.Errorf("claim: collect leased rows: %w", err)
+	}
+
+	infohashes := make([]string, 0, len(claimed))
+	titles := make([]string, 0, len(claimed))
+	for _, cr := range claimed {
+		infohashes = append(infohashes, cr.infohash)
+		titles = append(titles, cr.title)
+	}
+	precedents, err := precedentsFor(ctx, tx, infohashes, titles)
+	if err != nil {
+		return store.ClaimResult{}, err
 	}
 
 	items := make([]store.ClaimedRelease, 0, len(claimed))
@@ -276,6 +320,7 @@ func (s *Store) Claim(ctx context.Context, p store.ClaimParams) (store.ClaimResu
 			AttemptCount: cr.attemptCount,
 			LeaseExpires: cr.leaseExpires,
 			RawItems:     raw,
+			Precedents:   precedents[cr.infohash],
 		})
 	}
 
@@ -283,6 +328,38 @@ func (s *Store) Claim(ctx context.Context, p store.ClaimParams) (store.ClaimResu
 		return store.ClaimResult{}, fmt.Errorf("claim: commit: %w", err)
 	}
 	return store.ClaimResult{Items: items}, nil
+}
+
+// precedentsFor loads the decided releases nearest every claimed title in one
+// round trip, keyed by claimed infohash. A claim with no decided release in
+// the catalog is simply absent from the map.
+func precedentsFor(ctx context.Context, q releaseQuerier, infohashes, titles []string) (map[string][]store.Precedent, error) {
+	if len(infohashes) == 0 {
+		return nil, nil
+	}
+	rows, err := q.Query(ctx, precedentsByTitleSQL, infohashes, titles, claimPrecedentLimit)
+	if err != nil {
+		return nil, fmt.Errorf("claim: load precedents: %w", err)
+	}
+	type precedentRow struct {
+		claimedInfohash string
+		precedent       store.Precedent
+	}
+	collected, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (precedentRow, error) {
+		var pr precedentRow
+		err := row.Scan(&pr.claimedInfohash, &pr.precedent.Infohash, &pr.precedent.Title,
+			&pr.precedent.MatchStatus, &pr.precedent.Ref, &pr.precedent.Reason,
+			&pr.precedent.Similarity, &pr.precedent.PublishedAt)
+		return pr, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("claim: collect precedents: %w", err)
+	}
+	out := make(map[string][]store.Precedent, len(infohashes))
+	for _, pr := range collected {
+		out[pr.claimedInfohash] = append(out[pr.claimedInfohash], pr.precedent)
+	}
+	return out, nil
 }
 
 func rawItemsFor(ctx context.Context, q releaseQuerier, infohash, op string) ([]store.RawItemDetail, error) {
