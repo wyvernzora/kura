@@ -210,14 +210,21 @@ function barChrome(scrolled: boolean): string {
  * mirroring the hamburger. Releases uses it for its refresh button:
  * the page's own desktop header carries that control, but below `md`
  * this bar is the only chrome there is.
+ *
+ * `back` is an optional leading control between the hamburger and the
+ * title — the same slot the full top bar gives the back-to-library
+ * pill on detail routes. Releases uses it for its detail view's back
+ * button.
  */
 export function PageMobileBar({
   title,
   onMenu,
+  back,
   action,
 }: {
   title: string;
   onMenu: () => void;
+  back?: ReactNode;
   action?: ReactNode;
 }) {
   const scrolled = useScrolled();
@@ -225,6 +232,7 @@ export function PageMobileBar({
     <header className={cn(barChrome(scrolled), 'md:hidden')}>
       <div className="flex h-[72px] items-center gap-3 px-[18px]">
         <HamburgerButton onClick={onMenu} />
+        {back}
         <span className="font-semibold text-[15px] text-ink tracking-[-0.2px]">{title}</span>
         {action && <div className="ml-auto flex items-center">{action}</div>}
       </div>

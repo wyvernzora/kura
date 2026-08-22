@@ -12,6 +12,15 @@ export const ATTENTION_FILTER: readonly ReleaseFilterKey[] = [...ATTENTION_STATU
 
 interface ReleasesViewStore {
   active: ReadonlySet<ReleaseFilterKey>;
+  /**
+   * Infohash of the open release detail; null = the queue listing.
+   * Lives here rather than in ReleasesPage state because the shell's
+   * mobile page bar renders the detail's back button, and the shell
+   * owns that bar.
+   */
+  openInfohash: string | null;
+  openRelease: (infohash: string) => void;
+  closeRelease: () => void;
   toggle: (key: ReleaseFilterKey) => void;
   /** Empty set = every status, the menu's "All". */
   showAll: () => void;
@@ -29,6 +38,9 @@ interface ReleasesViewStore {
  */
 export const useReleasesView = create<ReleasesViewStore>((set) => ({
   active: new Set(ATTENTION_FILTER),
+  openInfohash: null,
+  openRelease: (infohash) => set({ openInfohash: infohash }),
+  closeRelease: () => set({ openInfohash: null }),
   toggle: (key) =>
     set((s) => {
       const next = new Set(s.active);
@@ -40,5 +52,5 @@ export const useReleasesView = create<ReleasesViewStore>((set) => ({
       return { active: next };
     }),
   showAll: () => set({ active: new Set() }),
-  clear: () => set({ active: new Set(ATTENTION_FILTER) }),
+  clear: () => set({ active: new Set(ATTENTION_FILTER), openInfohash: null }),
 }));

@@ -7,6 +7,7 @@ import { PageBarIconButton, PageMobileBar, TopBar } from '@/components/TopBar';
 import { MaterialIcon } from '@/components/ui/material-icon';
 import { RELEASES_REFRESH_EVENT } from '@/lib/releases';
 import { useSuppressHoverOnScroll } from '@/lib/useSuppressHoverOnScroll';
+import { useReleasesView } from '@/state/releasesView';
 
 interface AppShellProps {
   children: ReactNode;
@@ -60,6 +61,7 @@ export function AppShell({ children }: AppShellProps) {
           <PageMobileBar
             title={barlessTitle}
             onMenu={openDrawer}
+            back={pathname === '/releases' ? <ReleasesBackButton /> : undefined}
             action={pathname === '/releases' ? <ReleasesRefreshButton /> : undefined}
           />
         ) : (
@@ -88,6 +90,25 @@ function ReleasesRefreshButton() {
       onClick={() => window.dispatchEvent(new Event(RELEASES_REFRESH_EVENT))}
     >
       <MaterialIcon name="refresh" size={18} />
+    </PageBarIconButton>
+  );
+}
+
+/**
+ * Back button for the releases detail view, mirroring the back pill the
+ * full top bar shows on series detail routes. The open detail lives in
+ * the releases view store (the shell owns this bar, so the page can't
+ * pass a callback down); nothing renders while the listing is showing.
+ */
+function ReleasesBackButton() {
+  const openInfohash = useReleasesView((s) => s.openInfohash);
+  const closeRelease = useReleasesView((s) => s.closeRelease);
+  if (!openInfohash) {
+    return null;
+  }
+  return (
+    <PageBarIconButton aria-label="Back to attention queue" onClick={closeRelease}>
+      <MaterialIcon name="arrow_back" size={18} />
     </PageBarIconButton>
   );
 }

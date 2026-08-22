@@ -83,9 +83,11 @@ export function ReleasesPage() {
   const toggle = useReleasesView((s) => s.toggle);
   const showAll = useReleasesView((s) => s.showAll);
   const reset = useReleasesView((s) => s.clear);
+  const openInfohash = useReleasesView((s) => s.openInfohash);
+  const openRelease = useReleasesView((s) => s.openRelease);
+  const closeRelease = useReleasesView((s) => s.closeRelease);
 
   const [visible, setVisible] = useState(RELEASE_PAGE_SIZE);
-  const [openInfohash, setOpenInfohash] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [result, setResult] = useState<ReleaseOutcome | null>(null);
   const [refreshedAt, setRefreshedAt] = useState(() => formatStampUTC(new Date().toISOString()));
@@ -213,7 +215,7 @@ export function ReleasesPage() {
             detail.isError ? apiErrorMessage(detail.error, 'could not load this release') : null
           }
           seriesTitle={seriesTitleForRef(titles, open?.ref)}
-          onBack={() => setOpenInfohash(null)}
+          onBack={closeRelease}
           onAction={(action, release) => setPending({ action, release })}
         />
       ) : (
@@ -273,7 +275,7 @@ export function ReleasesPage() {
                     seriesTitle={seriesTitleForRef(titles, release.ref)}
                     onOpen={() => {
                       listScroll.current = window.scrollY;
-                      setOpenInfohash(release.infohash);
+                      openRelease(release.infohash);
                     }}
                   />
                 ))}
@@ -622,11 +624,14 @@ function ReleaseDetailView({
   onAction: (action: ReleaseActionId, release: ReleaseDetail) => void;
 }) {
   const narrow = useNarrow();
+  // Desktop-only: below `md` the shell's mobile page bar carries the
+  // back button (same chrome the series detail route gets), so an
+  // in-body copy would say it twice.
   const back = (
     <button
       type="button"
       onClick={onBack}
-      className="inline-flex h-8 cursor-pointer items-center gap-1.5 self-start rounded-md pr-2 font-medium text-[13px] text-muted transition-colors hover:text-ink"
+      className="hidden h-8 cursor-pointer items-center gap-1.5 self-start rounded-md pr-2 font-medium text-[13px] text-muted transition-colors hover:text-ink md:inline-flex"
     >
       <MaterialIcon name="arrow_back" size={16} />
       Attention queue
