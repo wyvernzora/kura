@@ -47,8 +47,8 @@ const SORT_LABELS: Record<TrashSortKey, string> = {
 const SORT_ORDER: readonly TrashSortKey[] = ['size', 'trashed', 'title'];
 const DIRECTION_GLYPH = { asc: '▲', desc: '▼' } as const;
 
-/** How long a non-blocking result banner stays up before it drains away. */
-const BANNER_TTL_MS = 6000;
+/** How long a non-blocking result toast stays up before it drains away. */
+const TOAST_TTL_MS = 6000;
 
 /**
  * What an Empty action will act on: the whole listing or one series.
@@ -88,10 +88,10 @@ export function TrashPage() {
   // What the in-flight empty is deleting, captured at confirm time.
   // Deleting a terabyte of trash takes the server a while, and the
   // confirm dialog closes immediately — this feeds the progress
-  // banner that fills the gap until the result lands.
+  // toast that fills the gap until the result lands.
   const [inFlight, setInFlight] = useState<{ entries: number; bytes: number } | null>(null);
   const emptying = empty.isPending;
-  // Stable identity so the banner's self-expire timer isn't restarted
+  // Stable identity so the toast's self-expire timer isn't restarted
   // by unrelated re-renders (sort flips, dropdown opens).
   const dismissResult = useCallback(() => setResult(null), []);
 
@@ -126,7 +126,7 @@ export function TrashPage() {
     } catch (err) {
       // The per-series route answers a failure with an HTTP error
       // rather than a `failures` array, so the envelope message is
-      // reshaped into the same partial-outcome the banner renders.
+      // reshaped into the same partial-outcome the toast renders.
       setResult({
         kind: 'partial',
         entries: 0,
@@ -201,24 +201,6 @@ export function TrashPage() {
         </div>
       )}
 
-      {emptying && inFlight && (
-        <EmptyingBanner
-          entries={inFlight.entries}
-          bytes={inFlight.bytes}
-          topGap={live.length === 0}
-        />
-      )}
-      {!emptying && result && (
-        <ResultBanner
-          result={result}
-          scopeNote={
-            maxAgeHours > 0 ? `Scoped to entries older than ${ageLabel}.` : 'Scoped to any age.'
-          }
-          topGap={live.length === 0}
-          onDismiss={dismissResult}
-        />
-      )}
-
       {listing.isPending ? (
         <TrashListSkeleton />
       ) : live.length === 0 ? (
@@ -276,6 +258,16 @@ export function TrashPage() {
         onCancel={() => setConfirm(null)}
         onConfirm={() => confirm && void runEmpty(confirm)}
       />
+      {emptying && inFlight && <EmptyingToast entries={inFlight.entries} bytes={inFlight.bytes} />}
+      {!emptying && result && (
+        <ResultToast
+          result={result}
+          scopeNote={
+            maxAgeHours > 0 ? `Scoped to entries older than ${ageLabel}.` : 'Scoped to any age.'
+          }
+          onDismiss={dismissResult}
+        />
+      )}
     </div>
   );
 }
@@ -767,38 +759,49 @@ function EmptyConfirm({
 }
 
 /**
- * In-flight strip shown while an empty mutation runs. Same shell as
- * ResultBanner so the result replaces it in place. No dismiss and no
- * drain bar — the operation cannot be cancelled and has no known
- * duration (deleting a terabyte of trash takes the server a while).
+ * Fixed toast layer shared by the in-flight and result toasts — the
+ * same shell (and position) as the releases page's toast, so outcomes
+ * read the same way everywhere: bottom-right at `sm`+, full-width
+ * bottom-centre below.
  */
-function EmptyingBanner({
-  entries,
-  bytes,
-  topGap,
-}: {
-  entries: number;
-  bytes: number;
-  topGap: boolean;
-}) {
+function ToastShell({ children }: { children: ReactNode }) {
   return (
-    <div className={cn('mb-4 flex items-start gap-2.5', topGap && 'mt-5')}>
-      <div className="relative flex w-full items-start gap-2.5 overflow-hidden rounded-[10px] border border-line-soft bg-surface px-4 py-3 shadow-card">
-        <MaterialIcon
-          name="progress_activity"
-          size={16}
-          className="mt-px shrink-0 animate-spin text-muted"
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <p className="font-medium text-[13px] text-ink">
-            Emptying {entries} {entries === 1 ? 'entry' : 'entries'} ({formatTrashBytes(bytes)})…
-          </p>
-          <p className="text-[12px] text-muted">
-            Deleting files from disk — large trash can take a while.
-          </p>
-        </div>
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-4 bottom-4 z-[90] flex justify-center sm:inset-x-auto sm:right-5 sm:bottom-5 sm:justify-end"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <div className="kura-toast-in pointer-events-auto relative flex w-full items-start gap-2.5 overflow-hidden rounded-[10px] border border-line-soft bg-surface px-4 py-3 shadow-pop sm:w-[380px]">
+        {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * In-flight toast shown while an empty mutation runs; the result toast
+ * replaces it in place. No dismiss and no drain bar — the operation
+ * cannot be cancelled and has no known duration (deleting a terabyte
+ * of trash takes the server a while).
+ */
+function EmptyingToast({ entries, bytes }: { entries: number; bytes: number }) {
+  return (
+    <ToastShell>
+      <MaterialIcon
+        name="progress_activity"
+        size={16}
+        className="mt-px shrink-0 animate-spin text-muted"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <p className="font-medium text-[13px] text-ink">
+          Emptying {entries} {entries === 1 ? 'entry' : 'entries'} ({formatTrashBytes(bytes)})…
+        </p>
+        <p className="text-[12px] text-muted">
+          Deleting files from disk — large trash can take a while.
+        </p>
+      </div>
+    </ToastShell>
   );
 }
 
@@ -809,33 +812,31 @@ const RESULT_STYLE: Record<TrashOutcome['kind'], { icon: string; tone: string }>
 };
 
 /**
- * Outcome banner. Success and "nothing matched" self-expire after six
+ * Outcome toast. Success and "nothing matched" self-expire after six
  * seconds with a drain bar; partial never does — it names series and
  * reasons the user has to actually read.
  */
-function ResultBanner({
+function ResultToast({
   result,
   scopeNote,
-  topGap,
   onDismiss,
 }: {
   result: TrashOutcome;
   scopeNote: string;
-  topGap: boolean;
   onDismiss: () => void;
 }) {
   const style = RESULT_STYLE[result.kind];
   const expires = result.kind !== 'partial';
 
-  // `result` is a dependency so a banner REPLACED by a second empty
+  // `result` is a dependency so a toast REPLACED by a second empty
   // action restarts the countdown; `onDismiss` must be
   // identity-stable in the caller or every parent re-render resets it.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `result` is deliberately extra — the timer must restart when the banner content is swapped, not only when it mounts.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `result` is deliberately extra — the timer must restart when the toast content is swapped, not only when it mounts.
   useEffect(() => {
     if (!expires) {
       return;
     }
-    const timer = setTimeout(onDismiss, BANNER_TTL_MS);
+    const timer = setTimeout(onDismiss, TOAST_TTL_MS);
     return () => clearTimeout(timer);
   }, [expires, onDismiss, result]);
 
@@ -847,37 +848,34 @@ function ResultBanner({
         : `Emptied ${result.entries} ${result.entries === 1 ? 'entry' : 'entries'} · reclaimed ${formatTrashBytes(result.bytes)}`;
 
   return (
-    <div className={cn('mb-4 flex items-start gap-2.5', topGap && 'mt-5')}>
-      <div className="relative flex w-full items-start gap-2.5 overflow-hidden rounded-[10px] border border-line-soft bg-surface px-4 py-3 shadow-card">
-        <MaterialIcon name={style.icon} size={16} className={cn('mt-px shrink-0', style.tone)} />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <p className="font-medium text-[13px] text-ink">{title}</p>
-          {result.failures.map((failure) => (
-            <p
-              key={failure.directory}
-              className="font-mono text-[11px] text-muted leading-[1.5] [overflow-wrap:anywhere]"
-            >
-              <span className="text-status-error">failed</span> {failure.directory} —{' '}
-              {failure.error}
-            </p>
-          ))}
-          {result.kind !== 'partial' && <p className="text-[12px] text-muted">{scopeNote}</p>}
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label="Dismiss"
-          className="shrink-0 cursor-pointer text-muted transition-colors hover:text-ink"
-        >
-          <MaterialIcon name="close" size={15} />
-        </button>
-        {expires && (
-          <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-[2px] bg-line-soft">
-            <span className="kura-toast-bar block h-full origin-left bg-status-complete/70" />
-          </span>
-        )}
+    <ToastShell>
+      <MaterialIcon name={style.icon} size={16} className={cn('mt-px shrink-0', style.tone)} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <p className="font-medium text-[13px] text-ink">{title}</p>
+        {result.failures.map((failure) => (
+          <p
+            key={failure.directory}
+            className="font-mono text-[11px] text-muted leading-[1.5] [overflow-wrap:anywhere]"
+          >
+            <span className="text-status-error">failed</span> {failure.directory} — {failure.error}
+          </p>
+        ))}
+        {result.kind !== 'partial' && <p className="text-[12px] text-muted">{scopeNote}</p>}
       </div>
-    </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="shrink-0 cursor-pointer text-muted transition-colors hover:text-ink"
+      >
+        <MaterialIcon name="close" size={15} />
+      </button>
+      {expires && (
+        <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-[2px] bg-line-soft">
+          <span className="kura-toast-bar block h-full origin-left bg-status-complete/70" />
+        </span>
+      )}
+    </ToastShell>
   );
 }
 
