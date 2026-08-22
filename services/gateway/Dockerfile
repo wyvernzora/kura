@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine AS go-build
 ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
