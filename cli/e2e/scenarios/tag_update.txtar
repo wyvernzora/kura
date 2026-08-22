@@ -6,18 +6,18 @@ kura_add stub:1001
 
 kura_tag_update stub:1001 Maintenance-Requested PRIORITY
 stdout '"ref":"stub:1001"'
-stdout '"tags":\["maintenance-requested","priority"\]'
+stdout '"tags":\["maintenance-requested","maintenance:requested","priority"\]'
 
 kura_show stub:1001
-stdout '"tags":\["maintenance-requested","priority"\]'
+stdout '"tags":\["maintenance-requested","maintenance:requested","priority"\]'
 
 kura_tag_update stub:1001 '!MAINTENANCE-REQUESTED' Mute-Notifications
-stdout '"tags":\["mute-notifications","priority"\]'
+stdout '"tags":\["maintenance:requested","mute-notifications","priority"\]'
 
 # Contradictory expressions reject the entire update.
 ! kura_tag_update stub:1001 maintenance-disabled '!maintenance-disabled'
 stderr 'tag appears as both positive and negative'
 
 kura_show stub:1001
-stdout '"tags":\["mute-notifications","priority"\]'
+stdout '"tags":\["maintenance:requested","mute-notifications","priority"\]'
 ! stdout 'maintenance-disabled'

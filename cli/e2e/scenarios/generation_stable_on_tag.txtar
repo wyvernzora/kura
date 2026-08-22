@@ -7,8 +7,8 @@ kura_show $KURA_LAST_REF
 stdout '"generation":1'
 
 kura_tag_update $KURA_LAST_REF priority:high
-stdout '"tags":\["priority:high"\]'
+stdout '"tags":\["maintenance:requested","priority:high"\]'
 
 kura_show $KURA_LAST_REF
 stdout '"generation":1'
-stdout '"tags":\["priority:high"\]'
+stdout '"tags":\["maintenance:requested","priority:high"\]'

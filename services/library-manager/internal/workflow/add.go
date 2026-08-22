@@ -74,6 +74,9 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result api.AddResult, err
 		return api.AddResult{}, err
 	}
 	model.Ref = ref
+	// Every newly added series starts flagged for maintenance so the
+	// agent's next pass picks it up; the agent clears the tag when done.
+	model.AddTag("maintenance:requested")
 	// Aliases + translated titles fold into searchKey here and stay
 	// transient — neither lands on disk. Next scan refreshes both
 	// from TVDB.
