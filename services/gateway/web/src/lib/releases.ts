@@ -1,4 +1,4 @@
-import type { MatchStatus } from '@/api/releaseTypes';
+import type { MatchStatus, ReleaseItem } from '@/api/releaseTypes';
 import type { ListRow } from '@/api/types';
 
 /**
@@ -97,28 +97,30 @@ export function isLowConfidence(
   return status === 'matched' && confidence != null && confidence < LOW_CONFIDENCE;
 }
 
-export type ReleaseActionId = 'match' | 'affirm' | 'requeue' | 'suppress';
+export type ReleaseActionId = 'match' | 'affirm' | 'suppress';
 
 export interface ReleaseAction {
   id: ReleaseActionId;
   icon: string;
   label: string;
   primary?: boolean;
-  /** Discard rather than resolve: rendered right-aligned in error tones. */
-  discard?: boolean;
 }
 
 /**
- * What the operator may do to a release in this state.
+ * What the operator may do to a release in this state. Hand match is
+ * always the LAST option.
  *
- *   exhausted        Hand match (primary) · Requeue · Suppress (discard)
+ *   exhausted        Suppress · Hand match (primary)
  *   suppressed       Hand match (primary)
  *   matched, low     Affirm match (primary) · Correct match
  *   matched          Correct match
  *   unmatched, dead  none
  *
- * `unmatched` is still in the claim queue and `dead` is terminal and
- * downloader-owned, so neither offers an operator transition.
+ * There is no requeue: by the time a release is exhausted, automated
+ * matching has had its chance — hand-matching is cheaper than another
+ * attempt budget. `unmatched` is still in the claim queue and `dead`
+ * is terminal and downloader-owned, so neither offers an operator
+ * transition.
  */
 export function releaseActions(
   status: MatchStatus,
@@ -127,9 +129,8 @@ export function releaseActions(
   const low = isLowConfidence(status, confidence);
   if (status === 'exhausted') {
     return [
+      { id: 'suppress', icon: 'do_not_disturb_on', label: 'Suppress' },
       { id: 'match', icon: 'link', label: 'Hand match', primary: true },
-      { id: 'requeue', icon: 'restart_alt', label: 'Requeue' },
-      { id: 'suppress', icon: 'block', label: 'Suppress', discard: true },
     ];
   }
   if (status === 'suppressed') {
@@ -144,6 +145,40 @@ export function releaseActions(
     return actions;
   }
   return [];
+}
+
+/**
+ * Whether a batch action applies to a release in this state — the
+ * same table `releaseActions` renders, as a predicate. The batch bar
+ * acts on the eligible subset of a selection only.
+ */
+export function releaseActionApplies(
+  id: ReleaseActionId,
+  status: MatchStatus,
+  confidence: number | null | undefined,
+): boolean {
+  return releaseActions(status, confidence).some((action) => action.id === id);
+}
+
+/**
+ * Client-side release search over the loaded set: the release title,
+ * its ref, its sources, and the resolved series' searchable titles
+ * (the library row's alias blob). `needle` is pre-lowercased.
+ */
+export function releaseMatchesQuery(
+  release: Pick<ReleaseItem, 'title' | 'ref' | 'sources'>,
+  needle: string,
+  seriesBlob: string | undefined,
+): boolean {
+  if (!needle) {
+    return true;
+  }
+  return (
+    release.title.toLowerCase().includes(needle) ||
+    (release.ref ?? '').toLowerCase().includes(needle) ||
+    release.sources.some((source) => source.includes(needle)) ||
+    (seriesBlob?.includes(needle) ?? false)
+  );
 }
 
 /**
@@ -180,6 +215,22 @@ export function seriesTitleIndex(rows: readonly ListRow[]): Map<string, string> 
   for (const row of rows) {
     if (row.ref) {
       index.set(row.ref, row.title);
+    }
+  }
+  return index;
+}
+
+/**
+ * Ref → lowercased searchable blob over the loaded library rows, so
+ * the release search also finds releases by the series they resolved
+ * to. Leans on the server-built `searchKey` alias fold when present.
+ */
+export function seriesSearchIndex(rows: readonly ListRow[]): Map<string, string> {
+  const index = new Map<string, string>();
+  for (const row of rows) {
+    if (row.ref) {
+      const blob = row.searchKey ?? [row.title, row.canonicalTitle].filter(Boolean).join('\n');
+      index.set(row.ref, blob.toLowerCase());
     }
   }
   return index;

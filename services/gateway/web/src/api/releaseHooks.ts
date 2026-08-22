@@ -90,8 +90,8 @@ export interface SetStatusInput {
 
 /**
  * Operator transition. Every action on this page is one of these:
- * hand match / correct / affirm submit `matched` with a ref, requeue
- * submits `unmatched` with none. Invalid transitions answer 409 and
+ * hand match / correct / affirm submit `matched` with a ref, suppress
+ * submits `suppressed` with none. Invalid transitions answer 409 and
  * the page surfaces that message verbatim.
  *
  * Invalidates the whole releases tree on settle — the row's status,

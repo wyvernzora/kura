@@ -73,8 +73,15 @@ async function clickWhenReady(find: () => HTMLElement | null | undefined): Promi
   throw new Error('play: target never became clickable');
 }
 
+// Rows are `div role="button"` (they nest the checkbox and quick-action
+// buttons), so clickable targets span both element kinds.
 const byText = (root: ParentNode, text: string) =>
-  Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.includes(text));
+  Array.from(root.querySelectorAll<HTMLElement>('button, [role="button"]')).find((b) =>
+    b.textContent?.includes(text),
+  );
+
+const byLabel = (root: ParentNode, label: string) =>
+  root.querySelector<HTMLElement>(`[aria-label="${label}"]`);
 
 /**
  * The confirm dialog portals outside the canvas AND repeats the label
@@ -132,12 +139,12 @@ export const HandMatch: Story = {
   },
 };
 
-/** Requeue confirm — the exhaustion accounting it clears is named. */
-export const RequeueConfirm: Story = {
+/** Suppress confirm — parks the release until an operator hand-matches it. */
+export const SuppressConfirm: Story = {
   render: () => <Harness />,
   play: async ({ canvasElement }) => {
     await clickWhenReady(() => openExhausted(canvasElement));
-    await clickWhenReady(() => byText(canvasElement, 'Requeue'));
+    await clickWhenReady(() => byText(canvasElement, 'Suppress'));
   },
 };
 
@@ -146,8 +153,8 @@ export const ActionSucceeded: Story = {
   render: () => <Harness />,
   play: async ({ canvasElement }) => {
     await clickWhenReady(() => openExhausted(canvasElement));
-    await clickWhenReady(() => byText(canvasElement, 'Requeue'));
-    await clickWhenReady(() => inDialog('Requeue'));
+    await clickWhenReady(() => byText(canvasElement, 'Suppress'));
+    await clickWhenReady(() => inDialog('Suppress'));
   },
 };
 
@@ -163,14 +170,50 @@ export const TransitionRejected: Story = {
         body: {
           kind: 'conflict',
           message:
-            'invalid transition: exhausted → unmatched (release b1d0c2e3…); status changed since this page was loaded',
+            'invalid transition: exhausted → suppressed (release b1d0c2e3…); status changed since this page was loaded',
         },
       }}
     />
   ),
   play: async ({ canvasElement }) => {
     await clickWhenReady(() => openExhausted(canvasElement));
-    await clickWhenReady(() => byText(canvasElement, 'Requeue'));
-    await clickWhenReady(() => inDialog('Requeue'));
+    await clickWhenReady(() => byText(canvasElement, 'Suppress'));
+    await clickWhenReady(() => inDialog('Suppress'));
+  },
+};
+
+/**
+ * Two rows checked — the batch bar docks at the bottom with
+ * per-action eligible counts.
+ */
+export const BatchSelection: Story = {
+  render: () => <Harness />,
+  play: async ({ canvasElement }) => {
+    await clickWhenReady(() =>
+      byLabel(
+        canvasElement,
+        'Select Attack on Titan S04E29 The Final Chapters Part 2 1080p WEB-DL AAC2.0 H.264',
+      ),
+    );
+    await clickWhenReady(() =>
+      byLabel(canvasElement, 'Select Steins;Gate 0 - 14 [1080p][HEVC][Multi-Sub]'),
+    );
+  },
+};
+
+/** Batch hand match — one series resolve, per-release ref composition. */
+export const BatchHandMatch: Story = {
+  render: () => <Harness />,
+  play: async ({ canvasElement }) => {
+    await clickWhenReady(() =>
+      byLabel(
+        canvasElement,
+        'Select Attack on Titan S04E29 The Final Chapters Part 2 1080p WEB-DL AAC2.0 H.264',
+      ),
+    );
+    await clickWhenReady(() =>
+      byLabel(canvasElement, 'Select Steins;Gate 0 - 14 [1080p][HEVC][Multi-Sub]'),
+    );
+    await clickWhenReady(() => byText(document.body, 'Hand match'));
   },
 };

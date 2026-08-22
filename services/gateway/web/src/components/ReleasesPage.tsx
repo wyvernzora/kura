@@ -44,9 +44,13 @@ import {
   RELEASE_PAGE_SIZE,
   RELEASES_REFRESH_EVENT,
   type ReleaseActionId,
+  releaseActionApplies,
   releaseActions,
+  releaseMatchesQuery,
   STATUS_DOT,
   STATUS_LABELS,
+  seriesRefOf,
+  seriesSearchIndex,
   seriesTitleForRef,
   seriesTitleIndex,
 } from '@/lib/releases';
@@ -91,6 +95,10 @@ export function ReleasesPage() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [result, setResult] = useState<ReleaseOutcome | null>(null);
   const [refreshedAt, setRefreshedAt] = useState(() => formatStampUTC(new Date().toISOString()));
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set<string>());
+  const [sheetInfohash, setSheetInfohash] = useState<string | null>(null);
+  const narrow = useNarrow();
 
   const specs = streamsForFilter(active);
   const plain = useReleaseStream(specs.find((s) => s.key === 'plain') ?? null);
@@ -103,11 +111,29 @@ export function ReleasesPage() {
 
   const streams = [plain, lowconf].filter((stream) => stream.hasMore || stream.items.length > 0);
   const merged = mergeReleaseStreams(streams);
-  const page = merged.items.slice(0, visible);
   const loading = plain.isPending || lowconf.isPending;
   const failure = plain.isError ? plain.error : lowconf.isError ? lowconf.error : null;
 
   const titles = useMemo(() => seriesTitleIndex(series.data ?? []), [series.data]);
+  const searchBlobs = useMemo(() => seriesSearchIndex(series.data ?? []), [series.data]);
+
+  // Client-side search over the loaded set: title, ref, source, and
+  // the resolved series' alias blob.
+  const needle = query.trim().toLowerCase();
+  const filtered = needle
+    ? merged.items.filter((item) =>
+        releaseMatchesQuery(item, needle, searchBlobs.get(seriesRefOf(item.ref))),
+      )
+    : merged.items;
+  const page = filtered.slice(0, visible);
+
+  const selectedReleases = useMemo(
+    () => merged.items.filter((item) => selected.has(item.infohash)),
+    [merged.items, selected],
+  );
+  const sheetRelease = sheetInfohash
+    ? merged.items.find((item) => item.infohash === sheetInfohash)
+    : undefined;
 
   // The shell owns the mobile page bar, so its refresh button
   // announces itself on the window rather than threading a callback
@@ -147,7 +173,7 @@ export function ReleasesPage() {
   function loadMore() {
     // Rows already fetched but not yet shown come for free; otherwise
     // advance whichever stream is holding the merge back.
-    if (visible >= merged.items.length) {
+    if (visible >= filtered.length) {
       const next = nextStreamToLoad(streams);
       if (next === 'lowconf') {
         lowconf.fetchNextPage();
@@ -158,38 +184,95 @@ export function ReleasesPage() {
     setVisible((n) => n + RELEASE_PAGE_SIZE);
   }
 
-  async function runAction(input: { ref?: string; reason: string }) {
+  function toggleSelect(infohash: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(infohash)) {
+        next.delete(infohash);
+      } else {
+        next.add(infohash);
+      }
+      return next;
+    });
+  }
+
+  const shownIds = page.map((item) => item.infohash);
+  const allShown = page.length > 0 && shownIds.every((id) => selected.has(id));
+
+  function toggleAll() {
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const id of shownIds) {
+        if (allShown) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+      }
+      return next;
+    });
+  }
+
+  /** Batch entry: the action runs over the eligible subset only. */
+  function startBatch(action: ReleaseActionId) {
+    const releases = selectedReleases.filter((item) =>
+      releaseActionApplies(action, item.matchStatus, item.confidence),
+    );
+    if (releases.length > 0) {
+      setPending({ action, releases });
+    }
+  }
+
+  async function runAction(input: { seriesRef?: string; reason: string }) {
     if (!pending) {
       return;
     }
-    const { action, release } = pending;
+    const { action, releases } = pending;
     setPending(null);
-    const target: MatchStatus =
-      action === 'requeue' ? 'unmatched' : action === 'suppress' ? 'suppressed' : 'matched';
-    const ref = action === 'affirm' ? (release.ref ?? undefined) : input.ref;
+    const target: MatchStatus = action === 'suppress' ? 'suppressed' : 'matched';
+    // Batch hand match resolves ONE series; each release's canonical
+    // ref is composed from its own parsed episode segment (the
+    // series-level ref when none parsed).
+    const refs = releases.map((release) =>
+      action === 'match'
+        ? composeReleaseRef(input.seriesRef ?? '', parseEpisodeMarker(release.title))
+        : (release.ref ?? undefined),
+    );
+    const count = releases.length;
+    let done = 0;
     try {
-      await setStatus.mutateAsync({
-        infohash: release.infohash,
-        body: {
-          status: target,
-          ...(target === 'matched' && ref ? { ref } : {}),
-          ...(input.reason ? { reason: input.reason } : {}),
-        },
-      });
+      for (const [i, release] of releases.entries()) {
+        const ref = refs[i];
+        await setStatus.mutateAsync({
+          infohash: release.infohash,
+          body: {
+            status: target,
+            ...(target === 'matched' && ref ? { ref } : {}),
+            ...(input.reason ? { reason: input.reason } : {}),
+          },
+        });
+        done += 1;
+      }
       setResult({
         kind: 'success',
         title:
           action === 'match'
-            ? `Matched to ${ref}`
+            ? count === 1
+              ? `Matched to ${refs[0]}`
+              : `Matched ${count} releases to ${input.seriesRef}`
             : action === 'affirm'
-              ? 'Match affirmed at 100% confidence'
-              : action === 'suppress'
-                ? 'Suppressed — out of the attention queue'
-                : 'Requeued — back in the claim queue',
+              ? count === 1
+                ? 'Match affirmed at 100% confidence'
+                : `Affirmed ${count} matches at 100% confidence`
+              : count === 1
+                ? 'Suppressed — parked until hand-matched'
+                : `Suppressed ${count} releases — parked until hand-matched`,
         detail:
-          action === 'affirm'
-            ? `${release.ref} · recorded to match_events`
-            : `${release.matchStatus} → ${target} · recorded to match_events`,
+          count > 1
+            ? 'recorded to match_events'
+            : action === 'affirm'
+              ? `${releases[0]?.ref} · recorded to match_events`
+              : `${releases[0]?.matchStatus} → ${target} · recorded to match_events`,
       });
     } catch (err) {
       // The API's 409 invalid-transition message is the whole
@@ -198,7 +281,20 @@ export function ReleasesPage() {
       setResult({
         kind: 'error',
         title: 'Transition rejected by the API.',
-        detail: apiErrorMessage(err, 'the status change failed'),
+        detail:
+          (count > 1 ? `${done}/${count} applied — ` : '') +
+          apiErrorMessage(err, 'the status change failed'),
+      });
+    } finally {
+      // Acting clears the acted rows from the selection; a mid-batch
+      // failure keeps the untouched remainder selected.
+      const acted = new Set(releases.slice(0, done).map((release) => release.infohash));
+      setSelected((current) => {
+        const next = new Set(current);
+        for (const id of acted) {
+          next.delete(id);
+        }
+        return next;
       });
     }
   }
@@ -216,12 +312,26 @@ export function ReleasesPage() {
           }
           seriesTitle={seriesTitleForRef(titles, open?.ref)}
           onBack={closeRelease}
-          onAction={(action, release) => setPending({ action, release })}
+          onAction={(action, release) => setPending({ action, releases: [release] })}
         />
       ) : (
         <>
           <ReleasesHeader refreshedAt={refreshedAt} onRefresh={refresh} />
           <div className="mb-4 flex flex-wrap items-center gap-2">
+            <SearchField
+              className="min-w-0 flex-1 basis-[200px] sm:max-w-[300px]"
+              value={query}
+              hideShortcutHint
+              placeholder="Search releases…"
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setVisible(RELEASE_PAGE_SIZE);
+              }}
+              onClear={() => {
+                setQuery('');
+                setVisible(RELEASE_PAGE_SIZE);
+              }}
+            />
             <StatusFilter
               active={active}
               counts={stats.data}
@@ -232,8 +342,8 @@ export function ReleasesPage() {
               }}
             />
             <span className="ml-1 text-[13px] text-muted">
-              {merged.items.length} {merged.items.length === 1 ? 'release' : 'releases'}
-              {merged.hasMore ? ' loaded' : active.size > 0 ? ' in this filter' : ''}
+              {filtered.length} {filtered.length === 1 ? 'release' : 'releases'}
+              {merged.hasMore ? ' loaded' : active.size > 0 || needle ? ' in this filter' : ''}
             </span>
           </div>
           {failure ? (
@@ -242,17 +352,17 @@ export function ReleasesPage() {
               title="Could not load the queue"
               sub={apiErrorMessage(failure, 'the release indexer did not answer')}
             />
-          ) : loading ? null : merged.items.length === 0 ? (
-            <ReleasesBlank
-              icon="inbox"
-              title="Nothing needs attention"
-              sub="Nothing is exhausted or matched below confidence. Suppressed releases, if any, are listed under their own filter — they are inspection material, not a queue."
-            >
-              {active.size > 0 && (
+          ) : loading ? null : filtered.length === 0 ? (
+            needle ? (
+              <ReleasesBlank
+                icon="search_off"
+                title={`No releases match “${query.trim()}”`}
+                sub="Search covers the release title, matched series, ref and source."
+              >
                 <button
                   type="button"
                   onClick={() => {
-                    showAll();
+                    setQuery('');
                     setVisible(RELEASE_PAGE_SIZE);
                   }}
                   className={cn(
@@ -260,27 +370,63 @@ export function ReleasesPage() {
                     'transition-[transform,box-shadow] duration-[160ms] hover:-translate-y-px hover:shadow-card-hover',
                   )}
                 >
-                  <MaterialIcon name="filter_alt_off" size={16} />
-                  Show all statuses
+                  <MaterialIcon name="backspace" size={16} />
+                  Clear search
                 </button>
-              )}
-            </ReleasesBlank>
+              </ReleasesBlank>
+            ) : (
+              <ReleasesBlank
+                icon="inbox"
+                title="Nothing needs attention"
+                sub="Nothing is exhausted or matched below confidence. Suppressed releases, if any, are listed under their own filter — they are inspection material, not a queue."
+              >
+                {active.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      showAll();
+                      setVisible(RELEASE_PAGE_SIZE);
+                    }}
+                    className={cn(
+                      'inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-line-soft bg-surface px-3 text-sm font-medium text-ink shadow-card',
+                      'transition-[transform,box-shadow] duration-[160ms] hover:-translate-y-px hover:shadow-card-hover',
+                    )}
+                  >
+                    <MaterialIcon name="filter_alt_off" size={16} />
+                    Show all statuses
+                  </button>
+                )}
+              </ReleasesBlank>
+            )
           ) : (
             <>
               <div className="overflow-hidden rounded-[12px] border border-line-soft bg-surface shadow-card">
+                <div className="flex items-center gap-3 border-line-soft border-b bg-surface-2 px-4 py-1.5">
+                  <RowCheck checked={allShown} onChange={toggleAll} label="Select all shown" />
+                  <span className="font-mono text-[10.5px] text-muted uppercase tracking-[0.5px] tabular-nums">
+                    {selected.size > 0 ? `${selected.size} selected` : 'select shown'}
+                  </span>
+                </div>
                 {page.map((release) => (
                   <ReleaseRow
                     key={release.infohash}
                     release={release}
                     seriesTitle={seriesTitleForRef(titles, release.ref)}
+                    selected={selected.has(release.infohash)}
+                    onToggleSelect={() => toggleSelect(release.infohash)}
                     onOpen={() => {
+                      if (narrow) {
+                        setSheetInfohash(release.infohash);
+                        return;
+                      }
                       listScroll.current = window.scrollY;
                       openRelease(release.infohash);
                     }}
+                    onAction={(action) => setPending({ action, releases: [release] })}
                   />
                 ))}
               </div>
-              {(visible < merged.items.length || merged.hasMore) && (
+              {(visible < filtered.length || merged.hasMore) && (
                 <div className="mt-4 flex justify-center">
                   <button
                     type="button"
@@ -295,23 +441,51 @@ export function ReleasesPage() {
                   >
                     <MaterialIcon name="expand_more" size={16} />
                     Load more
-                    {visible < merged.items.length && (
+                    {visible < filtered.length && (
                       <span className="font-mono text-[11px] text-muted tabular-nums">
-                        {merged.items.length - visible} left
+                        {filtered.length - visible} left
                       </span>
                     )}
                   </button>
                 </div>
               )}
+              {selectedReleases.length > 0 && <div className="h-14" aria-hidden="true" />}
             </>
           )}
         </>
+      )}
+      {!openInfohash && !pending && !sheetRelease && selectedReleases.length > 0 && (
+        <BatchBar
+          releases={selectedReleases}
+          onAction={startBatch}
+          onClear={() => setSelected(new Set())}
+        />
+      )}
+      {sheetRelease && (
+        <RowSheet
+          release={sheetRelease}
+          selected={selected.has(sheetRelease.infohash)}
+          onToggleSelect={() => {
+            toggleSelect(sheetRelease.infohash);
+            setSheetInfohash(null);
+          }}
+          onClose={() => setSheetInfohash(null)}
+          onAction={(action) => {
+            setSheetInfohash(null);
+            setPending({ action, releases: [sheetRelease] });
+          }}
+          onDetail={() => {
+            setSheetInfohash(null);
+            listScroll.current = window.scrollY;
+            openRelease(sheetRelease.infohash);
+          }}
+        />
       )}
       {result && <ReleaseToast result={result} onDismiss={() => setResult(null)} />}
       {pending &&
         (pending.action === 'match' ? (
           <HandMatchDialog
-            release={pending.release}
+            releases={pending.releases}
             rows={series.data ?? []}
             onCancel={() => setPending(null)}
             onConfirm={(input) => void runAction(input)}
@@ -319,7 +493,7 @@ export function ReleasesPage() {
         ) : (
           <ActionDialog
             action={pending.action}
-            release={pending.release}
+            releases={pending.releases}
             onCancel={() => setPending(null)}
             onConfirm={(input) => void runAction(input)}
           />
@@ -328,9 +502,22 @@ export function ReleasesPage() {
   );
 }
 
+/**
+ * The slice of a release the action dialogs and transitions need —
+ * satisfied by both the list row and the detail payload, so row quick
+ * actions and detail actions share one path.
+ */
+interface ActionTarget {
+  infohash: string;
+  title: string;
+  matchStatus: MatchStatus;
+  ref: string | null;
+  confidence: number | null;
+}
+
 interface PendingAction {
   action: ReleaseActionId;
-  release: ReleaseDetail;
+  releases: ActionTarget[];
 }
 
 interface ReleaseOutcome {
@@ -375,12 +562,19 @@ function ReleasesHeader({
   );
 }
 
+/**
+ * Low-confidence matches show ONE pill: "Matched – low confidence"
+ * with the incomplete-orange dot — the flag lives inside the pill, not
+ * as a separate label.
+ */
 function StatusPill({
   status,
   size = 'default',
+  lowConf = false,
 }: {
   status: MatchStatus;
   size?: 'default' | 'compact';
+  lowConf?: boolean;
 }) {
   return (
     <span
@@ -391,71 +585,113 @@ function StatusPill({
           : 'h-[22px] px-2.5 text-[10px] tracking-[0.5px]',
       )}
     >
-      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', STATUS_DOT[status])} />
-      {STATUS_LABELS[status]}
-    </span>
-  );
-}
-
-/**
- * Confidence first, as a large tabular number in its own column — it
- * is the triage signal, and a fixed column keeps the numbers aligned
- * down the list. Absent confidence renders a dimmed `––`, never 0.
- */
-function ConfidenceCell({ confidence }: { confidence: number | null }) {
-  return (
-    <span className="flex w-[52px] shrink-0 flex-col items-center justify-center self-stretch">
       <span
         className={cn(
-          'font-semibold text-[19px] leading-none tracking-[-0.5px] tabular-nums',
-          confidence == null && 'text-muted',
+          'h-1.5 w-1.5 shrink-0 rounded-full',
+          lowConf ? 'bg-status-incomplete' : STATUS_DOT[status],
         )}
-        style={{ color: confidenceColor(confidence) }}
-      >
-        {confidence == null ? (
-          <span className="text-muted opacity-60">––</span>
-        ) : (
-          <>
-            {Math.round(confidence * 100)}
-            <span className="font-medium text-[12px]">%</span>
-          </>
-        )}
-      </span>
+      />
+      {STATUS_LABELS[status]}
+      {lowConf && <span className="text-status-incomplete">– low confidence</span>}
     </span>
   );
 }
 
+/** The list's selection checkbox — a button, so it can nest inside the row. */
+function RowCheck({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}) {
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: an <input type="checkbox"> can't render the custom check glyph as a child; button + checkbox semantics is the shape the design reference specifies.
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onChange();
+      }}
+      className="group/check -my-2 -ml-1 grid h-9 w-8 shrink-0 cursor-pointer place-items-center"
+    >
+      <span
+        className={cn(
+          'grid h-[18px] w-[18px] place-items-center rounded-[4px] border transition-colors',
+          checked
+            ? 'border-ink bg-ink text-paper'
+            : 'border-line bg-surface group-hover/check:border-ink',
+        )}
+      >
+        {checked && <MaterialIcon name="check" size={13} />}
+      </span>
+    </button>
+  );
+}
+
 /**
- * One release. Below `sm` the status pill folds into the meta line so
- * the title keeps the full row width and the fixed pill column is
- * dropped. Attempt count is deliberately absent — it is detail-level
- * trivia, not triage.
+ * One release. Checkbox first, then the title over a meta line that
+ * leads with the coloured confidence percent (omitted when unscored —
+ * an exhausted release never carries one) and the status pill. At
+ * `sm`+ the row carries its quick-action icons; below, a chevron —
+ * the tap opens the action sheet instead. Attempt count is
+ * deliberately absent — detail-level trivia, not triage.
  */
 function ReleaseRow({
   release,
   seriesTitle,
+  selected,
+  onToggleSelect,
   onOpen,
+  onAction,
 }: {
   release: ReleaseItem;
   seriesTitle: string | undefined;
+  selected: boolean;
+  onToggleSelect: () => void;
   onOpen: () => void;
+  onAction: (action: ReleaseActionId) => void;
 }) {
   const size = release.sizeBytes == null ? null : formatBytesDecimal(release.sizeBytes);
   const low = isLowConfidence(release.matchStatus, release.confidence);
+  const actions = releaseActions(release.matchStatus, release.confidence);
   return (
-    <button
-      type="button"
+    // biome-ignore lint/a11y/useSemanticElements: the row nests the selection checkbox and quick-action buttons, and <button> cannot contain interactive descendants.
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className="group flex w-full cursor-pointer items-center gap-3 border-line-soft border-b px-4 py-3 text-left outline-none transition-colors last:border-b-0 hover:bg-overlay-soft"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          onOpen();
+        }
+      }}
+      className={cn(
+        'group flex w-full cursor-pointer items-center gap-3 border-line-soft border-b px-4 py-3 text-left outline-none transition-colors last:border-b-0 hover:bg-overlay-soft',
+        selected && 'bg-overlay-soft',
+      )}
     >
-      <ConfidenceCell confidence={release.confidence} />
+      <RowCheck checked={selected} onChange={onToggleSelect} label={`Select ${release.title}`} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate font-mono text-[12.5px] text-ink leading-snug">
           {release.title}
         </span>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] text-muted tabular-nums [&>span]:whitespace-nowrap">
-          <span className="sm:hidden">
-            <StatusPill status={release.matchStatus} size="compact" />
+          {release.confidence != null && (
+            <span
+              className="font-semibold text-[11.5px]"
+              style={{ color: confidenceColor(release.confidence) }}
+            >
+              {confidencePercent(release.confidence)}
+            </span>
+          )}
+          <span>
+            <StatusPill status={release.matchStatus} size="compact" lowConf={low} />
           </span>
           {seriesTitle && <span className="text-ink-2">{seriesTitle}</span>}
           <span>
@@ -464,18 +700,27 @@ function ReleaseRow({
           {size && <span>· {size}</span>}
         </div>
       </div>
-      <span className="hidden w-[108px] shrink-0 flex-col items-start gap-1 sm:flex">
-        <StatusPill status={release.matchStatus} />
-        {low && (
-          <span className="font-mono text-[9.5px] text-status-incomplete uppercase tracking-[0.5px]">
-            low confidence
-          </span>
-        )}
+      <span className="hidden w-[64px] shrink-0 items-center justify-end gap-0.5 sm:flex">
+        {actions.map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            title={action.label}
+            aria-label={`${action.label} — ${release.title}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAction(action.id);
+            }}
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-line-soft hover:text-ink"
+          >
+            <MaterialIcon name={action.icon} size={17} />
+          </button>
+        ))}
       </span>
-      <span className="shrink-0">
+      <span className="shrink-0 sm:hidden">
         <MaterialIcon name="chevron_right" size={18} className="text-muted" />
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -631,10 +876,13 @@ function ReleaseDetailView({
     <button
       type="button"
       onClick={onBack}
-      className="hidden h-8 cursor-pointer items-center gap-1.5 self-start rounded-md pr-2 font-medium text-[13px] text-muted transition-colors hover:text-ink md:inline-flex"
+      className={cn(
+        'hidden h-9 cursor-pointer items-center gap-2 self-start rounded-md border border-line-soft bg-surface px-3 font-medium text-ink text-sm shadow-card md:inline-flex',
+        'transition-[transform,box-shadow,background-color] duration-[160ms] ease-out hover:-translate-y-px hover:bg-overlay-soft hover:shadow-card-hover',
+      )}
     >
       <MaterialIcon name="arrow_back" size={16} />
-      Attention queue
+      Releases
     </button>
   );
 
@@ -668,7 +916,7 @@ function ReleaseDetailView({
                 <span className="font-mono text-[10.5px] text-muted">{seriesTitle}</span>
               )}
             </div>
-            <StatusPill status={release.matchStatus} />
+            <StatusPill status={release.matchStatus} lowConf={low} />
           </div>
           <span className="font-mono text-[10.5px] text-muted [overflow-wrap:anywhere]">
             {release.infohash}
@@ -704,9 +952,7 @@ function ReleaseDetailView({
                   'transition-[transform,box-shadow,background-color,color] duration-[160ms] ease-out hover:-translate-y-px hover:shadow-card-hover',
                   action.primary
                     ? 'bg-ink text-paper'
-                    : action.discard
-                      ? 'ml-auto border border-status-error/40 bg-surface text-status-error hover:bg-status-error hover:text-status-error-fg'
-                      : 'border border-line-soft bg-surface text-ink',
+                    : 'border border-line-soft bg-surface text-ink',
                 )}
               >
                 <MaterialIcon name={action.icon} size={16} />
@@ -907,15 +1153,15 @@ function PosterThumb({ title, className }: { title: string; className: string })
  * Modal at desktop, bottom sheet below `sm`.
  */
 function HandMatchDialog({
-  release,
+  releases,
   rows,
   onCancel,
   onConfirm,
 }: {
-  release: ReleaseDetail;
+  releases: ActionTarget[];
   rows: readonly ListRow[];
   onCancel: () => void;
-  onConfirm: (input: { ref: string; reason: string }) => void;
+  onConfirm: (input: { seriesRef: string; reason: string }) => void;
 }) {
   const [query, setQuery] = useState('');
   const [resolved, setResolved] = useState<ResolvedSeries | null>(null);
@@ -923,9 +1169,15 @@ function HandMatchDialog({
   const [reason, setReason] = useState('');
   const resolve = useResolveSeries();
 
+  // Batch hand match resolves ONE series; episode segments are
+  // composed per release at submit time. Only the single-release form
+  // can preview the exact composed ref.
+  const single = releases.length === 1 ? releases[0] : null;
+  const count = releases.length;
+
   const marker = useMemo<EpisodeMarker | null>(
-    () => parseEpisodeMarker(release.title),
-    [release.title],
+    () => (single ? parseEpisodeMarker(single.title) : null),
+    [single],
   );
 
   const trimmed = query.trim();
@@ -934,7 +1186,7 @@ function HandMatchDialog({
     [rows, trimmed],
   );
 
-  const ref = resolved ? composeReleaseRef(resolved.ref, marker) : '';
+  const ref = resolved ? (single ? composeReleaseRef(resolved.ref, marker) : resolved.ref) : '';
 
   async function pick(row: ListRow) {
     if (!row.ref) {
@@ -989,7 +1241,7 @@ function HandMatchDialog({
                 <MaterialIcon name="link" size={18} />
               </span>
               <DialogPrimitive.Title className="font-semibold text-[15px] text-ink tracking-[-0.2px]">
-                Hand match release
+                {count === 1 ? 'Hand match release' : `Hand match ${count} releases`}
               </DialogPrimitive.Title>
               <DialogPrimitive.Close asChild>
                 <GhostIconButton size="lg" aria-label="Close" className="ml-auto sm:hidden">
@@ -997,12 +1249,18 @@ function HandMatchDialog({
                 </GhostIconButton>
               </DialogPrimitive.Close>
             </div>
-            <p
-              className="shrink-0 truncate px-5 pt-3 font-mono text-[11px] text-ink-2"
-              title={release.title}
-            >
-              {release.title}
-            </p>
+            <div className="flex shrink-0 flex-col gap-0.5 px-5 pt-3">
+              {releases.slice(0, 3).map((release) => (
+                <p
+                  key={release.infohash}
+                  className="truncate font-mono text-[11px] text-ink-2"
+                  title={release.title}
+                >
+                  {release.title}
+                </p>
+              ))}
+              {count > 3 && <p className="font-mono text-[10.5px] text-muted">+{count - 3} more</p>}
+            </div>
             {resolved ? (
               <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-3">
                 <div className="rounded-[8px] border border-line-soft bg-paper px-3 py-2.5">
@@ -1033,16 +1291,18 @@ function HandMatchDialog({
                   </div>
                   <div className="mt-2.5 flex items-baseline gap-2 border-line-soft border-t pt-2.5">
                     <span className="font-mono text-[9.5px] text-muted uppercase tracking-[1px]">
-                      Ref
+                      {single ? 'Ref' : 'Series ref'}
                     </span>
                     <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">
                       {ref}
                     </span>
                   </div>
                   <p className="mt-1 font-mono text-[10px] text-muted leading-[1.5]">
-                    {marker
-                      ? `episode segment ${ref.slice(ref.indexOf('#') + 1)} parsed from the release title`
-                      : 'series-level ref — no episode parsed from the release title'}
+                    {single
+                      ? marker
+                        ? `episode segment ${ref.slice(ref.indexOf('#') + 1)} parsed from the release title`
+                        : 'series-level ref — no episode parsed from the release title'
+                      : 'episode segments are parsed per release; releases without one get the series-level ref'}
                   </p>
                 </div>
                 <label className="mt-3 flex flex-col gap-1.5">
@@ -1138,7 +1398,9 @@ function HandMatchDialog({
               <button
                 type="button"
                 disabled={!resolved}
-                onClick={() => resolved && onConfirm({ ref, reason: reason.trim() })}
+                onClick={() =>
+                  resolved && onConfirm({ seriesRef: resolved.ref, reason: reason.trim() })
+                }
                 className={cn(
                   'inline-flex h-9 items-center gap-2 rounded-md px-3.5 font-medium text-sm shadow-card transition-[transform,box-shadow] duration-[160ms]',
                   resolved
@@ -1147,7 +1409,7 @@ function HandMatchDialog({
                 )}
               >
                 <MaterialIcon name="link" size={16} />
-                Match release
+                {count === 1 ? 'Match release' : `Match ${count} releases`}
               </button>
             </div>
           </DialogPrimitive.Content>
@@ -1165,15 +1427,6 @@ interface ResolvedSeries {
   episodes: number;
 }
 
-const ACTION_COPY: Record<
-  'affirm' | 'requeue' | 'suppress',
-  { title: string; icon: string; cta: string }
-> = {
-  affirm: { title: 'Affirm match', icon: 'verified', cta: 'Affirm match' },
-  requeue: { title: 'Requeue release', icon: 'restart_alt', cta: 'Requeue' },
-  suppress: { title: 'Suppress release', icon: 'block', cta: 'Suppress' },
-};
-
 /**
  * Confirm gate for the ref-less actions. Every transition confirms
  * before mutating and takes an optional reason recorded to
@@ -1181,26 +1434,41 @@ const ACTION_COPY: Record<
  */
 function ActionDialog({
   action,
-  release,
+  releases,
   onCancel,
   onConfirm,
 }: {
   action: ReleaseActionId;
-  release: ReleaseDetail;
+  releases: ActionTarget[];
   onCancel: () => void;
   onConfirm: (input: { reason: string }) => void;
 }) {
   const [reason, setReason] = useState('');
-  if (action === 'match') {
+  if (action === 'match' || releases.length === 0) {
     return null;
   }
-  const copy = ACTION_COPY[action];
-  const body =
+  const release = releases[0] as ActionTarget;
+  const count = releases.length;
+  const copy =
     action === 'affirm'
-      ? 'Keeps the current ref and records it as an operator match. Operator matches are certain, so the release leaves the low-confidence set at 100%.'
-      : action === 'suppress'
-        ? 'Takes this release out of the attention queue for good: suppressed is inspection material, and the only way back is a hand match — there is no unsuppress.'
-        : `Returns this release to unmatched and clears its exhaustion accounting (${release.attemptCount} attempts), so the claim queue offers it again.`;
+      ? {
+          title: count === 1 ? 'Affirm match' : `Affirm ${count} matches`,
+          icon: 'verified',
+          body:
+            count === 1
+              ? 'Keeps the current ref and records it as an operator match. Operator matches are certain, so the release leaves the low-confidence set at 100%.'
+              : `Keeps each release's current ref and records it as an operator match at 100% confidence. ${count} releases leave the low-confidence set.`,
+          cta: count === 1 ? 'Affirm match' : `Affirm ${count} matches`,
+        }
+      : {
+          title: count === 1 ? 'Suppress release' : `Suppress ${count} releases`,
+          icon: 'do_not_disturb_on',
+          body:
+            count === 1
+              ? 'Parks this release out of the attention queue. Suppressed releases are not offered to the matcher again until an operator hand-matches them to a ref.'
+              : `Parks ${count} releases out of the attention queue. Suppressed releases are not offered to the matcher again until an operator hand-matches them to a ref.`,
+          cta: count === 1 ? 'Suppress' : `Suppress ${count}`,
+        };
   return (
     <DialogPrimitive.Root open onOpenChange={(next) => !next && onCancel()}>
       <DialogPrimitive.Portal>
@@ -1218,12 +1486,21 @@ function ActionDialog({
                 {copy.title}
               </DialogPrimitive.Title>
             </div>
-            <p className="mt-3 text-[13px] text-ink-2 leading-[1.55]">{body}</p>
+            <p className="mt-3 text-[13px] text-ink-2 leading-[1.55]">{copy.body}</p>
             <div className="mt-3 flex flex-col gap-1 rounded-[8px] bg-paper px-3 py-2.5">
-              <span className="truncate font-mono text-[11px] text-ink-2" title={release.title}>
-                {release.title}
-              </span>
-              {action === 'affirm' && (
+              {releases.slice(0, 3).map((item) => (
+                <span
+                  key={item.infohash}
+                  className="truncate font-mono text-[11px] text-ink-2"
+                  title={item.title}
+                >
+                  {item.title}
+                </span>
+              ))}
+              {count > 3 && (
+                <span className="font-mono text-[10.5px] text-muted">+{count - 3} more</span>
+              )}
+              {action === 'affirm' && count === 1 && (
                 <span className="font-mono text-[11px] text-ink">
                   {release.ref}{' '}
                   <span className="text-muted">
@@ -1268,6 +1545,153 @@ function ActionDialog({
             </div>
           </DialogPrimitive.Content>
         </div>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+/**
+ * Selection bar — appears once anything is checked. Each action names
+ * how many of the selected releases it applies to and acts on that
+ * subset only; a zero-eligible action is hidden. Hand match is always
+ * the last option.
+ */
+function BatchBar({
+  releases,
+  onAction,
+  onClear,
+}: {
+  releases: readonly ReleaseItem[];
+  onAction: (action: ReleaseActionId) => void;
+  onClear: () => void;
+}) {
+  const eligible = (action: ReleaseActionId) =>
+    releases.filter((item) => releaseActionApplies(action, item.matchStatus, item.confidence))
+      .length;
+  const button = (action: ReleaseActionId, icon: string, label: string) => {
+    const count = eligible(action);
+    if (count === 0) {
+      return null;
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => onAction(action)}
+        className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md border border-line-soft bg-paper px-2.5 font-medium text-[13px] text-ink transition-colors hover:bg-overlay-soft"
+      >
+        <MaterialIcon name={icon} size={15} className="text-muted" />
+        {label}
+        <span className="font-mono text-[10.5px] text-muted tabular-nums">{count}</span>
+      </button>
+    );
+  };
+  return (
+    <div
+      className="fixed inset-x-3 bottom-3 z-[70] flex justify-center"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      <div className="flex max-w-full flex-wrap items-center gap-2 rounded-[12px] border border-line-soft bg-surface px-3 py-2 shadow-pop">
+        <span className="px-1 font-medium text-[13px] text-ink tabular-nums">
+          {releases.length} selected
+        </span>
+        {button('affirm', 'verified', 'Affirm')}
+        {button('suppress', 'do_not_disturb_on', 'Suppress')}
+        {button('match', 'link', 'Hand match')}
+        <button
+          type="button"
+          onClick={onClear}
+          aria-label="Clear selection"
+          className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-muted transition-colors hover:bg-overlay-soft hover:text-ink"
+        >
+          <MaterialIcon name="close" size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Phone rows open this sheet instead of navigating — quick actions
+ * first, the detail page is one option among them.
+ */
+function RowSheet({
+  release,
+  selected,
+  onToggleSelect,
+  onClose,
+  onAction,
+  onDetail,
+}: {
+  release: ReleaseItem;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onClose: () => void;
+  onAction: (action: ReleaseActionId) => void;
+  onDetail: () => void;
+}) {
+  const actions = releaseActions(release.matchStatus, release.confidence);
+  const low = isLowConfidence(release.matchStatus, release.confidence);
+  const item = (
+    key: string,
+    icon: string,
+    label: string,
+    onClick: () => void,
+    emphasis?: boolean,
+  ) => (
+    <button
+      key={key}
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex h-12 w-full cursor-pointer items-center gap-3 rounded-[10px] px-3 text-left font-medium text-[14px] transition-colors hover:bg-overlay-soft',
+        emphasis ? 'text-ink' : 'text-ink-2',
+      )}
+    >
+      <MaterialIcon name={icon} size={18} className={emphasis ? 'text-ink' : 'text-muted'} />
+      {label}
+    </button>
+  );
+  return (
+    <DialogPrimitive.Root open onOpenChange={(next) => !next && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[80] bg-overlay" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          aria-label="Release actions"
+          className="fixed inset-x-0 bottom-0 z-[81] flex flex-col overflow-hidden rounded-t-[16px] bg-surface shadow-pop outline-none"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <div className="flex flex-col gap-1.5 border-line-soft border-b px-5 py-4">
+            <DialogPrimitive.Title asChild>
+              <span className="font-mono text-[12px] text-ink leading-snug [overflow-wrap:anywhere]">
+                {release.title}
+              </span>
+            </DialogPrimitive.Title>
+            <div className="flex items-center gap-2">
+              <StatusPill status={release.matchStatus} size="compact" lowConf={low} />
+              {release.confidence != null && (
+                <span
+                  className="font-mono text-[10.5px] tabular-nums"
+                  style={{ color: confidenceColor(release.confidence) }}
+                >
+                  {confidencePercent(release.confidence)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-col p-2">
+            {actions.map((action) =>
+              item(action.id, action.icon, action.label, () => onAction(action.id), action.primary),
+            )}
+            {item(
+              'select',
+              selected ? 'indeterminate_check_box' : 'check_box',
+              selected ? 'Deselect' : 'Select',
+              onToggleSelect,
+            )}
+            {item('detail', 'arrow_forward', 'Release details', onDetail)}
+          </div>
+        </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );

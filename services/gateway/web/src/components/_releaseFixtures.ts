@@ -103,7 +103,7 @@ const SEEDS: Seed[] = [
     status: 'exhausted',
     attempts: 8,
     bytes: 3_980_000_000,
-    confidence: 0.62,
+    confidence: null,
     postings: [
       {
         title: 'Attack on Titan S04E29 The Final Chapters Part 2 1080p WEB-DL AAC2.0 H.264',
@@ -163,7 +163,7 @@ const SEEDS: Seed[] = [
     status: 'exhausted',
     attempts: 8,
     bytes: 6_240_000_000,
-    confidence: 0.71,
+    confidence: null,
     postings: [
       {
         title: 'Jujutsu.Kaisen.S02E20.2160p.NF.WEB-DL.DDP5.1.HDR.H.265-Kitsune',
@@ -303,7 +303,7 @@ const SEEDS: Seed[] = [
     status: 'exhausted',
     attempts: 8,
     bytes: 1_020_000_000,
-    confidence: 0.49,
+    confidence: null,
     postings: [
       {
         title: 'Steins;Gate 0 - 14 [1080p][HEVC][Multi-Sub]',

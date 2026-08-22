@@ -7,8 +7,11 @@ import {
   confidencePercent,
   isLowConfidence,
   LOW_CONFIDENCE,
+  releaseActionApplies,
   releaseActions,
+  releaseMatchesQuery,
   seriesRefOf,
+  seriesSearchIndex,
   seriesTitleForRef,
   seriesTitleIndex,
 } from './releases';
@@ -71,12 +74,13 @@ describe('releaseActions', () => {
   const ids = (status: Parameters<typeof releaseActions>[0], confidence: number | null) =>
     releaseActions(status, confidence).map((action) => action.id);
 
-  it('offers hand match, requeue, and suppress for exhausted', () => {
-    expect(ids('exhausted', 0.62)).toEqual(['match', 'requeue', 'suppress']);
-    expect(releaseActions('exhausted', 0.62)[0]?.primary).toBe(true);
-    // Suppress is the discard: rendered apart from and unlike the
-    // constructive actions.
-    expect(releaseActions('exhausted', 0.62)[2]?.discard).toBe(true);
+  it('offers suppress then hand match for exhausted — no requeue', () => {
+    // Hand match is always the LAST option; by exhaustion automated
+    // matching has had its chance, so requeueing is off the menu.
+    expect(ids('exhausted', null)).toEqual(['suppress', 'match']);
+    const actions = releaseActions('exhausted', null);
+    expect(actions[0]?.primary).toBeUndefined();
+    expect(actions[1]?.primary).toBe(true);
   });
 
   it('offers only hand match for suppressed — there is no unsuppress', () => {
@@ -100,6 +104,65 @@ describe('releaseActions', () => {
   it('offers nothing for unmatched (still queued) or dead (downloader-owned)', () => {
     expect(ids('unmatched', null)).toEqual([]);
     expect(ids('dead', null)).toEqual([]);
+  });
+});
+
+describe('releaseActionApplies', () => {
+  it('mirrors the per-state action table', () => {
+    expect(releaseActionApplies('suppress', 'exhausted', null)).toBe(true);
+    expect(releaseActionApplies('suppress', 'suppressed', null)).toBe(false);
+    expect(releaseActionApplies('match', 'exhausted', null)).toBe(true);
+    expect(releaseActionApplies('match', 'suppressed', null)).toBe(true);
+    expect(releaseActionApplies('match', 'matched', 0.94)).toBe(true);
+    expect(releaseActionApplies('match', 'unmatched', null)).toBe(false);
+    expect(releaseActionApplies('match', 'dead', null)).toBe(false);
+  });
+
+  it('limits affirm to the low-confidence set', () => {
+    expect(releaseActionApplies('affirm', 'matched', 0.52)).toBe(true);
+    expect(releaseActionApplies('affirm', 'matched', 0.94)).toBe(false);
+    expect(releaseActionApplies('affirm', 'exhausted', null)).toBe(false);
+  });
+});
+
+describe('releaseMatchesQuery', () => {
+  const release = {
+    title: '[SubsPlease] Sousou no Frieren - 29 (1080p).mkv',
+    ref: 'tvdb:424536#s01e29',
+    sources: ['nyaa', 'animetosho'],
+  };
+
+  it('matches title, ref, and source', () => {
+    expect(releaseMatchesQuery(release, 'frieren', undefined)).toBe(true);
+    expect(releaseMatchesQuery(release, 'tvdb:424536', undefined)).toBe(true);
+    expect(releaseMatchesQuery(release, 'nyaa', undefined)).toBe(true);
+    expect(releaseMatchesQuery(release, 'bebop', undefined)).toBe(false);
+  });
+
+  it('matches the resolved series blob when provided', () => {
+    expect(releaseMatchesQuery(release, '葬送', '葬送のフリーレン\nfrieren')).toBe(true);
+    expect(releaseMatchesQuery(release, '葬送', undefined)).toBe(false);
+  });
+
+  it('matches everything on an empty needle', () => {
+    expect(releaseMatchesQuery(release, '', undefined)).toBe(true);
+  });
+});
+
+describe('seriesSearchIndex', () => {
+  it('lowercases the alias blob and skips ref-less rows', () => {
+    const rows: ListRow[] = [
+      { ...row('tvdb:81189', 'Cowboy Bebop'), searchKey: 'Cowboy Bebop\nカウボーイビバップ' },
+      { ...row('', 'Nameless'), ref: undefined },
+    ];
+    const index = seriesSearchIndex(rows);
+    expect(index.size).toBe(1);
+    expect(index.get('tvdb:81189')).toBe('cowboy bebop\nカウボーイビバップ');
+  });
+
+  it('falls back to the display titles when the row has no searchKey', () => {
+    const index = seriesSearchIndex([{ ...row('tvdb:1', 'Monster'), canonicalTitle: 'MONSTER' }]);
+    expect(index.get('tvdb:1')).toBe('monster\nmonster');
   });
 });
 
