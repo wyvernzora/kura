@@ -61,7 +61,7 @@ func runScan(ctx context.Context, deps Deps, in ScanInput) (api.ScanResult, erro
 	if err != nil {
 		return api.ScanResult{}, err
 	}
-	runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger, deps.PreferredLanguages)
+	runner := scan.NewRunner(deps.LibRoot, in.Ref, source, deps.Inspector, deps.Now, deps.Logger)
 	var out api.ScanResult
 	var modelForIndex *series.Series
 	err = deps.Coordinator.WithSeries(ctx, in.Ref, func() error {

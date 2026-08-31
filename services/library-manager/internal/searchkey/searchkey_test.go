@@ -85,21 +85,23 @@ func TestComputeDropsCJKOnlyAliases(t *testing.T) {
 	}
 }
 
-func TestComputeFiltersTranslationsByPreferredLangs(t *testing.T) {
-	in := Inputs{
+func TestComputeFoldsLatinTranslationsAndDropsCJKOnes(t *testing.T) {
+	got := Compute(Inputs{
 		Canonical: "葬送のフリーレン",
 		TranslatedTitles: []TranslatedTitle{
 			{Language: "en", Value: "Frieren Beyond Journeys End"},
 			{Language: "fr", Value: "Frieren Au-dela du Voyage"},
+			{Language: "ja", Value: "葬送のフリーレン"},
 		},
-		PreferredLangs: []string{"ja", "en"},
-	}
-	got := Compute(in)
+	})
 	if !containsLine(got, "frierenbeyondjourneysend") {
 		t.Fatalf("Compute = %q, want flat en translation line", got)
 	}
-	if strings.Contains(got, "voyage") {
-		t.Fatalf("Compute = %q, expected fr translation dropped", got)
+	if !containsLine(got, "frierenaudeladuvoyage") {
+		t.Fatalf("Compute = %q, want flat fr translation line", got)
+	}
+	if strings.Contains(got, "葬送") {
+		t.Fatalf("Compute = %q, expected CJK-only translation dropped", got)
 	}
 }
 
@@ -119,8 +121,7 @@ func TestComputeIdempotent(t *testing.T) {
 		Aliases: []provider.TitleEntry{
 			{Value: "Sousou no Frieren"},
 		},
-		UserAliases:    []string{"frieren-jp"},
-		PreferredLangs: []string{"ja"},
+		UserAliases: []string{"frieren-jp"},
 	}
 	first := Compute(in)
 	second := Compute(in)
@@ -162,4 +163,20 @@ func containsLine(blob, line string) bool {
 		}
 	}
 	return false
+}
+
+func TestComputeFoldsLatinTranslationOfCJKOnlyTitles(t *testing.T) {
+	// tvdb:173211 — canonical and preferred are both みつどもえ and TVDB
+	// carries no aliases, so the English translation is the only
+	// romaji handle the series has.
+	got := Compute(Inputs{
+		Canonical: "みつどもえ",
+		Preferred: "みつどもえ",
+		TranslatedTitles: []TranslatedTitle{
+			{Language: "en", Value: "Mitsudomoe"},
+		},
+	})
+	if !containsLine(got, "mitsudomoe") {
+		t.Fatalf("Compute = %q, want 'mitsudomoe'", got)
+	}
 }

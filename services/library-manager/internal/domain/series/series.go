@@ -346,11 +346,7 @@ func (s *Series) RemoveUserAlias(alias textnorm.NFCString) bool {
 // Add / scan paths pass both transient slices; the CLI alias-mutate
 // path passes nil for both — TVDB material lands back on the next
 // scan.
-//
-// prefs is the user's configured language preference (BCP-47 base form).
-// Empty list disables the translation channel.
 func (s *Series) RecomputeSearchKey(
-	prefs []string,
 	transientAliases []provider.TitleEntry,
 	transientTranslated []provider.TitleEntry,
 ) {
@@ -371,6 +367,5 @@ func (s *Series) RecomputeSearchKey(
 		TranslatedTitles: tt,
 		Aliases:          transientAliases,
 		UserAliases:      users,
-		PreferredLangs:   prefs,
 	})
 }

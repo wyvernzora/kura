@@ -109,7 +109,7 @@ func Import(ctx context.Context, deps Deps, in ImportInput) (result api.AddResul
 		model.Tags = preservedTags
 		model.Generation = preservedGeneration
 	}
-	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
+	model.RecomputeSearchKey(metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("import")); err != nil {
 		return api.AddResult{}, err
 	}

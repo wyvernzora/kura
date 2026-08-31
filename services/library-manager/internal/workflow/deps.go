@@ -67,12 +67,6 @@ type Deps struct {
 	// CLI runs leave it nil; kura serve sets it.
 	Logger *slog.Logger
 
-	// PreferredLanguages contains ordered BCP-47 base forms. Used by the
-	// searchkey fold to gate which translated titles flow into a series's
-	// `searchKey` blob. Empty disables the translation channel — only
-	// ASCII aliases + user aliases contribute to searchKey.
-	PreferredLanguages []string
-
 	// RowBuildOptions controls list/show row projection policy. Nil uses
 	// Kura defaults; cmd/kura-library-manager sets this from deploy-time config.
 	RowBuildOptions *indexfile.BuildOptions

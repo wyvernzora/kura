@@ -39,15 +39,12 @@ type TranslatedTitle struct {
 // is transient per-call data — typically the latest provider response;
 // callers may pass nil when only persisted state is in scope.
 // UserAliases is persisted user shorthands.
-// PreferredLangs filters TranslatedTitles via BCP-47 base form
-// (e.g. "ja", "en"); empty list disables the translation channel.
 type Inputs struct {
 	Canonical        string
 	Preferred        string
 	TranslatedTitles []TranslatedTitle
 	Aliases          []provider.TitleEntry
 	UserAliases      []string
-	PreferredLangs   []string
 }
 
 // Compute folds Inputs into the persisted search blob. Output is a
@@ -61,15 +58,6 @@ func Compute(in Inputs) string {
 	}
 	if v := flatten(in.Preferred); v != "" {
 		displaySet[v] = struct{}{}
-	}
-
-	prefSet := map[string]struct{}{}
-	for _, lang := range in.PreferredLangs {
-		l := strings.ToLower(strings.TrimSpace(lang))
-		if l == "" {
-			continue
-		}
-		prefSet[l] = struct{}{}
 	}
 
 	out := map[string]struct{}{}
@@ -91,8 +79,14 @@ func Compute(in Inputs) string {
 		add(alias.Value)
 	}
 	for _, entry := range in.TranslatedTitles {
-		lang := strings.ToLower(strings.TrimSpace(entry.Language))
-		if _, ok := prefSet[lang]; !ok {
+		// Same Latin-only rule the alias channel uses, and for the
+		// same reason: CJK translations duplicate what the display
+		// titles already cover. Deliberately NOT gated on the
+		// operator's preferred languages — that list is what picked
+		// the display title, so every translation passing such a
+		// gate would dedupe against it, leaving a CJK-titled series
+		// with an empty blob and no romaji handle at all.
+		if !isLatinOnly(entry.Value) {
 			continue
 		}
 		add(entry.Value)

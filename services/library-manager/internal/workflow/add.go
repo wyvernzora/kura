@@ -80,7 +80,7 @@ func Add(ctx context.Context, deps Deps, in AddInput) (result api.AddResult, err
 	// Aliases + translated titles fold into searchKey here and stay
 	// transient — neither lands on disk. Next scan refreshes both
 	// from TVDB.
-	model.RecomputeSearchKey(deps.PreferredLanguages, metadataSeries.Aliases, metadataSeries.TranslatedTitles)
+	model.RecomputeSearchKey(metadataSeries.Aliases, metadataSeries.TranslatedTitles)
 	if err := seriesfile.SaveCAS(deps.LibRoot, model, coord.NewMutator("add")); err != nil {
 		return api.AddResult{}, err
 	}

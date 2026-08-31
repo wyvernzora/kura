@@ -57,16 +57,15 @@ func buildDepsAsyncIndex(
 	// configured long-lived registry before transports start.
 	registry := jobs.NewRegistry(ctx, jobs.Config{}, nil)
 	return workflow.Deps{
-		LibRoot:            libRoot,
-		Index:              index,
-		Coordinator:        coordinator,
-		Provider:           provider,
-		Inspector:          inspector,
-		Now:                time.Now,
-		Jobs:               registry,
-		PreferredLanguages: cfg.Metadata.PreferredLanguages,
-		RowBuildOptions:    &rowBuildOptions,
-		ConflictAttempts:   cfg.Coordination.ConflictRetries + 1,
+		LibRoot:          libRoot,
+		Index:            index,
+		Coordinator:      coordinator,
+		Provider:         provider,
+		Inspector:        inspector,
+		Now:              time.Now,
+		Jobs:             registry,
+		RowBuildOptions:  &rowBuildOptions,
+		ConflictAttempts: cfg.Coordination.ConflictRetries + 1,
 	}, nil
 }
 
