@@ -10,7 +10,7 @@
 # --use-test-stubs (in-memory provider); leave unset for the real
 # provider path (KURA_TVDB_KEY required for verbs that resolve against
 # TVDB).
-FROM golang:1.26.4-alpine
+FROM golang:1.27.0-alpine
 
 # mediainfo is a runtime dep of `kura scan`. tini reaps air/kura
 # cleanly when docker stops the container; -g (set on ENTRYPOINT)
