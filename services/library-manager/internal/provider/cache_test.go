@@ -117,3 +117,8 @@ func (p *fakeSource) GetSeries(context.Context, string, string) (Series, error) 
 	p.seriesCalls++
 	return p.series, nil
 }
+
+func (p *fakeSource) GetSeriesSummary(context.Context, string) (SeriesSummary, error) {
+	p.seriesCalls++
+	return p.series.SeriesSummary, nil
+}

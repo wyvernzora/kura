@@ -178,6 +178,12 @@ func compareResults(a, b Result) int {
 	if diff := len(b.Evidence) - len(a.Evidence); diff != 0 {
 		return diff
 	}
+	// Match quality outranks provider rank: the source's own relevance
+	// ordering is weak enough to bury an exact title match below a
+	// dozen coincidental substring hits.
+	if diff := bestMatchTier(a.Evidence) - bestMatchTier(b.Evidence); diff != 0 {
+		return diff
+	}
 	if diff := sumRank(a.Evidence) - sumRank(b.Evidence); diff != 0 {
 		return diff
 	}
@@ -185,6 +191,15 @@ func compareResults(a, b Result) int {
 		return diff
 	}
 	return compareMetadataRef(a, b)
+}
+
+// bestMatchTier is the strongest match any of a result's terms made.
+func bestMatchTier(evidence []Evidence) int {
+	best := matchTier(nil)
+	for _, hit := range evidence {
+		best = min(best, matchTier(hit.Annotations))
+	}
+	return best
 }
 
 func compareMetadataRef(a, b Result) int {

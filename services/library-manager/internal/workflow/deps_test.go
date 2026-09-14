@@ -53,6 +53,9 @@ func (stubSource) Search(context.Context, textnorm.NFCString, provider.SearchOpt
 func (stubSource) GetSeries(context.Context, string, string) (provider.Series, error) {
 	return provider.Series{}, nil
 }
+func (stubSource) GetSeriesSummary(context.Context, string) (provider.SeriesSummary, error) {
+	return provider.SeriesSummary{}, nil
+}
 
 func TestProviderFactoryCachesAfterRecoveredError(t *testing.T) {
 	calls := 0

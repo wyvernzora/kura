@@ -146,6 +146,23 @@ func (p *Provider) GetSeries(ctx context.Context, metadataID, ordering string) (
 	return p.normalizeSeries(extended, episodes, preferredByID), nil
 }
 
+// GetSeriesSummary returns series-level facts for one series in a single
+// upstream request. The full GetSeries view additionally walks the
+// paginated episode spine, which resolve-time candidate enrichment does
+// not need — 50 candidates would otherwise cost hundreds of requests.
+func (p *Provider) GetSeriesSummary(ctx context.Context, metadataID string) (provider.SeriesSummary, error) {
+	metadataID = strings.TrimSpace(metadataID)
+	if metadataID == "" {
+		return provider.SeriesSummary{}, errors.New("tvdb: empty series id")
+	}
+
+	extended, err := p.client.seriesExtended(ctx, metadataID)
+	if err != nil {
+		return provider.SeriesSummary{}, err
+	}
+	return p.normalizeSeries(extended, nil, nil).SeriesSummary, nil
+}
+
 // firstPreferredLanguage returns the first non-empty entry in
 // preferredLanguages, normalized. Empty when no preference is set.
 func (p *Provider) firstPreferredLanguage() string {

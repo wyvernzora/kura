@@ -111,6 +111,27 @@ func (p *cachedSource) GetSeries(ctx context.Context, metadataID, ordering strin
 	return stored, nil
 }
 
+func (p *cachedSource) GetSeriesSummary(ctx context.Context, metadataID string) (SeriesSummary, error) {
+	key, err := cacheKey(p.next.Key(), "series_summary", metadataID)
+	if err != nil {
+		return SeriesSummary{}, err
+	}
+	if cached, ok := p.get(key); ok {
+		return cached.(SeriesSummary), nil
+	}
+
+	summary, err := p.next.GetSeriesSummary(ctx, metadataID)
+	if err != nil {
+		return SeriesSummary{}, err
+	}
+	// Store an isolated copy so the upstream Source can safely free or
+	// mutate its own buffers; subsequent reads return this copy
+	// unchanged. Per Source contract, callers must not mutate.
+	stored := cloneSeriesSummary(summary)
+	p.set(key, stored)
+	return stored, nil
+}
+
 func (p *cachedSource) get(key string) (any, bool) {
 	return p.entries.Get(key)
 }

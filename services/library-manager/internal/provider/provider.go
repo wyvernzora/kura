@@ -33,6 +33,11 @@ type Source interface {
 	// read views, matching, and filesystem title selection, not as durable local
 	// library state.
 	GetSeries(ctx context.Context, metadataID, ordering string) (Series, error)
+
+	// GetSeriesSummary returns series-level facts only, without the episode
+	// spine. Candidate-list enrichment uses this so resolving a query does
+	// not pay for every candidate's full paginated episode list.
+	GetSeriesSummary(ctx context.Context, metadataID string) (SeriesSummary, error)
 }
 
 // SearchOptions scopes metadata search without making the search interface

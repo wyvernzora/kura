@@ -250,6 +250,15 @@ func (p *Provider) GetSeries(_ context.Context, id, _ string) (provider.Series, 
 	return s, nil
 }
 
+// GetSeriesSummary returns the fixture series' summary, or provider.ErrNotFound.
+func (p *Provider) GetSeriesSummary(ctx context.Context, id string) (provider.SeriesSummary, error) {
+	s, err := p.GetSeries(ctx, id, "")
+	if err != nil {
+		return provider.SeriesSummary{}, err
+	}
+	return s.SeriesSummary, nil
+}
+
 // Inspector implements media.Inspector with canned facts.
 type Inspector struct {
 	resolution string

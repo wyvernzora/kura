@@ -23,6 +23,14 @@ func (previewSource) Search(context.Context, textnorm.NFCString, provider.Search
 	return nil, nil
 }
 
+func (p previewSource) GetSeriesSummary(ctx context.Context, id string) (provider.SeriesSummary, error) {
+	series, err := p.GetSeries(ctx, id, "")
+	if err != nil {
+		return provider.SeriesSummary{}, err
+	}
+	return series.SeriesSummary, nil
+}
+
 func (previewSource) GetSeries(_ context.Context, id, _ string) (provider.Series, error) {
 	ep1, _ := refs.NewEpisode(1, 1)
 	ep2, _ := refs.NewEpisode(1, 2)

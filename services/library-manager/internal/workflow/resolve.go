@@ -111,7 +111,8 @@ func candidateFrom(r resolve.Result, genres []string, poster provider.Artwork) a
 }
 
 // enrichCandidates pulls per-candidate genres and poster art in parallel
-// via source.GetSeries. Failures per-candidate fall back to no
+// via source.GetSeriesSummary — one upstream request per candidate, not
+// the full episode spine. Failures per-candidate fall back to no
 // enrichment (best-effort, never breaks the resolve).
 func enrichCandidates(ctx context.Context, source provider.Source, results []resolve.Result) map[string]enrichment {
 	out := make(map[string]enrichment, len(results))
@@ -121,15 +122,15 @@ func enrichCandidates(ctx context.Context, source provider.Source, results []res
 	for _, r := range results {
 		ref := r.Summary.MetadataRef
 		g.Go(func() error {
-			series, err := source.GetSeries(gctx, ref.ID(), "")
+			summary, err := source.GetSeriesSummary(gctx, ref.ID())
 			if err != nil {
 				return nil
 			}
 			mu.Lock()
 			out[ref.String()] = enrichment{
-				genres:      append([]string(nil), series.SeriesSummary.Genres...),
-				posterURL:   series.Poster.URL,
-				posterThumb: series.Poster.ThumbnailURL,
+				genres:      append([]string(nil), summary.Genres...),
+				posterURL:   summary.Poster.URL,
+				posterThumb: summary.Poster.ThumbnailURL,
 			}
 			mu.Unlock()
 			return nil

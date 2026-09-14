@@ -47,6 +47,14 @@ func (s *strategyFakeSource) GetSeries(_ context.Context, metadataID, _ string) 
 	return series, nil
 }
 
+func (s *strategyFakeSource) GetSeriesSummary(ctx context.Context, metadataID string) (provider.SeriesSummary, error) {
+	series, err := s.GetSeries(ctx, metadataID, "")
+	if err != nil {
+		return provider.SeriesSummary{}, err
+	}
+	return series.SeriesSummary, nil
+}
+
 func testSummary(ref string) provider.SeriesSummary {
 	return provider.SeriesSummary{
 		MetadataRef:    refs.Metadata(ref),
