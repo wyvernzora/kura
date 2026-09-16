@@ -10,8 +10,8 @@ require (
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/wyvernzora/kura/services/library-manager v0.0.0-00010101000000-000000000000
 	github.com/wyvernzora/kura/services/release-indexer v0.0.0-00010101000000-000000000000
-	golang.org/x/term v0.45.0
-	golang.org/x/tools v0.48.0
+	golang.org/x/term v0.46.0
+	golang.org/x/tools v0.50.0
 	rsc.io/script v0.0.2
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
-	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )
