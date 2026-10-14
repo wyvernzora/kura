@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
-	github.com/alecthomas/kong v1.16.0
+	github.com/alecthomas/kong v1.16.1
 	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/oklog/ulid/v2 v2.1.2
 	github.com/pelletier/go-toml/v2 v2.4.3
