@@ -1,2 +1,6 @@
 allowBuilds:
-  isolated-vm: true
+  # Optional SSH acceleration is unnecessary for the node package build.
+  cpu-features: false
+  ssh2: false
+  # The pinned package ships prebuilds for our Node 24 build platforms.
+  isolated-vm: false
