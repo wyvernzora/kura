@@ -42,7 +42,6 @@ export class KuraQueueTrigger implements INodeType {
 		polling: true,
 		inputs: [],
 		outputs: [NodeConnectionTypes.Main],
-		usableAsTool: true,
 		credentials: [{ name: CRED, required: true }],
 		properties: [
 			{
