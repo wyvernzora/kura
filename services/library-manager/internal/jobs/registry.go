@@ -158,7 +158,7 @@ func (r *Registry) Shutdown(grace time.Duration) int {
 // Submit registers a tracked job for (kind, series) and spawns a
 // goroutine to run fn. Three outcomes:
 //
-//   - No existing job for series: a fresh tracked Job is created and
+//   - No running job for series: a fresh tracked Job is created and
 //     returned. The goroutine runs fn with a derived ctx that carries
 //     the configured per-job timeout and a capture-only
 //     progress reporter that records the latest event into the job
@@ -166,9 +166,9 @@ func (r *Registry) Shutdown(grace time.Duration) int {
 //     Job.LatestProgress / UntypedJob.Progress; the registry does
 //     NOT forward events to whatever reporter the caller's ctx had
 //     installed.
-//   - Existing job for the same series with the same kind: the
+//   - Running job for the same series with the same kind: the
 //     existing typed *Job[T] is returned (de-dupe). No new goroutine.
-//   - Existing job for the same series with a different kind: an untracked
+//   - Running job for the same series with a different kind: an untracked
 //     failed *Job[T] carrying *JobBusyError is returned.
 //     No registration, no goroutine.
 //
@@ -194,7 +194,8 @@ func Submit[T any](
 	fn func(ctx context.Context) (T, error),
 ) *Job[T] {
 	r.mu.Lock()
-	if existing, ok := r.bySeries[series]; ok {
+	// Terminal entries can remain indexed while their history is persisted.
+	if existing, ok := r.bySeries[series]; ok && existing.State() == StatusRunning {
 		existingKind := existing.kind
 		if existingKind == kind {
 			typed, ok := existing.typedJob.(*Job[T])
