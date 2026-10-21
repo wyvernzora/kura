@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 COPY web/ ./
 RUN pnpm build
 
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS go-build
 ARG VERSION=dev
 ARG TARGETOS
 ARG TARGETARCH
@@ -30,7 +30,7 @@ ARG VERSION=dev
 # /api/v1/health.
 ENV KURA_VERSION=${VERSION}
 # caddy:2-alpine ships neither tini nor bash; /bin/sh is busybox ash.
-RUN apk add --no-cache tini \
+RUN apk add --no-cache tini 'ca-certificates>=20261020-r0' \
     && setcap -r /usr/bin/caddy \
     && mkdir -p /etc/kura \
     && chown -R 65532:65532 /config /data
