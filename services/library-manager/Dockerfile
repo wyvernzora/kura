@@ -4,7 +4,7 @@
 # arch and retarget the output — no QEMU emulation of `go build`. On a
 # multi-arch buildx run this turns a ~10 min QEMU-emulated arm64
 # compile into a ~30 s native cross-build.
-FROM --platform=$BUILDPLATFORM golang:1.26.4-alpine AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS go-build
 
 WORKDIR /src
 
@@ -57,7 +57,7 @@ ARG KURA_GID=10001
 #   timezone resolution silently falls back to UTC.
 RUN apk add --no-cache \
         mediainfo \
-        ca-certificates \
+        'ca-certificates>=20261020-r0' \
         tzdata
 
 # Create the unprivileged runtime user + group at the requested UID/GID.
