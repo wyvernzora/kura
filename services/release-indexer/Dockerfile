@@ -1,6 +1,6 @@
 ## Build stage
 ARG BUILDPLATFORM=linux/amd64
-FROM --platform=$BUILDPLATFORM golang:1.26.10-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine AS build
 
 WORKDIR /src
 
